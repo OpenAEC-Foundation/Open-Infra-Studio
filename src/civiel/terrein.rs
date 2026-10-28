@@ -823,6 +823,280 @@ pub fn volume(opt: &super::CivielOptions, design: Design, progress: &dyn Fn(Stri
     Ok(format!("{}: afgraven {} m³, ophogen {} m³ — {n} elementen.", lines[0], m3(w.cut), m3(w.fill)))
 }
 
+// ── TIN to TIN: exact volumes from the overlay of two triangulations ────────
+//
+// Inside one triangle of each TIN both surfaces are planes, so their
+// difference is linear over every convex piece where two triangles overlap.
+// Splitting a piece where the difference changes sign and integrating a
+// linear function (area × value at the centroid) gives the prismoidal
+// volume exactly, whatever the two triangulations look like.
+
+/// A triangle's plane: z = z0 + gx·(x − x0) + gy·(y − y0), with its own
+/// corner as origin so large project coordinates keep their precision.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Plane {
+    o: P3,
+    gx: f64,
+    gy: f64,
+}
+
+impl Plane {
+    pub fn of(t: [P3; 3]) -> Plane {
+        let [a, b, c] = t;
+        let (ux, uy, uz) = (b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+        let (vx, vy, vz) = (c[0] - a[0], c[1] - a[1], c[2] - a[2]);
+        let d = ux * vy - uy * vx;
+        if d.abs() < 1e-18 {
+            return Plane { o: a, gx: 0.0, gy: 0.0 };
+        }
+        Plane { o: a, gx: (uz * vy - uy * vz) / d, gy: (ux * vz - uz * vx) / d }
+    }
+
+    /// A level plane.
+    pub fn level(z: f64) -> Plane {
+        Plane { o: [0.0, 0.0, z], gx: 0.0, gy: 0.0 }
+    }
+
+    pub fn z(&self, p: XY) -> f64 {
+        self.o[2] + self.gx * (p[0] - self.o[0]) + self.gy * (p[1] - self.o[1])
+    }
+
+    /// Slope (rise per unit run) and the direction it rises to (radians).
+    pub fn gradient(&self) -> (f64, f64) {
+        (self.gx.hypot(self.gy), self.gy.atan2(self.gx))
+    }
+}
+
+/// Signed area of a polygon (counter-clockwise > 0) and its centroid.
+pub fn area_centroid(poly: &[XY]) -> (f64, XY) {
+    if poly.len() < 3 {
+        return (0.0, poly.first().copied().unwrap_or([0.0, 0.0]));
+    }
+    let o = poly[0];
+    let (mut a, mut cx, mut cy) = (0.0, 0.0, 0.0);
+    for i in 1..poly.len() - 1 {
+        let (p, q) = ([poly[i][0] - o[0], poly[i][1] - o[1]], [poly[i + 1][0] - o[0], poly[i + 1][1] - o[1]]);
+        let cr = p[0] * q[1] - q[0] * p[1];
+        a += cr;
+        cx += (p[0] + q[0]) * cr;
+        cy += (p[1] + q[1]) * cr;
+    }
+    if a.abs() < 1e-300 {
+        return (0.0, o);
+    }
+    (a / 2.0, [o[0] + cx / (3.0 * a), o[1] + cy / (3.0 * a)])
+}
+
+/// The part of a convex polygon where the linear function `g` is ≥ 0.
+/// Values within `eps` of zero count as on the line (no slivers).
+pub fn clip_half(poly: &[XY], eps: f64, g: impl Fn(XY) -> f64) -> Vec<XY> {
+    let n = poly.len();
+    if n < 3 {
+        return Vec::new();
+    }
+    let v: Vec<f64> = poly.iter().map(|p| {
+        let x = g(*p);
+        if x.abs() <= eps { 0.0 } else { x }
+    }).collect();
+    let mut out = Vec::with_capacity(n + 2);
+    for i in 0..n {
+        let j = (i + 1) % n;
+        let (p, q, a, b) = (poly[i], poly[j], v[i], v[j]);
+        if a >= 0.0 {
+            out.push(p);
+        }
+        if (a > 0.0 && b < 0.0) || (a < 0.0 && b > 0.0) {
+            let t = a / (a - b);
+            out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+        }
+    }
+    out
+}
+
+/// Signed distance to the line through `a`–`b`, positive on its left.
+fn left_of(a: XY, b: XY) -> impl Fn(XY) -> f64 {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let len = dx.hypot(dy).max(1e-300);
+    move |p: XY| (dx * (p[1] - a[1]) - dy * (p[0] - a[0])) / len
+}
+
+/// The edges of a triangle, oriented so its inside is on their left.
+fn ccw_edges(t: [XY; 3]) -> [(XY, XY); 3] {
+    let [a, b, c] = t;
+    let ccw = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]) >= 0.0;
+    if ccw { [(a, b), (b, c), (c, a)] } else { [(a, c), (c, b), (b, a)] }
+}
+
+/// A convex polygon cut to a triangle.
+pub fn clip_to_triangle(poly: &[XY], t: [XY; 3], eps: f64) -> Vec<XY> {
+    let mut out = poly.to_vec();
+    for (a, b) in ccw_edges(t) {
+        out = clip_half(&out, eps, left_of(a, b));
+        if out.len() < 3 {
+            return Vec::new();
+        }
+    }
+    out
+}
+
+/// A convex polygon minus a triangle: at most three convex pieces.
+pub fn minus_triangle(poly: &[XY], t: [XY; 3], eps: f64, min_area: f64) -> Vec<Vec<XY>> {
+    let mut rest = poly.to_vec();
+    let mut out = Vec::new();
+    for (a, b) in ccw_edges(t) {
+        let side = left_of(a, b);
+        let outside = clip_half(&rest, eps, |p| -side(p));
+        if area_centroid(&outside).0.abs() > min_area {
+            out.push(outside);
+        }
+        rest = clip_half(&rest, eps, &side);
+        if area_centroid(&rest).0.abs() <= min_area {
+            return out;
+        }
+    }
+    out
+}
+
+fn xy3(t: [P3; 3]) -> [XY; 3] {
+    t.map(|p| [p[0], p[1]])
+}
+
+impl Tin {
+    /// The corners of triangle `t`.
+    pub fn corners(&self, t: usize) -> [P3; 3] {
+        self.triangles[t].map(|i| self.points[i])
+    }
+
+    /// Plan extent [xmin, ymin, xmax, ymax].
+    pub fn extent(&self) -> [f64; 4] {
+        tin_bbox(self)
+    }
+
+    /// Triangles whose index cells touch the box `lo`–`hi`.
+    pub fn triangles_near(&self, lo: XY, hi: XY) -> Vec<usize> {
+        let ix = &self.index;
+        let cell = |v: f64, o: f64, n: usize| (((v - o) / ix.cell).floor().max(0.0) as usize).min(n.saturating_sub(1));
+        if hi[0] < ix.origin[0] || hi[1] < ix.origin[1] || lo[0] > ix.origin[0] + ix.cols as f64 * ix.cell || lo[1] > ix.origin[1] + ix.rows as f64 * ix.cell {
+            return Vec::new();
+        }
+        let (c0, c1) = (cell(lo[0], ix.origin[0], ix.cols), cell(hi[0], ix.origin[0], ix.cols));
+        let (r0, r1) = (cell(lo[1], ix.origin[1], ix.rows), cell(hi[1], ix.origin[1], ix.rows));
+        let mut out: Vec<usize> = Vec::new();
+        for r in r0..=r1 {
+            for c in c0..=c1 {
+                out.extend(ix.cells[r * ix.cols + c].iter().map(|t| *t as usize));
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+}
+
+/// Tolerances for clipping in drawing units: a length and an area.
+fn overlay_eps(a: &Tin, b: &Tin) -> (f64, f64) {
+    let e = tin_bbox(a);
+    let g = tin_bbox(b);
+    let size = (e[2] - e[0]).max(e[3] - e[1]).max(g[2] - g[0]).max(g[3] - g[1]).max(1e-9);
+    (size * 1e-11, size * size * 1e-16)
+}
+
+/// Every convex piece where a triangle of `a` and a triangle of `b` overlap:
+/// the piece (plan, counter-clockwise) and both triangle indices.
+pub fn overlay(a: &Tin, b: &Tin, mut each: impl FnMut(&[XY], usize, usize)) {
+    let (eps, min_area) = overlay_eps(a, b);
+    for ta in 0..a.triangles.len() {
+        let t = xy3(a.corners(ta));
+        let poly: Vec<XY> = ccw_edges(t).iter().map(|e| e.0).collect();
+        let lo = [t.iter().map(|p| p[0]).fold(f64::MAX, f64::min), t.iter().map(|p| p[1]).fold(f64::MAX, f64::min)];
+        let hi = [t.iter().map(|p| p[0]).fold(f64::MIN, f64::max), t.iter().map(|p| p[1]).fold(f64::MIN, f64::max)];
+        for tb in b.triangles_near(lo, hi) {
+            let u = xy3(b.corners(tb));
+            if u.iter().all(|p| p[0] < lo[0]) || u.iter().all(|p| p[0] > hi[0]) || u.iter().all(|p| p[1] < lo[1]) || u.iter().all(|p| p[1] > hi[1]) {
+                continue;
+            }
+            let piece = clip_to_triangle(&poly, u, eps);
+            if piece.len() >= 3 && area_centroid(&piece).0 > min_area {
+                each(&piece, ta, tb);
+            }
+        }
+    }
+}
+
+/// Cut and fill between two TINs, exact: volumes in m³, areas in m².
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct TinVolume {
+    pub cut: f64,
+    pub fill: f64,
+    /// Plan area where the design lies below (cut) or above (fill) the ground.
+    pub cut_area: f64,
+    pub fill_area: f64,
+    /// Plan area where both surfaces exist.
+    pub area: f64,
+    /// Plan area of the design surface (part of it may lie off the ground).
+    pub design_area: f64,
+}
+
+impl TinVolume {
+    pub fn net(&self) -> f64 {
+        self.fill - self.cut
+    }
+}
+
+/// Every overlay piece of design over ground, with the height difference
+/// (design − ground), which is linear over the piece.
+pub fn overlay_difference(ground: &Tin, design: &Tin, mut each: impl FnMut(&[XY], &dyn Fn(XY) -> f64)) {
+    overlay(design, ground, |poly, td, tg| {
+        let (pd, pg) = (Plane::of(design.corners(td)), Plane::of(ground.corners(tg)));
+        let d = move |p: XY| pd.z(p) - pg.z(p);
+        each(poly, &d);
+    });
+}
+
+/// `design` against `ground` (heights and coordinates in drawing units,
+/// `f` drawing units per metre).
+pub fn volume_between(ground: &Tin, design: &Tin, f: f64) -> TinVolume {
+    let mut v = TinVolume::default();
+    let (eps, _) = overlay_eps(ground, design);
+    // Height differences under 0.1 mm count as equal.
+    let flat = 1e-4 * f;
+    overlay_difference(ground, design, |poly, d| {
+        let (a, _) = area_centroid(poly);
+        v.area += a;
+        for sign in [1.0, -1.0] {
+            let part = clip_half(poly, eps, |p| sign * d(p));
+            let (ap, c) = area_centroid(&part);
+            if ap <= 0.0 {
+                continue;
+            }
+            let mean = d(c);
+            if sign * mean <= 0.0 {
+                continue;
+            }
+            if sign > 0.0 {
+                v.fill += ap * mean;
+                if mean > flat {
+                    v.fill_area += ap;
+                }
+            } else {
+                v.cut -= ap * mean;
+                if -mean > flat {
+                    v.cut_area += ap;
+                }
+            }
+        }
+    });
+    v.design_area = (0..design.triangles.len()).map(|t| area_centroid(&xy3(design.corners(t))).0.abs()).sum();
+    let (f2, f3) = (f * f, f * f * f);
+    TinVolume { cut: v.cut / f3, fill: v.fill / f3, cut_area: v.cut_area / f2, fill_area: v.fill_area / f2, area: v.area / f2, design_area: v.design_area / f2 }
+}
+
+/// A level surface (two triangles) over a box, for volumes against a level.
+pub fn level_tin(bbox: [f64; 4], z: f64) -> Option<Tin> {
+    let pts = [[bbox[0], bbox[1], z], [bbox[2], bbox[1], z], [bbox[2], bbox[3], z], [bbox[0], bbox[3], z]];
+    Tin::from_faces(&[[pts[0], pts[1], pts[2]], [pts[0], pts[2], pts[3]]])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -904,5 +1178,100 @@ mod tests {
         let cut = Tin::build(&pts, 15.0).unwrap();
         assert!(cut.triangles.len() < all.triangles.len());
         assert_eq!(cut.height([40.0, 40.0]), None);
+    }
+
+    /// A surface on a grid of n × n cells of `step`, heights from `h`.
+    fn grid_tin(x0: f64, y0: f64, n: usize, step: f64, h: impl Fn(f64, f64) -> f64) -> Tin {
+        let mut pts = Vec::new();
+        for i in 0..=n {
+            for j in 0..=n {
+                let (x, y) = (x0 + i as f64 * step, y0 + j as f64 * step);
+                pts.push([x, y, h(x, y)]);
+            }
+        }
+        Tin::build(&pts, 0.0).unwrap()
+    }
+
+    #[test]
+    fn tin_volume_of_a_box() {
+        // Ground at 0 over 20 × 20 m (7 × 7 cells), a plateau 2 m high over
+        // 10 × 10 m (3 × 3 cells): 200 m³ of fill, whatever the triangles.
+        let ground = grid_tin(0.0, 0.0, 7, 20.0 / 7.0, |_, _| 0.0);
+        let design = grid_tin(5.0, 5.0, 3, 10.0 / 3.0, |_, _| 2.0);
+        let v = volume_between(&ground, &design, 1.0);
+        assert!((v.fill - 200.0).abs() < 1e-6 && v.cut.abs() < 1e-9, "{v:?}");
+        assert!((v.fill_area - 100.0).abs() < 1e-6 && (v.area - 100.0).abs() < 1e-6 && v.cut_area == 0.0);
+        // Below the ground: all cut.
+        let pit = grid_tin(5.0, 5.0, 3, 10.0 / 3.0, |_, _| -1.5);
+        let v = volume_between(&ground, &pit, 1.0);
+        assert!((v.cut - 150.0).abs() < 1e-6 && v.fill.abs() < 1e-9, "{v:?}");
+        // A millimetre drawing: the same m³ and m².
+        let g = grid_tin(0.0, 0.0, 7, 20_000.0 / 7.0, |_, _| 0.0);
+        let d = grid_tin(5000.0, 5000.0, 3, 10_000.0 / 3.0, |_, _| 2000.0);
+        let v = volume_between(&g, &d, 1000.0);
+        assert!((v.fill - 200.0).abs() < 1e-6 && (v.fill_area - 100.0).abs() < 1e-6, "{v:?}");
+        // Half off the ground: only the overlap counts.
+        let off = grid_tin(15.0, 5.0, 3, 10.0 / 3.0, |_, _| 2.0);
+        let v = volume_between(&ground, &off, 1.0);
+        assert!((v.fill - 100.0).abs() < 1e-6 && (v.area - 50.0).abs() < 1e-6 && (v.design_area - 100.0).abs() < 1e-6, "{v:?}");
+    }
+
+    #[test]
+    fn tin_volume_of_a_pyramid() {
+        // Base 12 × 12 m, apex 3 m: V = a²h/3 = 144 m³, on RD-sized coordinates.
+        let (x0, y0) = (104_000.0, 425_000.0);
+        let c = [[x0, y0, 0.0], [x0 + 12.0, y0, 0.0], [x0 + 12.0, y0 + 12.0, 0.0], [x0, y0 + 12.0, 0.0]];
+        let apex = [x0 + 6.0, y0 + 6.0, 3.0];
+        let faces: Vec<[P3; 3]> = (0..4).map(|i| [c[i], c[(i + 1) % 4], apex]).collect();
+        let pyramid = Tin::from_faces(&faces).unwrap();
+        let ground = grid_tin(x0 - 1.0, y0 - 1.0, 5, 14.0 / 5.0, |_, _| 0.0);
+        let v = volume_between(&ground, &pyramid, 1.0);
+        assert!((v.fill - 144.0).abs() < 1e-6 && v.cut.abs() < 1e-9, "{v:?}");
+        // The grid method only gets close.
+        let w = earthwork(pyramid.extent(), 0.5, 1.0, |p| ground.height(p), |p| pyramid.height(p));
+        assert!((w.fill - 144.0).abs() < 2.0 && (w.fill - 144.0).abs() > 1e-6, "{w:?}");
+    }
+
+    #[test]
+    fn tin_volume_of_a_tilted_plane() {
+        // Ground z = x / 10 over 40 × 40 m against level 2: a wedge of 800 m³
+        // cut and one of 800 m³ fill, each over 800 m².
+        let ground = ramp();
+        let level = level_tin(ground.extent(), 2.0).unwrap();
+        let v = volume_between(&ground, &level, 1.0);
+        assert!((v.cut - 800.0).abs() < 1e-6 && (v.fill - 800.0).abs() < 1e-6, "{v:?}");
+        assert!((v.cut_area - 800.0).abs() < 1e-6 && (v.fill_area - 800.0).abs() < 1e-6, "{v:?}");
+        // The same plane triangulated twice, differently: no volume at all.
+        let plane = |x: f64, y: f64| 0.3 * x - 0.2 * y + 5.0;
+        let a = grid_tin(0.0, 0.0, 6, 10.0 / 6.0, plane);
+        let mut pts = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
+        for k in 0..40 {
+            let t = k as f64;
+            pts.push([(t * 7.31).rem_euclid(10.0), (t * 3.77 + 1.3).rem_euclid(10.0)]);
+        }
+        let b = Tin::build(&pts.iter().map(|p| [p[0], p[1], plane(p[0], p[1])]).collect::<Vec<_>>(), 0.0).unwrap();
+        let v = volume_between(&a, &b, 1.0);
+        assert!(v.cut < 1e-9 && v.fill < 1e-9 && (v.area - 100.0).abs() < 1e-6, "{v:?}");
+        // A tilted design over tilted ground: the difference is the plane
+        // z = 0.1·x over 10 × 10 → 50 m³ fill.
+        let c = grid_tin(0.0, 0.0, 3, 10.0 / 3.0, |x, y| plane(x, y) + 0.1 * x);
+        let v = volume_between(&b, &c, 1.0);
+        assert!((v.fill - 50.0).abs() < 1e-6 && v.cut < 1e-9, "{v:?}");
+    }
+
+    #[test]
+    fn convex_pieces() {
+        let square = vec![[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]];
+        let tri = [[0.0, 0.0], [2.0, 0.0], [0.0, 2.0]];
+        assert!((area_centroid(&clip_to_triangle(&square, tri, 1e-12)).0 - 2.0).abs() < 1e-12);
+        let rest = minus_triangle(&square, tri, 1e-12, 1e-12);
+        assert!((rest.iter().map(|p| area_centroid(p).0).sum::<f64>() - 2.0).abs() < 1e-12);
+        // A triangle sharing an edge with the square takes nothing away.
+        let beside = [[2.0, 0.0], [4.0, 0.0], [2.0, 2.0]];
+        let rest = minus_triangle(&square, beside, 1e-12, 1e-12);
+        assert_eq!(rest.len(), 1);
+        assert!((area_centroid(&rest[0]).0 - 4.0).abs() < 1e-12);
+        let p = Plane::of([[1.0, 1.0, 1.0], [3.0, 1.0, 2.0], [1.0, 5.0, 3.0]]);
+        assert!((p.z([3.0, 5.0]) - 4.0).abs() < 1e-12);
     }
 }
