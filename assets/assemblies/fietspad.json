@@ -1,0 +1,10 @@
+{
+  "naam": "fietspad",
+  "omschrijving": "Vrijliggend fietspad in twee richtingen, 3,00 m rood asfalt met bermen van 0,50 m",
+  "bronnen": ["Het sjabloon 'fietspad' van Open Infra (2026.44); breedte naar CROW Ontwerpwijzer fietsverkeer (publicatie 351): tweerichtingsfietspad 2,50–3,00 m bij 50–150 fietsers per spitsuur"],
+  "talud": 2, "ingraving": 1.5, "reikwijdte": 60, "verkanting": 0, "uitrol": 30,
+  "beide": [
+    {"type": "rijstrook", "naam": "fietspad", "breedte": 1.50, "helling": -2.0, "lagen": "fietspad-asfalt"},
+    {"type": "berm", "breedte": 0.50, "helling": -4.0}
+  ]
+}

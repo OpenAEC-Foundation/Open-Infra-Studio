@@ -1,0 +1,93 @@
+{
+  "bron": "Materialen en benamingen: Standaard RAW 2020 (CROW) en NEN-EN 13108-1 (asfaltbeton AC … surf/bin/base), NEN-EN 13242 (ongebonden granulaten), NEN-EN 1338 (betonstraatstenen), NEN-EN 1339 (betontegels). De diktes zijn SCHATTINGEN: gangbare opbouwen, geen dimensionering. Dimensioneer de verharding per project (verkeersbelasting, ondergrond), bijvoorbeeld met de CROW-methoden voor asfalt- en elementenverhardingen.",
+  "opbouw": {
+    "asfalt-gow": {
+      "omschrijving": "Asfalt voor een gebiedsontsluitingsweg (bus en vrachtverkeer): 18 cm asfalt op 30 cm menggranulaat en 50 cm zand (schatting)",
+      "lagen": [
+        {"materiaal": "AC 11 surf (deklaag)", "dikte": 0.04},
+        {"materiaal": "AC 16 bin (tussenlaag)", "dikte": 0.06},
+        {"materiaal": "AC 22 base (onderlaag)", "dikte": 0.08},
+        {"materiaal": "menggranulaat (fundering)", "dikte": 0.30},
+        {"materiaal": "zand (zandbed)", "dikte": 0.50}
+      ]
+    },
+    "asfalt-stad": {
+      "omschrijving": "Asfalt voor een stadsstraat: 10 cm asfalt op 25 cm menggranulaat en 30 cm zand (schatting)",
+      "lagen": [
+        {"materiaal": "AC 11 surf (deklaag)", "dikte": 0.04},
+        {"materiaal": "AC 16 bin (tussenlaag)", "dikte": 0.06},
+        {"materiaal": "menggranulaat (fundering)", "dikte": 0.25},
+        {"materiaal": "zand (zandbed)", "dikte": 0.30}
+      ]
+    },
+    "asfalt-etw": {
+      "omschrijving": "Asfalt voor een erftoegangsweg buiten de kom: 9 cm asfalt op 25 cm menggranulaat en 30 cm zand (schatting)",
+      "lagen": [
+        {"materiaal": "AC 11 surf (deklaag)", "dikte": 0.03},
+        {"materiaal": "AC 16 base (onderlaag)", "dikte": 0.06},
+        {"materiaal": "menggranulaat (fundering)", "dikte": 0.25},
+        {"materiaal": "zand (zandbed)", "dikte": 0.30}
+      ]
+    },
+    "fietspad-asfalt": {
+      "omschrijving": "Rood asfalt voor een fietspad: 8 cm asfalt op 20 cm menggranulaat en 20 cm zand (schatting)",
+      "lagen": [
+        {"materiaal": "AC 8 surf rood (deklaag)", "dikte": 0.03},
+        {"materiaal": "AC 16 base (onderlaag)", "dikte": 0.05},
+        {"materiaal": "menggranulaat (fundering)", "dikte": 0.20},
+        {"materiaal": "zand (zandbed)", "dikte": 0.20}
+      ]
+    },
+    "snelweg-zoab": {
+      "omschrijving": "Autosnelweg: ZOAB op 20 cm asfalt, 25 cm asfaltgranulaatcement en 1 m zand (schatting)",
+      "lagen": [
+        {"materiaal": "ZOAB 16 (deklaag)", "dikte": 0.05},
+        {"materiaal": "AC 22 bin (tussenlaag)", "dikte": 0.08},
+        {"materiaal": "AC 22 base (onderlaag)", "dikte": 0.12},
+        {"materiaal": "asfaltgranulaatcement AGRAC (fundering)", "dikte": 0.25},
+        {"materiaal": "zand (zandbed)", "dikte": 1.00}
+      ]
+    },
+    "klinkers": {
+      "omschrijving": "Betonstraatstenen 8 cm in keperverband op 5 cm straatlaag, 25 cm menggranulaat en 30 cm zand (schatting)",
+      "lagen": [
+        {"materiaal": "betonstraatsteen 8 cm", "dikte": 0.08},
+        {"materiaal": "straatlaag (brekerzand)", "dikte": 0.05},
+        {"materiaal": "menggranulaat (fundering)", "dikte": 0.25},
+        {"materiaal": "zand (zandbed)", "dikte": 0.30}
+      ]
+    },
+    "goot": {
+      "omschrijving": "Goot van betonstraatstenen (BSS) op de fundering van de rijbaan (schatting)",
+      "lagen": [
+        {"materiaal": "betonstraatsteen goot (BSS) 8 cm", "dikte": 0.08},
+        {"materiaal": "straatlaag (brekerzand)", "dikte": 0.05},
+        {"materiaal": "menggranulaat (fundering)", "dikte": 0.25},
+        {"materiaal": "zand (zandbed)", "dikte": 0.30}
+      ]
+    },
+    "tegels": {
+      "omschrijving": "Betontegels 30×30×5 cm op 5 cm straatlaag en 20 cm zand, voor een trottoir (schatting)",
+      "lagen": [
+        {"materiaal": "betontegels 30x30x5", "dikte": 0.05},
+        {"materiaal": "straatlaag (straatzand)", "dikte": 0.05},
+        {"materiaal": "zand (zandbed)", "dikte": 0.20}
+      ]
+    },
+    "parkeren": {
+      "omschrijving": "Betonstraatstenen voor een parkeerstrook: 8 cm op 5 cm straatlaag, 20 cm menggranulaat en 30 cm zand (schatting)",
+      "lagen": [
+        {"materiaal": "betonstraatsteen parkeren 8 cm", "dikte": 0.08},
+        {"materiaal": "straatlaag (brekerzand)", "dikte": 0.05},
+        {"materiaal": "menggranulaat (fundering)", "dikte": 0.20},
+        {"materiaal": "zand (zandbed)", "dikte": 0.30}
+      ]
+    },
+    "band": {
+      "omschrijving": "Stelbed en rugsteun van beton onder een band (schatting)",
+      "lagen": [
+        {"materiaal": "beton stelbed band", "dikte": 0.10, "rol": "fundering"}
+      ]
+    }
+  }
+}

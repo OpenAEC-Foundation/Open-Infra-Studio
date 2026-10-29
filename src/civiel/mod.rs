@@ -9,6 +9,8 @@ pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
 pub mod terrein;
+// Corridor stream: junctions and roundabouts, assemblies as JSON.
+pub mod profieltype;
 
 use std::sync::{Mutex, OnceLock};
 

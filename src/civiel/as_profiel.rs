@@ -825,6 +825,13 @@ pub struct SectionView {
     pub plan: (XY, XY),
 }
 
+thread_local! {
+    /// Extra outlines per view, (offset m, height m) on their layer: the
+    /// corridor's pavement layers. Set by the caller for the next
+    /// `draw_section_views` on this thread (hook of the corridor stream).
+    pub static SECTION_OUTLINES: std::cell::RefCell<Vec<Vec<(LayerSpec, Vec<(f64, f64)>)>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 /// Section views in a grid (upper-left corner `at`), each with its height
 /// scale, offsets, axis, ground, design, areas and title; the section lines
 /// in plan. Returns the number of rows.
@@ -916,6 +923,11 @@ pub fn draw_section_views(ctx: &Ctx, al: &Alignment, views: &[SectionView], left
         if sct.design.len() > 1 {
             out.put(&design_l, pl(sct.design.iter().map(|(d, z)| [gx(*d), gy(*z)]).collect(), &design_l));
         }
+        SECTION_OUTLINES.with(|o| {
+            for (spec, line) in o.borrow().get(i).into_iter().flatten() {
+                out.put(spec, pl(line.iter().map(|(d, z)| [gx(*d), gy(*z)]).collect(), spec));
+            }
+        });
         if let Some(zc) = sct.axis_z {
             let t = ctx.text([gx(0.0) + 1.0 * k, gy(zc) + 2.0 * k], &nap(zc, 2), 1.8, 0.0, &frame_t, None);
             out.put(&frame_t, [aligned(t, TextHorizontalAlignment::Left, TextVerticalAlignment::Middle)]);
