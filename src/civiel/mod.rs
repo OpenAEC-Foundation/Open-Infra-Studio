@@ -9,6 +9,8 @@ pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
 pub mod terrein;
+// Exchange: LandXML export (stream uitwisseling).
+pub mod uitwisseling;
 
 use std::sync::{Mutex, OnceLock};
 
