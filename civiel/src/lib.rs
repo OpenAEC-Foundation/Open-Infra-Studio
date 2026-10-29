@@ -466,7 +466,7 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
             let z = args.f64("Z")?.or(args.f64("PEIL")?);
             let edit = match verb {
                 "CIV_KANTLIJN_PEIL" => grading::EditArgs::Level { corner: args.f64("PUNT")?.map(|v| v as usize), near: at, z: z.ok_or("CIV_KANTLIJN_PEIL KANTLIJN=<handle> PUNT=<n> | BIJ=x,y Z=<m>")? },
-                "CIV_KANTLIJN_VERHOOG" => grading::EditArgs::Raise(args.f64("DZ")?.ok_or("CIV_KANTLIJN_VERHOOG KANTLIJN=<handle> DZ=<m> (< 0 omlaag / down)")?),
+                "CIV_KANTLIJN_VERHOOG" => grading::EditArgs::Raise(args.f64("DZ")?.ok_or(tr("CIV_KANTLIJN_VERHOOG KANTLIJN=<handle> DZ=<m> (< 0 omlaag)", "CIV_KANTLIJN_VERHOOG KANTLIJN=<handle> DZ=<m> (< 0 down)"))?),
                 "CIV_KANTLIJN_PUNT" => match at {
                     Some(at) => grading::EditArgs::Insert { at, z },
                     None => {
@@ -497,7 +497,7 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
                         Some((a, b)) => (a, Some(b)),
                         None => (v, args.str("RICHTING")),
                     };
-                    let dir = dir.ok_or("AFSCHOT: RICHTING=N|NO|O|ZO|Z|ZW|W|NW|<graden>")?;
+                    let dir = dir.ok_or(tr("AFSCHOT: geef RICHTING=N|NO|O|ZO|Z|ZW|W|NW|<graden>", "AFSCHOT: give RICHTING=N|NE|E|SE|S|SW|W|NW|<degrees>"))?;
                     Some((grading::number(pct)?, grading::parse_bearing(dir)?))
                 }
             };
@@ -588,7 +588,7 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
                 (None, Some(b)) if b == "TIN" => massa::VolumeSource::Tin,
                 (None, None) => massa::VolumeSource::Auto,
                 (None, Some(b)) if b == "AUTO" => massa::VolumeSource::Auto,
-                (None, Some(_)) => return Err("BRON: AUTO, CORRIDOR of/or TIN (of/or CSV=<pad>)".into()),
+                (None, Some(_)) => return Err(tr("BRON: AUTO, CORRIDOR of TIN (of CSV=<pad>)", "BRON: AUTO, CORRIDOR or TIN (or CSV=<path>)").into()),
             };
             let at = match args.points("PLAATS")? {
                 Some(p) if !p.is_empty() => Some(civiel::Ctx::new(&base)?.to_drawing(p[0])),
