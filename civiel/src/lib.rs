@@ -52,6 +52,9 @@ const I_BAG3D: IconKind = icon!("bag3d.svg");
 const I_PHOTO: IconKind = icon!("fototerrein.svg");
 const I_BGT3D: IconKind = icon!("bgt3d.svg");
 const I_WATER: IconKind = icon!("waterpeil.svg");
+// Exchange (stream uitwisseling).
+const I_LANDXML_EXPORT: IconKind = icon!("landxml-export.svg");
+const I_IFC_EXPORT: IconKind = icon!("ifc-export.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -143,6 +146,14 @@ impl CadModule for CivielModule {
                 },
                 // Civil 3D "Corridors": assembly along axis and design profile.
                 RibbonGroup { title: "Corridor", tools: vec![large("CIV_CORRIDOR", "Corridor", I_CORRIDOR)] },
+                // Exchange: LandXML 1.2 and IFC 4.3 out (stream uitwisseling).
+                RibbonGroup {
+                    title: open_infra::lang::tr("Uitwisseling", "Exchange"),
+                    tools: vec![
+                        small("CIV_LANDXML_EXPORT", open_infra::lang::tr("LandXML export", "LandXML export"), I_LANDXML_EXPORT),
+                        small("CIV_IFC_EXPORT", open_infra::lang::tr("IFC 4.3 export", "IFC 4.3 export"), I_IFC_EXPORT),
+                    ],
+                },
                 RibbonGroup {
                     title: "Instellingen",
                     tools: vec![large("CIV_INSTELLINGEN", "Instellingen", I_SETTINGS), small("CIV_INFO", "Modelinfo", I_INFO)],
@@ -597,6 +608,19 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
                 Ok(parts.join(" | "))
             });
         }
+        // Exchange: LandXML 1.2 and IFC 4.3 out (stream uitwisseling).
+        "CIV_LANDXML_EXPORT" | "CIV_IFC_EXPORT" => {
+            let o = opt(&["BESTAND", "PAD", "ALLES"])?;
+            let file = args.str("BESTAND").or(args.str("PAD")).map(str::to_string).or_else(|| args.words.iter().find(|w| !w.eq_ignore_ascii_case("ALLES") && !w.eq_ignore_ascii_case("ALL")).cloned());
+            let all = args.words.iter().any(|w| w.eq_ignore_ascii_case("ALLES") || w.eq_ignore_ascii_case("ALL"))
+                || args.str("ALLES").is_some_and(|v| !matches!(v.to_ascii_lowercase().as_str(), "nee" | "no" | "0" | "false"));
+            let path = file.map(std::path::PathBuf::from);
+            if verb == "CIV_LANDXML_EXPORT" {
+                job(host, "LandXML export", id, move |p| landxml::export(&o, path, all, p));
+            } else {
+                job(host, "IFC 4.3 export", id, move |p| civiel::ifc::export(&o, path, all, p));
+            }
+        }
         "CIV_INFO" => {
             opt(&[])?;
             job(host, "Modelinfo", id, |_| civiel::info());
@@ -609,7 +633,8 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_AS AS=<handle> | PI=x,y;x,y;… R=r;… [NAAM=] [BEGIN=]; CIV_AS_OFFSET AS= VERSCHUIVING=-3.5;3.5; CIV_STATION AS= x,y; \
              CIV_LENGTEPROFIEL AS= [PLAATS=x,y]; CIV_ONTWERPPROFIEL AS= PVI=station:hoogte;… [BOOG=]; CIV_DWARSPROFIELEN AS= [PLAATS=] [OM=] [LINKS=] [RECHTS=]; \
              3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>; \
-             CIV_CORRIDOR AS= [SJABLOON=weg|fietspad|snelweg|dijk] [NIVEAU=|BOVEN=] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y]; CIV_INFO.",
+             CIV_CORRIDOR AS= [SJABLOON=weg|fietspad|snelweg|dijk] [NIVEAU=|BOVEN=] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y]; CIV_INFO; \
+             CIV_LANDXML_EXPORT / CIV_IFC_EXPORT [BESTAND=<pad>] [ALLES].",
         ),
         _ => return Err(format!("onbekend commando {verb}; zie CIV_HELP")),
     }
