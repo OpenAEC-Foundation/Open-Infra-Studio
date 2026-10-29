@@ -162,7 +162,7 @@ pub fn save_site(site: &Site) -> Result<(), String> {
     }
 }
 
-fn request(req: PluginRequest) -> Result<PluginResponse, String> {
+pub(crate) fn request(req: PluginRequest) -> Result<PluginResponse, String> {
     let t = target().ok_or("geen tekening actief — klik eerst in Open CAD Studio op het GIS-tabblad")?;
     match t.sender.request(req) {
         Ok(PluginResponse::Error(e)) => Err(e),
@@ -475,6 +475,40 @@ pub fn index_add(kind: &str, key: &str, handles: &[Handle], replace: bool) {
         for chunk in list.chunks(200) {
             entries.push(XRecordEntry::string(1, format!("{k}\t{n}\t{}", chunk.join(" "))));
         }
+    }
+    let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
+    let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: INDEX_RECORD.into(), entries: entries.clone() };
+    if !matches!(request(update), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
+        let _ = request(PluginRequest::CreateXRecord { dictionary_path: path, name: INDEX_RECORD.into(), entries });
+    }
+}
+
+/// Set many keys of one kind in a single write: each key gets exactly these
+/// handles, and a key with none is dropped from the index (labels that
+/// follow their source, `civiel::labels`).
+pub fn index_set_many(kind: &str, keys: &[(String, Vec<Handle>)]) {
+    if keys.is_empty() {
+        return;
+    }
+    let _one = index_lock().lock().unwrap_or_else(|e| e.into_inner());
+    let mut all = index_read();
+    for (key, handles) in keys {
+        all.retain(|(k, n, _)| !(k == kind && n == key));
+        if !handles.is_empty() {
+            all.push((kind.to_string(), key.clone(), handles.clone()));
+        }
+    }
+    let mut entries = Vec::new();
+    for (k, n, hs) in &all {
+        let mut seen = HashSet::new();
+        let list: Vec<String> = hs.iter().filter(|h| seen.insert(**h)).map(|h| format!("{:X}", u64::from(*h))).collect();
+        for chunk in list.chunks(200) {
+            entries.push(XRecordEntry::string(1, format!("{k}\t{n}\t{}", chunk.join(" "))));
+        }
+    }
+    if entries.is_empty() {
+        // An XRecord keeps at least one entry.
+        entries.push(XRecordEntry::string(1, "-\t-\t".to_string()));
     }
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
     let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: INDEX_RECORD.into(), entries: entries.clone() };

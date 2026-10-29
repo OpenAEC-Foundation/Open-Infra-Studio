@@ -9,6 +9,9 @@ pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
 pub mod terrein;
+// Plan production: sheets and labels.
+pub mod bladen;
+pub mod labels;
 
 use std::sync::{Mutex, OnceLock};
 
