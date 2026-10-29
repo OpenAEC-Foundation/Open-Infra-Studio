@@ -361,7 +361,7 @@ const MAX_TRIANGLES: usize = 120_000;
 
 static TERRAINS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-fn next_name() -> String {
+pub(crate) fn next_name() -> String {
     format!("Terrein {}", TERRAINS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1)
 }
 
@@ -413,17 +413,22 @@ pub enum TinSource {
     Points,
     /// Everything with a height on one layer.
     Layer(String),
+    /// The ground points of a point cloud: AHN or a file (BRON=PUNTENWOLK).
+    Puntenwolk(super::puntenwolk::TinVraag),
 }
 
 /// `CIV_TIN`: a terrain on OG-TRIANGULATIE (status from the settings: B for
 /// the existing ground, N for a design).
 pub fn create(opt: &super::CivielOptions, source: TinSource, progress: &dyn Fn(String)) -> Result<String, String> {
+    if let TinSource::Puntenwolk(v) = &source {
+        return super::puntenwolk::create_tin(opt, v, progress);
+    }
     let opt = opt.clone();
     let ctx = Ctx::new(&opt)?;
     let doc = if source == TinSource::Ahn { ocs_plugin_api::host::codec::CadDocument::new() } else { super::document(&["punten"], &[])? };
     let mut sel: HashSet<Handle> = match &source {
         TinSource::Auto | TinSource::Selection => crate::bridge::selection().unwrap_or_default().into_iter().collect(),
-        TinSource::Ahn => HashSet::new(),
+        TinSource::Ahn | TinSource::Puntenwolk(_) => HashSet::new(),
         TinSource::Points => doc
             .model_space_entities()
             .filter(|e| {

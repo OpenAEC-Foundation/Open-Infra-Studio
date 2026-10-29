@@ -52,6 +52,9 @@ const I_BAG3D: IconKind = icon!("bag3d.svg");
 const I_PHOTO: IconKind = icon!("fototerrein.svg");
 const I_BGT3D: IconKind = icon!("bgt3d.svg");
 const I_WATER: IconKind = icon!("waterpeil.svg");
+// Point clouds: TIN from points, 3D mesh.
+const I_CLOUD_TIN: IconKind = icon!("puntenwolk-tin.svg");
+const I_MESH: IconKind = icon!("mesh.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -78,6 +81,27 @@ fn file_tool(id: &'static str, label: &'static str, icon: IconKind, title: &str,
         },
     };
     if big { RibbonItem::LargeTool(t) } else { RibbonItem::LabeledTool(t) }
+}
+
+/// Point clouds: a TIN from ground points (AHN in the Netherlands, or a
+/// file) and a 3D mesh of an object.
+fn point_cloud_group() -> RibbonGroup {
+    use open_infra::lang::{dutch, tr};
+    let mut tools = Vec::new();
+    if dutch() {
+        tools.push(large("CIV_PUNTENWOLK_TIN", tr("TIN uit AHN-punten", "TIN from AHN points"), I_CLOUD_TIN));
+    }
+    tools.push(file_tool(
+        "CIV_PUNTENWOLK_BESTAND",
+        tr("TIN uit puntenwolk", "TIN from point cloud"),
+        I_CLOUD_TIN,
+        tr("Puntenwolk openen", "Open a point cloud"),
+        tr("Puntenwolk (LAS, LAZ, E57, PLY, PTS, XYZ)", "Point cloud (LAS, LAZ, E57, PLY, PTS, XYZ)"),
+        &["las", "laz", "e57", "ply", "pts", "xyz", "txt"],
+        !dutch(),
+    ));
+    tools.push(small("CIV_MESH", tr("3D-mesh", "3D mesh"), I_MESH));
+    RibbonGroup { title: tr("Puntenwolk", "Point cloud"), tools }
 }
 
 struct CivielModule;
@@ -113,6 +137,7 @@ impl CadModule for CivielModule {
                         small("CIV_VOLUME", "Grondverzet", I_VOLUME),
                     ],
                 },
+                point_cloud_group(),
                 // Civil 3D "Alignments".
                 RibbonGroup {
                     title: "As",
@@ -415,16 +440,20 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             });
         }
         "CIV_TIN" => {
-            let o = opt(&["BRON", "LAAG"])?;
+            let mut own = vec!["BRON", "LAAG"];
+            own.extend(civiel::puntenwolk::TinVraag::ARGS);
+            let o = opt(&own)?;
             let source = match args.str("BRON").map(|s| s.to_ascii_uppercase()) {
                 None | Some(_) if args.str("LAAG").is_some() => terrein::TinSource::Layer(args.str("LAAG").unwrap().to_string()),
+                None if args.str("BESTAND").is_some() => terrein::TinSource::Puntenwolk(civiel::puntenwolk::TinVraag::from_args(args)?),
                 None => terrein::TinSource::Auto,
                 Some(b) => match b.as_str() {
                     "AHN" => terrein::TinSource::Ahn,
                     "SELECTIE" => terrein::TinSource::Selection,
                     "PUNTEN" => terrein::TinSource::Points,
                     "AUTO" => terrein::TinSource::Auto,
-                    _ => return Err("BRON: AHN, SELECTIE, PUNTEN of AUTO (of LAAG=<laagnaam>)".into()),
+                    "PUNTENWOLK" | "WOLK" => terrein::TinSource::Puntenwolk(civiel::puntenwolk::TinVraag::from_args(args)?),
+                    _ => return Err("BRON: AHN, SELECTIE, PUNTEN, PUNTENWOLK of AUTO (of LAAG=<laagnaam>)".into()),
                 },
             };
             job(host, "TIN maken", id, move |p| terrein::create(&o, source, p));
@@ -497,7 +526,11 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             });
         }
         "CIV_LENGTEPROFIEL" | "CIV_DWARSPROFIELEN" if scripted => {
-            let o = opt(&["AS", "PLAATS"])?;
+            let mut own = vec!["AS", "PLAATS"];
+            own.extend(civiel::puntenwolk::Grondbron::ARGS);
+            let mut o = opt(&own)?;
+            // BRON=PUNTENWOLK: the ground line from a strip of points along the axis.
+            o.puntenwolk = civiel::puntenwolk::Grondbron::from_args(args)?;
             let (h, at) = (args.handle("AS")?, place_arg(args)?);
             if verb == "CIV_LENGTEPROFIEL" {
                 job(host, "Lengteprofiel", id, move |p| as_profiel::length_profile(&o, h, at, p));
@@ -597,12 +630,40 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
                 Ok(parts.join(" | "))
             });
         }
+        // Point clouds: a TIN from the AHN points (of the site or the selected
+        // closed polyline) or from a file, and a 3D mesh of an object.
+        "CIV_PUNTENWOLK_TIN" | "CIV_PUNTENWOLK_BESTAND" => {
+            let o = opt(civiel::puntenwolk::TinVraag::ARGS)?;
+            let mut v = civiel::puntenwolk::TinVraag::from_args(args)?;
+            // From the file dialog: the path as the rest of the line (it may hold spaces).
+            let loose = args.words.join(" ");
+            if args.str("BESTAND").is_none() && !loose.trim().is_empty() {
+                v.invoer = civiel::puntenwolk::Invoer::file(&loose)?;
+            } else if verb == "CIV_PUNTENWOLK_BESTAND" && args.str("BESTAND").is_none() {
+                return Err(open_infra::lang::tr("geef een puntenwolkbestand: CIV_PUNTENWOLK_BESTAND <pad> (of kies via de knop in het lint)", "give a point cloud file: CIV_PUNTENWOLK_BESTAND <path> (or pick one with the ribbon button)").into());
+            }
+            job(host, open_infra::lang::tr("TIN uit puntenwolk", "TIN from point cloud"), id, move |p| terrein::create(&o, terrein::TinSource::Puntenwolk(v), p));
+        }
+        "CIV_MESH" => {
+            let o = opt(civiel::mesh::MeshVraag::ARGS)?;
+            let v = civiel::mesh::MeshVraag::from_args(args)?;
+            job(host, open_infra::lang::tr("3D-mesh", "3D mesh"), id, move |p| civiel::mesh::create(&o, &v, p));
+        }
         "CIV_INFO" => {
             opt(&[])?;
             job(host, "Modelinfo", id, |_| civiel::info());
         }
         "CIV_INSTELLINGEN" => open_settings(host),
-        "CIV_HELP" => host.push_info(
+        "CIV_HELP" => {
+            host.push_info(open_infra::lang::tr(
+                "[Open Infra — Civiel] Puntenwolk: CIV_TIN BRON=PUNTENWOLK [BESTAND=las/laz/e57/ply/pts/xyz] [EDITIE=AHN5|AHN4] [GEBIED=x,y;x,y] [KLASSEN=2;9|AUTO] [CEL=0.5] [TOL=0.10] [MAX=200000] [GAT=2] [HELLING=0.3] [VENSTER=18]; \
+                 CIV_LENGTEPROFIEL / CIV_DWARSPROFIELEN AS= BRON=PUNTENWOLK [STROOK=1] [BESTAND=] [KLASSEN=]; \
+                 CIV_MESH [GEBIED=x,y;x,y] [BESTAND=] [ZMIN=] [ZMAX=] [KLASSEN=] [VOXEL=] [GAT=1] [MAX=400000] [SOORT=kunstwerk|brug|viaduct|tunnel|sluis|steiger|pijler|landhoofd|kademuur] [ZIJDE=BOVEN|MIDDEN|x,y,z] [NAAM=].",
+                "[Open Infra — Civil] Point clouds: CIV_TIN BRON=PUNTENWOLK [BESTAND=las/laz/e57/ply/pts/xyz] [EDITIE=AHN5|AHN4] [GEBIED=x,y;x,y] [KLASSEN=2;9|AUTO] [CEL=0.5] [TOL=0.10] [MAX=200000] [GAT=2] [HELLING=0.3] [VENSTER=18]; \
+                 CIV_LENGTEPROFIEL / CIV_DWARSPROFIELEN AS= BRON=PUNTENWOLK [STROOK=1] [BESTAND=] [KLASSEN=]; \
+                 CIV_MESH [GEBIED=x,y;x,y] [BESTAND=] [ZMIN=] [ZMAX=] [KLASSEN=] [VOXEL=] [GAT=1] [MAX=400000] [SOORT=kunstwerk|brug|viaduct|tunnel|sluis|steiger|pijler|landhoofd|kademuur] [ZIJDE=BOVEN|MIDDEN|x,y,z] [NAAM=].",
+            ));
+            host.push_info(
             "[Open Infra — Civiel] Lint: selectie en klikken; scripts: argumenten SLEUTEL=waarde, coördinaten x,y in het projectstelsel, ID=<naam> schrijft <config>/api/<naam>.json. \
              CIV_PUNTEN_IMPORT <pad> [FORMAAT=], CIV_PUNT x,y[,z] [NR=] [CODE=], CIV_PUNTEN_EXPORT [PAD=], CIV_LANDXML <pad>; \
              CIV_TIN [BRON=AHN|PUNTEN|SELECTIE] [LAAG=] [STATUS=B|N] [AFSTAND=] [MAXRIBBE=]; CIV_HOOGTELIJNEN / CIV_ANALYSE [OPPERVLAK=B|N]; CIV_VOLUME [ONTWERP=PEIL] [PEIL=] [CEL=]; \
@@ -610,7 +671,8 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_LENGTEPROFIEL AS= [PLAATS=x,y]; CIV_ONTWERPPROFIEL AS= PVI=station:hoogte;… [BOOG=]; CIV_DWARSPROFIELEN AS= [PLAATS=] [OM=] [LINKS=] [RECHTS=]; \
              3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>; \
              CIV_CORRIDOR AS= [SJABLOON=weg|fietspad|snelweg|dijk] [NIVEAU=|BOVEN=] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y]; CIV_INFO.",
-        ),
+            );
+        }
         _ => return Err(format!("onbekend commando {verb}; zie CIV_HELP")),
     }
     Ok(())
