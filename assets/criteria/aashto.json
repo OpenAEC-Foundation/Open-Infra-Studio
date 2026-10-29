@@ -1,0 +1,960 @@
+{
+ "id": "aashto",
+ "naam": "AASHTO Green Book 2018 (metrisch)",
+ "land": "US",
+ "ooghoogte": {
+  "v": 1.08,
+  "bron": "gb18-eye"
+ },
+ "objecthoogte": {
+  "v": 0.6,
+  "bron": "gb18-eye"
+ },
+ "categorieen": [
+  {
+   "id": "emax4",
+   "naam": "Weg met emax 4 %",
+   "snelheden": [
+    {
+     "v": 50,
+     "r_min": {
+      "v": 86,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 700,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 7"
+     },
+     "r_voet_min": {
+      "v": 1300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 13"
+     },
+     "verkanting_max": {
+      "v": 4,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 65,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 60,
+     "r_min": {
+      "v": 135,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 1100,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 11"
+     },
+     "r_voet_min": {
+      "v": 1800,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 18"
+     },
+     "verkanting_max": {
+      "v": 4,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 85,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 70,
+     "r_min": {
+      "v": 203,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 1700,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 17"
+     },
+     "r_voet_min": {
+      "v": 2300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 23"
+     },
+     "verkanting_max": {
+      "v": 4,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 105,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 80,
+     "r_min": {
+      "v": 280,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 2600,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 26"
+     },
+     "r_voet_min": {
+      "v": 3000,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 30"
+     },
+     "verkanting_max": {
+      "v": 4,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 130,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 90,
+     "r_min": {
+      "v": 375,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 3900,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 39"
+     },
+     "r_voet_min": {
+      "v": 3800,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 38"
+     },
+     "verkanting_max": {
+      "v": 4,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 160,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 100,
+     "r_min": {
+      "v": 492,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 5200,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 52"
+     },
+     "r_voet_min": {
+      "v": 4500,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 45"
+     },
+     "verkanting_max": {
+      "v": 4,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 185,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 110,
+     "r_min": {
+      "v": 635,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 7400,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 74"
+     },
+     "r_voet_min": {
+      "v": 5500,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 55"
+     },
+     "verkanting_max": {
+      "v": 4,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 220,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 120,
+     "r_min": {
+      "v": 872,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 9500,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 95"
+     },
+     "r_voet_min": {
+      "v": 6300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 63"
+     },
+     "verkanting_max": {
+      "v": 4,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 250,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 130,
+     "r_min": {
+      "v": 1109,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 12400,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 124"
+     },
+     "r_voet_min": {
+      "v": 7300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 73"
+     },
+     "verkanting_max": {
+      "v": 4,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 285,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "emax6",
+   "naam": "Weg met emax 6 %",
+   "snelheden": [
+    {
+     "v": 50,
+     "r_min": {
+      "v": 79,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 700,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 7"
+     },
+     "r_voet_min": {
+      "v": 1300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 13"
+     },
+     "verkanting_max": {
+      "v": 6,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 65,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 60,
+     "r_min": {
+      "v": 123,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 1100,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 11"
+     },
+     "r_voet_min": {
+      "v": 1800,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 18"
+     },
+     "verkanting_max": {
+      "v": 6,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 85,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 70,
+     "r_min": {
+      "v": 184,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 1700,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 17"
+     },
+     "r_voet_min": {
+      "v": 2300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 23"
+     },
+     "verkanting_max": {
+      "v": 6,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 105,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 80,
+     "r_min": {
+      "v": 252,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 2600,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 26"
+     },
+     "r_voet_min": {
+      "v": 3000,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 30"
+     },
+     "verkanting_max": {
+      "v": 6,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 130,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 90,
+     "r_min": {
+      "v": 336,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 3900,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 39"
+     },
+     "r_voet_min": {
+      "v": 3800,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 38"
+     },
+     "verkanting_max": {
+      "v": 6,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 160,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 100,
+     "r_min": {
+      "v": 437,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 5200,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 52"
+     },
+     "r_voet_min": {
+      "v": 4500,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 45"
+     },
+     "verkanting_max": {
+      "v": 6,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 185,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 110,
+     "r_min": {
+      "v": 560,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 7400,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 74"
+     },
+     "r_voet_min": {
+      "v": 5500,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 55"
+     },
+     "verkanting_max": {
+      "v": 6,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 220,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 120,
+     "r_min": {
+      "v": 756,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 9500,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 95"
+     },
+     "r_voet_min": {
+      "v": 6300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 63"
+     },
+     "verkanting_max": {
+      "v": 6,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 250,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 130,
+     "r_min": {
+      "v": 951,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 12400,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 124"
+     },
+     "r_voet_min": {
+      "v": 7300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 73"
+     },
+     "verkanting_max": {
+      "v": 6,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 285,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "emax8",
+   "naam": "Weg met emax 8 %",
+   "snelheden": [
+    {
+     "v": 50,
+     "r_min": {
+      "v": 73,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 700,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 7"
+     },
+     "r_voet_min": {
+      "v": 1300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 13"
+     },
+     "verkanting_max": {
+      "v": 8,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 65,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 60,
+     "r_min": {
+      "v": 113,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 1100,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 11"
+     },
+     "r_voet_min": {
+      "v": 1800,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 18"
+     },
+     "verkanting_max": {
+      "v": 8,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 85,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 70,
+     "r_min": {
+      "v": 168,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 1700,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 17"
+     },
+     "r_voet_min": {
+      "v": 2300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 23"
+     },
+     "verkanting_max": {
+      "v": 8,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 105,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 80,
+     "r_min": {
+      "v": 229,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 2600,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 26"
+     },
+     "r_voet_min": {
+      "v": 3000,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 30"
+     },
+     "verkanting_max": {
+      "v": 8,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 130,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 90,
+     "r_min": {
+      "v": 304,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 3900,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 39"
+     },
+     "r_voet_min": {
+      "v": 3800,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 38"
+     },
+     "verkanting_max": {
+      "v": 8,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 160,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 100,
+     "r_min": {
+      "v": 394,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 5200,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 52"
+     },
+     "r_voet_min": {
+      "v": 4500,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 45"
+     },
+     "verkanting_max": {
+      "v": 8,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 185,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 110,
+     "r_min": {
+      "v": 501,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 7400,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 74"
+     },
+     "r_voet_min": {
+      "v": 5500,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 55"
+     },
+     "verkanting_max": {
+      "v": 8,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 220,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 120,
+     "r_min": {
+      "v": 667,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 9500,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 95"
+     },
+     "r_voet_min": {
+      "v": 6300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 63"
+     },
+     "verkanting_max": {
+      "v": 8,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 250,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    },
+    {
+     "v": 130,
+     "r_min": {
+      "v": 832,
+      "bron": "gb18-rmin",
+      "schatting": true
+     },
+     "helling_min": {
+      "v": 0.5,
+      "bron": "gb18-grade",
+      "opmerking": "wegen met banden"
+     },
+     "r_top_min": {
+      "v": 12400,
+      "bron": "gb18-crest",
+      "schatting": true,
+      "opmerking": "K = 124"
+     },
+     "r_voet_min": {
+      "v": 7300,
+      "bron": "gb18-sag",
+      "schatting": true,
+      "opmerking": "K = 73"
+     },
+     "verkanting_max": {
+      "v": 8,
+      "bron": "gb18-emax"
+     },
+     "stopzicht": {
+      "v": 285,
+      "bron": "gb18-ssd",
+      "schatting": true
+     }
+    }
+   ]
+  }
+ ],
+ "bronnen": {
+  "gb18-ssd": "AASHTO, A Policy on Geometric Design of Highways and Streets, 7th ed. (2018), tabel 3-1 / vgl. 3-2: d = 0,278·V·t + 0,039·V²/a, t = 2,5 s, a = 3,4 m/s² (waarde berekend, afgerond op 5 m)",
+  "gb18-crest": "AASHTO Green Book 2018, tabel 3-35: K topboog (h1 = 1,08 m, h2 = 0,60 m; L = A·S²/658); R ≈ 100·K (waarde berekend)",
+  "gb18-sag": "AASHTO Green Book 2018, tabel 3-37: K voetboog (koplampcriterium; L = A·S²/(120 + 3,5·S)); R ≈ 100·K (waarde berekend)",
+  "gb18-rmin": "AASHTO Green Book 2018, §3.3: Rmin = V²/(127·(0,01·emax + fmax)) (waarde berekend; fmax niet tegen de tabel gecontroleerd)",
+  "gb18-emax": "AASHTO Green Book 2018, §3.3.3: ontwerpwaarden emax 4, 6, 8, 10 en 12 %",
+  "gb18-grade": "AASHTO Green Book 2018, p. 3-164: minimale helling 0,5 % (0,30 % in sommige gevallen) bij wegen met banden (geciteerd in Michigan DOT, Sight Distance Guidelines According to the 2018 AASHTO)",
+  "gb18-eye": "AASHTO Green Book 2018, p. 3-167: ooghoogte 1,08 m, objecthoogte 0,60 m (geciteerd in Michigan DOT, Sight Distance Guidelines According to the 2018 AASHTO)"
+ }
+}
