@@ -151,7 +151,7 @@ impl CadModule for GisModule {
                             event: ModuleEvent::PluginFileDialog {
                                 command: "GIS_BESTAND".into(),
                                 title: lang::tr("Geodatabestand openen", "Open a geodata file").into(),
-                                filter_name: "GeoJSON, Shapefile, GeoPackage, KML/KMZ, GPX, GML, CSV, GeoTIFF, ASC, JPG/PNG + world file, LAS/LAZ".into(),
+                                filter_name: "GeoJSON, Shapefile, GeoPackage, KML/KMZ, GPX, GML, CSV, GeoTIFF, ASC, JPG/PNG + world file, LAS/LAZ, E57, PLY, PTS, XYZ".into(),
                                 extensions: gis::files::EXTENSIONS.iter().chain(gis::rasterbestand::EXTENSIONS.iter()).map(|e| e.to_string()).collect(),
                             },
                         }),
@@ -867,7 +867,7 @@ impl BuiltinPlugin for OpenInfra {
                 }
             }
             "GIS_RASTER_IMPORT" => {
-                // GeoTIFF, ASC, JPG/PNG with a world file, LAS/LAZ.
+                // GeoTIFF, ASC, JPG/PNG with a world file, point clouds (LAS/LAZ, E57, PLY, PTS, XYZ).
                 let arg = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim().trim_matches('"').to_string()).unwrap_or_default();
                 let Some(site) = require_site(host) else { return true };
                 if arg.is_empty() {
@@ -958,7 +958,7 @@ impl BuiltinPlugin for OpenInfra {
                  GIS_VOERTUIGOVERZICHT | GIS_VEHICLE_CATALOG [categorie] [ZIJ|SIDE], \
                  GIS_VEEGPAD | GIS_SWEPT_PATH <id> [interval m] (geselecteerde lijn of punten); \
                  bestanden / files: GIS_BESTAND | GIS_FILE [pad] (venster; vector, raster, puntenwolk), GIS_BESTAND_IMPORT | GIS_FILE_IMPORT <pad> [EPSG:code], \
-                 GIS_RASTER_IMPORT <GeoTIFF/ASC/JPG/PNG+world file/LAS/LAZ>; scripts: ID=<naam> → <config>/OpenCADStudio/open-infra/api/<naam>.json.",
+                 GIS_RASTER_IMPORT <GeoTIFF/ASC/JPG/PNG+world file/LAS/LAZ/E57/PLY/PTS/XYZ>; scripts: ID=<naam> → <config>/OpenCADStudio/open-infra/api/<naam>.json.",
             ),
             v => match QUICK.iter().find(|(c, ..)| *c == v) {
                 Some((_, label, q)) => quick(host, q, label),

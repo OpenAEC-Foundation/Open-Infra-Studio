@@ -15,7 +15,9 @@ case "$(uname -s)" in
 esac
 
 rustc_version="$(rustc --version)"
-acadrust_source="$(awk '/^name = "acadrust"$/{f=1} f&&/^source = /{gsub(/^source = "|"$/,""); print; exit}' Cargo.lock)"
+# The host's opencadcodec (a git source); pointcloud-core brings a
+# crates.io acadrust as well.
+acadrust_source="$(awk '/^name = "acadrust"$/{f=1} f&&/^source = /{if ($0 ~ /opencadcodec/) {gsub(/^source = "|"$/,""); print; exit} f=0}' Cargo.lock)"
 
 install_plugin() { # <plugin id> <library name> <plugin.toml>
   local dest="$cfg/OpenCADStudio/plugins/$1"

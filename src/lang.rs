@@ -64,6 +64,20 @@ pub fn save(lang: Lang) -> Result<(), String> {
     std::fs::write(&path, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
+/// The Dutch modules (PDOK, BGT, BRK, KLIC, AHN, BRO, 3D BAG, NLCS) in the
+/// ribbons: `netherlands` in settings.json, on unless switched off. Read
+/// once per session, like the language (the ribbon is built at load).
+pub fn dutch() -> bool {
+    static D: OnceLock<bool> = OnceLock::new();
+    *D.get_or_init(|| {
+        std::fs::read_to_string(settings_file())
+            .ok()
+            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+            .and_then(|v| v.get("netherlands").and_then(|b| b.as_bool()))
+            .unwrap_or(true)
+    })
+}
+
 /// Pick the text for the current language.
 pub fn tr<'a>(nl: &'a str, en: &'a str) -> &'a str {
     match current() {
