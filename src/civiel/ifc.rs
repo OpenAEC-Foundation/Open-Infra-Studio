@@ -210,7 +210,7 @@ fn curvature(r: f64) -> f64 {
 pub struct Body {
     pub points: Vec<P3>,
     pub triangles: Vec<[usize; 3]>,
-    /// Every edge used by exactly two faces, in opposite directions.
+    /// Watertight: every edge used as often in one direction as in the other.
     pub closed: bool,
     /// Enclosed volume (m³), when closed.
     pub volume: f64,
@@ -239,7 +239,10 @@ fn finish(points: Vec<P3>, triangles: Vec<[usize; 3]>) -> Body {
             *directed.entry((a, b)).or_default() += 1;
         }
     }
-    let closed = !triangles.is_empty() && directed.iter().all(|(&(a, b), &n)| n == 1 && directed.get(&(b, a)) == Some(&1));
+    // Watertight: every edge as often one way as the other. Two parts of a
+    // body may touch along a line where the thickness is zero (four faces
+    // on one edge); that still encloses the volume.
+    let closed = !triangles.is_empty() && directed.iter().all(|(&(a, b), &n)| directed.get(&(b, a)) == Some(&n));
     let volume = if closed {
         let o = points[triangles[0][0]];
         let r = |p: P3| [p[0] - o[0], p[1] - o[1], p[2] - o[2]];
@@ -262,13 +265,20 @@ fn finish(points: Vec<P3>, triangles: Vec<[usize; 3]>) -> Body {
 /// no thickness); along the open border of the design surface walls close
 /// it. `ground` is the height under each design point (None: no ground).
 pub fn earth_body(points: &[P3], ground: &[Option<f64>], triangles: &[[usize; 3]], fill: bool) -> Body {
+    // Thinner than this is no thickness: top and bottom are one point. At
+    // least the vertex grid (0.1 mm), so two heights never merge by rounding.
+    const SNAP: f64 = 2e-4;
     // Signed thickness, top and bottom height at each design point.
     let sign = if fill { 1.0 } else { -1.0 };
     let info = |i: usize| -> (XY, f64, f64, f64) {
         let p = points[i];
         let g = ground.get(i).copied().flatten().unwrap_or(p[2]);
+        let d = sign * (p[2] - g);
+        if d.abs() < SNAP {
+            return ([p[0], p[1]], 0.0, p[2], p[2]);
+        }
         let (top, bottom) = if fill { (p[2], g) } else { (g, p[2]) };
-        ([p[0], p[1]], sign * (p[2] - g), top, bottom)
+        ([p[0], p[1]], d, top, bottom)
     };
     // Edges on the border of the design surface.
     let mut uses: HashMap<(usize, usize), usize> = HashMap::new();
@@ -277,7 +287,6 @@ pub fn earth_body(points: &[P3], ground: &[Option<f64>], triangles: &[[usize; 3]
             *uses.entry((a.min(b), a.max(b))).or_default() += 1;
         }
     }
-    let eps = 1e-6;
     let mut pts = Points::default();
     let mut tris: Vec<[usize; 3]> = Vec::new();
     let push = |t: [usize; 3], tris: &mut Vec<[usize; 3]>| {
@@ -287,7 +296,18 @@ pub fn earth_body(points: &[P3], ground: &[Option<f64>], triangles: &[[usize; 3]
     };
     // A vertex of the clipped polygon: plan point, top and bottom height.
     type Vx = (XY, f64, f64);
-    let cross = |a: &(XY, f64, f64, f64), b: &(XY, f64, f64, f64)| -> Vx {
+    type Info = (XY, f64, f64, f64);
+    let corner = |a: &Info| -> Vx { (a.0, a.2, a.3) };
+    // Where the thickness is zero on an edge, computed the same way from
+    // both triangles that share it (lower point index first).
+    let cross = |(i, a): (usize, &Info), (j, b): (usize, &Info)| -> Vx {
+        let (a, b) = if i < j { (a, b) } else { (b, a) };
+        if a.1 == 0.0 {
+            return corner(a);
+        }
+        if b.1 == 0.0 {
+            return corner(b);
+        }
         let t = a.1 / (a.1 - b.1);
         let xy = [a.0[0] + (b.0[0] - a.0[0]) * t, a.0[1] + (b.0[1] - a.0[1]) * t];
         let z = a.2 + (b.2 - a.2) * t;
@@ -295,18 +315,18 @@ pub fn earth_body(points: &[P3], ground: &[Option<f64>], triangles: &[[usize; 3]
     };
     for t in triangles {
         let v = t.map(info);
-        if v.iter().all(|x| x.1 <= eps) {
+        if v.iter().all(|x| x.1 <= 0.0) {
             continue;
         }
         // Sutherland–Hodgman against thickness > 0.
         let mut poly: Vec<Vx> = Vec::with_capacity(4);
         for k in 0..3 {
             let (a, b) = (&v[k], &v[(k + 1) % 3]);
-            if a.1 > eps {
-                poly.push((a.0, a.2, a.3));
+            if a.1 > 0.0 {
+                poly.push(corner(a));
             }
-            if (a.1 > eps) != (b.1 > eps) {
-                poly.push(cross(a, b));
+            if (a.1 > 0.0) != (b.1 > 0.0) {
+                poly.push(cross((t[k], a), (t[(k + 1) % 3], b)));
             }
         }
         let top: Vec<usize> = poly.iter().map(|p| pts.at([p.0[0], p.0[1], p.1])).collect();
@@ -322,10 +342,10 @@ pub fn earth_body(points: &[P3], ground: &[Option<f64>], triangles: &[[usize; 3]
                 continue;
             }
             let (a, b) = (&v[k], &v[(k + 1) % 3]);
-            let (u, w): (Vx, Vx) = match (a.1 > eps, b.1 > eps) {
-                (true, true) => ((a.0, a.2, a.3), (b.0, b.2, b.3)),
-                (true, false) => ((a.0, a.2, a.3), cross(a, b)),
-                (false, true) => (cross(a, b), (b.0, b.2, b.3)),
+            let (u, w): (Vx, Vx) = match (a.1 > 0.0, b.1 > 0.0) {
+                (true, true) => (corner(a), corner(b)),
+                (true, false) => (corner(a), cross((i, a), (j, b))),
+                (false, true) => (cross((i, a), (j, b)), corner(b)),
                 (false, false) => continue,
             };
             let (tu, bu) = (pts.at([u.0[0], u.0[1], u.1]), pts.at([u.0[0], u.0[1], u.2]));
@@ -581,13 +601,13 @@ pub fn write(m: &Model, file_name: &str, time_stamp: &str) -> (String, Summary) 
         let key = format!("as/{ai}/{}", a.name);
         let pl = w.local_placement(None);
         // Horizontal: business logic and geometry.
-        let hs: Vec<super::ifc::HSeg> = a.segs.iter().map(|s| horizontal_segment(s, base)).collect();
+        let hs: Vec<HSeg> = a.segs.iter().map(|s| horizontal_segment(s, base)).collect();
         let mut h_segments = Vec::new();
         let mut h_curves = Vec::new();
         for (i, h) in hs.iter().enumerate() {
             let next = hs.get(i + 1).map(|n| (n.start, n.dir, curvature(n.r0))).unwrap_or((h.end, h.end_dir, 0.0));
-            let tr = transition((h.end, h.end_dir, curvature(h.r1)), next);
-            let (seg, cs) = write_horizontal(&mut w, &format!("{key}/h{i}"), h, tr, pl);
+            let code = transition((h.end, h.end_dir, curvature(h.r1)), next);
+            let (seg, cs) = write_horizontal(&mut w, &format!("{key}/h{i}"), h, code, pl);
             h_segments.push(seg);
             h_curves.push(cs);
         }
@@ -605,11 +625,10 @@ pub fn write(m: &Model, file_name: &str, time_stamp: &str) -> (String, Summary) 
         if !vs.is_empty() {
             let mut v_curves = Vec::new();
             for (i, v) in vs.iter().enumerate() {
-                let (e, c) = v.curvature();
+                let (_, c) = v.curvature();
                 let next = vs.get(i + 1).map(|n| ([n.s0, n.z0], n.g0.atan(), n.curvature().0)).unwrap_or(([v.end().0, v.end().1], v.g1.atan(), 0.0));
-                let tr = transition(([v.end().0, v.end().1], v.g1.atan(), c), next);
-                let _ = e;
-                let (seg, cs) = write_vertical(&mut w, &format!("{key}/v{i}"), v, tr, pl);
+                let code = transition(([v.end().0, v.end().1], v.g1.atan(), c), next);
+                let (seg, cs) = write_vertical(&mut w, &format!("{key}/v{i}"), v, code, pl);
                 v_segments.push(seg);
                 v_curves.push(cs);
             }
@@ -1027,6 +1046,26 @@ mod tests {
         let cut = earth_body(&pts, &ground, &tris, false);
         assert!(fill.closed && cut.closed);
         assert!((fill.volume - 25.0).abs() < 1e-9 && (cut.volume - 25.0).abs() < 1e-9, "{} {}", fill.volume, cut.volume);
+        // Two cut wedges that touch along a line on the ground (a ditch on
+        // either side of a ridge at ground level): still watertight.
+        let mut pts = Vec::new();
+        for y in 0..3 {
+            for x in 0..3 {
+                pts.push([x as f64, y as f64, if y == 1 { 0.00005 } else { -1.0 }]);
+            }
+        }
+        let p = |x: usize, y: usize| y * 3 + x;
+        let mut tris = Vec::new();
+        for y in 0..2 {
+            for x in 0..2 {
+                tris.push([p(x, y), p(x + 1, y), p(x + 1, y + 1)]);
+                tris.push([p(x, y), p(x + 1, y + 1), p(x, y + 1)]);
+            }
+        }
+        let cut = earth_body(&pts, &vec![Some(0.0); 9], &tris, false);
+        assert!(cut.closed, "{:?}", cut.triangles);
+        assert!((cut.volume - 2.0).abs() < 1e-9, "{}", cut.volume);
+        assert!(earth_body(&pts, &vec![Some(0.0); 9], &tris, true).triangles.is_empty(), "0.05 mm is no fill");
     }
 
     #[test]
