@@ -516,7 +516,7 @@ pub fn grade(edge: &[P3], closed: bool, side: f64, target: Target, s: Sampling, 
     };
     // Ray starts in order along the edge: (point, direction or None for none).
     let mut starts: Vec<(P3, Option<XY>)> = Vec::new();
-    for i in 0..n {
+    for (i, &corner_pt) in pts.iter().enumerate() {
         let prev = if closed { Some((i + n - 1) % n) } else { i.checked_sub(1) };
         let next = (i < segs).then_some(i);
         match (prev, next) {
@@ -524,22 +524,22 @@ pub fn grade(edge: &[P3], closed: bool, side: f64, target: Target, s: Sampling, 
                 let (na, nb) = (normal(a), normal(b));
                 let turn = (na[0] * nb[1] - na[1] * nb[0]).atan2(na[0] * nb[0] + na[1] * nb[1]);
                 if turn.abs() < 1e-9 {
-                    starts.push((pts[i], Some(na)));
+                    starts.push((corner_pt, Some(na)));
                 } else if side * turn > 0.0 {
                     // Outside corner: a fan from one normal to the other.
                     let k = (turn.abs() / s.fan).ceil().max(1.0) as usize;
                     for j in 0..=k {
                         let a = turn * j as f64 / k as f64;
                         let (c, sn) = (a.cos(), a.sin());
-                        starts.push((pts[i], Some([na[0] * c - na[1] * sn, na[0] * sn + na[1] * c])));
+                        starts.push((corner_pt, Some([na[0] * c - na[1] * sn, na[0] * sn + na[1] * c])));
                     }
                 } else {
                     // Inside corner: the slopes of both sides meet on the bisector.
-                    starts.push((pts[i], None));
+                    starts.push((corner_pt, None));
                 }
             }
-            (None, Some(b)) => starts.push((pts[i], Some(normal(b)))),
-            (Some(a), None) => starts.push((pts[i], Some(normal(a)))),
+            (None, Some(b)) => starts.push((corner_pt, Some(normal(b)))),
+            (Some(a), None) => starts.push((corner_pt, Some(normal(a)))),
             (None, None) => {}
         }
         if let Some(i) = next {
@@ -592,7 +592,7 @@ pub fn grade(edge: &[P3], closed: bool, side: f64, target: Target, s: Sampling, 
         let o = ring[0];
         let flat: Vec<f64> = ring.iter().flat_map(|p| [p[0] - o[0], p[1] - o[1]]).collect();
         let idx = earcutr::earcut(&flat, &[], 2).map_err(|_| tr("het plateau is niet te trianguleren: snijdt de omtrek zichzelf?", "the plateau cannot be triangulated: does its outline cross itself?").to_string())?;
-        for t in idx.chunks_exact(3) {
+        for t in idx.as_chunks::<3>().0 {
             let tri = [ring[t[0]], ring[t[1]], ring[t[2]]];
             if tri_area(&tri).abs() > small {
                 tris.push((tri, Part::Core));
@@ -1336,7 +1336,10 @@ fn mesh_tris(e: &EntityType) -> Vec<[P3; 3]> {
 
 /// The combined design surface in the drawing: its triangles, mesh handles
 /// and the names of the gradings in it.
-pub fn read_bouwrijp() -> Result<(Vec<Tri>, Vec<Handle>, Vec<String>), String> {
+/// The design surface's triangles, its mesh handles and the gradings in it.
+pub type Bouwrijp = (Vec<Tri>, Vec<Handle>, Vec<String>);
+
+pub fn read_bouwrijp() -> Result<Bouwrijp, String> {
     let hs: Vec<Handle> = bridge::index_read().into_iter().filter(|(k, _, _)| k == "bouwrijp").flat_map(|(_, _, h)| h).collect();
     let mut tris = Vec::new();
     let mut found = Vec::new();
@@ -1502,7 +1505,7 @@ fn draw_grading(ctx: &Ctx, g: &Grading, edge: Option<(&[P3], bool)>, data: &ocs_
             }
         }
         last = Some(*r);
-        if n % 2 == 0 {
+        if n.is_multiple_of(2) {
             out.put(&long, [line3(top, bottom, &long)]);
         } else {
             let t = 1.0 / 3.0;
@@ -1649,7 +1652,7 @@ pub fn plateau(opt: &super::CivielOptions, req: PlateauRequest, progress: &dyn F
         ("talud_op", format!("1:{}", req.fill)),
     ]);
     let mut out = Out::default();
-    let daylight = draw_grading(&ctx, &g, Some((&edge[..], true)).filter(|_| from_feature.is_none()), &data, &mut out)?;
+    let daylight = draw_grading(&ctx, &g, from_feature.is_none().then_some((&edge[..], true)), &data, &mut out)?;
     // The level, and an arrow down the fall.
     let spec_t = ctx.layer("GW", "HOOGTE_AFWERKHOOGTE", Element::T)?;
     let zc = edge.iter().map(|p| p[2]).sum::<f64>() / edge.len() as f64;
@@ -1781,7 +1784,7 @@ pub fn slope(opt: &super::CivielOptions, req: SlopeRequest, progress: &dyn Fn(St
         ("naar", what.clone()),
     ]);
     let mut out = Out::default();
-    let length = draw_grading(&ctx, &g, Some((&edge[..], line.closed)).filter(|_| from_feature.is_none()), &data, &mut out)?;
+    let length = draw_grading(&ctx, &g, from_feature.is_none().then_some((&edge[..], line.closed)), &data, &mut out)?;
     let handles = out.write_handles(&name)?;
     bridge::index_add("grading", &name, &handles, true);
     let vol = grading_volume(&ctx, &mut ground, &g.tris);
