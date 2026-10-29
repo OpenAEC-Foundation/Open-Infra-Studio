@@ -9,6 +9,10 @@ pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
 pub mod terrein;
+// Clothoids, design criteria, rail and sight distance (as-spoor).
+pub mod ontwerpcriteria;
+pub mod spoor;
+pub mod zicht;
 
 use std::sync::{Mutex, OnceLock};
 
