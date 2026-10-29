@@ -17,6 +17,8 @@ Everything works on drawings in metres, millimetres or centimetres, at any locat
 
 There is no dialog API for plugins, so the values that need typing (levels, grades, falls) go in as command arguments.
 
+The MCP server offers the same as `civ_feature_line`, `civ_feature_line_edit`, `civ_plateau`, `civ_slope`, `civ_volume_tin` and `civ_mass_haul`.
+
 ## Feature lines (`CIV_KANTLIJN`)
 
 A 3D polyline on `N-…-OG-BREUKLIJN-G` (status N unless `STATUS=` is given), with object data `kantlijn`, `bron`, `punten`, `lengte_m`, `z_min`, `z_max` and `hellingen` (grade per segment, %). Labels on `…-OG-BREUKLIJN-T`: the level at each corner and the grade of each segment with an arrow down the slope (on lines of more than 30 points only the ends get a level).
