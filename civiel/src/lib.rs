@@ -453,12 +453,18 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             job(host, "Grondverzet", id, move |p| terrein::volume(&o, design, p));
         }
         "CIV_AS" => {
-            let o = opt(&["AS", "PI", "R", "NAAM", "BEGIN"])?;
+            let o = opt(&["AS", "PI", "R", "NAAM", "BEGIN", "LS", "A"])?;
             let input = match args.points("PI")? {
                 Some(pis) => {
                     let pis: Vec<[f64; 2]> = pis.into_iter().map(to_drawing).collect::<Result<_, _>>()?;
                     let radii: Vec<f64> = args.list("R")?.unwrap_or_default().into_iter().map(|r| r * unit).collect();
-                    as_profiel::AxisInput::Pis(pis, radii)
+                    // Clothoids per PI: a length LS= or a parameter A=.
+                    match (args.list("LS")?, args.list("A")?) {
+                        (None, None) => as_profiel::AxisInput::Pis(pis, radii),
+                        (Some(_), Some(_)) => return Err(open_infra::lang::tr("geef per boog LS= (lengte overgangsboog) óf A= (clothoïdeparameter), niet beide", "give LS= (transition length) or A= (clothoid parameter) per curve, not both").into()),
+                        (Some(ls), None) => as_profiel::AxisInput::Layout(pis, radii, ls.into_iter().map(|l| as_profiel::Transition::Length(l * unit)).collect()),
+                        (None, Some(a)) => as_profiel::AxisInput::Layout(pis, radii, a.into_iter().map(|a| as_profiel::Transition::Parameter(a * unit)).collect()),
+                    }
                 }
                 None => as_profiel::AxisInput::Line(args.handle("AS")?),
             };
@@ -606,7 +612,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             "[Open Infra — Civiel] Lint: selectie en klikken; scripts: argumenten SLEUTEL=waarde, coördinaten x,y in het projectstelsel, ID=<naam> schrijft <config>/api/<naam>.json. \
              CIV_PUNTEN_IMPORT <pad> [FORMAAT=], CIV_PUNT x,y[,z] [NR=] [CODE=], CIV_PUNTEN_EXPORT [PAD=], CIV_LANDXML <pad>; \
              CIV_TIN [BRON=AHN|PUNTEN|SELECTIE] [LAAG=] [STATUS=B|N] [AFSTAND=] [MAXRIBBE=]; CIV_HOOGTELIJNEN / CIV_ANALYSE [OPPERVLAK=B|N]; CIV_VOLUME [ONTWERP=PEIL] [PEIL=] [CEL=]; \
-             CIV_AS AS=<handle> | PI=x,y;x,y;… R=r;… [NAAM=] [BEGIN=]; CIV_AS_OFFSET AS= VERSCHUIVING=-3.5;3.5; CIV_STATION AS= x,y; \
+             CIV_AS AS=<handle> | PI=x,y;x,y;… R=r;… [LS=l;…|A=a;…] [NAAM=] [BEGIN=]; CIV_AS_OFFSET AS= VERSCHUIVING=-3.5;3.5; CIV_STATION AS= x,y; \
              CIV_LENGTEPROFIEL AS= [PLAATS=x,y]; CIV_ONTWERPPROFIEL AS= PVI=station:hoogte;… [BOOG=]; CIV_DWARSPROFIELEN AS= [PLAATS=] [OM=] [LINKS=] [RECHTS=]; \
              3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>; \
              CIV_CORRIDOR AS= [SJABLOON=weg|fietspad|snelweg|dijk] [NIVEAU=|BOVEN=] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y]; CIV_INFO.",
