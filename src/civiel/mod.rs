@@ -5,6 +5,8 @@
 pub mod api;
 pub mod as_profiel;
 pub mod corridor;
+pub mod grading;
+pub mod massa;
 pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
