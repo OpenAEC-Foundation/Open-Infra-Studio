@@ -9,6 +9,8 @@ pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
 pub mod terrein;
+pub mod hydrologie;
+pub mod percelen;
 
 use std::sync::{Mutex, OnceLock};
 
