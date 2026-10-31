@@ -155,6 +155,8 @@ A second plugin, `openaec.open-infra-civiel`, adds the ribbon tab **"Open Infra 
 
 **Grading** (feature lines, plateaus and slopes into one design surface, exact TIN-to-TIN volumes, mass haul): see [docs/civiel-grading.md](docs/civiel-grading.md).
 
+**Bladen** (sheets, plan production): sheet sets along an alignment with plan and profile in paper-space layouts, a PDF per sheet, and labels that follow their source — see [docs/civiel-bladen.md](docs/civiel-bladen.md).
+
 The window page **Civiel — instellingen** (settings) holds all settings, and they also apply to the ribbon buttons. Checked on a real road near Dordrecht: the corridor's average-end-area volumes and the independent TIN-to-TIN grid volume agree within 2 %.
 
 ## 3D city and landscape model

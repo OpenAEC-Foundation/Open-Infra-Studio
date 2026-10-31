@@ -66,6 +66,11 @@ const I_PLATEAU: IconKind = icon!("plateau.svg");
 const I_SLOPE: IconKind = icon!("talud.svg");
 const I_VOLUME_TIN: IconKind = icon!("grondverzet-tin.svg");
 const I_MASS_HAUL: IconKind = icon!("grondbalans.svg");
+// Plan production: sheets and labels.
+const I_SHEETS: IconKind = icon!("bladen.svg");
+const I_SHEETS_PDF: IconKind = icon!("bladen-pdf.svg");
+const I_LABELS: IconKind = icon!("labels.svg");
+const I_LABELS_UPDATE: IconKind = icon!("labels-bijwerken.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -186,6 +191,16 @@ impl CadModule for CivielModule {
                 });
             }
             groups.push(RibbonGroup { title: tr("3D-model", "3D model"), tools: model });
+            // Plan production: sheet sets along an alignment, labels that follow their source.
+            groups.push(RibbonGroup {
+                title: tr("Bladen", "Sheets"),
+                tools: vec![
+                    large("CIV_BLADEN", tr("Bladen maken", "Create sheets"), I_SHEETS),
+                    small("CIV_BLADEN_PDF", tr("Bladen naar PDF", "Sheets to PDF"), I_SHEETS_PDF),
+                    small("CIV_LABELS", "Labels", I_LABELS),
+                    small("CIV_LABELS_BIJWERKEN", tr("Labels bijwerken", "Update labels"), I_LABELS_UPDATE),
+                ],
+            });
             groups.push(RibbonGroup {
                 title: tr("Instellingen", "Settings"),
                 tools: vec![large("CIV_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS), small("CIV_INFO", tr("Modelinfo", "Model info"), I_INFO)],
@@ -987,6 +1002,73 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             opt(&["BESTAND", "PAD", "TEKST"])?;
             let (file, selection, texts) = open_infra::ifc::args(args);
             job(host, "IFC 4x3", id, move |p| open_infra::ifc::command(file, selection, texts, p));
+        }
+        // Plan production: sheets and labels.
+        "CIV_BLADEN" => {
+            use open_infra::lang::tr;
+            let o = args.without(&["FORMAAT", "SCHAAL"]).apply(&base, &["AS", "VSCHAAL", "OVERLAP", "PROJECT", "ONDERWERP", "NUMMER"])?;
+            let paper = match args.str("FORMAAT") {
+                Some(p) => civiel::bladen::Paper::parse(p).ok_or(tr("FORMAAT: A0, A1, A2 of A3", "FORMAAT: A0, A1, A2 or A3"))?,
+                None => civiel::bladen::Paper::parse("A1").expect("A1"),
+            };
+            let scale = match args.str("SCHAAL") {
+                Some(s) => civiel::bladen::parse_scale(s).ok_or(tr("SCHAAL: bijv. 1:1000 of 500", "SCHAAL: e.g. 1:1000 or 500"))?,
+                None => base.nlcs.scale,
+            };
+            // VSCHAAL=10 is an exaggeration, VSCHAAL=1:100 a vertical scale.
+            let exaggeration = match args.str("VSCHAAL") {
+                Some(v) if v.contains([':', '/']) => scale / civiel::bladen::parse_scale(v).ok_or(tr("VSCHAAL: bijv. 10 of 1:100", "VSCHAAL: e.g. 10 or 1:100"))?,
+                Some(_) => args.f64("VSCHAAL")?.unwrap_or(base.exaggeration),
+                None => base.exaggeration,
+            };
+            let axis_h = args.handle("AS")?;
+            if axis_h.is_none() && !scripted && selected_axis(host).is_none() {
+                return Err(tr("selecteer eerst één as, of geef AS=<handle>", "select one alignment first, or give AS=<handle>").into());
+            }
+            let req = civiel::bladen::Request {
+                axis: axis_h,
+                paper,
+                scale,
+                exaggeration,
+                overlap: args.f64("OVERLAP")?,
+                project: args.str("PROJECT").map(str::to_string),
+                subject: args.str("ONDERWERP").map(str::to_string),
+                number: args.str("NUMMER").map(str::to_string),
+            };
+            job(host, tr("Bladen", "Sheets"), id, move |p| civiel::bladen::create(&o, req, p));
+        }
+        "CIV_BLADEN_PDF" => {
+            opt(&["AS", "NAAM", "MAP"])?;
+            let (h, name, dir) = (args.handle("AS")?, args.str("NAAM").map(str::to_string), args.str("MAP").map(std::path::PathBuf::from));
+            job(host, "PDF", id, move |p| {
+                let name = match (name, h) {
+                    (Some(n), _) => Some(n),
+                    (None, Some(h)) => bridge::entities(&[h])?.into_iter().flatten().next().and_then(|e| civiel::data_value(&e, "as")),
+                    (None, None) => None,
+                };
+                civiel::bladen::pdf(name, dir, p)
+            });
+        }
+        "CIV_LABELS" => {
+            use open_infra::lang::tr;
+            let o = opt(&["AS", "SOORT", "PUNTEN", "RASTER", "OPPERVLAK"])?;
+            let kinds = match args.str("SOORT") {
+                Some(k) => civiel::labels::Kind::list(k)?,
+                None => Vec::new(),
+            };
+            let points: Vec<[f64; 2]> = args.points("PUNTEN")?.unwrap_or_default().into_iter().map(to_drawing).collect::<Result<_, _>>()?;
+            let surface = match args.str("OPPERVLAK").map(|s| s.to_ascii_uppercase()) {
+                None => 'B',
+                Some(s) if s == "B" || s == "BESTAAND" => 'B',
+                Some(s) if s == "N" || s == "ONTWERP" => 'N',
+                Some(_) => return Err(tr("OPPERVLAK: B (bestaand) of N (ontwerp)", "OPPERVLAK: B (existing) or N (design)").into()),
+            };
+            let req = civiel::labels::Request { kinds, axis: args.handle("AS")?, points, grid: args.f64("RASTER")?, surface };
+            job(host, "Labels", id, move |p| civiel::labels::create(&o, req, p));
+        }
+        "CIV_LABELS_BIJWERKEN" => {
+            let o = opt(&[])?;
+            job(host, open_infra::lang::tr("Labels bijwerken", "Update labels"), id, move |p| civiel::labels::update(&o, p));
         }
         "CIV_INFO" => {
             opt(&[])?;
