@@ -538,6 +538,46 @@ def t_mass_haul(a):
                                            VRIJ=a.get("free_haul"), PLAATS=a.get("at") and _pt(a["at"])))
 
 
+# Corridor stream: assemblies (JSON), junctions and roundabouts.
+@tool("civ_assemblies", "The corridor assemblies (profieltypen): presets and the user's JSON files in <config>/OpenCADStudio/open-infra/assemblies/, "
+      "with their parts per side (lanes, gutters, kerbs, footways, cycle paths, parking, verges, central reserve, ditches), pavement layers, "
+      "conditions (cut/fill) and targets. With name: one in detail; copy_to copies it as a start for your own; at draws it as a template section.",
+      {"name": STR, "copy_to": STR, "at": PT})
+def t_assemblies(a):
+    if a.get("name"):
+        return OCS.run(f"CIV_PROFIELTYPE {_kv(NAAM=a['name'], KOPIE=a.get('copy_to'), PLAATS=a.get('at') and _pt(a['at']))}")
+    return OCS.run("CIV_PROFIELTYPEN")
+
+
+@tool("civ_corridor_range", "A corridor with any assembly (preset or own JSON) over a station range, e.g. from a junction's or roundabout's mouth "
+      "(their result gives 'VAN=…' or 'TOT=…' per arm); targets are named lines in the drawing for width or level targets.",
+      {"axis": AXIS, "assembly": STR, "from_station": NUM, "to_station": NUM, "targets": {"type": "object", "additionalProperties": STR, "description": "name → handle"},
+       "level": NUM, "frequency": NUM, "sections": {"type": "boolean"}}, ["assembly"])
+def t_corridor_range(a):
+    targets = ";".join(f"{k}:{v}" for k, v in (a.get("targets") or {}).items())
+    return OCS.run("CIV_CORRIDOR " + _kv(AS=a.get("axis"), PROFIELTYPE=a["assembly"], VAN=a.get("from_station"), TOT=a.get("to_station"), DOELEN=targets,
+                                         NIVEAU=a.get("level"), FREQUENTIE=a.get("frequency"), DWARSPROFIELEN=True if a.get("sections") else None))
+
+
+@tool("civ_junction", "A T or X junction of a main road and a side road (axes with design profiles): corner radii per corner (CROW-based default 8 m, an estimate), "
+      "kerb returns, the side road tied in to the main road's cross slope, a TIN patch; the result gives each arm's mouth station for its corridor.",
+      {"main": AXIS, "side": AXIS, "radii": {"type": "array", "items": NUM}, "assembly": STR, "main_assembly": STR, "side_assembly": STR, "level": NUM},
+      ["main", "side"])
+def t_junction(a):
+    radii = ";".join(_num(r) for r in a.get("radii") or [])
+    return OCS.run("CIV_KRUISPUNT " + _kv(HOOFD=a["main"], ZIJ=a["side"], R=radii, PROFIELTYPE=a.get("assembly"), PROFIELTYPE_HOOFD=a.get("main_assembly"),
+                                           PROFIELTYPE_ZIJ=a.get("side_assembly"), NIVEAU=a.get("level")))
+
+
+@tool("civ_roundabout", "A single-lane roundabout after CROW publication 126 on 2+ axes (3–6 arms): outer diameter, carriageway, overrunnable strip, "
+      "entry and exit radii and splitter islands; 2D layout and a 3D surface falling outward. The result gives each arm's mouth station.",
+      {"axes": {"type": "array", "items": STR}, "centre": PT, "kind": {"type": "string", "enum": ["binnen", "buiten"]}, "diameter": NUM, "assembly": STR, "level": NUM},
+      ["axes"])
+def t_roundabout(a):
+    return OCS.run("CIV_ROTONDE " + _kv(ASSEN=";".join(a["axes"]), MIDDEN=a.get("centre") and _pt(a["centre"]), TYPE=a.get("kind"), D=a.get("diameter"),
+                                         PROFIELTYPE=a.get("assembly"), NIVEAU=a.get("level")))
+
+
 @tool("civ_bag3d", "3D BAG buildings of the project area (LoD 1.2, 1.3 or 2.2): roof and wall meshes per building. "
       "style: mooi (roof colours from the aerial photo, walls by building year, windows per storey, crisp planes), "
       "maquette (white architectural model), realistisch (two plain colours) or nlcs (layer colours).",

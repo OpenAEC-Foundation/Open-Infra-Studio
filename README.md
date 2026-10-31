@@ -157,6 +157,8 @@ A second plugin, `openaec.open-infra-civiel`, adds the ribbon tab **"Open Infra 
 
 **Bladen** (sheets, plan production): sheet sets along an alignment with plan and profile in paper-space layouts, a PDF per sheet, and labels that follow their source — see [docs/civiel-bladen.md](docs/civiel-bladen.md).
 
+Corridor parts (kerbs, footways, cycle paths, ditches, pavement layers), your own assemblies as JSON, junctions and roundabouts: see [docs/civiel-corridor.md](docs/civiel-corridor.md).
+
 The window page **Civiel — instellingen** (settings) holds all settings, and they also apply to the ribbon buttons. Checked on a real road near Dordrecht: the corridor's average-end-area volumes and the independent TIN-to-TIN grid volume agree within 2 %.
 
 ## 3D city and landscape model

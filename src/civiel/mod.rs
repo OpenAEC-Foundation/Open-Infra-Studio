@@ -15,6 +15,9 @@ pub mod terrein;
 // Plan production: sheets and labels.
 pub mod bladen;
 pub mod labels;
+// Corridor stream: junctions and roundabouts, assemblies as JSON.
+pub mod kruispunt;
+pub mod profieltype;
 
 use std::sync::{Mutex, OnceLock};
 

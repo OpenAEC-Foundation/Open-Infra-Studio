@@ -1,0 +1,11 @@
+{
+  "naam": "snelweg",
+  "omschrijving": "Halfverharding van een 2×2-autosnelweg zoals het sjabloon 'snelweg' van Open Infra: 7,00 + 3,50 m verharding, berm 2,00 m, verkanting 5 %",
+  "bronnen": ["Het sjabloon 'snelweg' van Open Infra (2026.44); maten zijn schattingen, toets ze aan de ROA (Richtlijn Ontwerp Autosnelwegen, Rijkswaterstaat)"],
+  "talud": 3, "ingraving": 2, "reikwijdte": 60, "verkanting": 5, "uitrol": 30,
+  "beide": [
+    {"type": "rijstrook", "breedte": 7.00, "helling": -2.5, "lagen": "snelweg-zoab"},
+    {"type": "rijstrook", "breedte": 3.50, "helling": -2.5, "lagen": "snelweg-zoab"},
+    {"type": "berm", "breedte": 2.00, "helling": -4.0}
+  ]
+}
