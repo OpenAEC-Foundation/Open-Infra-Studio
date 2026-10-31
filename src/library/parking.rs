@@ -533,8 +533,9 @@ pub fn draw(line: &[P], req: &Request) -> Result<String, String> {
         tx.horizontal_alignment = TextHorizontalAlignment::Center;
         tx.vertical_alignment = TextVerticalAlignment::Middle;
         tx.alignment_point = Some(at);
-        // Read along the bay.
-        let ang = bay.into[1].atan2(bay.into[0]);
+        // Read along the bay's long side.
+        let long = if d.angle == 0.0 { bay.along } else { bay.into };
+        let ang = long[1].atan2(long[0]);
         tx.rotation = crate::emit::readable(ang);
         let mut e = EntityType::Text(tx);
         e.common_mut().layer = text_l.into();

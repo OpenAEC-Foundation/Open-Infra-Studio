@@ -134,7 +134,9 @@ Neither NLCS 5.02 nor the BGT has objects for flow paths or catchments. These go
 - **At an edge** it goes on into the next triangle. Where both triangles slope towards the edge (a gutter or a valley), it follows the edge down.
 - **At a vertex** it takes the steepest way out: a triangle's slope or a descending edge.
 
-It stops in a pit (a local minimum: water stands there), at the edge of the TIN, or on a level triangle. The path is a 3D polyline with its length, fall and end as object data, and a label with the end height.
+- **On level ground** (a level triangle, or a vertex without a lower neighbour) it walks across the vertices of the same height to the nearest one with a way down, or to the edge of the TIN.
+
+It stops in a pit (a local minimum, also a level one without a way out: water stands there) or at the edge of the TIN. The path is a 3D polyline with its length, fall and end as object data, and a label with the end height.
 
 Without a TIN in the drawing, an AHN TIN every `CEL=` m (default 1) is made in memory. It is not drawn.
 
@@ -150,7 +152,7 @@ Without a TIN in the drawing, an AHN TIN every `CEL=` m (default 1) is made in m
   - Level and filled cells drain along the flooding order, so every cell reaches an outflow.
   - Each cell belongs to the first outlet downstream of it.
   - The grid border and cells without a height are where water leaves the model. In AHN these are water and buildings.
-- **Snapping:** an outlet moves to the cell with the most flow within `SNAP=` m (default 2), as a gully catches the gutter's flow.
+- **Snapping:** an outlet on a cell without a height (a building, water, a hole in the TIN) first moves to the nearest cell with one; then it moves to the cell with the most flow within `SNAP=` m (default 2), as a gully catches the gutter's flow.
 - **Output:** the outline of each catchment (cell edges, lightly simplified), its area in m² as a label and in the JSON, and the outlet as a circle.
 
 ### Ponds
@@ -258,6 +260,17 @@ The other bays hold the same vehicle, parked the same way; in parallel bays they
 *Past* (fits) means no overlap with a parked vehicle and the final position inside the bay. The swept path itself is drawn on the swept-path layers.
 
 With the defaults a mid-size car from the library (4.28 m long, 2.62 m wheelbase) fits a 2.50 m bay at 90° with a 6.00 m aisle in reverse, and a 6.25 m parallel bay along the S. These cases are unit-tested.
+
+## In the IFC 4.3 export
+
+`GIS_IFC` / `CIV_IFC` pick all of this up through the NLCS layers and the object data:
+
+| What | IFC |
+|---|---|
+| Linework from codes | by its NLCS object, like any other drawing: kerbs `IfcKerb`, pavement edges `IfcPavement`, fences `IfcRailing`, walls `IfcWall`, the building outline `IfcBuilding` |
+| Survey symbols (blocks placed from point codes) | the object at the measured point: trees `IfcGeographicElement` (VEGETATION), manholes `IfcDistributionChamberElement` (MANHOLE), gullies the same (SUMP), hydrants `IfcFireSuppressionTerminal` (FIREHYDRANT), valve covers `IfcPipeFitting`, signs `IfcSign`. Other blocks, such as vehicles, stay out |
+| Parcels | `IfcAnnotation` (KG layer), with number, area, perimeter and frontage in the `OPENINFRA` property set |
+| Catchments, ponds, water drops, parking bays | `IfcAnnotation` named *Stroomgebied*, *Plas*, *Waterdruppel*, *Parkeervak*, with their object data |
 
 ## Tests
 

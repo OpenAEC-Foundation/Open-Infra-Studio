@@ -273,6 +273,9 @@ impl Flow {
         let mut state = At::Tri(t0);
         let mut cur = p;
         let mut seen: HashSet<usize> = HashSet::new();
+        // A hop to the next triangle without moving (the drop sat on their
+        // shared edge): where it came from.
+        let mut hop_from: Option<usize> = None;
         for _ in 0..500_000 {
             match state {
                 At::Tri(t) => {
@@ -309,8 +312,53 @@ impl Flow {
                         }
                     }
                     let Some((lam, k, mu)) = best else {
-                        return Some(DropPath { points: pts, stop: Stop::Flat });
+                        // No way out forward. On a corner: on from that vertex.
+                        if let Some(&v) = tri.iter().find(|&&v| len(sub(self.xy(v), cur)) <= tol) {
+                            if seen.contains(&v) {
+                                return Some(DropPath { points: pts, stop: Stop::Pit });
+                            }
+                            cur = self.xy(v);
+                            hop_from = None;
+                            state = At::Vert(v);
+                            continue;
+                        }
+                        // On an edge: the drop runs into the triangle beyond
+                        // it, or both sides slope to the edge (a channel) and
+                        // it follows it down.
+                        let on = (0..3).find(|&k| {
+                            let (u, w) = (self.xy(tri[k]), self.xy(tri[(k + 1) % 3]));
+                            let e = sub(w, u);
+                            let l = len(e).max(1e-12);
+                            let along = dot(sub(cur, u), e) / l;
+                            (cross(e, sub(cur, u)) / l).abs() <= 1e-6 * l.max(1.0) && along > -1e-9 && along < l + 1e-9
+                        });
+                        let Some(k) = on else {
+                            return Some(DropPath { points: pts, stop: Stop::Flat });
+                        };
+                        let (iu, iw) = (tri[k], tri[(k + 1) % 3]);
+                        match self.nb[t][k] {
+                            Some(t2) if hop_from != Some(t2) => {
+                                hop_from = Some(t);
+                                state = At::Tri(t2);
+                            }
+                            _ => {
+                                let (zu, zw) = (self.tin.points[iu][2], self.tin.points[iw][2]);
+                                let v = if zu < zw {
+                                    iu
+                                } else if zw < zu {
+                                    iw
+                                } else {
+                                    return Some(DropPath { points: pts, stop: Stop::Flat });
+                                };
+                                pts.push(self.tin.points[v]);
+                                cur = self.xy(v);
+                                hop_from = None;
+                                state = At::Vert(v);
+                            }
+                        }
+                        continue;
                     };
+                    hop_from = None;
                     let (iu, iw) = (tri[k], tri[(k + 1) % 3]);
                     if mu < 1e-7 || mu > 1.0 - 1e-7 {
                         let v = if mu < 0.5 { iu } else { iw };
@@ -1238,6 +1286,23 @@ mod tests {
         let flow = Flow::new(tin_of(|x, y| x.abs() * 0.2 + y * 0.01, 10, 2.0));
         let p = flow.drop_path([12.3, 15.0]).unwrap();
         assert_eq!(p.stop, Stop::Edge);
+        let end = p.points.last().unwrap();
+        assert!(end[0].abs() < 1e-6 && (end[1] + 20.0).abs() < 1e-6, "{end:?}");
+    }
+
+    #[test]
+    fn a_drop_let_go_on_an_edge_runs_on() {
+        // The start lies on a triangle edge (the grid's points and their
+        // diagonals): whichever triangle holds it, the drop runs down.
+        let flow = Flow::new(tin_of(|x, y| 0.1 * x + 0.03 * y, 10, 2.0));
+        for start in [[4.0, 4.0], [3.0, 3.0], [4.0, 3.0], [2.0, 7.0]] {
+            let p = flow.drop_path(start).unwrap();
+            assert_eq!(p.stop, Stop::Edge, "{start:?}");
+            assert!(p.length() > 20.0, "{start:?}: {}", p.length());
+        }
+        // A V-shaped valley along the y axis, let go on the valley line.
+        let flow = Flow::new(tin_of(|x, y| x.abs() * 0.2 + y * 0.01, 10, 2.0));
+        let p = flow.drop_path([0.0, 5.0]).unwrap();
         let end = p.points.last().unwrap();
         assert!(end[0].abs() < 1e-6 && (end[1] + 20.0).abs() < 1e-6, "{end:?}");
     }
