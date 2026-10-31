@@ -288,7 +288,7 @@ fn triangulate(pts: &[P3], chosen: &[usize], centre: [f64; 2], occ: Option<&Occu
     let tri = delaunator::triangulate(&d);
     let mut tris = Vec::with_capacity(tri.triangles.len() / 3);
     let mut holes = Vec::with_capacity(tri.triangles.len() / 3);
-    for t in tri.triangles.chunks_exact(3) {
+    for t in tri.triangles.as_chunks::<3>().0 {
         let ids = [chosen[t[0]], chosen[t[1]], chosen[t[2]]];
         let [a, b, c] = ids.map(|i| pts[i]);
         if area2(a, b, c).abs() < 1e-12 {

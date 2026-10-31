@@ -240,7 +240,7 @@ pub fn create(opt: &CivielOptions, v: &MeshVraag, progress: &dyn Fn(String)) -> 
             return true;
         }
         seen += 1;
-        if seen % stride != 0 {
+        if !seen.is_multiple_of(stride) {
             return true;
         }
         pts.push([(p[0] - mid[0]) / f, (p[1] - mid[1]) / f, p[2] / f]);

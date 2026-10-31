@@ -264,7 +264,7 @@ pub fn stream_ahn(bbox: [f64; 4], edition: Edition, spacing: f64, max_tiles: usi
                     pass.stopped = true;
                     break;
                 }
-                if pass.read % 250_000 == 0 {
+                if pass.read.is_multiple_of(250_000) {
                     progress(format!(
                         "{} tegel {}/{}: {} punten, {:.1} MB opgehaald…",
                         edition.short(),
@@ -414,7 +414,7 @@ pub fn stream_file(path: &Path, bbox: Option<[f64; 4]>, spacing: f64, progress: 
                         pass.stopped = true;
                         break;
                     }
-                    if pass.read % 1_000_000 == 0 {
+                    if pass.read.is_multiple_of(1_000_000) {
                         progress(format!("{name}: {}…", pass.read));
                     }
                 }
@@ -436,7 +436,7 @@ pub fn stream_file(path: &Path, bbox: Option<[f64; 4]>, spacing: f64, progress: 
                 pass.stopped = true;
                 break;
             }
-            if pass.read % 1_000_000 == 0 {
+            if pass.read.is_multiple_of(1_000_000) {
                 progress(format!("{name}: {} / {total}…", pass.read));
             }
         }
@@ -454,7 +454,7 @@ pub fn stream_file(path: &Path, bbox: Option<[f64; 4]>, spacing: f64, progress: 
             stop = true;
             return Err(pointcloud_core::LoadError::Cancelled);
         }
-        if pass.read % 1_000_000 == 0 {
+        if pass.read.is_multiple_of(1_000_000) {
             progress(format!("{name}: {}…", pass.read));
         }
         Ok(())
@@ -646,7 +646,7 @@ mod tests {
                 entries += u32_at(rec + 108 + level * 4) as usize;
             }
             assert_eq!(entries * 4 + points * 16, size);
-            for r in b[block + entries * 4..block + size].chunks_exact(16) {
+            for r in b[block + entries * 4..block + size].as_chunks::<16>().0 {
                 let v = u64::from_le_bytes(r[0..8].try_into().unwrap());
                 let q = |s: u32| ((v >> s) & 0x3FFFF) as f64 * 1e-3;
                 read.push(([cube[0] + q(0), cube[1] + q(18), cube[2] + q(36)], [r[11], r[10], r[9]]));

@@ -112,6 +112,21 @@ def main():
         time.sleep(0.5)
         return path.exists()
 
+    def plan(name, bounds):
+        ocs.run("-VIEW TOP")
+        ocs.run("VSCURRENT WIREFRAME2D")
+        return capture(name, bounds)
+
+    def view3d(name, window=None):
+        ocs.run("-VIEW SWISO")
+        ocs.run("VSCURRENT GOURAUDSHADED")
+        if window:
+            ocs.run(f"ZOOM W {window[0]},{window[1]} {window[2]},{window[3]}")
+        else:
+            ocs.run("ZOOM EXTENTS")
+        time.sleep(2)
+        return capture(name)
+
     def layer_with(part):
         return [n for n in ocs.layers() if part in n]
 
@@ -179,25 +194,33 @@ def main():
         ok = d.get("driehoeken", 0) > 500 and "-KW-KUNSTWERK_BRUG-" in layer and any("driehoeken=" in str(x) for x in xd)
         return ok, f"{r['message']} | XDATA {xd[:4]}"
 
-    def captures_dordrecht():
+    def capture_tin():
+        a = plan("dordrecht_tin_plan", SITE)
+        b = view3d("dordrecht_tin_3d")
+        return a and b, "dordrecht_tin_plan.png, dordrecht_tin_3d.png"
+
+    def capture_contours():
+        return plan("dordrecht_hoogtelijnen", SITE), "dordrecht_hoogtelijnen.png"
+
+    def capture_bridge():
+        a = plan("dordrecht_brug_plan", [104780, 425265, 104823, 425305])
+        b = view3d("dordrecht_brug_3d", [104780, 425265, 104823, 425305])
+        return a and b, "dordrecht_brug_plan.png, dordrecht_brug_3d.png"
+
+    def capture_profiles():
         ocs.run("-VIEW TOP")
         ocs.run("VSCURRENT WIREFRAME2D")
-        a = capture("dordrecht_tin_hoogtelijnen", SITE)
-        b = capture("dordrecht_brug_plan", [104780, 425265, 104823, 425305])
-        ocs.run("-VIEW SWISO")
-        ocs.run("VSCURRENT GOURAUDSHADED")
         ocs.run("ZOOM EXTENTS")
         time.sleep(2)
-        c = capture("dordrecht_3d")
-        return a and b and c, "captures in target/e2e-puntenwolk/"
+        return capture("dordrecht_profielen"), "dordrecht_profielen.png"
 
     def save_dordrecht():
         path = OUT / "puntenwolk_dordrecht.dwg"
         if path.exists():
             path.unlink()
-        r = ocs.call("/save", {"path": str(path), "document_id": ocs.doc()}, timeout=300)
+        r = ocs.run(f"SAVEAS {path}")
         time.sleep(2)
-        return path.exists(), f"{path} ({r.get('ok', r)})"
+        return path.exists(), f"{path} ({r.get('status')})"
 
     # ── Synthetic data: unclassified LAS, PLY ──────────────────────────────
     def new_drawing():
@@ -244,41 +267,48 @@ def main():
             ok = "'Testbrug'" in text and ".TERRAIN." in text
         return ok, f"{r['message']} | {k}"
 
-    def captures_test():
-        ocs.run("-VIEW TOP")
-        ocs.run("VSCURRENT WIREFRAME2D")
-        a = capture("testwolk_tin_hoogtelijnen", [105395, 425295, 105485, 425365])
-        ocs.run("-VIEW SWISO")
-        ocs.run("VSCURRENT GOURAUDSHADED")
-        ocs.run("ZOOM EXTENTS")
-        time.sleep(2)
-        b = capture("testwolk_3d")
-        return a and b, "captures in target/e2e-puntenwolk/"
+    def capture_test_tin():
+        return view3d("testwolk_tin_3d"), "testwolk_tin_3d.png"
+
+    def capture_test_contours():
+        return plan("testwolk_hoogtelijnen", [105395, 425295, 105485, 425365]), "testwolk_hoogtelijnen.png"
+
+    def capture_test_bridge():
+        return view3d("testwolk_brug_3d", [105405, 425262, 105435, 425282]), "testwolk_brug_3d.png"
+
+    def capture_test_scan():
+        return view3d("testwolk_brug_scan", [105405, 425262, 105435, 425282]), "testwolk_brug_scan.png"
 
     def save_test():
         path = OUT / "puntenwolk_testwolk.dwg"
         if path.exists():
             path.unlink()
-        r = ocs.call("/save", {"path": str(path), "document_id": ocs.doc()}, timeout=300)
+        r = ocs.run(f"SAVEAS {path}")
         time.sleep(2)
-        return path.exists(), f"{path} ({r.get('ok', r)})"
+        return path.exists(), f"{path} ({r.get('status')})"
 
     try:
         step("site", site)
         step("tin_ahn", tin_ahn)
+        step("capture_tin", capture_tin)
         step("contours", contours)
+        step("capture_contours", capture_contours)
+        step("mesh_ahn", mesh_ahn)
+        step("capture_bridge", capture_bridge)
         step("analysis_volume", analysis_and_volume)
         step("profiles", profiles)
-        step("mesh_ahn", mesh_ahn)
-        step("captures_dordrecht", captures_dordrecht)
+        step("capture_profiles", capture_profiles)
         step("save_dordrecht", save_dordrecht)
         step("new_drawing", new_drawing)
         step("tin_las", tin_las)
+        step("capture_test_tin", capture_test_tin)
         step("contours_las", contours_las)
-        step("ply_import", ply_import)
+        step("capture_test_contours", capture_test_contours)
         step("mesh_ply", mesh_ply)
+        step("capture_test_bridge", capture_test_bridge)
+        step("ply_import", ply_import)
+        step("capture_test_scan", capture_test_scan)
         step("ifc_export", ifc_export)
-        step("captures_test", captures_test)
         step("save_test", save_test)
     finally:
         ocs.stop()

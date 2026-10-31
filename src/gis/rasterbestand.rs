@@ -346,7 +346,7 @@ fn point_cloud(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Result<St
     progress(format!("{} …", path.display()));
     let pass = super::pointcloud::stream_file(path, None, 0.0, progress, &mut |s| {
         seen += 1;
-        if seen % stride != 0 {
+        if !seen.is_multiple_of(stride) {
             return true;
         }
         let Some(q) = to([s.xyz[0], s.xyz[1]]) else { return true };
