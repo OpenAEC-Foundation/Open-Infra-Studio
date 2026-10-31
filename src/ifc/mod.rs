@@ -1485,19 +1485,34 @@ impl<W: Write> Exporter<'_, W> {
             reps.insert(("Body", "Tessellation"), vec![item]);
             x.shape(&reps)
         };
-        // The surface parts as courses.
-        let courses: [(&[Part], &str, String, &'static str, (u8, u8, u8), &'static str); 3] = [
-            (&[Part::Pavement], "deklaag", tr("Verharding bovenvlak", "Pavement surface").to_string(), "PAVEMENT", (72, 72, 78), "CARRIAGEWAY"),
-            (&[Part::Shoulder, Part::Crest], "berm", if is_road { tr("Berm", "Shoulder") } else { tr("Kruin", "Crest") }.to_string(), "PROTECTION", (112, 158, 82), "SOFTSHOULDER"),
-            (&[Part::Slope], "talud", tr("Talud", "Slope").to_string(), "PROTECTION", (136, 176, 96), "ROADSIDE"),
+        // The surface parts as courses: parts, key, name, course type, colour, road part.
+        struct Course {
+            want: &'static [Part],
+            id: &'static str,
+            name: &'static str,
+            kind: &'static str,
+            rgb: (u8, u8, u8),
+            part_kind: &'static str,
+        }
+        let courses = [
+            Course { want: &[Part::Pavement], id: "deklaag", name: tr("Verharding bovenvlak", "Pavement surface"), kind: "PAVEMENT", rgb: (72, 72, 78), part_kind: "CARRIAGEWAY" },
+            Course {
+                want: &[Part::Shoulder, Part::Crest],
+                id: "berm",
+                name: if is_road { tr("Berm", "Shoulder") } else { tr("Kruin", "Crest") },
+                kind: "PROTECTION",
+                rgb: (112, 158, 82),
+                part_kind: "SOFTSHOULDER",
+            },
+            Course { want: &[Part::Slope], id: "talud", name: tr("Talud", "Slope"), kind: "PROTECTION", rgb: (136, 176, 96), part_kind: "ROADSIDE" },
         ];
-        for (want, id, name, kind, rgb, part_kind) in courses {
+        for Course { want, id, name, kind, rgb, part_kind } in courses {
             let (pts, t) = corridor::part_mesh(&m.verts, &tris, &parts, want);
             if t.is_empty() {
                 continue;
             }
             let shape = body(self, &pts, &t, Some(false), rgb, 0)?;
-            let course = self.element(&format!("{key}:{id}"), &class("IfcCourse", Some(kind), None), &name, &road, None, &shape)?;
+            let course = self.element(&format!("{key}:{id}"), &class("IfcCourse", Some(kind), None), name, &road, None, &shape)?;
             *report.classes.entry("IfcCourse".into()).or_insert(0) += 1;
             let element = if kind == "PAVEMENT" {
                 // The course is the pavement's top: the assembly has no build-up.

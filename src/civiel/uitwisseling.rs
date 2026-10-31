@@ -505,7 +505,6 @@ pub(crate) fn sample_model() -> Model {
             lines: vec![FeatureLine { name: "Corridor As 1 Kant verharding links".into(), kind: LineKind::Pavement, offset: Some(-3.25), pts: vec![at(-80.0, -16.75, 1.4), at(-40.0, -16.75, 1.6)] }],
             ..Default::default()
         }],
-        ..Default::default()
     }
 }
 #[cfg(test)]
