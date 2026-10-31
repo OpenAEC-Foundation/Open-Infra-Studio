@@ -17,11 +17,13 @@ Steps
   criteria       ``CIV_ONTWERPCRITERIA`` ROA 2017 niet-hoofdbaan 70 km/h on
                  the axis; ``CIV_AS_TOETS``: exactly one violation, the
                  deliberate R 150 < 160 m, with its station and a marker.
-  sight          ``CIV_ZICHT``: available against required (80 m), with the
-                 buildings on the inside of the curve.
+  sight          ``CIV_ZICHT`` (NOA 80 km/h: 103 m) both ways: a deficit where
+                 the building on the inside of the bend blocks the view.
   rail           ``CIV_SPOOR`` two tracks, V 80, R 600, clothoids of 80 m:
                  cant per curve, ramps and the cant diagram.
   turnout        ``CIV_WISSEL`` 1:9 to the right: the diverging track.
+  IFC            ``CIV_IFC``: clothoids and cant in IFC 4.3, checked with
+                 tests/ifc_validate.py when IfcOpenShell is in target/venv.
   captures       PNGs of the plan, the diagrams and the turnout.
 
 Usage
@@ -175,11 +177,13 @@ def main():
         return ok, f"{c['message']} | {t['message']} | markers {n_marks}"
 
     def sight():
-        r = result("zicht1", f"CIV_ZICHT AS={state['as']} OM=10 RICHTING=beide", timeout=400)
+        # NOA 80 km/h: 103 m stopping sight; the building inside the bend blocks it.
+        r = result("zicht1", f"CIV_ZICHT AS={state['as']} RICHTLIJN=noa CATEGORIE=autosnelweg V=80 OM=10 RICHTING=beide", timeout=400)
         d = r.get("data", {})
         st = d.get("stations", [])
         state["zicht"] = d
-        ok = r["ok"] and abs(d.get("nodig_m", 0) - 80) < 1e-6 and len(st) > 10 and d.get("obstakelranden", 0) > 0 and d.get("terrein")
+        deficits = d.get("tekorten", [])
+        ok = r["ok"] and abs(d.get("nodig_m", 0) - 103) < 1e-6 and len(st) > 10 and d.get("obstakelranden", 0) > 0 and d.get("terrein") and any(t["oorzaak"] == "plattegrond" for t in deficits)
         worst = min((s["beschikbaar_m"] for s in st), default=None)
         return ok, f"{r['message']} | {len(st)} stations, min {worst} m, {len(d.get('tekorten', []))} tekort(en), {d.get('obstakelranden')} randen"
 
@@ -203,10 +207,30 @@ def main():
         ok = r["ok"] and d.get("type") == "1:9" and abs(d.get("hoek_graden", 0) - 6.3402) < 1e-3 and d.get("as")
         return ok, f"{r['message']} | WB {d.get('wisselbegin')} MS {d.get('mathematisch_snijpunt')}"
 
+    def ifc():
+        path = OUT / "as-spoor.ifc"
+        if path.exists():
+            path.unlink()
+        r = result("ifc1", f"CIV_IFC BESTAND={path}", timeout=400)
+        py = REPO / "target" / "venv" / "bin" / "python"
+        if not path.exists():
+            return False, r["message"]
+        text = path.read_text(errors="replace")
+        found = {k: text.count(k) for k in ("IFCCLOTHOID(", "IFCALIGNMENTCANT(", ".LINEARTRANSITION.", "IFCALIGNMENT(")}
+        if not py.exists():
+            return all(found.values()), f"{r['message']} | {found} | IfcOpenShell not installed in target/venv"
+        v = subprocess.run([str(py), str(REPO / "tests" / "ifc_validate.py"), str(path)], capture_output=True, text=True)
+        tail = " / ".join(l for l in v.stdout.splitlines() if "error" in l or "misfit" in l)
+        return v.returncode == 0 and all(found.values()), f"{found} | {tail}"
+
     def captures():
-        # The terrain mesh clutters the plan: switch its layer off.
+        # The terrain mesh clutters the plan: freeze its layer.
         for l in layer_like("-OG-TRIANGULATIE-"):
-            ocs.run(f"LAYER OFF {l}")
+            ocs.run(f"LAYER FREEZE {l}")
+        try:
+            ocs.run("REGEN")
+        except Exception:  # noqa: BLE001
+            pass
         ocs.run("ZOOM EXTENTS")
         time.sleep(1.5)
         shots = [capture("overzicht", focus=None)]
@@ -215,9 +239,13 @@ def main():
         shots.append(capture("plan", rect))
         # Drawing = RD + offset (zero for an absolute project location).
         ox, oy = (rect[0] + rect[2]) / 2 - x, (rect[1] + rect[3]) / 2 - y
-        # The bend of the road: main points, clothoid labels, the violation and sight deficits.
+        # The road, and the bend with its main points, clothoid labels and the violation.
+        shots.append(capture("as", focus=[state["as"]]))
         cx, cy = BEND[0] + ox, BEND[1] + oy
         shots.append(capture("bocht", [cx - 110, cy - 85, cx + 110, cy + 85]))
+        marks = [h for l in layer_like("-AL-AANKLEDING-G") for h in ocs.handles(l)]
+        if marks:
+            shots.append(capture("toetsing", focus=marks[:3]))
         # The turnout on the track.
         if state.get("wissel", {}).get("wisselbegin"):
             wx, wy = state["wissel"]["wisselbegin"]
@@ -241,6 +269,7 @@ def main():
         step("sight distance", sight)
     if step("rail with cant", rail):
         step("turnout 1:9", turnout)
+    step("IFC 4.3 export", ifc)
     step("captures", captures)
     try:
         ocs.run(f"QSAVEAS {OUT / 'as-spoor.dwg'}")

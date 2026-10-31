@@ -51,7 +51,17 @@ Each clothoid is labelled `A = … · L = …` on the inside of the bend; the JS
 
 ### LandXML
 
-`<Spiral>` elements of LandXML 1.x become real clothoids: the start point, the direction towards the spiral's PI (or, without a PI, the direction that makes the chord fit), the length and the curvature from `radiusStart` to `radiusEnd` (`INF` is straight), signed by `rot`. Export of clothoids to LandXML and IFC is added when the export branch is merged.
+`<Spiral>` elements of LandXML 1.x become real clothoids: the start point, the direction towards the spiral's PI (or, without a PI, the direction that makes the chord fit), the length and the curvature from `radiusStart` to `radiusEnd` (`INF` is straight), signed by `rot`. Export of clothoids to LandXML is added when the export branch is merged.
+
+### IFC 4.3
+
+The IFC export (`CIV_IFC`, `GIS_IFC`) writes clothoids into the `IfcAlignment`:
+- the layout: an `IfcAlignmentHorizontalSegment` with PredefinedType `CLOTHOID`, the start and end radius (0 for straight, negative for clockwise) and the segment length;
+- the geometry: an `IfcCurveSegment` of the composite curve whose parent curve is an `IfcClothoid` with constant A = 1/√|dκ/ds| (negative for a clockwise clothoid). A clothoid whose curvature does not start at zero (out of a curve, or between two radii) uses the part of the parent curve from parameter t₀ = κ₀/(dκ/ds), so the curvature along the segment is exactly the clothoid's.
+
+**Cant** of a rail track (`CIV_SPOOR`) is written as `IfcAlignmentCant` (rail head distance 1.5 m) with one `IfcAlignmentCantSegment` per piece: `CONSTANTCANT` on straights (0) and circular curves (the applied cant), `LINEARTRANSITION` along the clothoids. The outer rail is raised: in a left curve the right rail, in a right curve the left rail. The cant has no geometric representation yet (no `IfcSegmentedReferenceCurve`): it is part of the alignment's layout only.
+
+Checked with IfcOpenShell 0.8.4 (`tests/ifc_validate.py`): no schema or EXPRESS rule errors, and the composite curve evaluated by IfcOpenShell's geometry kernel passes through the start of every layout segment (to 1 mm), so each clothoid ends where the next segment starts. The sample drawing of the unit tests (`target/ifc-test/voorbeeld.ifc`) has a road with clothoids and a rail track with cant.
 
 ## Design criteria (`CIV_ONTWERPCRITERIA`, `CIV_AS_TOETS`)
 

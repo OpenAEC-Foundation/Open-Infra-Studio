@@ -482,7 +482,7 @@ pub fn check(opt: &super::CivielOptions, axis_h: Option<Handle>, choice: Option<
         let (p, dir) = al.at((a + b) / 2.0);
         // Stagger the markers so neighbours do not overlap.
         let off = (8.0 + 5.0 * (i % 3) as f64) * k;
-        let at = [p[0] - dir.sin() * -off, p[1] + dir.cos() * off];
+        let at = [p[0] - dir.sin() * off, p[1] + dir.cos() * off];
         out.put(&spec, crate::emit::markers(&[p], &spec.name, 2.0 * k, Some(&data)));
         out.put(&spec, crate::emit::polylines(&[(vec![p, at], false)], &spec.name, k, None));
         let label = format!("{} {}–{}: {} ({})", if fd.severity == "fout" { "✗" } else { "!" }, station(al.start + fd.s0), station(al.start + fd.s1), fd.text, fd.source);

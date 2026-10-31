@@ -522,10 +522,10 @@ pub fn sight(opt: &super::CivielOptions, req: SightRequest, progress: &dyn Fn(St
         out.put(&frame, pl(vec![[at[0], gy(need)], [x1, gy(need)]], &frame));
         let t = ctx.text([x1 + 2.0 * k, gy(need)], &format!("{} {} m", crate::lang::tr("nodig", "required"), comma(need, 0)), 1.8, 0.0, &frame_t, None);
         out.put(&frame_t, [aligned(t, TextHorizontalAlignment::Left, TextVerticalAlignment::Middle)]);
-        let kinds: [(&str, Box<dyn Fn(&Available) -> Option<f64>>); 3] = [
-            (crate::lang::tr("profiel", "profile"), Box::new(|r: &Available| Some(r.profile))),
-            (crate::lang::tr("terrein", "terrain"), Box::new(|r: &Available| r.terrain)),
-            (crate::lang::tr("plattegrond", "plan"), Box::new(|r: &Available| r.plan)),
+        let kinds: [(&str, fn(&Available) -> Option<f64>); 3] = [
+            (crate::lang::tr("profiel", "profile"), |r| Some(r.profile)),
+            (crate::lang::tr("terrein", "terrain"), |r| r.terrain),
+            (crate::lang::tr("plattegrond", "plan"), |r| r.plan),
         ];
         for (label, get) in &kinds {
             let pts: Vec<XY> = rs.iter().filter_map(|r| get(r).map(|v| [gx(r.s), gy(v)])).collect();

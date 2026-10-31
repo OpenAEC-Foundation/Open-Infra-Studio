@@ -488,6 +488,8 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
         },
         "MO" if o.starts_with("ONDERZOEK_") && is_mesh => Class { role: Role::Stratum, ..class("IfcGeotechnicalStratum", Some("SOLID"), ot) },
         "MO" => annotation(if ln.element == "S" { "SYMBOL" } else { "USERDEFINED" }, ot),
+        // Sight lines of the sight distance check: drawing aids, not structures.
+        "KW" if o == "ZICHTRUIMTE" => annotation("USERDEFINED", ot),
         "KW" => class("IfcCivilElement", None, ot),
         "GW" => match o {
             _ if o.starts_with("ONTGRAVING") => class("IfcEarthworksCut", Some("EXCAVATION"), ot),
