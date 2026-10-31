@@ -13,6 +13,9 @@ use ocs_plugin_api::ribbon::{CadModule, IconKind, ModuleEvent, RibbonGroup, Ribb
 use open_infra::civiel::api::{self, Args};
 use open_infra::civiel::{self, as_profiel, corridor, landmeten, landxml, terrein};
 use open_infra::{bridge, ui};
+// Grading: feature lines, plateaus, slopes, TIN volumes, mass haul.
+use open_infra::civiel::{grading, massa};
+use open_infra::lang::tr;
 
 static MANIFEST: PluginManifest = PluginManifest {
     id: "openaec.open-infra-civiel",
@@ -56,6 +59,12 @@ const I_CITYGML: IconKind = icon!("citygml.svg");
 const I_KLIC3D: IconKind = icon!("klic3d.svg");
 const I_SEE: IconKind = icon!("doorzicht.svg");
 const I_CPT: IconKind = icon!("sonderingen.svg");
+// Grading.
+const I_FEATURE: IconKind = icon!("kantlijn.svg");
+const I_PLATEAU: IconKind = icon!("plateau.svg");
+const I_SLOPE: IconKind = icon!("talud.svg");
+const I_VOLUME_TIN: IconKind = icon!("grondverzet-tin.svg");
+const I_MASS_HAUL: IconKind = icon!("grondbalans.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -138,6 +147,18 @@ impl CadModule for CivielModule {
                 },
                 // Corridors: assembly along axis and design profile.
                 RibbonGroup { title: "Corridor", tools: vec![large("CIV_CORRIDOR", "Corridor", I_CORRIDOR)] },
+                // Grading: feature lines, plateaus and slopes, exact earthwork, mass haul.
+                RibbonGroup {
+                    title: tr("Grondwerk", "Grading"),
+                    tools: vec![
+                        large("CIV_KANTLIJN", tr("Kantlijn", "Feature line"), I_FEATURE),
+                        small("CIV_PLATEAU", tr("Plateau", "Plateau"), I_PLATEAU),
+                        small("CIV_TALUD", tr("Talud", "Slope"), I_SLOPE),
+                        small("CIV_KANTLIJN_PUNT", tr("Hoogtepunt", "Height point"), I_PLACE),
+                        small("CIV_VOLUME_TIN", tr("Grondverzet TIN", "Volume TIN"), I_VOLUME_TIN),
+                        small("CIV_GRONDBALANS", tr("Grondbalans", "Mass haul"), I_MASS_HAUL),
+                    ],
+                },
             ];
             // The 3D city and landscape model: open formats for everyone, the
             // Dutch registers (3D BAG, AHN, BGT, KLIC, BRO) in one menu.
@@ -314,6 +335,306 @@ impl InteractiveCommand for PlaceViewCmd {
     }
 }
 
+/// `CIV_TALUD` from the ribbon: click the side of the selected line the
+/// slope goes to.
+struct SlopeSideCmd {
+    line: Vec<[f64; 3]>,
+    handle: ocs_plugin_api::host::codec::Handle,
+}
+
+impl InteractiveCommand for SlopeSideCmd {
+    fn prompt(&self) -> String {
+        tr("Grondwerk: klik aan de kant waar het talud komt", "Grading: click the side the slope goes to").into()
+    }
+    fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
+        // The side of the nearest segment the point lies on.
+        let mut best = (f64::MAX, 1.0);
+        for w in self.line.windows(2) {
+            let (a, b) = (w[0], w[1]);
+            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+            let l2 = (dx * dx + dy * dy).max(1e-24);
+            let t = (((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / l2).clamp(0.0, 1.0);
+            let d = (a[0] + dx * t - pt[0]).hypot(a[1] + dy * t - pt[1]);
+            if d < best.0 {
+                best = (d, if dx * (pt[1] - a[1]) - dy * (pt[0] - a[0]) > 0.0 { -1.0 } else { 1.0 });
+            }
+        }
+        let (side, h) = (best.1, self.handle);
+        std::thread::spawn(move || {
+            let o = grading::design_options(&civiel::settings(), false);
+            let req = grading::SlopeRequest {
+                source: grading::Source::Handle(h),
+                side,
+                to: grading::SlopeTo::Ground { cut: DEFAULT_CUT, fill: DEFAULT_FILL, reach: 50.0 },
+                level: None,
+                step: 1.0,
+                name: None,
+                join: true,
+            };
+            match grading::slope(&o, req, &|_| {}) {
+                Ok(m) => bridge::info(&m),
+                Err(e) => bridge::error(&format!("{}: {e}", tr("Talud", "Slope"))),
+            }
+        });
+        CommandStep::Done
+    }
+}
+
+/// `CIV_KANTLIJN_PUNT` from the ribbon: click points on the selected
+/// feature line; each becomes a height point (height interpolated).
+struct HeightPointCmd {
+    handle: ocs_plugin_api::host::codec::Handle,
+}
+
+fn edit_lock() -> &'static Mutex<()> {
+    static L: OnceLock<Mutex<()>> = OnceLock::new();
+    L.get_or_init(|| Mutex::new(()))
+}
+
+impl InteractiveCommand for HeightPointCmd {
+    fn prompt(&self) -> String {
+        tr("Grondwerk: klik een hoogtepunt op de kantlijn [Enter = klaar]", "Grading: click a height point on the feature line [Enter = done]").into()
+    }
+    fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
+        let h = self.handle;
+        std::thread::spawn(move || {
+            let _one = edit_lock().lock().unwrap_or_else(|e| e.into_inner());
+            let o = civiel::settings();
+            let at = match civiel::Ctx::new(&o) {
+                Ok(c) => c.from_drawing([pt[0], pt[1]]),
+                Err(e) => return bridge::error(&e),
+            };
+            match grading::edit_feature(&o, Some(h), grading::EditArgs::Insert { at, z: None }) {
+                Ok(m) => bridge::info(&m),
+                Err(e) => bridge::error(&format!("{}: {e}", tr("Hoogtepunt", "Height point"))),
+            }
+        });
+        CommandStep::NeedPoint
+    }
+    fn on_enter(&mut self) -> CommandStep {
+        CommandStep::Done
+    }
+}
+
+/// Slopes when none are given: the corridor's road template (fill 1:3, cut
+/// 1:2); a starting value, not a standard.
+const DEFAULT_CUT: f64 = 2.0;
+const DEFAULT_FILL: f64 = 3.0;
+
+/// The line of a grading command: LIJN=<handle>, PUNTEN=x,y[,z];…, or the selection.
+fn grading_source(args: &Args, key: &str) -> Result<grading::Source, String> {
+    if let Some(h) = args.handle(key)?.or(args.handle("LIJN")?) {
+        return Ok(grading::Source::Handle(h));
+    }
+    if let Some(p) = args.str("PUNTEN") {
+        let pts = p
+            .split(';')
+            .filter(|t| !t.trim().is_empty())
+            .map(|t| {
+                let c: Result<Vec<f64>, String> = t.split(',').map(grading::number).collect();
+                match c {
+                    Ok(c) if c.len() == 2 || c.len() == 3 => Ok(c),
+                    _ => Err(format!("PUNTEN: {} '{t}'", tr("verwacht x,y of x,y,z, kreeg", "expected x,y or x,y,z, got"))),
+                }
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        return Ok(grading::Source::Points(pts));
+    }
+    Ok(grading::Source::Selection)
+}
+
+fn yes(v: Option<&str>) -> Option<bool> {
+    v.map(|v| matches!(v.to_ascii_lowercase().as_str(), "ja" | "yes" | "1" | "true" | "aan" | "on"))
+}
+
+/// The grading commands (`CIV_KANTLIJN…`, `CIV_PLATEAU`, `CIV_TALUD`,
+/// `CIV_VOLUME BASIS=TIN`, `CIV_VOLUME_TIN`, `CIV_GRONDBALANS`); false when
+/// the verb is not one of them.
+fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> Result<bool, String> {
+    let scripted = !args.is_empty();
+    let base = civiel::settings();
+    let keep_status = args.str("STATUS").is_some();
+    let ratio = |k: &str| args.str(k).map(grading::parse_ratio).transpose();
+    match verb {
+        "CIV_KANTLIJN" => {
+            let o = grading::design_options(&args.apply(&base, &["LIJN", "PUNTEN", "HOOGTE", "OPPERVLAK", "START", "HELLING", "PEILEN", "TUSSENPUNTEN", "NAAM", "GESLOTEN"])?, keep_status);
+            let source = grading_source(args, "LIJN")?;
+            let surface = match args.str("OPPERVLAK").or(args.str("HOOGTE")).map(|s| s.to_ascii_uppercase()) {
+                Some(s) if s == "N" || s == "ONTWERP" => 'N',
+                _ => 'B',
+            };
+            let heights = if let Some(start) = args.f64("START")? {
+                grading::Heights::Grades { start, grades: args.list("HELLING")?.unwrap_or_default() }
+            } else if let Some(p) = args.str("PEILEN") {
+                grading::Heights::Levels(p.to_string())
+            } else if matches!(args.str("HOOGTE").map(|s| s.to_ascii_uppercase()).as_deref(), Some("EIGEN" | "LIJN" | "OWN")) {
+                grading::Heights::Own
+            } else {
+                grading::Heights::Surface(surface)
+            };
+            let step = match args.str("TUSSENPUNTEN") {
+                Some(v) if grading::number(v).is_ok() => grading::number(v)?,
+                v => if yes(v).unwrap_or(!scripted) { o.step } else { 0.0 },
+            };
+            let req = grading::FeatureRequest { source, heights, step, name: args.str("NAAM").map(str::to_string), closed: yes(args.str("GESLOTEN")) };
+            job(host, tr("Kantlijn", "Feature line"), id, move |p| grading::feature_line(&o, req, p));
+        }
+        "CIV_KANTLIJN_PEIL" | "CIV_KANTLIJN_VERHOOG" | "CIV_KANTLIJN_PUNT" | "CIV_KANTLIJN_HELLING" => {
+            let o = args.apply(&base, &["KANTLIJN", "LIJN", "PUNT", "BIJ", "Z", "DZ", "VAN", "TOT", "HELLING"])?;
+            let h = args.handle("KANTLIJN")?.or(args.handle("LIJN")?);
+            let at = args.points("BIJ")?.and_then(|p| p.first().copied());
+            let z = args.f64("Z")?.or(args.f64("PEIL")?);
+            let edit = match verb {
+                "CIV_KANTLIJN_PEIL" => grading::EditArgs::Level { corner: args.f64("PUNT")?.map(|v| v as usize), near: at, z: z.ok_or("CIV_KANTLIJN_PEIL KANTLIJN=<handle> PUNT=<n> | BIJ=x,y Z=<m>")? },
+                "CIV_KANTLIJN_VERHOOG" => grading::EditArgs::Raise(args.f64("DZ")?.ok_or(tr("CIV_KANTLIJN_VERHOOG KANTLIJN=<handle> DZ=<m> (< 0 omlaag)", "CIV_KANTLIJN_VERHOOG KANTLIJN=<handle> DZ=<m> (< 0 down)"))?),
+                "CIV_KANTLIJN_PUNT" => match at {
+                    Some(at) => grading::EditArgs::Insert { at, z },
+                    None => {
+                        // From the ribbon: click points on the selected feature line.
+                        let sel = host.selection();
+                        let Some(handle) = h.or(sel.first().copied().filter(|_| sel.len() == 1)) else {
+                            return Err(tr("selecteer eerst één kantlijn, of geef KANTLIJN=<handle> BIJ=x,y [Z=]", "select one feature line first, or give KANTLIJN=<handle> BIJ=x,y [Z=]").into());
+                        };
+                        host.start_interactive(Box::new(HeightPointCmd { handle }));
+                        return Ok(true);
+                    }
+                },
+                _ => grading::EditArgs::Grade {
+                    from: args.f64("VAN")?.ok_or("CIV_KANTLIJN_HELLING KANTLIJN=<handle> VAN=<n> TOT=<n> [HELLING=%]")? as usize,
+                    to: args.f64("TOT")?.ok_or("CIV_KANTLIJN_HELLING KANTLIJN=<handle> VAN=<n> TOT=<n> [HELLING=%]")? as usize,
+                    grade: args.f64("HELLING")?,
+                },
+            };
+            job(host, tr("Kantlijn bewerken", "Edit feature line"), id, move |_| grading::edit_feature(&o, h, edit));
+        }
+        "CIV_PLATEAU" => {
+            let o = grading::design_options(&args.apply(&base, &["LIJN", "PUNTEN", "AFSCHOT", "RICHTING", "PEILPUNT", "TALUD", "TALUD_AF", "TALUD_OP", "REIKWIJDTE", "NAAM", "SAMENVOEGEN"])?, keep_status);
+            let source = grading_source(args, "LIJN")?;
+            let fall = match args.str("AFSCHOT") {
+                None => None,
+                Some(v) => {
+                    let (pct, dir) = match v.split_once(';') {
+                        Some((a, b)) => (a, Some(b)),
+                        None => (v, args.str("RICHTING")),
+                    };
+                    let dir = dir.ok_or(tr("AFSCHOT: geef RICHTING=N|NO|O|ZO|Z|ZW|W|NW|<graden>", "AFSCHOT: give RICHTING=N|NE|E|SE|S|SW|W|NW|<degrees>"))?;
+                    Some((grading::number(pct)?, grading::parse_bearing(dir)?))
+                }
+            };
+            let both = ratio("TALUD")?;
+            let req = grading::PlateauRequest {
+                source,
+                level: args.f64("PEIL")?,
+                default_level: (!scripted).then_some(base.level),
+                fall,
+                reference: args.points("PEILPUNT")?.and_then(|p| p.first().copied()),
+                cut: ratio("TALUD_AF")?.or(both).unwrap_or(DEFAULT_CUT),
+                fill: ratio("TALUD_OP")?.or(both).unwrap_or(DEFAULT_FILL),
+                reach: args.f64("REIKWIJDTE")?.unwrap_or(50.0).max(1.0),
+                step: if args.str("STAP").is_some() { o.step } else { 1.0 },
+                name: args.str("NAAM").map(str::to_string),
+                join: yes(args.str("SAMENVOEGEN")).unwrap_or(true),
+            };
+            job(host, tr("Plateau", "Plateau"), id, move |p| grading::plateau(&o, req, p));
+        }
+        "CIV_TALUD" => {
+            let o = grading::design_options(&args.apply(&base, &["LIJN", "PUNTEN", "ZIJDE", "NAAR", "TALUD", "TALUD_AF", "TALUD_OP", "BREEDTE", "RICHTING", "RANDPEIL", "REIKWIJDTE", "NAAM", "SAMENVOEGEN"])?, keep_status);
+            let source = grading_source(args, "LIJN")?;
+            if !scripted {
+                // From the ribbon: the selected line, then click the side.
+                let sel = host.selection();
+                let e = (sel.len() == 1).then(|| bridge::entities(&sel).ok()).flatten().and_then(|v| v.into_iter().next().flatten());
+                let Some(line) = e.as_ref().and_then(grading::line_of) else {
+                    return Err(tr("selecteer eerst één lijn of kantlijn voor het talud", "select one line or feature line for the slope first").into());
+                };
+                host.start_interactive(Box::new(SlopeSideCmd { line: line.pts, handle: sel[0] }));
+                return Ok(true);
+            }
+            let side = match args.str("ZIJDE").map(|s| s.to_ascii_uppercase()) {
+                None => 1.0,
+                Some(s) if s.starts_with('R') => 1.0,
+                Some(s) if s.starts_with('L') => -1.0,
+                Some(_) => return Err("ZIJDE: LINKS | RECHTS".into()),
+            };
+            let n = ratio("TALUD")?;
+            let width = args.f64("BREEDTE")?.or(args.f64("AFSTAND")?);
+            let to = match args.str("NAAR").map(|s| s.to_ascii_uppercase()) {
+                Some(s) if s == "AFSTAND" || s == "BREEDTE" || (s.is_empty() && width.is_some()) => grading::SlopeTo::Width {
+                    width: width.ok_or("NAAR=AFSTAND: BREEDTE=<m>")?,
+                    n: n.unwrap_or(DEFAULT_FILL),
+                    up: matches!(args.str("RICHTING").map(|s| s.to_ascii_uppercase()).as_deref(), Some("OP" | "UP")),
+                },
+                Some(s) if s == "PEIL" => grading::SlopeTo::Level { z: args.f64("PEIL")?.ok_or("NAAR=PEIL: PEIL=<m>")?, n: n.unwrap_or(DEFAULT_FILL) },
+                None if width.is_some() => grading::SlopeTo::Width { width: width.unwrap(), n: n.unwrap_or(DEFAULT_FILL), up: matches!(args.str("RICHTING").map(|s| s.to_ascii_uppercase()).as_deref(), Some("OP" | "UP")) },
+                None | Some(_) => grading::SlopeTo::Ground {
+                    cut: ratio("TALUD_AF")?.or(n).unwrap_or(DEFAULT_CUT),
+                    fill: ratio("TALUD_OP")?.or(n).unwrap_or(DEFAULT_FILL),
+                    reach: args.f64("REIKWIJDTE")?.unwrap_or(50.0).max(1.0),
+                },
+            };
+            let req = grading::SlopeRequest {
+                source,
+                side,
+                to,
+                level: args.f64("RANDPEIL")?,
+                step: if args.str("STAP").is_some() { o.step } else { 1.0 },
+                name: args.str("NAAM").map(str::to_string),
+                join: yes(args.str("SAMENVOEGEN")).unwrap_or(true),
+            };
+            job(host, tr("Talud", "Slope"), id, move |p| grading::slope(&o, req, p));
+        }
+        "CIV_VOLUME_TIN" | "CIV_VOLUME" if verb == "CIV_VOLUME_TIN" || args.str("BASIS").is_some_and(|b| b.eq_ignore_ascii_case("TIN")) => {
+            let o = args.apply(&base, &["BASIS", "ONTWERP", "LOSFACTOR", "VERDICHTING", "VERGELIJK", "KAART"])?;
+            let design = match args.str("ONTWERP").map(|s| s.to_ascii_uppercase()) {
+                Some(s) if s == "PEIL" => grading::DesignPick::Level,
+                Some(s) if s == "BOUWRIJP" || s == "GRADING" => grading::DesignPick::Bouwrijp,
+                _ if args.str("PEIL").is_some() => grading::DesignPick::Level,
+                _ => grading::DesignPick::Auto,
+            };
+            let req = grading::VolumeRequest {
+                design,
+                loose: args.f64("LOSFACTOR")?.unwrap_or(1.0).max(0.01),
+                compaction: args.f64("VERDICHTING")?.unwrap_or(1.0).max(0.01),
+                bands: if yes(args.str("KAART")) == Some(false) { 0 } else { o.bands.max(2) },
+                compare: yes(args.str("VERGELIJK")).unwrap_or(false),
+            };
+            job(host, tr("Grondverzet TIN", "Volume TIN"), id, move |p| grading::volume_tin(&o, req, p));
+        }
+        "CIV_GRONDBALANS" => {
+            let o = args.apply(&base, &["AS", "BRON", "CSV", "FACTOR", "HERGEBRUIK", "VRIJ", "BREEDTE", "PLAATS"])?;
+            let from = match (args.str("CSV"), args.str("BRON").map(|s| s.to_ascii_uppercase())) {
+                (Some(p), _) => massa::VolumeSource::Csv(p.into()),
+                (None, Some(b)) if b == "CORRIDOR" => massa::VolumeSource::Corridor,
+                (None, Some(b)) if b == "TIN" => massa::VolumeSource::Tin,
+                (None, None) => massa::VolumeSource::Auto,
+                (None, Some(b)) if b == "AUTO" => massa::VolumeSource::Auto,
+                (None, Some(_)) => return Err(tr("BRON: AUTO, CORRIDOR of TIN (of CSV=<pad>)", "BRON: AUTO, CORRIDOR or TIN (or CSV=<path>)").into()),
+            };
+            let at = match args.points("PLAATS")? {
+                Some(p) if !p.is_empty() => Some(civiel::Ctx::new(&base)?.to_drawing(p[0])),
+                _ => None,
+            };
+            let req = massa::Request {
+                axis: args.handle("AS")?,
+                from,
+                factor: args.f64("FACTOR")?.unwrap_or(1.0).max(0.0),
+                reuse: (args.f64("HERGEBRUIK")?.unwrap_or(100.0) / 100.0).clamp(0.0, 1.0),
+                free: args.f64("VRIJ")?.unwrap_or(0.0).max(0.0),
+                every: o.corridor_every,
+                reach: args.f64("BREEDTE")?.unwrap_or(100.0).max(1.0),
+                at,
+            };
+            job(host, tr("Grondbalans", "Mass haul"), id, move |p| massa::mass_haul_diagram(&o, req, p));
+        }
+        "CIV_HELP" if args.words.first().is_some_and(|w| w.eq_ignore_ascii_case("GRADING") || w.eq_ignore_ascii_case("GRONDWERK")) => host.push_info(tr(
+            "[Open Infra — Grondwerk] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL= [AFSCHOT=% RICHTING=N|O|Z|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (of CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
+            "[Open Infra — Grading] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL= [AFSCHOT=% RICHTING=N|E|S|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (or CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
+        )),
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
 fn open_settings(host: &mut dyn HostApi) {
     if let Err(e) = ui::open(ui::Tab::Civiel) {
         host.push_error(&format!("[Open Infra] {e}"));
@@ -396,6 +717,10 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
     let base = civiel::settings();
     let opt = |own: &[&str]| args.apply(&base, own);
     let path = || args.words.iter().find(|w| !w.contains(',') || std::path::Path::new(w).exists()).cloned();
+    // Grading commands.
+    if run_grading(host, verb, args, id.clone())? {
+        return Ok(());
+    }
     match verb {
         "CIV_PUNTEN_IMPORT" | "CIV_LANDXML" => {
             let Some(file) = path() else {

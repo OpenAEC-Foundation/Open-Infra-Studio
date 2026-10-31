@@ -465,6 +465,68 @@ def t_corridor(a):
         REIKWIJDTE=a.get("reach"), FREQUENTIE=a.get("frequency"), DWARSPROFIELEN=views))
 
 
+# Grading: feature lines, plateaus, slopes, exact TIN volumes and mass haul.
+LINE = {"type": "string", "description": "Handle of a line, polyline or feature line (hex); empty = the selection or points"}
+
+
+@tool("civ_feature_line", "3D feature line (OG-BREUKLIJN, object data) from a line or points: heights from the ground (with grade breaks), "
+      "from a start level and grades per segment (%), or fixed levels at corners ('2.5;;3' or '1:2.5;4:3').",
+      {"line": LINE, "points": PTS, "heights": {"type": "string", "enum": ["MAAIVELD", "ONTWERP", "EIGEN"]}, "grade_breaks": {"type": "boolean"},
+       "start_level": NUM, "grades_pct": {"type": "array", "items": NUM}, "levels": STR, "closed": {"type": "boolean"}, "name": STR})
+def t_feature_line(a):
+    return OCS.run("CIV_KANTLIJN " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), HOOGTE=a.get("heights"),
+                                        TUSSENPUNTEN=a.get("grade_breaks"), START=a.get("start_level"), HELLING=_list(a.get("grades_pct") or []),
+                                        PEILEN=a.get("levels"), GESLOTEN=a.get("closed"), NAAM=a.get("name")))
+
+
+@tool("civ_feature_line_edit", "Edit a feature line in place: set a corner level (corner from 1, or the corner nearest 'at'), raise/lower all (dz), "
+      "insert a height point at 'at', or a constant grade between two corners.",
+      {"line": LINE, "action": {"type": "string", "enum": ["level", "raise", "point", "grade"]}, "corner": NUM, "at": PT, "z": NUM, "dz": NUM,
+       "from_corner": NUM, "to_corner": NUM, "grade_pct": NUM}, ["action"])
+def t_feature_edit(a):
+    verb = {"level": "PEIL", "raise": "VERHOOG", "point": "PUNT", "grade": "HELLING"}[a["action"]]
+    return OCS.run(f"CIV_KANTLIJN_{verb} " + _kv(KANTLIJN=a.get("line"), PUNT=a.get("corner"), BIJ=a.get("at") and _pt(a["at"]), Z=a.get("z"),
+                                                 DZ=a.get("dz"), VAN=a.get("from_corner"), TOT=a.get("to_corner"), HELLING=a.get("grade_pct")))
+
+
+@tool("civ_plateau", "Building plot plateau from a closed line or points at a level, optionally with a fall (% towards N/NE/E/…/NW or degrees), "
+      "sloping to the existing ground with separate cut and fill slopes (1:n); joins the combined design surface (N).",
+      {"line": LINE, "points": PTS, "level": NUM, "fall_pct": NUM, "fall_direction": STR, "level_point": PT, "cut_slope": NUM, "fill_slope": NUM,
+       "reach": NUM, "name": STR, "join": {"type": "boolean"}})
+def t_plateau(a):
+    return OCS.run("CIV_PLATEAU " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), PEIL=a.get("level"), AFSCHOT=a.get("fall_pct"),
+                                       RICHTING=a.get("fall_direction"), PEILPUNT=a.get("level_point") and _pt(a["level_point"]),
+                                       TALUD_AF=a.get("cut_slope"), TALUD_OP=a.get("fill_slope"), REIKWIJDTE=a.get("reach"), NAAM=a.get("name"),
+                                       SAMENVOEGEN=a.get("join")))
+
+
+@tool("civ_slope", "Slope from a (feature) line on one side: to the ground (cut/fill slopes), over a width, or to a level; joins the design surface.",
+      {"line": LINE, "points": PTS, "side": {"type": "string", "enum": ["LINKS", "RECHTS"]}, "to": {"type": "string", "enum": ["MAAIVELD", "AFSTAND", "PEIL"]},
+       "slope": NUM, "cut_slope": NUM, "fill_slope": NUM, "width": NUM, "level": NUM, "up": {"type": "boolean"}, "edge_level": NUM, "name": STR})
+def t_slope(a):
+    return OCS.run("CIV_TALUD " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), ZIJDE=a.get("side"), NAAR=a.get("to"),
+                                     TALUD=a.get("slope"), TALUD_AF=a.get("cut_slope"), TALUD_OP=a.get("fill_slope"), BREEDTE=a.get("width"),
+                                     PEIL=a.get("level"), RICHTING=("OP" if a.get("up") else None), RANDPEIL=a.get("edge_level"), NAAM=a.get("name")))
+
+
+@tool("civ_volume_tin", "Exact cut and fill (prismoidal, TIN against TIN) of the design against the existing ground, with bulking and compaction "
+      "factors and a cut/fill map in colour bands. design: BOUWRIJP (gradings only), PEIL (a level) or empty (selection / design surface N).",
+      {"design": {"type": "string", "enum": ["BOUWRIJP", "PEIL"]}, "level": NUM, "bulking": NUM, "compaction": NUM, "bands": NUM, "map": {"type": "boolean"},
+       "compare_grid_cell": NUM})
+def t_volume_tin(a):
+    return OCS.run("CIV_VOLUME_TIN " + _kv(ONTWERP=a.get("design"), PEIL=a.get("level"), LOSFACTOR=a.get("bulking"), VERDICHTING=a.get("compaction"),
+                                          BANDEN=a.get("bands"), KAART=a.get("map"), VERGELIJK=(True if a.get("compare_grid_cell") else None),
+                                          CEL=a.get("compare_grid_cell")))
+
+
+@tool("civ_mass_haul", "Mass haul diagram of an axis from its corridor's cut and fill per section (or measured on the TINs): balance points, "
+      "haul (m³·km), free haul and overhaul, surplus/shortage; drawn as a graph, returned per station.",
+      {"axis": AXIS, "source": {"type": "string", "enum": ["AUTO", "CORRIDOR", "TIN"]}, "factor": NUM, "reuse_pct": NUM, "free_haul": NUM, "at": PT})
+def t_mass_haul(a):
+    return OCS.run("CIV_GRONDBALANS " + _kv(AS=a.get("axis"), BRON=a.get("source"), FACTOR=a.get("factor"), HERGEBRUIK=a.get("reuse_pct"),
+                                           VRIJ=a.get("free_haul"), PLAATS=a.get("at") and _pt(a["at"])))
+
+
 @tool("civ_bag3d", "3D BAG buildings of the project area (LoD 1.2, 1.3 or 2.2): roof and wall meshes per building. "
       "style: mooi (roof colours from the aerial photo, walls by building year, windows per storey, crisp planes), "
       "maquette (white architectural model), realistisch (two plain colours) or nlcs (layer colours).",
