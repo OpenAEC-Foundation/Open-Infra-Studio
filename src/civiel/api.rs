@@ -153,6 +153,12 @@ impl Args {
         self.words.iter().filter(|w| w.contains(',')).map(|w| point(w)).collect()
     }
 
+    /// The arguments without one key: for a command whose own key has the
+    /// name of a setting (CIV_RIOOL_EXPORT FORMAAT=GWSW).
+    pub fn without(&self, k: &str) -> Args {
+        Args { words: self.words.clone(), kv: self.kv.iter().filter(|(key, _)| key.as_str() != k).map(|(a, b)| (a.clone(), b.clone())).collect() }
+    }
+
     /// A safe result name.
     pub fn id(&self) -> Option<String> {
         self.str("ID").filter(|v| !v.is_empty() && v.len() <= 64 && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')).map(str::to_string)

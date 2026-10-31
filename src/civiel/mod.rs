@@ -8,6 +8,7 @@ pub mod corridor;
 pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
+pub mod riool;
 pub mod terrein;
 
 use std::sync::{Mutex, OnceLock};
