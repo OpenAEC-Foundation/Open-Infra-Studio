@@ -591,6 +591,9 @@ pub fn sight(opt: &super::CivielOptions, req: SightRequest, progress: &dyn Fn(St
     if let Some(h) = handles.first() {
         super::api::note("diagram", super::api::handle_text(*h));
     }
+    if let Some(at) = first_at {
+        super::api::note("plaats", serde_json::json!([at[0], at[1]]));
+    }
     super::api::note("nodig_m", need);
     super::api::note("nodig_bron", need_src);
     super::api::note("ooghoogte_m", eye);

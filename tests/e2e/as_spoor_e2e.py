@@ -7,8 +7,8 @@ Runs its own Open CAD Studio with an isolated configuration folder
 for daily use is left alone. A window appears, as with ``ocs_e2e.py``.
 
 Steps
-  site + BGT     ``GIS_SITE RD 104885 425320 …``, the BGT (buildings for the
-                 sight check in plan).
+  site + BGT     ``GIS_SITE RD 106000 423300 …`` (Dordrecht), the BGT
+                 (buildings for the sight check in plan).
   road           ``CIV_AS PI=… R=150 A=100``: a clothoid–arc–clothoid; the
                  main points BO/BC/EC/EO, the clothoid records in XDATA.
   offset         ``CIV_AS_OFFSET`` beside the clothoids; ``CIV_STATION``.
@@ -44,12 +44,14 @@ import ocs_e2e  # noqa: E402
 REPO = ocs_e2e.REPO
 OUT = REPO / "target" / "e2e-as-spoor"
 
-# Project location: Dordrecht centre, a bit wider than the default box.
-SITE = (104885, 425320, 500, 400)
-# Road: east-north-east, then a 54° left bend (R 150, A 100) between buildings.
-ROAD = "104660,425210;104880,425236;105000,425456"
-# Rail: north of the road, a gentle bend (R 600, clothoids of 80 m).
-RAIL = "104640,425440;104900,425470;105120,425560"
+# Project location: Dordrecht (Sterrenburg), open ground between buildings.
+SITE = (106000, 423300, 650, 450)
+# Road: north-north-east, then a 92° right bend (R 150, A 100) with a
+# building on the inside of the bend.
+ROAD = "105830,423203;105925,423397;106229,423231"
+BEND = (105930, 423340)
+# Rail: south of the road, a gentle bend (R 600, clothoids of 80 m).
+RAIL = "105720,423120;105980,423150;106250,423100"
 
 
 def install(xdg):
@@ -104,13 +106,15 @@ def main():
     def layer_like(part):
         return [n for n in ocs.layers() if part in n]
 
-    def capture(name, bounds=None):
+    def capture(name, bounds=None, focus=None):
         path = OUT / f"{name}.png"
         if path.exists():
             path.unlink()
         body = {"path": str(path), "document_id": ocs.doc(), "max_dimension": 1800}
         if bounds:
             body.update({"view": "region", "bounds": bounds})
+        if focus:
+            body["focus_handles"] = focus
         r = ocs.call("/capture", body)
         t0 = time.time()
         while not (path.exists() and path.stat().st_size > 0) and time.time() - t0 < 60:
@@ -144,7 +148,7 @@ def main():
         r = result("off1", f"CIV_AS_OFFSET AS={state['as']} VERSCHUIVING=-3.5;3.5")
         lines = r.get("data", {}).get("lijnen", [])
         # A point 2 m right of the axis in the middle of the bend.
-        s = result("st1", f"CIV_STATION AS={state['as']} 104905,425262")
+        s = result("st1", f"CIV_STATION AS={state['as']} 105950,423350")
         pts = s.get("data", {}).get("punten", [])
         return r["ok"] and len(lines) == 2 and s["ok"] and len(pts) == 1, f"{r['message']} | {s['message']}"
 
@@ -200,27 +204,33 @@ def main():
         return ok, f"{r['message']} | WB {d.get('wisselbegin')} MS {d.get('mathematisch_snijpunt')}"
 
     def captures():
+        # The terrain mesh clutters the plan: switch its layer off.
+        for l in layer_like("-OG-TRIANGULATIE-"):
+            ocs.run(f"LAYER OFF {l}")
         ocs.run("ZOOM EXTENTS")
         time.sleep(1.5)
-        shots = [capture("overzicht")]
+        shots = [capture("overzicht", focus=None)]
         x, y, w, h = SITE
         rect = state.get("rect") or [x - w / 2, y - h / 2, x + w / 2, y + h / 2]
         shots.append(capture("plan", rect))
         # Drawing = RD + offset (zero for an absolute project location).
         ox, oy = (rect[0] + rect[2]) / 2 - x, (rect[1] + rect[3]) / 2 - y
-        # The bend of the road with its main points and the violation marker.
-        cx, cy = 104900 + ox, 425290 + oy
-        shots.append(capture("bocht", [cx - 110, cy - 90, cx + 110, cy + 90]))
+        # The bend of the road: main points, clothoid labels, the violation and sight deficits.
+        cx, cy = BEND[0] + ox, BEND[1] + oy
+        shots.append(capture("bocht", [cx - 110, cy - 85, cx + 110, cy + 85]))
         # The turnout on the track.
         if state.get("wissel", {}).get("wisselbegin"):
             wx, wy = state["wissel"]["wisselbegin"]
             wx, wy = wx + ox, wy + oy
-            shots.append(capture("wissel", [wx - 30, wy - 40, wx + 90, wy + 40]))
-        # The diagrams below the project.
-        ocs.run("ZOOM EXTENTS")
-        time.sleep(1)
-        lo = rect[1]
-        shots.append(capture("diagrammen", [rect[0] - 60, lo - 700, rect[2] + 150, lo + 10]))
+            shots.append(capture("wissel", [wx - 25, wy - 30, wx + 85, wy + 30]))
+        # The diagrams: one view each.
+        for name, rid in [("lengteprofiel", "lp1"), ("zichtafstand", "zicht1"), ("verkanting", "sp1")]:
+            f = api_dir / f"{rid}.json"
+            if f.exists():
+                d = json.loads(f.read_text()).get("data", {})
+                h = d.get("lengteprofiel") or d.get("diagram")
+                if h:
+                    shots.append(capture(name, focus=[h]))
         return all(s[0] for s in shots), ", ".join(s[1] for s in shots)
 
     if step("site + BGT", site) and step("road with clothoids", road):
