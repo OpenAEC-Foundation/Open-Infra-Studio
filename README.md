@@ -80,6 +80,8 @@ A second plugin, `openaec.open-infra-civiel`, adds the ribbon tab **"Open Infra 
 
 The window page **Civiel — instellingen** holds all settings, and they also apply to the ribbon buttons. Checked on a real road near Dordrecht: the corridor's average-end-area volumes and the independent TIN-to-TIN grid volume agree within 2 %.
 
+Survey codes to linework and symbols, parcels, water drops, catchments and ponds, swept paths in reverse and NEN 2443 parking bays: see [docs/civiel-overig.md](docs/civiel-overig.md).
+
 ## 3D city and landscape model
 
 | | |

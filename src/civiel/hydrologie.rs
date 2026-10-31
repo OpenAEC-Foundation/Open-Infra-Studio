@@ -758,7 +758,7 @@ impl DropSession {
             let mut start = EntityType::Circle(Circle::from_center_radius(Vector3::new(p[0], p[1], path.points[0][2]), 0.4 * k));
             start.common_mut().layer = line_l.name.clone();
             out.put(&line_l, [start, ring]);
-            let mut t = self.ctx.text([end[0] + 1.2 * k, end[1]], &format!("{} {}", nap(end[2] / f, 2), if path.stop == Stop::Pit { crate::lang::tr("put", "pit") } else { "" }).trim().to_string(), 1.8, 0.0, &line_l, None);
+            let mut t = self.ctx.text([end[0] + 1.2 * k, end[1]], format!("{} {}", nap(end[2] / f, 2), if path.stop == Stop::Pit { crate::lang::tr("put", "pit") } else { "" }).trim(), 1.8, 0.0, &line_l, None);
             if let EntityType::Text(tx) = &mut t {
                 tx.horizontal_alignment = TextHorizontalAlignment::Left;
             }
@@ -856,7 +856,7 @@ fn model(ctx: &Ctx, req: &CatchmentRequest, progress: &dyn Fn(String)) -> Result
         if let Some(t) = Tin::from_document(&doc).or_else(|| Tin::from_document_with(&doc, &HashSet::new())) {
             progress(tr("Raster van de TIN…", "Grid from the TIN…"));
             let grid = grid_from_tin(&t, req.cell, ctx.f)?;
-            return Ok(Model { grid, to_drawing: Box::new(|p| Some(p)), to_grid: Box::new(|p| Some(p)), source: t!("TIN in de tekening, cel {} m", "TIN in the drawing, cell {} m", req.cell) });
+            return Ok(Model { grid, to_drawing: Box::new(Some), to_grid: Box::new(Some), source: t!("TIN in de tekening, cel {} m", "TIN in the drawing, cell {} m", req.cell) });
         }
         if want.as_deref() == Some("TIN") {
             return Err(tr("geen TIN in de tekening: maak er een (CIV_TIN) of kies BRON=AHN", "no TIN in the drawing: make one (CIV_TIN) or choose BRON=AHN"));

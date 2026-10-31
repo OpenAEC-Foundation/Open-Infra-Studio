@@ -650,6 +650,11 @@ impl InteractiveCommand for ParkingCmd {
     }
 }
 
+/// The library car closest to 4.5 m long: a mid-size car for `MET_VEEGPAD=ja`.
+fn default_car() -> Option<&'static Vehicle> {
+    super::vehicles().iter().filter(|v| v.category == "car" && v.units.len() == 1).min_by(|a, b| (a.length() - 4.5).abs().total_cmp(&(b.length() - 4.5).abs()))
+}
+
 /// `GIS_PARKEERVAKKEN | GIS_PARKING [HOEK=90|80|70|65|60|45|30|LANGS]
 /// [KLASSE=openbaar|intensief|nietopenbaar|stalling] [BREEDTE=2.50]
 /// [ZIJDE=beide|links|rechts] [LIJN=x,y;x,y] [MET_VEEGPAD=<voertuig>] [VAK=n]
@@ -695,7 +700,7 @@ pub fn command(host: &mut dyn HostApi, cmd: &str) {
             "LIJN" | "LINE" => line_arg = Some(v.to_string()),
             "START" => req.first = num(v).map(|x| x.max(0.0) as usize).unwrap_or(1),
             "VAK" | "BAY" => req.bay = num(v).map(|x| x.max(0.0) as usize),
-            "MET_VEEGPAD" | "WITH_SWEPT_PATH" | "VEEGPAD" => match super::find(v).or_else(|| matches!(v.to_ascii_lowercase().as_str(), "ja" | "yes").then(|| super::find("car_vw_golf")).flatten()) {
+            "MET_VEEGPAD" | "WITH_SWEPT_PATH" | "VEEGPAD" => match super::find(v).or_else(|| matches!(v.to_ascii_lowercase().as_str(), "ja" | "yes").then(default_car).flatten()) {
                 Some(veh) => req.vehicle = Some(veh),
                 None => bad = Some(t!("onbekend voertuig {v} (zie GIS_VOERTUIGEN)", "unknown vehicle {v} (see GIS_VEHICLES)")),
             },
