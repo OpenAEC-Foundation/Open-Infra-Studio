@@ -37,7 +37,7 @@ Claude Desktop (`claude_desktop_config.json`): dezelfde regel onder `mcpServers`
 | Groep | Tools |
 |---|---|
 | Sessie | `oi_sessions`, `oi_status` (assen, profielen, corridors, terreinen met handles), `oi_command` (elk `GIS_`/`CIV_`-commando of hostcommando) |
-| Project en data | `oi_site` (projectlocatie en gebied), `gis_services` (WMS/WFS/tegeldiensten wereldwijd zoeken), `gis_service_load` (een laag daarvan laden), `gis_import` (BGT, BRK, luchtfoto, BAG, NWB, spoor, OSM, AHN, tekenblad …), `nlcs_check`, `quantities`, `bgt_mutation` (NLCS-ontwerp als BGT-mutatie in IMGeo-GML) |
+| Project en data | `oi_site` (projectlocatie en gebied), `gis_services` (WMS/WFS/tegeldiensten wereldwijd zoeken), `gis_service_load` (een laag daarvan laden), `gis_import` (BGT, BRK, luchtfoto, BAG, NWB, spoor, OSM, AHN, tekenblad …), `nlcs_check`, `quantities`, `bgt_mutation` (NLCS-ontwerp als BGT-mutatie in IMGeo-GML), `ifc_export` (de tekening als IFC 4.3) |
 | Landmeten | `civ_points_import` (PNEZD/CSV), `civ_points`, `civ_points_export`, `civ_landxml` |
 | Terrein | `civ_tin` (AHN, meetpunten, selectie of laag; status B of N), `civ_contours`, `civ_analysis`, `civ_volume` |
 | As en profielen | `civ_alignment` (PI's met boogstralen), `civ_offsets`, `civ_station`, `civ_length_profile`, `civ_design_profile` (PVI's met verticale bogen), `civ_cross_sections` |

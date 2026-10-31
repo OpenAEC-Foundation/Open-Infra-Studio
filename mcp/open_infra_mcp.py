@@ -364,6 +364,17 @@ def t_mutation(a):
     return OCS.run(f"GIS_BGT_MUTATIE {_kv(BRONHOUDER=a.get('bronhouder'))}{words}")
 
 
+@tool("ifc_export", "Export the drawing as IFC 4.3 (IFC4X3_ADD2), beside it as <drawing>_IFC4X3.ifc or to `path`. "
+      "Every object becomes its IFC class from its NLCS layer and object data: terrain (TIN, photo terrain), 3D BAG and CityGML "
+      "buildings, pavements, green, water, structures, cables and pipes, sewers, earthworks, CPTs and boreholes (IfcBorehole with "
+      "IfcGeotechnicalStratum); axes become IfcAlignments with horizontal and vertical layout. Georeferenced from the project "
+      "location; object data as property sets. Answers with the counts per IFC class.",
+      {"path": STR, "selection": {"type": "boolean"}, "texts": {"type": "boolean"}})
+def t_ifc(a):
+    words = (" SELECTIE" if a.get("selection") else "") + (" TEKST=nee" if a.get("texts") is False else "")
+    return OCS.run(f"CIV_IFC {_kv(BESTAND=a.get('path'))}{words}", 1800)
+
+
 @tool("quantities", "Quantities per NLCS layer (count, length, area) as CSV beside the drawing.")
 def t_quantities(a):
     return OCS.run("GIS_HOEVEELHEDEN_CSV")

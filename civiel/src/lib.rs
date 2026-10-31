@@ -56,6 +56,7 @@ const I_PHOTO: IconKind = icon!("fototerrein.svg");
 const I_BGT3D: IconKind = icon!("bgt3d.svg");
 const I_WATER: IconKind = icon!("waterpeil.svg");
 const I_CITYGML: IconKind = icon!("citygml.svg");
+const I_IFC: IconKind = icon!("ifc.svg");
 const I_KLIC3D: IconKind = icon!("klic3d.svg");
 const I_SEE: IconKind = icon!("doorzicht.svg");
 const I_CPT: IconKind = icon!("sonderingen.svg");
@@ -165,6 +166,7 @@ impl CadModule for CivielModule {
             let mut model = vec![
                 file_tool("CIV_CITYGML", "CityGML/JSON", I_CITYGML, tr("CityGML of CityJSON openen", "Open CityGML or CityJSON"), "CityGML / CityJSON", &["gml", "xml", "citygml", "json", "jsonl"], true),
                 small("CIV_DOORZICHT", tr("Maaiveld doorzichtig", "See-through ground"), I_SEE),
+                small("CIV_IFC", "IFC 4x3", I_IFC),
             ];
             if dutch() {
                 model.push(RibbonItem::LabeledDropdown {
@@ -981,6 +983,11 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             };
             job(host, "Sonderingen 3D", id, move |p| civiel::ondergrond::columns(&o, &req, p));
         }
+        "CIV_IFC" => {
+            opt(&["BESTAND", "PAD", "TEKST"])?;
+            let (file, selection, texts) = open_infra::ifc::args(args);
+            job(host, "IFC 4x3", id, move |p| open_infra::ifc::command(file, selection, texts, p));
+        }
         "CIV_INFO" => {
             opt(&[])?;
             job(host, "Modelinfo", id, |_| civiel::info());
@@ -993,7 +1000,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_AS AS=<handle> | PI=x,y;x,y;… R=r;… [NAAM=] [BEGIN=]; CIV_AS_OFFSET AS= VERSCHUIVING=-3.5;3.5; CIV_STATION AS= x,y; \
              CIV_LENGTEPROFIEL AS= [PLAATS=x,y]; CIV_ONTWERPPROFIEL AS= PVI=station:hoogte;… [BOOG=]; CIV_DWARSPROFIELEN AS= [PLAATS=] [OM=] [LINKS=] [RECHTS=]; \
              3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs] [RAMEN=nee], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>, CIV_CITYGML <pad> [STIJL=], CIV_KLIC3D [<levering>] [VERGROOT=], CIV_DOORZICHT [PCT=70] [ALLES] [UIT], CIV_SONDERINGEN3D [BRON=sonderingen|boringen|alles] [MAX=100] [STRAAL=0.4] [MINLAAG=0.2] [QC=nee] [LABELS=nee] (BRO: kolommen met grondsoorten); \
-             CIV_CORRIDOR AS= [SJABLOON=weg|fietspad|snelweg|dijk] [NIVEAU=|BOVEN=] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y]; CIV_INFO.",
+             CIV_CORRIDOR AS= [SJABLOON=weg|fietspad|snelweg|dijk] [NIVEAU=|BOVEN=] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_INFO.",
         ),
         _ => return Err(format!("onbekend commando {verb}; zie CIV_HELP")),
     }

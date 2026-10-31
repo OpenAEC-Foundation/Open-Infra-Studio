@@ -1,15 +1,51 @@
-Open Infra — open-source GIS and civil design for **Open CAD Studio v2026.43** (plugin API 13), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the new **Civiel** (civil) ribbon tab.
+Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.43** (plugin API 13), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab. New in this release: the whole drawing as **IFC 4.3**.
 
 **Note:** this release is built for Open CAD Studio **v2026.43**. A plugin for v2026.42 does not load in v2026.43, and the other way round. So update Open Infra together with Open CAD Studio.
 
-**New — international first**
+**Installing**
+
+1. Update Open CAD Studio to [v2026.43](https://github.com/HakanSeven12/OpenCADStudio/releases/tag/v2026.43).
+2. **GIS plugin:** in Open CAD Studio, run `PLUGINS` (Plugin Manager), pick **Open Infra Studio** from the list (or choose *Add a repository* and enter `OpenAEC-Foundation/Open-Infra-Studio`), pick this release and click *Install*. By hand: put `openaec.open-infra-<platform>` and `plugin.toml` from this release in `<config>/OpenCADStudio/plugins/openaec.open-infra/`.
+3. **Civiel plugin:** unzip `open-infra-civiel-<platform>.zip` into `<config>/OpenCADStudio/plugins/`. That gives the folder `openaec.open-infra-civiel` with its library and `plugin.toml`.
+4. Restart Open CAD Studio. The ribbon shows the tabs **GIS** and **Civiel**.
+
+`<config>` is `%APPDATA%` on Windows, `~/.config` on Linux and `~/Library/Application Support` on macOS.
+
+The libraries are signed: Authenticode with a timestamp on Windows (publisher Impertio Studio B.V.), Developer ID and notarized by Apple on macOS, and a detached OpenPGP signature of the OpenAEC Foundation (`.asc`) per Linux file. Check those with `gpg --verify <file>.asc <file>` against `openaec-signing-public-key.asc` (fingerprint `13F6D414ADEE4ED4CD09AC60601D86C93C504D29`).
+
+**New — IFC 4.3 export**
+
+- **GIS → Output → IFC 4x3** and **Civiel → 3D model → IFC 4x3** (`GIS_IFC`, `CIV_IFC [BESTAND=] [SELECTIE] [TEKST=nee]`, MCP tool `ifc_export`) write the whole drawing as IFC 4.3 (IFC4X3_ADD2) beside it.
+- Every object becomes the IFC entity of what it is, from its NLCS layer and object data:
+  - terrain and photo terrain as `IfcGeographicElement`;
+  - 3D BAG and CityGML buildings as `IfcBuilding`;
+  - pavements, kerbs, markings, walls, fences, green and water;
+  - KLIC cables, pipes, casings and appurtenances, sewers and manholes;
+  - CPTs and boreholes as `IfcBorehole` with a stratum per soil layer;
+  - excavation and fill, and a corridor as `IfcRoad`.
+- **Axes become IfcAlignments** with their horizontal layout (lines and arcs) and, from the design profile, the vertical one (grades and parabolic curves), with a station referent.
+- **Georeferenced:** `IfcProjectedCRS` and `IfcMapConversion` from the project location.
+- **Data:** object data and the NLCS layer as property sets, DWG layers and colours as IFC layers and styles.
+- **Checked with IfcOpenShell:** schema and EXPRESS rules, and the alignment geometry against its layout. The example drawings export without errors.
+
+**Fixed**
+
+- **IFC export (2026.44.5):** the contents of the cross-section and length-profile views (axis, ground and design lines, texts) went into the IFC, with an extra alignment per cross section. They now stay out; a corridor's 3D axis line is part of the IfcRoad.
+- **KLIC in 3D:** appurtenances (joints) and manholes were empty meshes, without faces, so they did not show. They are now closed columns with a lid and a base, also visible from above. Run `CIV_KLIC3D` again for an existing model.
+
+**Other changes**
+
+- **Plugin Manager:** Open Infra Studio is now in the Plugin Manager's own list of plugins.
+- **Releases:** `scripts/version.sh` sets both plugins to the `JJJJ.W.N` version of this week, and the release stops when tag and version differ. Every release is signed (see above).
+
+**From 2026.44.3 — international first**
 
 - The ribbons put the worldwide tools first: location, maps & data (services worldwide, WMS/TMS, WFS, OpenStreetMap, files), elevation, output, library. Everything Dutch sits in one compact **Netherlands** group of menus on the GIS tab and one **3D Netherlands** menu on the Civiel tab.
 - **Dutch modules on/off** next to the language choice: off hides those menus for users elsewhere.
 - **Language:** Open Infra follows Open CAD Studio's interface language and falls back to English; every ribbon label is in English and Dutch.
 - The workbench windows have their own taskbar icon instead of a generic one.
 
-**New — historical and thematic maps**
+**From 2026.44.3 — historical and thematic maps**
 
 - **Topotijdreis:** every Dutch topographic map from 1815 to 2014 (Kadaster), read from ArcGIS tile caches in RD: `GIS_Q_TIJDREIS` or `GIS_Q_SERVER JAAR=1850`.
 - **HisGIS:** the cadastral maps (minuutplans) of 1832: `GIS_Q_HISGIS`.
@@ -17,7 +53,7 @@ Open Infra — open-source GIS and civil design for **Open CAD Studio v2026.43**
 - `GIS_Q_SERVER <id> [LAAG=] [RES=]` loads any server of the catalogue by id (MCP tool `gis_server`).
 - `CIV_BAG3D RAMEN=nee`: buildings with plain facades, without windows.
 
-**Fixed**
+**From 2026.44.3 — fixed**
 
 - `GIS_SITE` with a coordinate system that comes from epsg.io kept the previous location's coordinates.
 - Services that answer in ISO-8859-1 (e.g. the Spanish cadastre) were refused.
@@ -26,7 +62,7 @@ Open Infra — open-source GIS and civil design for **Open CAD Studio v2026.43**
 - A WMS default layer given as a list (`a,b`) took only the first layer.
 - A quick import over a large area (tens of km) asked for billions of pixels and hung; the resolution now follows the area.
 
-**New — Civiel tab (after Hakan's FreeCAD Road workbench)**
+**From 2026.44.3 — Civiel tab (after Hakan's FreeCAD Road workbench)**
 
 - **Points:**
   - survey points from PNEZD/PENZD/CSV; the separator, decimal comma and N/E order are detected automatically;
@@ -58,7 +94,7 @@ Open Infra — open-source GIS and civil design for **Open CAD Studio v2026.43**
   - 3D BAG buildings in LoD 1.2, 1.3 or 2.2;
   - the whole BGT in 3D: areas draped, buildings and walls extruded, water at its level, bridges at deck height, posts and trees as 3D symbols, in natural colours.
 
-**New — API and MCP server**
+**From 2026.44.3 — API and MCP server**
 
 - **Arguments:** every `CIV_` command and the GIS data commands also take arguments (`KEY=value`, points `x,y`). With `ID=<name>` the result is saved as JSON in `<config>/OpenCADStudio/open-infra/api/` (handles, lengths, volumes).
 - **MCP server** (`mcp/open_infra_mcp.py`): about 30 tools that let an AI agent (Claude Code, Claude Desktop) build whole models. It finds every Open CAD Studio window by itself.
@@ -68,7 +104,7 @@ Open Infra — open-source GIS and civil design for **Open CAD Studio v2026.43**
   - 2,864 buildings in LoD 2.2;
   - a ring road and a dike with corridor and cross sections.
 
-**New — nicer 3D and water level**
+**From 2026.44.3 — nicer 3D and water level**
 
 - **3D BAG in the "mooi" ("nice") style** (now the default of `CIV_BAG3D`):
   - crisp roof and wall planes;
@@ -81,7 +117,7 @@ Open Infra — open-source GIS and civil design for **Open CAD Studio v2026.43**
 - Trees in BGT 3D get a round crown.
 - `CIV_WATERPEIL PEIL=<m NAP>` (Civiel → 3D-model → Waterpeil) lays a water surface over the project area and reports which share lies lower. With another level, the same surface moves along: climate adaptation in one picture. Also available as the MCP tool `civ_water_level`.
 
-**New — the subsurface from the BRO: CPTs and boreholes in 3D**
+**From 2026.44.3 — the subsurface from the BRO: CPTs and boreholes in 3D**
 
 - `CIV_SONDERINGEN3D` (Civiel → 3D-model → Sonderingen 3D) fetches the cone penetration tests (BRO CPT) and geotechnical boreholes (BRO BHR-GT) of the project area from the Basisregistratie Ondergrond, the successor of DINOloket.
 - Each one becomes a 3D column from its surface level (m NAP) down, one mesh per soil layer in conventional colours: sand yellow, clay green, peat brown, silt/loam grey-green, gravel orange, made ground grey.
@@ -89,7 +125,7 @@ Open Infra — open-source GIS and civil design for **Open CAD Studio v2026.43**
 - qc and Rf are drawn as 3D graphs beside each CPT, with a plan symbol and BRO id for each column. Every layer carries its BRO id, date, surface level, end depth, soil type, and top and bottom in m NAP as object data. They go on the NLCS layers `MO-ONDERZOEK_SONDERING` and `MO-ONDERZOEK_BORING`.
 - `GIS_Q_SONDERINGEN` (GIS → BGT · BRK · KLIC) draws only the plan symbols, as a quick overview. The MCP tool is `civ_subsurface`.
 
-**New — service browser: WMS, WFS and tiles worldwide**
+**From 2026.44.3 — service browser: WMS, WFS and tiles worldwide**
 
 - A new workbench page, **Services wereldwijd / Services worldwide**, opens from the ribbon (*Kaarten & data*) or with `GIS_SERVICES`. It searches the 19 built-in presets, 600 checked public services from GIS2BIM's worldwide list (45 countries, Europe, Africa, worldwide) and your own servers.
 - Free-text search in Dutch and English, with theme words in several languages (*kadaster*, *parcels*, *Flurstücke*, *cadastro*; *luchtfoto*, *aerial*; *hoogte*, *DEM*; *bodem*, *geology* …). Place names work too (*Bayern*, *Vlaanderen*, *Wenen*). Filter chips cover category and type.
@@ -100,15 +136,13 @@ Open Infra — open-source GIS and civil design for **Open CAD Studio v2026.43**
 - `assets/servers/world.json` now carries each service's coordinate systems, provider, licence, coverage and a WGS 84 coverage box. `tools/import_gis2bim_servers.py` derives the box from the state, province or city the coverage names. Service ids are unchanged.
 - Reprojection: a WMS layer without the project CRS, Web Mercator or WGS 84 is now requested in a system that transforms, and an EPSG code that is not built in is loaded once from epsg.io. A WFS feature type that lists neither the project CRS nor WGS 84 is requested in a system it does list. Layer extents are now read from GetCapabilities, and WMS 1.1.1 capabilities with a DOCTYPE are no longer refused.
 
-**Verder**
-
-**New — KLIC in 3D under a see-through ground**
+**From 2026.44.3 — KLIC in 3D under a see-through ground**
 
 - `CIV_KLIC3D` (Civiel → 3D-model → KLIC in 3D) turns a KLIC delivery into 3D tubes under the AHN ground, in IMKL colours on the NLCS layers. The depth comes from the delivery where given, else the usual cover depth per network type; the object data records which. Ducts are grey sleeves, appurtenances short columns. `VERGROOT=` thickens the tubes for overview pictures.
 - `CIV_DOORZICHT` (Maaiveld doorzichtig) makes the ground surfaces transparent, so cables, pipes and CPT columns show beneath the street. `UIT` makes it opaque again.
 - MCP tools `civ_klic3d` and `civ_see_through`.
 
-**New — CityGML and CityJSON import**
+**From 2026.44.3 — CityGML and CityJSON import**
 
 - `CIV_CITYGML <file>` (Civiel → 3D-model → CityGML/JSON) imports a 3D city model: CityGML 1.0, 2.0 and 3.0, IMGeo/BGT GML, CityJSON 1.x/2.0 and CityJSONSeq.
 - The file's coordinate system is transformed to the project location: EPSG codes, RD + NAP (7415) and the German AdV names (`ETRS89_UTM32*…`, `DHDN_3GK*`).
@@ -116,14 +150,14 @@ Open Infra — open-source GIS and civil design for **Open CAD Studio v2026.43**
 - Buildings: roof and wall meshes on the NLCS building layers, in the 3D BAG styles (`STIJL=mooi`, `maquette`, `realistisch`, `nlcs`), with the highest LoD per object and walls by year of construction. Other themes (roads, green, water, bridges, relief) go to the NLCS layers of their BGT counterpart; 2D IMGeo objects are draped on the AHN.
 - MCP tool `civ_citygml`.
 
-**New — NLCS design as BGT mutation (#10)**
+**From 2026.44.3 — NLCS design as BGT mutation (#10)**
 
 - `GIS_BGT_MUTATIE` (ribbon *NLCS → BGT-mutatie*, or the NLCS-controle page) exports the design back to the BGT, as IMGeo-GML 2.1.1 with a report beside the drawing. The GML is valid against the IMGeo 2.1.1 schema. The municipality's BGT package reads it and delivers it to the LV-BGT.
 - Layers N become plan topography, R (or N with *Gerealiseerd*, "as built") becomes as built, and V ends the BGT object. Existing objects keep their `lokaal_id`; new ones get `<bronhouder>.<uuid>`.
 - Type and function come from the BGT data, from the BGT object the new area covers, or from the NLCS layer if that is unambiguous. Anything ambiguous is listed in the report.
 - Checks: self-intersection, at most 5000 points, millimetres, ring orientation, overlap at ground level.
 
-**Other changes**
+**From 2026.44.3 — other changes**
 
 - **Button test:** `tests/e2e/ui_knoppen.py` clicks every button of both windows in a real Open CAD Studio. Found and fixed: *Annuleren* (Cancel) on the location page now closes the window, *Zoeken* (Search) is disabled while the search field is empty, and `GIS_SITE` rejects RD coordinates without the word `RD`.
 - **NLCS check and quantities** (also in the 2026.44.x betas):
@@ -161,7 +195,7 @@ A new test set fetches data at 16 locations, from Dordrecht and the Vaalserberg 
 - **KLIC IMKL theme colours** now follow the PMKL-handreiking 3.0 (PMKL guideline) exactly: buisleiding gevaarlijke inhoud (pipelines with hazardous contents) #ff7f00, plus wees (orphaned) and overig (other).
 - **`GIS_SITE … RELATIEF`** sets the project location with the base point at 0,0.
 
-Test set ([tests/README.md](https://github.com/OpenAEC-Foundation/Open-Infra/blob/main/tests/README.md)):
+Test set ([tests/README.md](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/blob/main/tests/README.md)):
 - **Offline:** on every push to GitHub.
 - **Online:** weekly, with search, map image, BGT, BRK, OSM, AHN, profile and point cloud for each location.
 - **End-to-end in Open CAD Studio:** import, move, change layer, erase, undo, save and reopen, mm drawing, relative coordinates.
@@ -172,7 +206,7 @@ Known issues, in Open CAD Studio v2026.42 itself:
 
 **From 2026.44 — AHN heights, profiles and point cloud**
 
-![AHN5 point cloud in Open CAD Studio](https://raw.githubusercontent.com/OpenAEC-Foundation/Open-Infra/v2026.44.2/docs/images/ahn-pointcloud.png)
+![AHN5 point cloud in Open CAD Studio](https://raw.githubusercontent.com/OpenAEC-Foundation/Open-Infra-Studio/v2026.44.2/docs/images/ahn-pointcloud.png)
 
 - **Spot heights:** AHN4 ground level (DTM) or surface (DSM) in a grid of 2 to 100 m.
   - They go on `OG-HOOGTEPUNT`, with heights such as `+2,43` m NAP.

@@ -75,11 +75,21 @@ impl MeshBuilder {
 
     pub fn quad(&mut self, a: P3, b: P3, c: P3, d: P3) {
         self.room(4);
-        let (i, j, k, l) = (self.vertex(a), self.vertex(b), self.vertex(c), self.vertex(d));
-        if i != j && j != k && k != l && l != i && i != k && j != l {
-            self.faces.push([i, j, k, l]);
-        } else {
-            self.faces.push([i, j, k, NO]);
+        // Corners that coincide (a sliver, a ring of zero radius) drop out;
+        // what is left is a quad, a triangle or nothing.
+        let mut f: Vec<usize> = Vec::with_capacity(4);
+        for v in [self.vertex(a), self.vertex(b), self.vertex(c), self.vertex(d)] {
+            if f.last() != Some(&v) {
+                f.push(v);
+            }
+        }
+        if f.len() > 1 && f.first() == f.last() {
+            f.pop();
+        }
+        match f.len() {
+            4 if f[0] != f[2] && f[1] != f[3] => self.faces.push([f[0], f[1], f[2], f[3]]),
+            3 if f[0] != f[2] => self.faces.push([f[0], f[1], f[2], NO]),
+            _ => {}
         }
     }
 
@@ -1425,27 +1435,33 @@ fn klic_radius(thema: &str, diameter: Option<f64>) -> f64 {
 }
 
 /// A tube along a 3D line: 8 sides, shared corners, so it shades round.
+const SIDES: usize = 8;
+
+/// The ring of a tube of radius `r` around `p`, square to direction `t`.
+fn ring(p: P3, t: P3, r: f64) -> Vec<P3> {
+    let l = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt().max(1e-9);
+    let h = (t[0] * t[0] + t[1] * t[1]).sqrt();
+    // Horizontal side vector; a vertical line (a column) has no horizontal
+    // direction to turn, so it takes the x axis.
+    let n = if h > 1e-9 * l { [-t[1] / h, t[0] / h, 0.0] } else { [1.0, 0.0, 0.0] };
+    let tu = [t[0] / l, t[1] / l, t[2] / l];
+    // The "up" perpendicular to the line.
+    let u = [tu[1] * n[2] - tu[2] * n[1], tu[2] * n[0] - tu[0] * n[2], tu[0] * n[1] - tu[1] * n[0]];
+    (0..SIDES)
+        .map(|k| {
+            let w = std::f64::consts::TAU * k as f64 / SIDES as f64;
+            let (c, s) = (w.cos() * r, w.sin() * r);
+            [p[0] + n[0] * c + u[0] * s, p[1] + n[1] * c + u[1] * s, p[2] + n[2] * c + u[2] * s]
+        })
+        .collect()
+}
+
 fn tube(m: &mut MeshBuilder, line: &[P3], r: f64) {
-    const SIDES: usize = 8;
     let mut prev: Option<Vec<P3>> = None;
     for i in 0..line.len() {
         let a = line[i.saturating_sub(1)];
         let b = line[(i + 1).min(line.len() - 1)];
-        let t = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-        let h = (t[0] * t[0] + t[1] * t[1]).sqrt().max(1e-9);
-        // Horizontal side vector and the "up" perpendicular to the line.
-        let n = [-t[1] / h, t[0] / h, 0.0];
-        let l = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt().max(1e-9);
-        let tu = [t[0] / l, t[1] / l, t[2] / l];
-        let u = [tu[1] * n[2] - tu[2] * n[1], tu[2] * n[0] - tu[0] * n[2], tu[0] * n[1] - tu[1] * n[0]];
-        let p = line[i];
-        let ring: Vec<P3> = (0..SIDES)
-            .map(|k| {
-                let w = std::f64::consts::TAU * k as f64 / SIDES as f64;
-                let (c, s) = (w.cos() * r, w.sin() * r);
-                [p[0] + n[0] * c + u[0] * s, p[1] + n[1] * c + u[1] * s, p[2] + n[2] * c + u[2] * s]
-            })
-            .collect();
+        let ring = ring(line[i], [b[0] - a[0], b[1] - a[1], b[2] - a[2]], r);
         if let Some(q) = &prev {
             for k in 0..SIDES {
                 let k2 = (k + 1) % SIDES;
@@ -1453,6 +1469,19 @@ fn tube(m: &mut MeshBuilder, line: &[P3], r: f64) {
             }
         }
         prev = Some(ring);
+    }
+}
+
+/// A closed column from `bottom` to `top`: the side as a tube, with a lid
+/// and a base, so it also shows from above.
+fn column(m: &mut MeshBuilder, bottom: P3, top: P3, r: f64) {
+    tube(m, &[bottom, top], r);
+    let t = [top[0] - bottom[0], top[1] - bottom[1], top[2] - bottom[2]];
+    let (base, lid) = (ring(bottom, t, r), ring(top, t, r));
+    for k in 0..SIDES {
+        let k2 = (k + 1) % SIDES;
+        m.tri(bottom, base[k2], base[k]);
+        m.tri(top, lid[k], lid[k2]);
     }
 }
 
@@ -1515,8 +1544,7 @@ pub fn klic3d(opt: &super::CivielOptions, path: &std::path::Path, scale: f64, pr
         for p in feat.points.iter().filter_map(|p| to(*p)).filter(|p| crate::gis::vector::inside(*p, area)) {
             // An appurtenance (manhole, joint): a short column to the ground.
             let g = smooth_ground(&mut bron, p, f).unwrap_or(0.0);
-            let col = [[p[0], p[1], (g - depth - 0.3) * f], [p[0], p[1], (g - 0.05) * f]];
-            tube(&mut m, &col, 0.25 * scale * f);
+            column(&mut m, [p[0], p[1], (g - depth - 0.3) * f], [p[0], p[1], (g - 0.05) * f], 0.25 * scale * f);
             points += 1;
         }
         if m.is_empty() {
@@ -1550,6 +1578,55 @@ pub fn klic3d(opt: &super::CivielOptions, path: &std::path::Path, scale: f64, pr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn mesh_of(m: MeshBuilder) -> Mesh {
+        match m.finish("TEST", None, None).into_iter().next() {
+            Some(EntityType::Mesh(mesh)) => mesh,
+            _ => panic!("no mesh"),
+        }
+    }
+
+    #[test]
+    fn a_vertical_column_has_faces_and_a_footprint() {
+        let mut m = MeshBuilder::default();
+        column(&mut m, [10.0, 20.0, -1.0], [10.0, 20.0, 0.5], 0.25);
+        let mesh = mesh_of(m);
+        // 8 side quads, 8 lid and 8 base triangles.
+        assert_eq!(mesh.faces.len(), 24);
+        let xs: Vec<f64> = mesh.vertices.iter().map(|v| v.x).collect();
+        let ys: Vec<f64> = mesh.vertices.iter().map(|v| v.y).collect();
+        let span = |v: &[f64]| v.iter().cloned().fold(f64::MIN, f64::max) - v.iter().cloned().fold(f64::MAX, f64::min);
+        assert!((span(&xs) - 0.5).abs() < 1e-9 && span(&ys) > 0.45, "footprint {} × {}", span(&xs), span(&ys));
+        assert!(mesh.faces.iter().all(|f| {
+            let mut v = f.vertices.clone();
+            v.sort();
+            v.dedup();
+            v.len() == f.vertices.len()
+        }));
+    }
+
+    #[test]
+    fn a_horizontal_tube_is_unchanged() {
+        let mut m = MeshBuilder::default();
+        tube(&mut m, &[[0.0, 0.0, -1.0], [10.0, 0.0, -1.0], [20.0, 5.0, -1.2]], 0.1);
+        let mesh = mesh_of(m);
+        assert_eq!(mesh.faces.len(), 16);
+        // The ring of the first point stands square to the x axis.
+        assert!(mesh.vertices.iter().filter(|v| v.x.abs() < 1e-9).count() == 8);
+    }
+
+    #[test]
+    fn coinciding_corners_leave_no_degenerate_faces() {
+        let mut m = MeshBuilder::default();
+        let (a, b, c) = ([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]);
+        m.quad(a, a, b, c);
+        m.quad(a, b, c, a);
+        m.quad(a, a, b, b);
+        m.quad(a, a, a, a);
+        let mesh = mesh_of(m);
+        assert_eq!(mesh.faces.len(), 2);
+        assert!(mesh.faces.iter().all(|f| f.vertices.len() == 3));
+    }
 
     #[test]
     fn building_styles() {

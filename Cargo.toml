@@ -1,10 +1,10 @@
 [package]
 name = "open-infra"
-version = "2026.44.2"
+version = "2026.44.5"
 edition = "2021"
 description = "Open Infra — GIS-workbench voor Open CAD Studio (infra en civiele techniek, NL en wereldwijd)."
 license = "GPL-3.0-only"
-repository = "https://github.com/OpenAEC-Foundation/Open-Infra"
+repository = "https://github.com/OpenAEC-Foundation/Open-Infra-Studio"
 
 [lib]
 # cdylib: the GIS plugin the host loads; rlib: the engine for `cargo test`

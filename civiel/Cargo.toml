@@ -1,10 +1,10 @@
 [package]
 name = "open-infra-civiel"
-version = "2026.44.2"
+version = "2026.44.5"
 edition = "2021"
 description = "Open Infra — Civiel: civiele ontwerptools voor Open CAD Studio (punten, oppervlakken, assen, profielen, grondverzet)."
 license = "GPL-3.0-only"
-repository = "https://github.com/OpenAEC-Foundation/Open-Infra"
+repository = "https://github.com/OpenAEC-Foundation/Open-Infra-Studio"
 
 [lib]
 # The Civiel plugin the host loads; its engine lives in open-infra (src/civiel).

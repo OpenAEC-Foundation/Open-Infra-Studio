@@ -15,6 +15,7 @@ pub mod civiel;
 pub mod emit;
 pub mod hoeveelheden;
 pub mod hoogte;
+pub mod ifc;
 pub mod gis;
 pub mod import;
 pub mod basisdata;
@@ -62,6 +63,7 @@ const I_BGT: IconKind = IconKind::Svg(include_bytes!("../assets/bgt.svg"));
 const I_KADASTER: IconKind = IconKind::Svg(include_bytes!("../assets/kadaster.svg"));
 const I_KLIC: IconKind = IconKind::Svg(include_bytes!("../assets/klic.svg"));
 const I_SHEET: IconKind = IconKind::Svg(include_bytes!("../assets/sheet.svg"));
+const I_IFC: IconKind = IconKind::Svg(include_bytes!("../assets/ifc.svg"));
 const I_AHN: IconKind = IconKind::Svg(include_bytes!("../assets/ahn.svg"));
 const I_CONTOURS: IconKind = IconKind::Svg(include_bytes!("../assets/hoogtelijnen.svg"));
 const I_PROFILE: IconKind = IconKind::Svg(include_bytes!("../assets/profiel.svg"));
@@ -184,7 +186,7 @@ impl CadModule for GisModule {
                 },
                 RibbonGroup {
                     title: tr("Uitvoer", "Output"),
-                    tools: vec![tool("GIS_TEKENBLAD", tr("Tekenblad", "Drawing sheet"), I_SHEET), small("GIS_SERVERS", "Servers", I_SERVER)],
+                    tools: vec![tool("GIS_TEKENBLAD", tr("Tekenblad", "Drawing sheet"), I_SHEET), small("GIS_IFC", "IFC 4x3", I_IFC), small("GIS_SERVERS", "Servers", I_SERVER)],
                 },
                 // Block libraries (vehicles), like the vehicle sets of
                 // swept-path software.
@@ -548,6 +550,21 @@ fn mutation_command(host: &mut dyn HostApi, cmd: &str) {
     std::thread::spawn(move || match bgt_mutatie::export(&bronhouder, as_built, only) {
         Ok(m) => bridge::info(&m),
         Err(e) => bridge::error(&format!("GIS_BGT_MUTATIE: {e}")),
+    });
+}
+
+/// `GIS_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee]`: the drawing as IFC 4.3
+/// (IFC4X3_ADD2), beside it as `<tekening>_IFC4X3.ifc`.
+fn ifc_command(host: &mut dyn HostApi, cmd: &str) {
+    let args = civiel::api::Args::parse(cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or(""));
+    let (path, selection, texts) = ifc::args(&args);
+    host.push_info("[Open Infra] IFC 4x3 exporteren …");
+    std::thread::spawn(move || {
+        let _ = civiel::api::take();
+        match ifc::command(path, selection, texts, &|_| {}) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&format!("GIS_IFC: {e}")),
+        }
     });
 }
 
@@ -1002,6 +1019,7 @@ impl BuiltinPlugin for OpenInfra {
             }
             "GIS_HOEVEELHEDEN_TABEL" => host.start_interactive(Box::new(TableCmd)),
             "GIS_BGT_MUTATIE" => mutation_command(host, cmd),
+            "GIS_IFC" => ifc_command(host, cmd),
             "GIS_HOOGTEPUNTEN" | "GIS_HOOGTELIJNEN" | "GIS_PUNTENWOLK" => ahn_command(host, &verb),
             "GIS_PROFIEL" => {
                 let Some(site) = require_site(host) else { return true };
@@ -1139,6 +1157,7 @@ impl BuiltinPlugin for OpenInfra {
                  diensten / services: GIS_SERVICES | GIS_DIENSTEN (venster) of [ZOEK=<tekst>] [CATEGORIE=kadaster] [TYPE=WMS|WFS|XYZ] [HIER | LON= LAT=] [LIMIET=50], \
                  GIS_SERVICE_LOAD | GIS_DIENST_LADEN DIENST=<id> [LAAG=<laag>] [RESOLUTIE=0.25] [LIMIET=5000]; \
                  NLCS: GIS_NLCS_CONTROLE, GIS_NLCS_RAPPORT, GIS_NLCS_HERSTEL, GIS_HOEVEELHEDEN, GIS_HOEVEELHEDEN_CSV, GIS_HOEVEELHEDEN_TABEL, GIS_BGT_MUTATIE [BRONHOUDER=G0505] [GEREALISEERD] [SELECTIE]; \
+                 IFC 4x3: GIS_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee]; \
                  AHN: GIS_AHN (venster), GIS_HOOGTEPUNTEN, GIS_HOOGTELIJNEN, GIS_PROFIEL, GIS_PUNTENWOLK; \
                  NLCS: GIS_BGT (venster), GIS_Q_BGT, GIS_BGT_BIJWERKEN | GIS_BGT_UPDATE, GIS_Q_BRK, GIS_Q_GWSW, GIS_Q_SONDERINGEN [BRON=sonderingen|boringen] (BRO), GIS_KLIC [bestand], GIS_KLIC_IMPORT <bestand>, GIS_TEKENBLAD [onderwerp]; \
                  Bibliotheek / library: GIS_VOERTUIGEN | GIS_VEHICLES (venster), GIS_VOERTUIG | GIS_VEHICLE <id> [ZIJ|SIDE], \
