@@ -266,6 +266,19 @@ def main():
 
     step("export GWSW-OroX en CSV", export)
 
+    def ifc():
+        path = OUT / "riolering.ifc"
+        if path.exists():
+            path.unlink()
+        r = run_id(f"CIV_IFC BESTAND={path}", "riool_ifc", timeout=600)
+        text = path.read_text(errors="replace") if path.exists() else ""
+        pipes = [l for l in text.splitlines() if "IFCPIPESEGMENT(" in l and "'P10" in l]
+        chambers = [l for l in text.splitlines() if "IFCDISTRIBUTIONCHAMBERELEMENT(" in l and "'P10" in l]
+        ok = r["ok"] and len(pipes) == 5 and len(chambers) == 6 and "IFCSWEPTDISKSOLID" in text and "'InvertLevelStart'" in text and "'OpenInfra_Sewer'" in text
+        return ok, f"{len(pipes)} IfcPipeSegment, {len(chambers)} IfcDistributionChamberElement van DWA1; {r['message'][:200]}"
+
+    step("IFC-export: leidingen en putten met BOB", ifc)
+
     # The pictures: plan and profile.
     xs = [x for x, _ in RUN] + [x for x, _ in HWA]
     ys = [y for _, y in RUN] + [y for _, y in HWA]
