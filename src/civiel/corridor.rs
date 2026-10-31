@@ -59,6 +59,12 @@ pub fn num(v: f64, decimals: usize) -> String {
 /// material or a line.
 pub type NlcsId = u32;
 
+/// A link of a section: inner and outer point (offset m, height m).
+pub type Link = [(f64, f64); 2];
+
+/// A line in the drawing: points (drawing units) with their height (m), if any.
+pub type TargetLine = Vec<(XY, Option<f64>)>;
+
 /// The NLCS object `group`/`name`; 0 when the table lacks it.
 pub fn nlcs_id(group: &str, name: &str) -> NlcsId {
     nlcs::object_by_name(group, name).map(|o| o.id).unwrap_or(0)
@@ -558,7 +564,7 @@ pub struct Section {
     pub datum: Vec<(f64, f64)>,
     /// The formation (underside of the surfacing) per part: side, part
     /// index, inner and outer point.
-    pub formation: Vec<(usize, usize, [(f64, f64); 2])>,
+    pub formation: Vec<(usize, usize, Link)>,
     pub bodies: Vec<Body>,
     /// Top width per surface (m).
     pub surfaces: Vec<(NlcsId, f64)>,
@@ -691,7 +697,7 @@ struct SideOut {
     pts: Vec<Pt>,
     fill: Option<bool>,
     datum: Vec<(f64, f64)>,
-    formation: Vec<(usize, [(f64, f64); 2])>,
+    formation: Vec<(usize, Link)>,
     bodies: Vec<Body>,
     surfaces: Vec<(NlcsId, f64)>,
 }
@@ -872,7 +878,7 @@ pub fn section_with(asm: &Assembly, s: f64, z0: f64, curve: Option<f64>, ground:
     let mirror = |b: &Body| Body { poly: b.poly.iter().map(|(o, z)| (-o, *z)).collect(), ..b.clone() };
     let mut bodies: Vec<Body> = l.bodies.iter().map(mirror).collect();
     bodies.extend(r.bodies.iter().cloned());
-    let mut formation: Vec<(usize, usize, [(f64, f64); 2])> = l.formation.iter().map(|(pi, [a, b])| (0, *pi, [(-a.0, a.1), (-b.0, b.1)])).collect();
+    let mut formation: Vec<(usize, usize, Link)> = l.formation.iter().map(|(pi, [a, b])| (0, *pi, [(-a.0, a.1), (-b.0, b.1)])).collect();
     formation.extend(r.formation.iter().map(|(pi, ab)| (1, *pi, *ab)));
     let mut surfaces = l.surfaces;
     surfaces.extend(r.surfaces);
@@ -962,9 +968,18 @@ pub fn quantities(sections: &[Section]) -> Quantities {
 /// may differ in points (where a condition swaps a part, or a width follows
 /// a target): both are walked by offset.
 pub fn stitch(a: &[(f64, P3)], b: &[(f64, P3)], mesh: &mut MeshBuilder) {
+    let a: Vec<(f64, P3, NlcsId)> = a.iter().map(|p| (p.0, p.1, 0)).collect();
+    let b: Vec<(f64, P3, NlcsId)> = b.iter().map(|p| (p.0, p.1, 0)).collect();
+    stitch_by(&a, &b, &mut |t, _| mesh.tri(t[0], t[1], t[2]));
+}
+
+/// `stitch` with the surface of each triangle: the part of the segment it
+/// rests on (the segment's point farther from the axis).
+pub fn stitch_by(a: &[(f64, P3, NlcsId)], b: &[(f64, P3, NlcsId)], emit: &mut dyn FnMut([P3; 3], NlcsId)) {
     if a.is_empty() || b.is_empty() {
         return;
     }
+    let part = |p: &(f64, P3, NlcsId), q: &(f64, P3, NlcsId)| if q.0 > 0.0 { q.2 } else { p.2 };
     let (mut i, mut j) = (0, 0);
     while i + 1 < a.len() || j + 1 < b.len() {
         let advance_a = if i + 1 >= a.len() {
@@ -975,12 +990,36 @@ pub fn stitch(a: &[(f64, P3)], b: &[(f64, P3)], mesh: &mut MeshBuilder) {
             a[i + 1].0 <= b[j + 1].0
         };
         if advance_a {
-            mesh.tri(a[i].1, a[i + 1].1, b[j].1);
+            emit([a[i].1, a[i + 1].1, b[j].1], part(&a[i], &a[i + 1]));
             i += 1;
         } else {
-            mesh.tri(a[i].1, b[j + 1].1, b[j].1);
+            emit([a[i].1, b[j + 1].1, b[j].1], part(&b[j], &b[j + 1]));
             j += 1;
         }
+    }
+}
+
+/// A natural colour for a surface in 3D: asphalt, paving, tiles, kerbs,
+/// grass; 0 (a daylight slope) is grass.
+pub fn surface_colour(id: NlcsId) -> (u8, u8, u8) {
+    let name = nlcs::object(id).map(|o| o.name.as_str()).unwrap_or("");
+    let has = |k: &str| name.contains(k);
+    if has("ASFALT_ROOD") {
+        (150, 72, 62)
+    } else if has("ASFALT") {
+        (72, 72, 76)
+    } else if has("TEGEL") {
+        (192, 188, 178)
+    } else if has("BETONSTRAATSTEEN") || has("STRAATBAKSTEEN") || has("GOOT") {
+        (146, 136, 122)
+    } else if has("KANTOPSLUITING") || has("BETON") {
+        (208, 208, 200)
+    } else if has("WATERGANG") {
+        (64, 112, 120)
+    } else if has("GRIND") || has("HALFVERHARDING") {
+        (172, 160, 138)
+    } else {
+        (98, 148, 72)
     }
 }
 
@@ -990,14 +1029,15 @@ fn point_keys(sct: &Section) -> Vec<(u8, &'static str, u16)> {
     let axis = sct.pts.iter().position(|p| p.code == "AS").unwrap_or(0);
     let mut keys = vec![(2u8, "AS", 0u16); sct.pts.len()];
     let mut count: HashMap<(u8, &'static str), u16> = HashMap::new();
-    for i in (0..axis).rev() {
-        let c = count.entry((0, sct.pts[i].code)).or_insert(0);
-        keys[i] = (0, sct.pts[i].code, *c);
+    let (left, right) = keys.split_at_mut(axis);
+    for (k, p) in left.iter_mut().zip(&sct.pts[..axis]).rev() {
+        let c = count.entry((0, p.code)).or_insert(0);
+        *k = (0, p.code, *c);
         *c += 1;
     }
-    for i in axis + 1..sct.pts.len() {
-        let c = count.entry((1, sct.pts[i].code)).or_insert(0);
-        keys[i] = (1, sct.pts[i].code, *c);
+    for (k, p) in right.iter_mut().zip(&sct.pts[axis..]).skip(1) {
+        let c = count.entry((1, p.code)).or_insert(0);
+        *k = (1, p.code, *c);
         *c += 1;
     }
     keys
@@ -1005,7 +1045,7 @@ fn point_keys(sct: &Section) -> Vec<(u8, &'static str, u16)> {
 
 /// A line in the drawing as points in drawing units, with its heights (m)
 /// where it has them (3D polylines, lines).
-fn target_line(doc: &CadDocument, h: Handle, f: f64) -> Result<Vec<(XY, Option<f64>)>, String> {
+fn target_line(doc: &CadDocument, h: Handle, f: f64) -> Result<TargetLine, String> {
     let e = doc.get_entity(h).ok_or_else(|| trf!("doel: geen element met handle {}", "target: no entity with handle {}", super::api::handle_text(h)))?;
     match e {
         EntityType::Polyline3D(p) => Ok(p.vertices.iter().map(|v| ([v.position.x, v.position.y], Some(v.position.z / f))).collect()),
@@ -1061,6 +1101,8 @@ pub struct Request {
     pub to: Option<f64>,
     /// Target lines in the drawing by name (DOELEN=naam:handle;…).
     pub targets: Vec<(String, Handle)>,
+    /// The design surface in natural colours per part (else by layer).
+    pub natural: bool,
 }
 
 /// `CIV_CORRIDOR`.
@@ -1075,7 +1117,7 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
     let (f, k) = (ctx.f, ctx.k);
     let len_m = al.length() / f;
     let asm = req.assembly;
-    let lines: Vec<(String, Vec<(XY, Option<f64>)>)> = req.targets.iter().map(|(n, h)| Ok((n.clone(), target_line(&doc, *h, f)?))).collect::<Result<_, String>>()?;
+    let lines: Vec<(String, TargetLine)> = req.targets.iter().map(|(n, h)| Ok((n.clone(), target_line(&doc, *h, f)?))).collect::<Result<_, String>>()?;
     let grade = match req.grade {
         Some(g) => g,
         None => Grade::Profile(profile_of(&doc, &al.name).ok_or_else(|| {
@@ -1164,12 +1206,13 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
     let data = record(&[("corridor", format!("Corridor {name}")), ("as", al.name.clone()), ("sjabloon", asm.name.clone())]);
     // Design surface: strips between consecutive sections.
     let faces_spec = ctx.layer("OG", "TRIANGULATIE", Element::G)?;
-    let mut mesh = MeshBuilder::default();
+    // One mesh per surface in natural colours, or one by layer.
+    let mut meshes: BTreeMap<NlcsId, MeshBuilder> = BTreeMap::new();
     let mut datum_mesh = MeshBuilder::default();
     let mut formation_mesh = MeshBuilder::default();
     for w in sections.windows(2) {
-        let line = |s: &Section| -> Vec<(f64, P3)> { s.pts.iter().map(|q| (q.o, p3(s, q.o, q.z))).collect() };
-        stitch(&line(&w[0]), &line(&w[1]), &mut mesh);
+        let line = |s: &Section| -> Vec<(f64, P3, NlcsId)> { s.pts.iter().map(|q| (q.o, p3(s, q.o, q.z), q.nlcs)).collect() };
+        stitch_by(&line(&w[0]), &line(&w[1]), &mut |t, id| meshes.entry(if req.natural { id } else { 0 }).or_default().tri(t[0], t[1], t[2]));
         if asm.has_layers() {
             let line = |s: &Section| -> Vec<(f64, P3)> { s.datum.iter().map(|(o, z)| (*o, p3(s, *o, *z))).collect() };
             stitch(&line(&w[0]), &line(&w[1]), &mut datum_mesh);
@@ -1180,8 +1223,15 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
             }
         }
     }
-    let face_count = mesh.faces();
-    let mesh_ents = mesh.finish(&faces_spec.name, None, Some(&data));
+    let face_count: usize = meshes.values().map(MeshBuilder::faces).sum();
+    let mut mesh_ents = Vec::new();
+    for (id, m) in meshes {
+        let colour = req.natural.then(|| {
+            let (r, g, b) = surface_colour(id);
+            ocs_plugin_api::host::codec::Color::Rgb { r, g, b }
+        });
+        mesh_ents.extend(m.finish(&faces_spec.name, colour, Some(&data)));
+    }
     let mesh_count = mesh_ents.len();
     out.put(&faces_spec, mesh_ents);
     let mut other_meshes = 0;
@@ -1215,7 +1265,8 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
     let axis3 = ctx.layer("AM", "AS", Element::G)?;
     // key → runs of (section index, point, NLCS object, fill)
     type Key = (u8, &'static str, u16);
-    let mut tracks: BTreeMap<Key, Vec<(usize, P3, NlcsId, Option<bool>)>> = BTreeMap::new();
+    type Track = Vec<(usize, P3, NlcsId, Option<bool>)>;
+    let mut tracks: BTreeMap<Key, Track> = BTreeMap::new();
     let mut order: Vec<Key> = Vec::new();
     for (si, sct) in sections.iter().enumerate() {
         for (key, q) in point_keys(sct).into_iter().zip(&sct.pts) {
@@ -1327,7 +1378,9 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
         let vctx = Ctx { opt: vopt, ..Ctx::new(&opt)? };
         let place = (!at[0].is_nan()).then_some(at);
         as_profiel::SECTION_OUTLINES.with(|o| *o.borrow_mut() = layer_lines);
-        view_rows = as_profiel::draw_section_views(&vctx, &al, &views, left, right, place, &trf!("ontwerp {} over {}", "design {} over {}", asm.name, ground.label()), " — corridor", &mut vout)?.0;
+        let (rows, at) = as_profiel::draw_section_views(&vctx, &al, &views, left, right, place, &trf!("ontwerp {} over {}", "design {} over {}", asm.name, ground.label()), " — corridor", &mut vout)?;
+        view_rows = rows;
+        super::api::note("dwarsprofielen_plaats", serde_json::json!([at[0], at[1]]));
         as_profiel::SECTION_OUTLINES.with(|o| o.borrow_mut().clear());
         view_count = vout.write(&trf!("Dwarsprofielen corridor {}", "Cross sections corridor {}", name))?;
     }
@@ -1698,5 +1751,11 @@ mod tests {
             })
             .sum();
         assert!((area - 10.0).abs() < 1e-9, "{area}");
+        // Each triangle takes the part of its segment: the point farther
+        // from the axis (left: the point itself, right: the next one).
+        let line = |y: f64| -> Vec<(f64, P3, NlcsId)> { [(-3.0, 1), (0.0, 9), (3.0, 2), (3.2, 3)].iter().map(|(o, id)| (*o, [*o, y, 0.0], *id)).collect() };
+        let mut got = Vec::new();
+        stitch_by(&line(0.0), &line(1.0), &mut |t, id| got.push(((t[0][0] + t[1][0] + t[2][0]) / 3.0, id)));
+        assert!(got.iter().all(|(x, id)| (*x < 0.0 && *id == 1) || (*x > 0.0 && *x < 3.0 && *id == 2) || (*x > 3.0 && *id == 3)), "{got:?}");
     }
 }

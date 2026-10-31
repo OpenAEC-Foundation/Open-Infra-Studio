@@ -78,6 +78,8 @@ A second plugin, `openaec.open-infra-civiel`, adds the ribbon tab **"Open Infra 
 | Corridor | **Corridor** | An assembly swept along the axis and its design profile (or a level). Assemblies: *weg*, *fietspad*, *snelweg*, *dijk*; lane and shoulder widths, cross slopes, fill/cut slopes, crest and superelevation in curves (with runoff) are all adjustable. The corridor builds: daylight to the ground; a design TIN (status N); 3D feature lines (asphalt edge, shoulder, toe and crest of slope); cut and fill per section with average-end-area volumes and a mass balance (CSV); optional section views with the design. |
 | 3D-model | **3D BAG** · Terrein + luchtfoto · BGT naar 3D | See below. |
 
+Corridor parts (kerbs, footways, cycle paths, ditches, pavement layers), your own assemblies as JSON, junctions and roundabouts: see [docs/civiel-corridor.md](docs/civiel-corridor.md).
+
 The window page **Civiel — instellingen** holds all settings, and they also apply to the ribbon buttons. Checked on a real road near Dordrecht: the corridor's average-end-area volumes and the independent TIN-to-TIN grid volume agree within 2 %.
 
 ## 3D city and landscape model

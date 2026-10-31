@@ -52,6 +52,10 @@ const I_BAG3D: IconKind = icon!("bag3d.svg");
 const I_PHOTO: IconKind = icon!("fototerrein.svg");
 const I_BGT3D: IconKind = icon!("bgt3d.svg");
 const I_WATER: IconKind = icon!("waterpeil.svg");
+// Corridor stream: assemblies, junctions, roundabouts.
+const I_ASSEMBLY: IconKind = icon!("profieltype.svg");
+const I_JUNCTION: IconKind = icon!("kruispunt.svg");
+const I_ROUNDABOUT: IconKind = icon!("rotonde.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -141,8 +145,16 @@ impl CadModule for CivielModule {
                         small("CIV_WATERPEIL", "Waterpeil", I_WATER),
                     ],
                 },
-                // Civil 3D "Corridors": assembly along axis and design profile.
-                RibbonGroup { title: "Corridor", tools: vec![large("CIV_CORRIDOR", "Corridor", I_CORRIDOR)] },
+                // Corridors: assembly along axis and design profile; assemblies, junctions, roundabouts.
+                RibbonGroup {
+                    title: "Corridor",
+                    tools: vec![
+                        large("CIV_CORRIDOR", "Corridor", I_CORRIDOR),
+                        small("CIV_PROFIELTYPEN", open_infra::lang::tr("Profieltypen", "Assemblies"), I_ASSEMBLY),
+                        small("CIV_KRUISPUNT", open_infra::lang::tr("Kruispunt", "Junction"), I_JUNCTION),
+                        small("CIV_ROTONDE", open_infra::lang::tr("Rotonde", "Roundabout"), I_ROUNDABOUT),
+                    ],
+                },
                 RibbonGroup {
                     title: "Instellingen",
                     tools: vec![large("CIV_INSTELLINGEN", "Instellingen", I_SETTINGS), small("CIV_INFO", "Modelinfo", I_INFO)],
@@ -368,6 +380,23 @@ fn place_arg(args: &Args) -> Result<Option<[f64; 2]>, String> {
     }
 }
 
+/// The assembly arguments (RIJSTROOK=, TALUD=, …) as text, to apply on a worker.
+fn assembly_overrides(args: &Args) -> String {
+    corridor::Assembly::ARGS.iter().filter_map(|k| args.str(k).map(|v| format!("{k}={v}"))).collect::<Vec<_>>().join(" ")
+}
+
+/// "naam:handle;naam:handle" (DOELEN=).
+fn named_handles(args: &Args, key: &str) -> Result<Vec<(String, ocs_plugin_api::host::codec::Handle)>, String> {
+    let Some(v) = args.str(key) else { return Ok(Vec::new()) };
+    v.split(';')
+        .filter(|t| !t.trim().is_empty())
+        .map(|t| {
+            let (n, h) = t.split_once(':').ok_or_else(|| format!("{key}: {} '{t}'", open_infra::lang::tr("verwacht naam:handle, kreeg", "expected name:handle, got")))?;
+            Ok((n.trim().to_lowercase(), api::parse_handle(h)?))
+        })
+        .collect()
+}
+
 /// One command: from the ribbon (no arguments: selection and clicks) or
 /// from a script (arguments; see CIV_HELP).
 fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> Result<(), String> {
@@ -522,12 +551,11 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             }
         }
         "CIV_CORRIDOR" => {
-            let mut own = vec!["AS", "NIVEAU", "BOVEN", "DWARSPROFIELEN"];
+            let mut own = vec!["AS", "NIVEAU", "BOVEN", "DWARSPROFIELEN", "PROFIELTYPE", "VAN", "TOT", "DOELEN", "KLEUR"];
             own.extend(corridor::Assembly::ARGS);
             let o = opt(&own)?;
-            let asm = corridor::Assembly::template(&o.assembly)
-                .ok_or_else(|| format!("onbekend sjabloon {}; kies {}", o.assembly, corridor::Assembly::NAMES.join(", ")))?
-                .with_args(args)?;
+            let asm_name = args.str("PROFIELTYPE").map(str::to_string).unwrap_or_else(|| o.assembly.clone());
+            let overrides = assembly_overrides(args);
             let grade = match (args.f64("NIVEAU")?, args.f64("BOVEN")?) {
                 (Some(z), _) => Some(corridor::Grade::Level(z)),
                 (None, Some(dz)) => Some(corridor::Grade::AboveGround(dz)),
@@ -535,19 +563,121 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             };
             let views = match args.str("DWARSPROFIELEN") {
                 Some(v) if v.contains(',') => place_arg(&Args::parse(&format!("PLAATS={v}")))?,
-                Some(v) if matches!(v.to_ascii_lowercase().as_str(), "ja" | "1" | "true") => Some([f64::NAN, f64::NAN]),
+                Some(v) if matches!(v.to_ascii_lowercase().as_str(), "ja" | "yes" | "1" | "true") => Some([f64::NAN, f64::NAN]),
                 None if o.corridor_views => Some([f64::NAN, f64::NAN]),
                 _ => None,
             };
             let axis_h = args.handle("AS")?;
             if axis_h.is_none() && !scripted && selected_axis(host).is_none() {
-                return Err("selecteer eerst de as (met ontwerpprofiel) of geef AS=<handle>".into());
+                return Err(open_infra::lang::tr("selecteer eerst de as (met ontwerpprofiel) of geef AS=<handle>", "select the alignment (with a design profile) first, or give AS=<handle>").into());
             }
+            let (from, to) = (args.f64("VAN")?, args.f64("TOT")?);
+            let targets = named_handles(args, "DOELEN")?;
+            let natural = realistic(args)?;
             let every = o.corridor_every;
             job(host, "Corridor", id, move |p| {
+                let asm = civiel::profieltype::find(&asm_name)?.with_args(&Args::parse(&overrides))?;
                 // Views without a place (NaN): the corridor finds one.
-                corridor::corridor(&o, corridor::Request { axis: axis_h, assembly: asm, grade, every, views }, p)
+                corridor::corridor(&o, corridor::Request { axis: axis_h, assembly: asm, grade, every, views, from, to, targets, natural }, p)
             });
+        }
+        // Corridor stream: assemblies, junctions and roundabouts.
+        "CIV_PROFIELTYPEN" => {
+            opt(&[])?;
+            job(host, open_infra::lang::tr("Profieltypen", "Assemblies"), id, |_| civiel::profieltype::list_command());
+        }
+        "CIV_PROFIELTYPE" => {
+            let o = opt(&["NAAM", "KOPIE", "PLAATS"])?;
+            let name = args.str("NAAM").map(str::to_string).or_else(|| args.words.first().cloned()).ok_or_else(|| {
+                open_infra::lang::tr("geef NAAM=<profieltype> (CIV_PROFIELTYPEN geeft de lijst)", "give NAAM=<assembly> (CIV_PROFIELTYPEN lists them)").to_string()
+            })?;
+            let copy = args.str("KOPIE").map(str::to_string);
+            let at = place_arg(args)?;
+            job(host, open_infra::lang::tr("Profieltype", "Assembly"), id, move |_| civiel::profieltype::show(&o, &name, copy.as_deref(), at));
+        }
+        "CIV_KRUISPUNT" => {
+            let o = opt(&["HOOFD", "ZIJ", "R", "PROFIELTYPE", "PROFIELTYPE_HOOFD", "PROFIELTYPE_ZIJ", "NIVEAU", "NAAM", "KLEUR"])?;
+            let (main, side) = match (args.handle("HOOFD")?, args.handle("ZIJ")?) {
+                (Some(m), Some(s)) => (m, s),
+                _ if !scripted => {
+                    let sel = host.selection();
+                    if sel.len() != 2 {
+                        return Err(open_infra::lang::tr("selecteer de hoofdweg en de zijweg (twee assen), of geef HOOFD=<handle> ZIJ=<handle>", "select the main road and the side road (two alignments), or give HOOFD=<handle> ZIJ=<handle>").into());
+                    }
+                    (sel[0], sel[1])
+                }
+                _ => return Err(open_infra::lang::tr("geef HOOFD=<handle> en ZIJ=<handle> (de assen)", "give HOOFD=<handle> and ZIJ=<handle> (the alignments)").into()),
+            };
+            let both = args.str("PROFIELTYPE").map(str::to_string);
+            let req = civiel::kruispunt::JunctionRequest {
+                main,
+                side,
+                main_asm: args.str("PROFIELTYPE_HOOFD").map(str::to_string).or(both.clone()),
+                side_asm: args.str("PROFIELTYPE_ZIJ").map(str::to_string).or(both),
+                radii: args.list("R")?.unwrap_or_default(),
+                level: args.f64("NIVEAU")?,
+                name: args.str("NAAM").map(str::to_string),
+                auto_order: !scripted,
+                natural: realistic(args)?,
+            };
+            job(host, open_infra::lang::tr("Kruispunt", "Junction"), id, move |p| civiel::kruispunt::junction(&o, req, p));
+        }
+        "CIV_ROTONDE" => {
+            let o = opt(&["ASSEN", "MIDDEN", "TYPE", "D", "RIJBAAN", "OVERRIJDBAAR", "IN", "UIT", "INBREEDTE", "UITBREEDTE", "MIDDENGELEIDER", "LENGTE", "AANSLUITING", "HELLING", "PROFIELTYPE", "NIVEAU", "NAAM", "KLEUR"])?;
+            let axes = match args.str("ASSEN") {
+                Some(list) => list.split(';').filter(|t| !t.trim().is_empty()).map(api::parse_handle).collect::<Result<Vec<_>, _>>()?,
+                None if !scripted => host.selection(),
+                None => Vec::new(),
+            };
+            let built_up = match args.str("TYPE").map(|t| t.to_ascii_lowercase()) {
+                None => true,
+                Some(t) if t.starts_with("binnen") || t == "bibeko" || t == "urban" => true,
+                Some(t) if t.starts_with("buiten") || t == "bubeko" || t == "rural" => false,
+                Some(_) => return Err(open_infra::lang::tr("TYPE: binnen (bebouwde kom) of buiten", "TYPE: binnen (built-up area) or buiten (rural)").into()),
+            };
+            let mut dims = civiel::kruispunt::RoundDims::crow(built_up);
+            if let Some(d) = args.f64("D")? {
+                let w = dims.r_out - dims.r_in;
+                dims.r_out = d / 2.0;
+                dims.r_in = dims.r_out - w;
+            }
+            if let Some(w) = args.f64("RIJBAAN")? {
+                dims.r_in = dims.r_out - w;
+            }
+            for (key, field) in [
+                ("OVERRIJDBAAR", &mut dims.apron),
+                ("IN", &mut dims.r_entry),
+                ("UIT", &mut dims.r_exit),
+                ("INBREEDTE", &mut dims.entry_w),
+                ("UITBREEDTE", &mut dims.exit_w),
+                ("MIDDENGELEIDER", &mut dims.split_w),
+                ("LENGTE", &mut dims.split_l),
+                ("AANSLUITING", &mut dims.taper),
+            ] {
+                if let Some(v) = args.f64(key)? {
+                    *field = v;
+                }
+            }
+            if let Some(h) = args.f64("HELLING")? {
+                dims.slope = h / 100.0;
+            }
+            if dims.r_in <= dims.apron + 1.0 || dims.r_out <= dims.r_in {
+                return Err(open_infra::lang::tr("de maten passen niet: D, RIJBAAN en OVERRIJDBAAR", "the dimensions do not fit: D, RIJBAAN and OVERRIJDBAAR").into());
+            }
+            let centre = match args.points("MIDDEN")? {
+                Some(p) if !p.is_empty() => Some(to_drawing(p[0])?),
+                _ => None,
+            };
+            let req = civiel::kruispunt::RoundaboutRequest {
+                axes,
+                centre,
+                dims,
+                asm: args.str("PROFIELTYPE").map(str::to_string),
+                level: args.f64("NIVEAU")?,
+                name: args.str("NAAM").map(str::to_string),
+                natural: realistic(args)?,
+            };
+            job(host, open_infra::lang::tr("Rotonde", "Roundabout"), id, move |p| civiel::kruispunt::roundabout(&o, req, p));
         }
         "CIV_BAG3D" => {
             let o = opt(&["LOD", "MAX", "KLEUR", "STIJL"])?;
@@ -609,7 +739,9 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_AS AS=<handle> | PI=x,y;x,y;… R=r;… [NAAM=] [BEGIN=]; CIV_AS_OFFSET AS= VERSCHUIVING=-3.5;3.5; CIV_STATION AS= x,y; \
              CIV_LENGTEPROFIEL AS= [PLAATS=x,y]; CIV_ONTWERPPROFIEL AS= PVI=station:hoogte;… [BOOG=]; CIV_DWARSPROFIELEN AS= [PLAATS=] [OM=] [LINKS=] [RECHTS=]; \
              3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>; \
-             CIV_CORRIDOR AS= [SJABLOON=weg|fietspad|snelweg|dijk] [NIVEAU=|BOVEN=] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y]; CIV_INFO.",
+             CIV_CORRIDOR AS= [PROFIELTYPE=<naam>|<pad.json>] [NIVEAU=|BOVEN=] [VAN=] [TOT=] [DOELEN=naam:handle;…] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y] [KLEUR=nlcs]; \
+             CIV_PROFIELTYPEN, CIV_PROFIELTYPE NAAM= [KOPIE=] [PLAATS=x,y]; CIV_KRUISPUNT HOOFD= ZIJ= [R=8;…] [PROFIELTYPE=] [NIVEAU=]; \
+             CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_INFO.",
         ),
         _ => return Err(format!("onbekend commando {verb}; zie CIV_HELP")),
     }

@@ -825,11 +825,14 @@ pub struct SectionView {
     pub plan: (XY, XY),
 }
 
+/// Outlines per section view: (offset m, height m) on their layer.
+pub type Outlines = Vec<Vec<(LayerSpec, Vec<(f64, f64)>)>>;
+
 thread_local! {
-    /// Extra outlines per view, (offset m, height m) on their layer: the
-    /// corridor's pavement layers. Set by the caller for the next
-    /// `draw_section_views` on this thread (hook of the corridor stream).
-    pub static SECTION_OUTLINES: std::cell::RefCell<Vec<Vec<(LayerSpec, Vec<(f64, f64)>)>>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Extra outlines per view: the corridor's pavement layers. Set by the
+    /// caller for the next `draw_section_views` on this thread (hook of the
+    /// corridor stream).
+    pub static SECTION_OUTLINES: std::cell::RefCell<Outlines> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Section views in a grid (upper-left corner `at`), each with its height
