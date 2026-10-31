@@ -143,9 +143,13 @@ def check_ifc(path):
     out["alignments"] = als
 
     # Terrain, roads, earthworks, buildings.
+    def body_items(p):
+        return [i for r in (p.Representation.Representations if p.Representation else []) if r.RepresentationIdentifier == "Body" for i in r.Items]
+
     out["terrain"] = [
-        {"name": e.Name, "triangles": len(e.Representation.Representations[0].Items[0].CoordIndex)}
+        {"name": e.Name, "triangles": sum(len(i.CoordIndex) for i in body_items(e) if hasattr(i, "CoordIndex"))}
         for e in f.by_type("IfcGeographicElement")
+        if e.PredefinedType == "TERRAIN"
     ]
     out["roads"] = [r.Name for r in f.by_type("IfcRoad")]
     out["road_parts"] = [p.PredefinedType for p in f.by_type("IfcRoadPart")]
@@ -153,7 +157,7 @@ def check_ifc(path):
     vols = {}
     for e in f.by_type("IfcEarthworksFill") + f.by_type("IfcEarthworksCut"):
         p = ifcopenshell.util.element.get_pset(e, "OpenInfra_Earthworks") or {}
-        fs = e.Representation.Representations[0].Items[0]
+        fs = body_items(e)[0]
         vols[f"{e.is_a()}:{e.Name}"] = {"volume": p.get("Volume"), "closed": fs.Closed, "voids": [r.RelatingBuildingElement.Name for r in getattr(e, "VoidsElements", [])]}
     out["earthworks"] = vols
     out["buildings"] = len(f.by_type("IfcBuilding"))
@@ -161,7 +165,7 @@ def check_ifc(path):
     failed = 0
     bodies = 0
     for p in f.by_type("IfcProduct"):
-        if p.is_a("IfcAlignment") or p.is_a("IfcAlignmentSegment") or not p.Representation:
+        if p.is_a("IfcAlignment") or p.is_a("IfcAlignmentSegment") or not body_items(p):
             continue
         bodies += 1
         try:

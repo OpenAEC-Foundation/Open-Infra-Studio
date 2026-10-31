@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""End-to-end test of the LandXML and IFC 4.3 exports in Open CAD Studio.
+"""End-to-end test of the LandXML export (and the corridor in the IFC 4.3
+export) in Open CAD Studio.
 
 Runs its own Open CAD Studio (REST on --port, default 18813) with an
 isolated configuration folder (``XDG_CONFIG_HOME``), so the plugin
@@ -16,10 +17,11 @@ Builds a small civil model in Dordrecht (``GIS_SITE RD 104885 425320 200
   landxml      CIV_LANDXML_EXPORT … ALLES, validated against the LandXML
                1.2 XSD
   round trip   the file read back with CIV_LANDXML into a new drawing
-  ifc          CIV_IFC_EXPORT … ALLES, opened and validated with
-               ifcopenshell (schema and EXPRESS rules), alignment lengths,
-               stations and georeferencing read back, earthwork volumes
-               against the corridor's own
+  ifc          CIV_IFC BESTAND=… (main's IFC 4.3 export), opened and
+               validated with ifcopenshell (schema and EXPRESS rules),
+               alignment lengths, stations and georeferencing read back; the
+               corridor as IfcRoad with road parts, courses and earthwork
+               bodies, their volumes against the corridor's own
   selection    only the selected axis is exported
   millimetres  a drawing in mm with a relative site: the same lengths
 
@@ -204,7 +206,7 @@ def main():
 
     def ifc():
         path = OUT / "dordrecht.ifc"
-        r = run_id(f"CIV_IFC_EXPORT BESTAND={path} ALLES", "ux-ifc", 900)
+        r = run_id(f"CIV_IFC BESTAND={path}", "ux-ifc", 900)
         state["ifc_result"] = r["data"]
         rep = check(ifc=path)["ifc"]
         state["ifc"] = rep
@@ -221,7 +223,7 @@ def main():
             and abs(mc.get("eastings", 0) - SITE[0]) < 1e-6
             and abs(mc.get("northings", 0) - SITE[1]) < 1e-6
             and mc.get("crs") == "EPSG:28992"
-            and mc.get("vertical") == "NAP"
+            and mc.get("vertical") in ("NAP", "EPSG:5709")
             and abs(al.get("horizontal_length", 0) - state["axis_len"]) < 1e-3
             and abs(al.get("vertical_length", 0) - state["axis_len"]) < 1e-3
             and al.get("start_station") == 0.0
@@ -229,6 +231,8 @@ def main():
             and "PARABOLICARC" in al.get("vertical_types", [])
             and geo_ok
             and rep["roads"]
+            and sorted(rep["road_parts"]) == ["CARRIAGEWAY", "ROADSIDE", "SOFTSHOULDER"]
+            and len(rep["courses"]) == 3
             and len(rep["terrain"]) >= 1
         )
         return ok, (
@@ -286,7 +290,7 @@ def main():
         r = run_id("CIV_AS PI=104800,425270;104880,425290;104960,425360 R=60", "ux-mm-as")
         length = r["data"]["lengte_m"]
         path = OUT / "mm.ifc"
-        run_id(f"CIV_IFC_EXPORT BESTAND={path}", "ux-mm-ifc")
+        run_id(f"CIV_IFC BESTAND={path}", "ux-mm-ifc")
         rep = check(ifc=path)["ifc"]
         al = rep["alignments"][0]
         fp = al.get("Axis_Curve2D", {})

@@ -1,40 +1,38 @@
-# Exchange: LandXML 1.2 and IFC 4.3 export
+# Exchange: LandXML 1.2 export (and corridors in IFC 4.3)
 
-The Civiel tab reads LandXML (points, surfaces, alignments). These two commands write the model back out, so it can go to a partner who works in other civil design software (LandXML) or to a client who asks for open BIM (IFC 4.3).
+The Civiel tab reads LandXML (points, surfaces, alignments). `CIV_LANDXML_EXPORT` writes the model back out, so it can go to a partner who works in other civil design software. For open BIM there is the IFC 4.3 export (`GIS_IFC` / `CIV_IFC`); this stream adds the corridor's road parts and earthworks to it (see [below](#corridors-in-the-ifc-43-export)).
 
-Both are in the ribbon group **Uitwisseling / Exchange** and take arguments like every `CIV_` command.
+## The command
 
 | Command | Arguments | Writes |
 |---|---|---|
 | `CIV_LANDXML_EXPORT` | `[BESTAND=<path>]` (or a path as a word), `[ALLES]`, `[ID=<name>]` | LandXML 1.2 |
-| `CIV_IFC_EXPORT` | `[BESTAND=<path>]` (or a path as a word), `[ALLES]`, `[ID=<name>]` | IFC 4.3 (`IFC4X3_ADD2`) |
 
-- **What goes out:** with a selection, only the objects that have an entity in it (an axis, a TIN mesh, survey points, a corridor line). Without a selection, or with `ALLES`, everything.
-- **Where it goes:** without a path the file goes beside the drawing: `<drawing>_landxml.xml` and `<drawing>_ifc4x3.ifc`. The ribbon buttons always write there, because the plugin API has no save dialog.
-- **Result:** with `ID=` the JSON result lists the file, the counts per object type, the alignments with their lengths and start stations, and (IFC) the fill and cut volumes.
+- **Ribbon:** Civiel → Points (Punten) → **LandXML export**, beside the LandXML import.
+- **What goes out:** with a selection, only the objects that have an entity in it (an alignment, a TIN mesh, survey points, a corridor line). Without a selection, or with `ALLES`, everything.
+- **Where it goes:** without a path the file goes beside the drawing: `<drawing>_landxml.xml`. The ribbon button always writes there, because the plugin API has no save dialog.
+- **Result:** with `ID=` the JSON result lists the file, the number of points, the surfaces (name, status, points, triangles), the alignments (name, length, start station, segments, ground profile points, PVIs) and the corridors (name, feature lines).
 
-Example, from a script or an agent:
+From a script or an agent (MCP tool `civ_landxml_export`):
 
 ```
 CIV_LANDXML_EXPORT BESTAND=/data/dordrecht.xml ALLES ID=lx
-CIV_IFC_EXPORT BESTAND=/data/dordrecht.ifc ALLES ID=ifc
 ```
 
 ## Where the data comes from
 
-The commands read the drawing the way the other civil commands do: through the object index `OPENINFRA/INDEX` and the object data (XDATA `OPENINFRA`) on the entities, so they also work on drawings too large to share whole. All coordinates are converted to project coordinates: metres in the site's coordinate system (RD in the Netherlands), heights in metres NAP.
+The command reads the drawing the way the other civil commands do: through the object index `OPENINFRA/INDEX` and the object data (XDATA `OPENINFRA`) on the entities, so it also works on drawings too large to share whole. All coordinates are converted to project coordinates: metres in the site's coordinate system (RD in the Netherlands), heights in metres NAP. A drawing in millimetres or with relative coordinates gives the same file.
 
 | Object | Found as |
 |---|---|
 | Survey points | POINTs on `OG-HOOGTEPUNT`, or with a point number in their object data |
 | Surfaces | meshes and 3D faces on `OG-TRIANGULATIE`; status B (existing) or N (design) from the layer; one surface per object data record, so two TINs never merge; the name from `terrein` (or `corridor`) |
-| Alignments | polylines on `AM-AS` with an axis name, without offset, design profile or corridor data; start station from `beginstation` |
-| Ground profile | sampled along the axis every `STAP` m (and at every tangent point) on the existing TIN (B); with a length profile but no TIN, from AHN |
+| Alignments | polylines on `AM-AS` with an alignment name, without offset, design profile or corridor data; the start station from `beginstation` |
+| Ground profile | sampled along the alignment every `STAP` m (and at every tangent point) on the existing TIN (B); with a length profile but no TIN, from AHN |
 | Design profile | the PVIs (`pvi`) and curve length (`boog_m`) of the design profile, with the same parabolic curves the drawing shows |
-| Corridors | the feature lines of the index entry `corridor`, the design surface by its `corridor` data, the axis and assembly from the corridor's 3D axis line |
-| 3D BAG buildings (IFC) | roof and wall meshes with a BAG id; only when Open CAD Studio shares the whole drawing, because they are not in the index |
+| Corridors | the feature lines of the index entry `corridor`, the design surface by its `corridor` data, the alignment and assembly from the corridor's 3D axis line |
 
-## LandXML 1.2
+## What the file holds
 
 | LandXML | From |
 |---|---|
@@ -49,53 +47,47 @@ The commands read the drawing the way the other civil commands do: through the o
 | `Profile/ProfAlign` | the design: `PVI` at both ends, `ParaCurve length=…` at every PVI with a vertical curve |
 | `PlanFeatures/PlanFeature` | per corridor, its feature lines (pavement edge, shoulder, crest, toe and top of slope, axis) as 3D `Line`s |
 
-Northing comes before easting everywhere, as LandXML requires and as the reader expects. Plan coordinates of alignments are written to 6 decimals (so tangency survives), the rest to 4 (0.1 mm).
+Northing comes before easting everywhere, as LandXML requires and as the reader expects. Alignment geometry is written to 6 decimals (so tangency survives), the rest to 4 (0.1 mm).
 
-The file validates against the [LandXML 1.2 schema](http://www.landxml.org/schema/LandXML-1.2/LandXML-1.2.xsd). Read back with `CIV_LANDXML` it gives the same points, surfaces (triangle for triangle) and alignments; the unit test `exports_and_reads_back` and the e2e test check this.
+**Checked:**
+- the file validates against the [LandXML 1.2 schema](http://www.landxml.org/schema/LandXML-1.2/LandXML-1.2.xsd);
+- read back with `CIV_LANDXML` it gives the same points, the same surfaces (triangle for triangle) and the same alignments (lengths to 1 mm); the unit test `exports_and_reads_back` and the e2e test check this.
 
-## IFC 4.3
+## Corridors in the IFC 4.3 export
 
-The file follows IFC 4.3 ADD2 (ISO 16739-1:2024), written by Open Infra's own small STEP writer (ISO 10303-21).
+Main's IFC 4.3 export (`src/ifc/`) maps every object to its IFC class by its NLCS layer and object data. A corridor became an `IfcRoad` holding its design surface as terrain. Now the design surface is split into what it is:
 
-| IFC | From |
+| IFC | What |
 |---|---|
-| `IfcProject` | SI units (metre, square metre, cubic metre, radian), a 3D model context with `Body` and `Axis` sub-contexts |
-| `IfcProjectedCRS` | `Name` the site's EPSG code, `Description` its name, `VerticalDatum` NAP (or MSL), `MapUnit` metre |
-| `IfcMapConversion` | `Eastings`/`Northings` the site's base point, `OrthogonalHeight` 0, no rotation (`XAxisAbscissa` 1, `XAxisOrdinate` 0), `Scale` 1 |
-| `IfcSite` | the site, with its latitude and longitude |
-| `IfcAlignment` | per axis, aggregated in the project and referenced in the site |
-| `IfcAlignmentHorizontal` | nested `IfcAlignmentSegment`s with `IfcAlignmentHorizontalSegment` `LINE` and `CIRCULARARC` (radius positive to the left), closed by a zero-length segment |
-| `IfcAlignmentVertical` | from the design profile: `CONSTANTGRADIENT` and `PARABOLICARC` (with its `RadiusOfCurvature`), closed by a zero-length segment |
-| geometry | `FootPrint`/`Curve2D`: an `IfcCompositeCurve` of `IfcCurveSegment`s (`IfcLine`, `IfcCircle`); `Axis`/`Curve3D`: an `IfcGradientCurve` (`IfcLine`, `IfcPolynomialCurve`) on it; each segment also carries its curve segment as `Axis`/`Segment`; transition codes from the joints (same position, direction, curvature) |
-| stationing | an `IfcReferent` (`STATION`) at the start, linearly placed on the alignment, with `Pset_Stationing.Station` |
-| terrain | every TIN that is not a corridor surface as `IfcGeographicElement` `TERRAIN` with an `IfcTriangulatedIrregularNetwork`; property set `OpenInfra_Terrain` (status, source) |
-| corridor | `IfcRoad`, positioned by its alignment (`IfcRelPositions`), with `IfcRoadPart`s `CARRIAGEWAY` (an `IfcPavement` with an `IfcCourse` `PAVEMENT`), `SOFTSHOULDER` (`IfcCourse` `PROTECTION`, the shoulders) and `ROADSIDE` (`IfcCourse` `PROTECTION`, the slopes) |
-| earthworks | `IfcEarthworksFill` `EMBANKMENT` and `IfcEarthworksCut` `CUT` (voiding the existing terrain): closed triangulated bodies between the design surface and the existing ground; their volume and closedness in `OpenInfra_Earthworks` |
-| dike corridor | the same without the road: the crest, slopes and the dike body (`IfcEarthworksFill`) in the site |
-| 3D BAG | `IfcBuilding` per building with an `IfcRoof` and an `IfcWall` (triangulated), `Pset_BuildingCommon` with `BuildingID` and `YearOfConstruction` |
+| `IfcRoadPart` `CARRIAGEWAY` | holds an `IfcPavement` (`FLEXIBLE`) with an `IfcCourse` `PAVEMENT`: the lanes' top surface |
+| `IfcRoadPart` `SOFTSHOULDER` | an `IfcCourse` `PROTECTION`: the shoulders (a dike's crest) |
+| `IfcRoadPart` `ROADSIDE` | an `IfcCourse` `PROTECTION`: the slopes |
+| `IfcEarthworksFill` `EMBANKMENT` | a closed triangulated body between the design surface and the existing ground, where the design lies higher; `OpenInfra_Earthworks.Volume` (m³) and `Closed` |
+| `IfcEarthworksCut` `CUT` | the same where the design lies lower; it voids the existing ground (`IfcRelVoidsElement`) |
+| `IfcRelPositions` | the corridor's alignment positions the road |
 
-**Coordinates:** the IFC file holds metres relative to the site's base point, so the numbers stay small. The map conversion adds the base point back. Heights are metres NAP. In a drawing with relative coordinates (base point at 0,0), the IFC coordinates equal the drawing coordinates in metres; in an absolute RD drawing they are the RD coordinates minus the base point.
+The corridor's feature lines (asphalt edge, shoulder, toe and top of slope) go into the road too: they are found by running through the design surface, as the corridor gives only its axis line object data. A dike corridor (no lanes) gets its crest, slopes and dike body in the road without road parts.
 
-**How the corridor is split:** the triangles of the corridor's design surface are sorted by the offset of their centre from the axis. Up to the pavement edge (the widest asphalt feature line) they are pavement; up to the shoulder edge, shoulder; up to the crest edge (dike), crest; the rest are slopes.
+**How the surface is split:** each triangle by the offset of its centre from the alignment: up to the pavement edge (the widest asphalt feature line) pavement; up to the shoulder edge, shoulder; up to the crest edge (dike), crest; the rest slope.
 
-**How the earthworks are built:** for every triangle of the design surface the ground height under its corners is taken from the existing TIN (or AHN when there is none). Where the design lies above the ground, the triangle is clipped to that part: its top is the design, its bottom the ground, and the two meet where the thickness is zero. Along the open border of the corridor (start and end section) walls close the body. The result is a closed body; its volume is computed from its faces and written as a property. Cut is the same with ground and design swapped. In the e2e test the volumes agree with the corridor's own average-end-area volumes within the tolerance stated there.
+**How the earthworks are built:** the ground height under every corner of the design surface comes from the existing TIN (status B). Where the design lies above the ground, each triangle is clipped to that part: its top is the design, its bottom the ground, and the two meet where the thickness is zero. Walls close the body along the open border of the corridor. The result is watertight; two parts of a body may touch along a line where the design meets the ground. The volume follows from the faces. Thinner than 0.2 mm counts as no thickness. Cut is the same with ground and design swapped, and is only written when the existing ground is in the file (a cut must void something).
 
-**GUIDs** are stable: they are derived from the site, the object's kind and name, so exporting the same drawing again gives the same GUIDs and a receiving model can follow the changes.
+**Checked:** the unit test `a_corridor_becomes_road_parts_and_earthworks` writes `target/ifc-test/corridor.ifc`; `tests/ifc_validate.py` reports no schema or EXPRESS rule errors. The fill volume equals the hand-computed cross-section area times the length. In the Dordrecht e2e test the fill and cut volumes agree with the corridor's own average-end-area volumes within the tolerance of the test (15 %).
 
 ## Spirals
 
-The as-spoor stream adds `Seg::Spiral` (a clothoid). Each format has one function with an exhaustive match on `Seg`, so the merge shows where spirals go, and each documents what a spiral needs:
+The as-spoor stream adds `Seg::Spiral` (a clothoid). The exhaustive matches on `Seg` show the merge where spirals go, and each documents what a spiral needs:
 
 - `uitwisseling::seg_to_project`: move the start point, divide length and radii by the drawing unit;
-- `landxml::coord_geom_segment`: `<Spiral length radiusStart radiusEnd rot spiType="clothoid">` with Start, PI, End (radii "INF" for a straight end);
-- `ifc::horizontal_segment`: `CLOTHOID` with signed `StartRadiusOfCurvature` and `EndRadiusOfCurvature` (0 for straight) and `SegmentLength`; the parent curve is ready (`clothoid_parent`, an `IfcClothoid`), after the ifcopenshell alignment API.
+- `landxml::coord_geom_segment`: `<Spiral length radiusStart radiusEnd rot spiType="clothoid">` with Start, PI, End (radii "INF" for a straight end), which the reader takes;
+- IFC: `src/ifc/alignment.rs`, `horizontal()`, has the marked place: an end radius in `HSeg`, kind `CLOTHOID`, and in `mod.rs` an `IFCCLOTHOID` parent curve with the constant and SegmentStart from `alignment::clothoid` (ready and tested, after the ifcopenshell alignment API).
 
-## Validation
+## Validation tools
 
-`tests/e2e/uitwisseling_check.py` checks both files offline:
+`tests/e2e/uitwisseling_check.py` checks files offline:
 
 - LandXML against the LandXML 1.2 XSD (lxml);
-- IFC with ifcopenshell: the file opens, `ifcopenshell.validate` with EXPRESS rules reports no issues, every body gives geometry, the alignments are read back (segment types, lengths from the business logic and from the evaluated curves, start station), and the georeferencing.
+- IFC with ifcopenshell: the file opens, `ifcopenshell.validate` with EXPRESS rules reports no issues, every body gives geometry, the alignments are read back (segment types, lengths from the layout and from the evaluated curves, start station), the georeferencing, the road parts, courses and earthworks.
 
 ```
 python3 -m venv target/e2e-uitwisseling/venv
@@ -103,22 +95,19 @@ target/e2e-uitwisseling/venv/bin/pip install lxml ifcopenshell pytest
 target/e2e-uitwisseling/venv/bin/python tests/e2e/uitwisseling_check.py --landxml file.xml --ifc file.ifc
 ```
 
-`tests/e2e/uitwisseling_e2e.py` builds a model in Dordrecht in Open CAD Studio (TIN from AHN, survey points, an alignment from PIs with a curve, length and design profile, a corridor) and checks both exports, the LandXML round trip, export of a selection, and a drawing in millimetres.
+`tests/e2e/uitwisseling_e2e.py` builds a model in Dordrecht in Open CAD Studio (TIN from AHN, survey points, an alignment from PIs with a curve, length and design profile, a corridor) and checks the LandXML export, its round trip, the export of a selection, the IFC export of the corridor, and a drawing in millimetres.
 
 ## Limits
 
 - **No spirals yet:** they come with `Seg::Spiral` (see above).
-- **Pavement build-up:** the assemblies have no layer thicknesses, so the pavement and shoulders are surfaces (the top), not solids. The fill body under them is a solid.
-- **Ground under the corridor:** taken at the corners of the design triangles; ground relief within one triangle is not followed.
-- **Cut needs terrain in the file:** an `IfcEarthworksCut` must void an element. Without an existing TIN in the export (for instance a selection without it) the cut is left out; the fill is still written.
 - **No cross sections, superelevation or assembly in LandXML:** the corridor goes out as its surface (with breaklines) and feature lines.
-- **No rotation in the map conversion:** Open Infra's site has none (grid north is the drawing's Y axis).
-- **3D BAG buildings** go out only when Open CAD Studio shares the whole drawing (up to its view size); they are not in the object index.
 - **The reader** (`CIV_LANDXML`) does not read profiles back; the round trip compares points, surfaces and alignments.
+- **Pavement build-up (IFC):** the assemblies have no layer thicknesses, so the pavement and shoulders are surfaces (the top), not solids. The fill body under them is a solid.
+- **Ground under the corridor (IFC):** taken at the corners of the design triangles; ground relief within one triangle is not followed. That is why the IFC volumes differ a little from the corridor's section volumes.
 
 ## Sources
 
 - LandXML 1.2 schema: <http://www.landxml.org/schema/LandXML-1.2/LandXML-1.2.xsd>.
-- IFC 4.3 ADD2 (ISO 16739-1:2024), buildingSMART: the alignment, linear placement, georeferencing and road concepts; `IfcTriangulatedIrregularNetwork` flags from the IFC 4.3 documentation (buildingSMART/IFC4.3.x-development).
-- The mapping of alignment segments to curve segments follows the ifcopenshell alignment API (IfcOpenShell, LGPL-3.0-or-later).
+- IFC 4.3 ADD2 (ISO 16739-1:2024), buildingSMART: road parts, courses, earthworks, `IfcRelPositions`.
+- The clothoid mapping follows the ifcopenshell alignment API (IfcOpenShell, LGPL-3.0-or-later).
 - No design values: the exports write what the drawing holds. The colours in the IFC file are only for viewing.
