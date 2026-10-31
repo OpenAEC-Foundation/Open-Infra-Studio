@@ -47,6 +47,20 @@ impl HSeg {
 
 /// The horizontal layout of an axis in drawing units, in metres from the
 /// drawing origin (`f` drawing units per metre).
+///
+/// ── CLOTHOID: the place for `Seg::Spiral` (as-spoor branch) ──────────────
+/// A clothoid has a start and an end radius, so `HSeg` needs an end radius
+/// next to `radius` (start), and `kind()` returns "CLOTHOID" for it. Then:
+/// - here, the `Seg::Spiral` arm: start point and direction, the signed
+///   start and end radii (left > 0, 0 for straight) and the length, all
+///   divided by `f` where they are lengths;
+/// - `end()` and `curvature()`: from the spiral's own end (`Seg::at`);
+/// - in `mod.rs` (`Exporter::alignment`): the parent curve is an
+///   `IFCCLOTHOID(<identity2>,A)` and the curve segment starts at
+///   `SegmentStart`, both from [`clothoid`] below; the
+///   IfcAlignmentHorizontalSegment gets StartRadiusOfCurvature and
+///   EndRadiusOfCurvature from the two radii, PredefinedType .CLOTHOID.;
+/// - the match below stays exhaustive (no wildcard), so the merge points here.
 pub fn horizontal(al: &Alignment, f: f64) -> Vec<HSeg> {
     al.segs
         .iter()
@@ -69,6 +83,23 @@ pub fn horizontal(al: &Alignment, f: f64) -> Vec<HSeg> {
         })
         .filter(|s| s.length > 1e-9)
         .collect()
+}
+
+/// The IfcClothoid parent curve of a spiral from signed radius `r0` to `r1`
+/// (0 = straight) over `len` (m): the clothoid constant A and where the
+/// segment starts on it (SegmentStart). After ifcopenshell's `_map_clothoid`
+/// (IfcOpenShell alignment API, LGPL-3.0-or-later). For `Seg::Spiral`.
+pub fn clothoid(r0: f64, r1: f64, len: f64) -> (f64, f64) {
+    let f = (if r1 == 0.0 { 0.0 } else { len / r1 }) - (if r0 == 0.0 { 0.0 } else { len / r0 });
+    let a = len / f.abs().sqrt() * f.signum();
+    let start = if (r0.abs() < r1.abs() && r0 != 0.0) || r1 == 0.0 {
+        -len - if r1 != 0.0 { len * r0 / (r1 - r0) } else { 0.0 }
+    } else if r0 != 0.0 {
+        len * r1 / (r0 - r1)
+    } else {
+        0.0
+    };
+    (a, start)
 }
 
 /// How segment `a` runs into segment `b` (IfcTransitionCode).
@@ -201,6 +232,16 @@ mod tests {
         assert!((p[0] - (100.0 + 200.0 * 0.5f64.sin())).abs() < 1e-9);
         assert!((p[1] - 200.0 * (1.0 - 0.5f64.cos())).abs() < 1e-9);
         assert!((d - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn clothoid_parent_curves() {
+        // Straight into R 200 to the left over 60 m: A = sqrt(R L), from the origin.
+        let (a, start) = clothoid(0.0, 200.0, 60.0);
+        assert!((a - (200.0f64 * 60.0).sqrt()).abs() < 1e-9 && start.abs() < 1e-9);
+        // From R 200 out to straight: the 60 m before the origin, mirrored.
+        let (a, start) = clothoid(200.0, 0.0, 60.0);
+        assert!(a < 0.0 && (start + 60.0).abs() < 1e-9, "{a} {start}");
     }
 
     #[test]
