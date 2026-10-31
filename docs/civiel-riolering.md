@@ -4,7 +4,7 @@ The Civiel tab's group **Riolering** (Sewers) designs free-flow sewer networks f
 
 The design works anywhere a TIN or a height source is available. Three parts lean on Dutch data and say so below: the GWSW import and takeover (Dutch municipal sewer data), the KLIC crossing check (Dutch cable and pipe deliveries) and the design values (Dutch guidance).
 
-![A DWA run of six manholes along the KLIC sample in Dordrecht](images/riolering-plan.png)
+![A DWA run of six manholes along the KLIC sample in Dordrecht, with the check markers (orange: KLIC crossings of unknown depth, red: clashes)](images/riolering-plan.png)
 
 ## Commands
 

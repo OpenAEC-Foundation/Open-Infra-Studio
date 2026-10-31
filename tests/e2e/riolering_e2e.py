@@ -232,6 +232,8 @@ def main():
         return ok, f"{r['message'][:160]} | {kinds} | {markers} markeringen | {cap}"
 
     step("toets: dekking, verhang, capaciteit, KLIC en kruising", toets)
+    # The window's lower part holds the command line: the regions reach below the run.
+    step("afbeelding plattegrond met toets", lambda: (capture("riolering-toets", [104835, 425240, 104975, 425352]), "riolering-toets.png"))
 
     def bijwerken():
         p = state["ontwerp"]["data"]["putten"][2]
@@ -282,12 +284,12 @@ def main():
     # The pictures: plan and profile.
     xs = [x for x, _ in RUN] + [x for x, _ in HWA]
     ys = [y for _, y in RUN] + [y for _, y in HWA]
-    step("afbeelding plattegrond", lambda: (capture("riolering-plan", [min(xs) - 15, min(ys) - 15, max(xs) + 15, max(ys) + 15]), "riolering-plan.png"))
-    step("afbeelding detail P102-P104", lambda: (capture("riolering-detail", [104900, 425270, 104975, 425320]), "riolering-detail.png"))
+    step("afbeelding plattegrond", lambda: (capture("riolering-plan", [104835, 425240, 104975, 425352]), "riolering-plan.png"))
+    step("afbeelding detail P102-P104", lambda: (capture("riolering-detail", [104900, 425255, 104975, 425315]), "riolering-detail.png"))
     place = state.get("profiel", {}).get("data", {}).get("plaats")
     if place:
         length = state["profiel"]["data"]["lengte"]
-        step("afbeelding lengteprofiel", lambda: (capture("riolering-profiel", [place[0] - 25, place[1] - 5, place[0] + length + 5, place[1] + 70]), "riolering-profiel.png"))
+        step("afbeelding lengteprofiel", lambda: (capture("riolering-profiel", [place[0] - 25, place[1] - 40, place[0] + length + 5, place[1] + 75]), "riolering-profiel.png"))
         step("afbeelding lengteprofiel detail", lambda: (capture("riolering-profiel-detail", [place[0] - 25, place[1] - 2, place[0] + 60, place[1] + 60]), "riolering-profiel-detail.png"))
     try:
         ocs.call("/save", {"path": str(dwg), "document_id": ocs.doc()}, timeout=300)
@@ -344,7 +346,7 @@ def main():
         return ok, f"{r['message'][:240]}"
 
     step("nieuw riool sluit aan op het bestaande", uitbreiden)
-    step("afbeelding overgenomen + uitbreiding", lambda: (capture("riolering-gwsw", [min(xs) - 15, min(ys) - 15, max(xs) + 15, max(ys) + 60]), "riolering-gwsw.png"))
+    step("afbeelding overgenomen + uitbreiding", lambda: (capture("riolering-gwsw", [104835, 425240, 105010, 425352]), "riolering-gwsw.png"))
     try:
         ocs.call("/save", {"path": str(dwg2), "document_id": ocs.doc()}, timeout=300)
     except Exception:  # noqa: BLE001

@@ -2656,8 +2656,14 @@ pub fn orox_of(nets: &[&Net], naam: &str, rd: &dyn Fn(XY) -> Result<XY, String>)
 
 /// The manhole and pipe tables (`;`, decimal comma).
 pub fn csv_of(nets: &[&Net], rd: &dyn Fn(XY) -> Result<XY, String>) -> Result<(String, String), String> {
-    let mut puts = String::from("Riool;Putnummer;Stelsel;X (RD);Y (RD);Maaiveld (m NAP);Afmeting (mm);BOB laagst (m NAP);Diepte (m);Bestaand\n");
-    let mut pipes = String::from("Riool;Leiding;Van;Naar;Stelsel;Materiaal;Diameter (mm);Binnendiameter (mm);Wanddikte (mm);Lengte (m);BOB van (m NAP);BOB naar (m NAP);Verhang;Verhang (1:n);Dekking min (m);Eis dekking (m);Eis verhang;Bestaand\n");
+    let mut puts = String::from(tr(
+        "Riool;Putnummer;Stelsel;X (RD);Y (RD);Maaiveld (m NAP);Afmeting (mm);BOB laagst (m NAP);Diepte (m);Bestaand\n",
+        "Sewer;Manhole;System;X (RD);Y (RD);Ground level (m NAP);Size (mm);Lowest invert (m NAP);Depth (m);Existing\n",
+    ));
+    let mut pipes = String::from(tr(
+        "Riool;Leiding;Van;Naar;Stelsel;Materiaal;Diameter (mm);Binnendiameter (mm);Wanddikte (mm);Lengte (m);BOB van (m NAP);BOB naar (m NAP);Verhang;Verhang (1:n);Dekking min (m);Eis dekking (m);Eis verhang;Bestaand\n",
+        "Sewer;Pipe;From;To;System;Material;Diameter (mm);Inner diameter (mm);Wall (mm);Length (m);Invert from (m NAP);Invert to (m NAP);Slope;Slope (1:n);Smallest cover (m);Required cover (m);Required slope;Existing\n",
+    ));
     let opt_dec = |v: Option<f64>, n: usize| v.map(|v| dec(v, n)).unwrap_or_default();
     for net in nets {
         for (i, p) in net.putten.iter().enumerate() {
@@ -2674,7 +2680,7 @@ pub fn csv_of(nets: &[&Net], rd: &dyn Fn(XY) -> Result<XY, String>) -> Result<(S
                 p.maat_text(),
                 opt_dec(low, 3),
                 opt_dec(p.maaiveld.zip(low).map(|(g, b)| g - b), 3),
-                if p.bestaand { "ja" } else { "nee" }
+                if p.bestaand { tr("ja", "yes") } else { tr("nee", "no") }
             ));
         }
         for (i, l) in net.leidingen.iter().enumerate() {
@@ -2698,7 +2704,7 @@ pub fn csv_of(nets: &[&Net], rd: &dyn Fn(XY) -> Result<XY, String>) -> Result<(S
                 opt_dec(cover, 3),
                 dec(l.dekking_min, 2),
                 verhang_text(l.verhang_min),
-                if l.bestaand { "ja" } else { "nee" }
+                if l.bestaand { tr("ja", "yes") } else { tr("nee", "no") }
             ));
         }
     }
