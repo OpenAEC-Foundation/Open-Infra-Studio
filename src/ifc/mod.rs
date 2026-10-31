@@ -965,6 +965,18 @@ impl<'a, W: Write> Exporter<'a, W> {
                 skip("profiel- en dwarsprofielweergave");
                 continue;
             }
+            // Sheet sets (`civiel::bladen`): view frames, match lines, sheet
+            // profiles and paper space are drawing sheets, not objects.
+            if get(&data, "bladen").is_some() {
+                skip("tekenblad en profielkader");
+                continue;
+            }
+            // Labels (`civiel::labels`) are annotation as a whole: without
+            // texts their ticks, crosses and arrows go too.
+            if opt.no_texts && get(&data, "label").is_some() && get(&data, "vingerafdruk").is_some() {
+                skip("tekst");
+                continue;
+            }
             let mut cl = match classify(ln.as_ref(), &layer, &data, &geo) {
                 Ok(c) => c,
                 Err(r) => {
@@ -1674,6 +1686,34 @@ pub mod tests {
         assert_eq!(compound(51.5), "(51,30,0,0)");
         assert_eq!(compound(-4.25), "(-4,-15,0,0)");
         assert_eq!(plain("{\\fArial|b1;Grote}\\PKerk"), "Grote Kerk");
+    }
+
+    #[test]
+    fn sheets_stay_out_and_labels_follow_the_text_switch() {
+        let mut doc = CadDocument::new();
+        let sheet = [("bladen", "A1 A1")];
+        let label = [("label", "stationering"), ("bron", "1A"), ("vingerafdruk", "0123456789abcdef")];
+        let frame = lw(&[[0.0, 0.0], [600.0, 0.0], [600.0, 300.0], [0.0, 300.0]], true, 0.0);
+        doc.add_entity(on(frame, &nl("AL", "TEKENBLADGRENS", Element::G, Status::N), &sheet)).unwrap();
+        doc.add_entity(on(EntityType::Text(Text::with_value("BLAD 1 VAN 2".to_string(), Vector3::new(5.0, 290.0, 0.0))), &nl("AL", "TEKENBLADGRENS", Element::T, Status::N), &sheet)).unwrap();
+        doc.add_entity(on(EntityType::Text(Text::with_value("AANSLUITLIJN 0+500".to_string(), Vector3::new(500.0, 50.0, 0.0))), &nl("AL", "BLADVERWIJZING_AS", Element::T, Status::N), &sheet)).unwrap();
+        doc.add_entity(on(lw(&[[100.0, -2.5], [100.0, 2.5]], false, 0.0), &nl("AM", "KILOMETRERING", Element::G, Status::N), &label)).unwrap();
+        doc.add_entity(on(EntityType::Text(Text::with_value("0+100".to_string(), Vector3::new(100.0, 4.0, 0.0))), &nl("AM", "KILOMETRERING", Element::T, Status::N), &label)).unwrap();
+        let site = sample_site();
+        let src = Source { doc: &doc, f: 1.0, site: Some(&site), name: "bladen.dwg".into() };
+        let run = |opt: &Options| {
+            let mut r = Report::default();
+            export(&src, opt, Vec::new(), &mut r).unwrap();
+            r
+        };
+        let r = run(&Options::default());
+        assert_eq!(r.skipped.get("tekenblad en profielkader"), Some(&3), "{:?}", r.skipped);
+        assert_eq!(r.classes.get("IfcAnnotation"), Some(&2), "{:?}", r.classes);
+        let r = run(&Options { no_texts: true, ..Options::default() });
+        // The three texts and the label's tick; the sheet frame stays a sheet part.
+        assert_eq!(r.skipped.get("tekst"), Some(&4), "{:?}", r.skipped);
+        assert_eq!(r.skipped.get("tekenblad en profielkader"), Some(&1), "{:?}", r.skipped);
+        assert_eq!(r.classes.get("IfcAnnotation"), None, "{:?}", r.classes);
     }
 
     /// Writes target/ifc-test/voorbeeld.ifc for tests/ifc_validate.py.

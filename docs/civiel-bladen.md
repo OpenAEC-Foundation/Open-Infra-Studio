@@ -135,6 +135,12 @@ The labels are listed per source in the drawing's object index (`OPENINFRA/INDEX
 
 The result (`ID=`) reports `bijgewerkt`, `verwijderd` and `ongewijzigd`.
 
+## IFC export
+
+`CIV_IFC` / `GIS_IFC` leave the sheets out: every sheet part carries the object data `bladen=<set>`. That covers the view frames, match lines, sheet profile views and, in a large drawing read through the shared view, the paper-space parts too. The export reports them under "tekenblad en profielkader".
+
+Labels are exported as `IfcAnnotation`: texts as TEXT, ticks, crosses and slope arrows as annotation lines. Their object data (`label`, `bron`, `vingerafdruk`) goes into the `OpenInfra_ObjectData` property set. With `TEKST=nee` a label goes as a whole, its lines included.
+
 ## Limits
 
 - **Viewports cannot be clipped.** The plugin API has no clipped (polygonal) viewports, so a sheet's plan is the rectangular window, overlap included. The match lines and "ZIE BLAD" references mark where the next sheet takes over.

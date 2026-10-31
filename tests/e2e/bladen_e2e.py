@@ -266,32 +266,31 @@ def main():
             ok &= r2["data"]["bijgewerkt"] == 0
             return ok, f"{d}; {len(moved)}/{len(before)} station labels moved by (10, 5); PVI labels {pvi_before}→{pvi_after}; again: {r2['data']}"
 
+        def ifc():
+            # The sheets stay out of the IFC export; labels are annotation,
+            # and without texts they go as a whole.
+            r1 = run.civ(f"CIV_IFC BESTAND={OUT / 'bladen.ifc'}", "ifc1", 900)
+            r2 = run.civ(f"CIV_IFC BESTAND={OUT / 'bladen-zonder-tekst.ifc'} TEKST=nee", "ifc2", 900)
+            s1, s2 = r1["data"]["overgeslagen"], r2["data"]["overgeslagen"]
+            c1, c2 = r1["data"]["klassen"], r2["data"]["klassen"]
+            sheet_parts = s1.get("tekenblad en profielkader", 0)
+            ok = sheet_parts > 0 and c1.get("IfcAlignment", 0) >= 1 and c2.get("IfcAnnotation", 0) < c1.get("IfcAnnotation", 0)
+            # Nothing at sheet coordinates: every annotation lies in the project.
+            return ok, f"sheet parts left out {sheet_parts}; annotations {c1.get('IfcAnnotation', 0)} → {c2.get('IfcAnnotation', 0)} without texts; skipped {s1}"
+
         def save():
-            path = OUT / "bladen.dwg"
-            if path.exists():
-                path.unlink()
-            # The window may still be busy with the last command: ask until it answers.
-            answer, lossy = None, None
-            for _ in range(30):
-                doc = ocs.doc()
-                if doc is not None:
-                    body = {"path": str(path), "document_id": doc}
-                    if lossy:
-                        body["allow_lossy"] = True
-                    answer = ocs.call("/save", body, timeout=300)
-                    err = str(answer.get("error") or "")
-                    if answer.get("ok") is not False:
-                        break
-                    if "allow_lossy" in err and not lossy:
-                        lossy = err
-                        continue
-                time.sleep(1)
+            # QSAVE into start.dwg, then a copy (the REST /save of v2026.43
+            # leaves out the document id).
+            start = OUT / "start.dwg"
+            before = start.stat().st_mtime
+            ocs.run("QSAVE")
             t0 = time.time()
-            while not (path.exists() and path.stat().st_size > 0) and time.time() - t0 < 120:
+            while start.stat().st_mtime == before and time.time() - t0 < 120:
                 time.sleep(0.5)
-            time.sleep(2)
-            if not path.exists():
-                return False, f"no file; last answer {answer}"
+            time.sleep(3)
+            path = OUT / "bladen.dwg"
+            shutil.copy(start, path)
+            lossy = None
             # Open a copy: the layouts and the label index come back.
             copy = OUT / "bladen-heropend.dwg"
             shutil.copy(path, copy)
@@ -301,8 +300,11 @@ def main():
             layouts = sorted({r.get("properties", {}).get("name") for r in recs if r.get("type") == "Layout"} - {None, "Model"})
             want = state["b1"]["layouts"] + state["b2"]["layouts"]
             ok = all(l in layouts for l in want)
+            # The labels' object data and index came along: nothing to redo.
+            r = run.civ("CIV_LABELS_BIJWERKEN SCHAAL=1000", "lb3")
+            ok &= r["data"]["bijgewerkt"] == 0 and r["data"]["ongewijzigd"] > 0
             note = f"; lossy: {lossy}" if lossy else ""
-            return ok, f"{path.name} {path.stat().st_size // 1024} kB; reopened: {len(layouts)} layouts ({sum(l in layouts for l in want)}/{len(want)} sheets){note}"
+            return ok, f"{path.name} {path.stat().st_size // 1024} kB; reopened: {len(layouts)} layouts ({sum(l in layouts for l in want)}/{len(want)} sheets), labels {r['data']}{note}"
 
         if run.step("model", model):
             a1 = run.step("sheets A1 1:1000", lambda: sheets("A1", "1:1000", "b1", lambda n: n == 2))
@@ -312,6 +314,7 @@ def main():
                 run.step("pdf", pdf)
             if run.step("labels", labels):
                 run.step("follow", follow)
+            run.step("ifc", ifc)
             run.step("save", save)
     finally:
         ocs.stop()

@@ -20,7 +20,7 @@ use std::f64::consts::FRAC_PI_2;
 
 use ocs_plugin_api::host::codec::entities::{TextHorizontalAlignment, TextVerticalAlignment, Viewport};
 use ocs_plugin_api::host::codec::{EntityType, Handle, Vector3};
-use ocs_plugin_api::host::{ExtendedDataRecord, TableOperation, XRecordEntry, XRecordValue};
+use ocs_plugin_api::host::{ExtendedDataRecord, TableOperation, XDataValue, XRecordEntry, XRecordValue};
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 
 use super::as_profiel::{self, design_z, Alignment, Pvi, Seg};
@@ -536,6 +536,41 @@ fn st(al: &Alignment, s: f64, f: f64) -> String {
     station(al.start + s / f)
 }
 
+/// The entities of a sheet set. Each carries `bladen=<set>` as object data
+/// (added to object data of its own), so exports and quantity
+/// take-offs can tell sheet parts from the design (the IFC export leaves
+/// them out).
+struct Sheets {
+    out: Out,
+    mark: ExtendedDataRecord,
+}
+
+impl Sheets {
+    fn new(set: &str) -> Sheets {
+        Sheets { out: Out::default(), mark: record(&[("bladen", set.to_string())]) }
+    }
+
+    fn put(&mut self, spec: &LayerSpec, e: impl IntoIterator<Item = EntityType>) {
+        let mark = &self.mark;
+        self.out.put(
+            spec,
+            e.into_iter().map(|mut x| {
+                let ed = &mut x.common_mut().extended_data;
+                match ed.remove_record(bridge::XDATA_APP) {
+                    None => ed.add_record(mark.clone()),
+                    Some(mut r) => {
+                        if !r.values.iter().any(|v| matches!(v, XDataValue::String(s) if s.starts_with("bladen="))) {
+                            r.values.extend(mark.values.iter().cloned());
+                        }
+                        ed.add_record(r);
+                    }
+                }
+                x
+            }),
+        );
+    }
+}
+
 /// One sheet's profile view in model space.
 struct View {
     s0: f64,
@@ -599,7 +634,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
     if !old.is_empty() {
         let _ = bridge::remove_entities(&t2(format!("Bladen {name} vervangen"), format!("Replace sheets {name}")), &old);
     }
-    let mut out = Out::default();
+    let mut out = Sheets::new(&set);
     // The plan grew into the room the profile leaves: the same centres.
     let frame = Frame { h: lay.plan.h() * k, ..frame };
     let grens = ctx.layer("AL", "TEKENBLADGRENS", Element::G)?;
@@ -662,7 +697,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
         draw_profile(&ctx, &al, &samples, design.as_deref(), &view, &rows, &vert, &title, &mut out)?;
         views.push(view);
     }
-    let handles = out.write_handles(&t2(format!("Bladen {name}"), format!("Sheets {name}")))?;
+    let handles = out.out.write_handles(&t2(format!("Bladen {name}"), format!("Sheets {name}")))?;
     bridge::index_add("bladen", &set, &handles, true);
     // The view frames are for model space only: they do not plot.
     for spec in [&grens, &grens_t] {
@@ -697,9 +732,9 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
                 number: format!("{}-{:02}", req.number.clone().unwrap_or_else(|| "OI-BL".into()), i + 1),
                 ..SheetInfo::default()
             };
-            let mut paper = Out::default();
+            let mut paper = Sheets::new(&set);
             sheet(&ctx, &req, &lay, &al, &spans, i, view, &vert, &info, &crs, &place, &mut paper)?;
-            paper.write(&t2(format!("Blad {} {name}", i + 1), format!("Sheet {} {name}", i + 1)))?;
+            paper.out.write(&t2(format!("Blad {} {name}", i + 1), format!("Sheet {} {name}", i + 1)))?;
         }
         Ok(())
     })();
@@ -758,7 +793,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
 /// design line, PVIs and tangent points. Same layers as the length profile
 /// of `CIV_LENGTEPROFIEL`.
 #[allow(clippy::too_many_arguments)]
-fn draw_profile(ctx: &Ctx, al: &Alignment, samples: &Samples, design: Option<&[Pvi]>, view: &View, rows: &[Row], vert: &Vertical, title: &str, out: &mut Out) -> Result<(), String> {
+fn draw_profile(ctx: &Ctx, al: &Alignment, samples: &Samples, design: Option<&[Pvi]>, view: &View, rows: &[Row], vert: &Vertical, title: &str, out: &mut Sheets) -> Result<(), String> {
     let (f, k) = (ctx.f, ctx.k);
     let v = vert.v;
     let frame = ctx.layer("AL", "PROFIELBALK", Element::G)?;
@@ -1015,7 +1050,7 @@ fn ptext(at: XY, value: &str, mm: f64, rot: f64, spec: &LayerSpec, h: TextHorizo
 /// references, and the title column with sheet number, scales, north arrow,
 /// legend and title block.
 #[allow(clippy::too_many_arguments)]
-fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[Span], i: usize, view: &View, vert: &Vertical, info: &SheetInfo, crs: &str, place: &str, out: &mut Out) -> Result<(), String> {
+fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[Span], i: usize, view: &View, vert: &Vertical, info: &SheetInfo, crs: &str, place: &str, out: &mut Sheets) -> Result<(), String> {
     let (f, k) = (ctx.f, ctx.k);
     let n = spans.len();
     let sp = &spans[i];
@@ -1080,11 +1115,11 @@ fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[S
         out.put(&part, crate::emit::polylines(&[(vec![[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]], true)], &part.name, 1.0, None));
     }
     let vpl = ctx.layer("AL", "TEKENBLAD_VIEWPORT", Element::G)?;
-    let d = record(&[("bladen", al.name.clone()), ("blad", format!("{} van {n}", i + 1)), ("aanzicht", "situatie".into())]);
+    let d = record(&[("bladen", format!("{} {}", al.name, p.name)), ("blad", format!("{} van {n}", i + 1)), ("aanzicht", "situatie".into())]);
     out.put(&vpl, [viewport(&pl, sp.centre, pl.h() * k, twist, &vpl.name, &d)]);
     let w_model = [pr.w() * k, pr.h() * k];
     let target = [view.org[0] - 2.0 * k + w_model[0] / 2.0, view.org[1] - 2.0 * k + w_model[1] / 2.0];
-    let d = record(&[("bladen", al.name.clone()), ("blad", format!("{} van {n}", i + 1)), ("aanzicht", "lengteprofiel".into())]);
+    let d = record(&[("bladen", format!("{} {}", al.name, p.name)), ("blad", format!("{} van {n}", i + 1)), ("aanzicht", "lengteprofiel".into())]);
     out.put(&vpl, [viewport(&pr, target, pr.h() * k, 0.0, &vpl.name, &d)]);
     // Match line references inside the plan view, near its top edge.
     let refs = ctx.layer("AL", "BLADVERWIJZING_AS", Element::T)?;
