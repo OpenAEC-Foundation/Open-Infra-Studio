@@ -118,6 +118,30 @@ cargo build --release -p open-infra && cargo build --release -p open-infra-civie
 python3 tests/e2e/bgt_mutatie_e2e.py --xsd
 ```
 
+## 7. IFC 4.3-export
+
+De unit-tests van `src/ifc` exporteren een voorbeeldtekening met van alles één:
+- een as met ontwerpprofiel, een TIN, een fototerrein en een 3D BAG-pand;
+- KLIC, een sondering met twee lagen, verharding met markering, een ontgraving en een corridor;
+- teksten en een kaartbeeld.
+
+Ze schrijven `target/ifc-test/voorbeeld.ifc`. `tests/ifc_validate.py` toetst dat bestand met IfcOpenShell:
+- aan het schema IFC4X3_ADD2 en de EXPRESS-regels;
+- de as-geometrie: de geometriekernel rekent de horizontale en verticale curve uit, en de punten moeten op de segmenten liggen.
+
+In CI gebeurt dat bij elke push.
+
+`tests/ifc_dwg.rs` exporteert een echte tekening rechtstreeks uit de DWG, zonder Open CAD Studio. De projectlocatie komt uit de tekening.
+
+```sh
+cargo test --lib -p open-infra ifc
+pip install ifcopenshell pytest
+python3 tests/ifc_validate.py target/ifc-test/voorbeeld.ifc
+cargo test --release --test ifc_dwg -- --ignored --nocapture
+OI_IFC_DWG=docs/video/bron/data/dordrecht-showcase.dwg cargo test --release --test ifc_dwg -- --ignored --nocapture
+python3 tests/ifc_validate.py target/ifc-test/dordrecht-showcase.ifc
+```
+
 ## Wat de testset tot nu toe vond
 
 In de plugin, opgelost:
@@ -139,12 +163,13 @@ Met het grote model gevonden en opgelost in de plugin:
 - **Gedeelde weergave:** die wordt na het lezen weer gesloten; anders publiceert de host hem na elke wijziging opnieuw.
 - **Strepen op water:** de gaten in AHN worden per aaneengesloten gebied vlak gevuld, onder de laagste oever.
 
-In Open CAD Studio (host), nog open:
-- **v2026.43:** de gedeelde documentweergave voor plugins is standaard 16 MB (`OCS_V4_SNAPSHOT_SEGMENT_SIZE`). Groter dan 256 MB lukt niet: de plugin-kant mapt hoogstens 1 GiB voor twee segmenten.
-- **v2026.43:** plugins krijgen geen INSUNITS en geen tekeningextents (alleen CLAYER, SNAPANG en CTAB). Ook is er geen opvraging per laag of type.
-- **Ongedaan maken:** een import van de plugin is niet ongedaan te maken. Elementen die een plugin op de achtergrond toevoegt komen niet in de ongedaan-maakstap.
-- **Zonder venster** (`--http` zonder tekening) verwerkt Open CAD Studio de achtergrondverzoeken van een plugin alleen tijdens een plugin-commando.
-- **REST:** de routes `/save` en `/undo` nemen geen `document_id` mee in de GUI-modus. De test gebruikt daarom `QSAVE` en `U`.
+In Open CAD Studio (host), nog open. Gemeld bij Open CAD Studio, samengevat onder [RFC #2331](https://github.com/HakanSeven12/OpenCADStudio/issues/2331#issuecomment-6505337895):
+- **v2026.43:** de gedeelde documentweergave voor plugins is standaard 16 MB (`OCS_V4_SNAPSHOT_SEGMENT_SIZE`). Groter dan 256 MB lukt niet: de plugin-kant mapt hoogstens 1 GiB voor twee segmenten. ([#2334](https://github.com/HakanSeven12/OpenCADStudio/issues/2334))
+- **v2026.43:** plugins krijgen geen INSUNITS en geen tekeningextents (alleen CLAYER, SNAPANG en CTAB) ([#2333](https://github.com/HakanSeven12/OpenCADStudio/issues/2333)). Ook is er geen opvraging per laag of type ([#2335](https://github.com/HakanSeven12/OpenCADStudio/issues/2335)).
+- **Ongedaan maken:** een import van de plugin is niet ongedaan te maken. Elementen die een plugin op de achtergrond toevoegt komen niet in de ongedaan-maakstap. ([#2336](https://github.com/HakanSeven12/OpenCADStudio/issues/2336))
+- **Zonder venster** (`--http` zonder tekening) verwerkt Open CAD Studio de achtergrondverzoeken van een plugin alleen tijdens een plugin-commando. ([#2337](https://github.com/HakanSeven12/OpenCADStudio/issues/2337))
+- **REST:** de routes `/save` en `/undo` nemen geen `document_id` mee in de GUI-modus. De test gebruikt daarom `QSAVE` en `U`. ([#2338](https://github.com/HakanSeven12/OpenCADStudio/issues/2338))
+- **Plugin Manager:** installeert per repository één plugin; de Civiel-plugin moet met de hand uit de zip. ([#2339](https://github.com/HakanSeven12/OpenCADStudio/issues/2339))
 
 Gedrag om te beslissen:
 - **Opnieuw importeren** in hetzelfde gebied voegt alles nogmaals toe (dubbele elementen).

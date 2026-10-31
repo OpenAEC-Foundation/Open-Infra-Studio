@@ -23,7 +23,7 @@ pub fn wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer, op
     bridge::ensure_layer(&layer_name, Color::from_index(8));
     let handles = bridge::add_entities_handles(&format!("GIS WMS {}", layer.title), emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
     let n = handles.len();
-    bridge::send_to_back(&handles);
+    bridge::image_to_back(&handles);
     bridge::zoom_extents();
     Ok(format!("{n} kaartdeel/delen van {} op laag {layer_name} ({}).", server.name, server.attribution))
 }
@@ -34,7 +34,7 @@ pub fn xyz(site: &Site, server: &MapServer, opt: &RasterOptions, fade: u8, progr
     let layer_name = emit::layer_name("GIS", &server.name);
     bridge::ensure_layer(&layer_name, Color::from_index(8));
     let handles = bridge::add_entities_handles(&format!("GIS {}", server.name), emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
-    bridge::send_to_back(&handles);
+    bridge::image_to_back(&handles);
     bridge::zoom_extents();
     Ok(format!("{} op laag {layer_name} ({}).", server.name, server.attribution))
 }
@@ -72,6 +72,50 @@ pub fn wfs_place(site: &Site, ft: &WfsType, result: &wfs::WfsResult, style: &Vec
     let n = place_features(site, &result.features, &result.data_crs, &layer, &format!("GIS WFS {}", ft.title), style)?;
     bridge::zoom_extents();
     Ok(format!("{n} objecten van {} op laag {layer}.", ft.title))
+}
+
+/// One layer of any service (service browser, `GIS_SERVICE_LOAD`) for the
+/// project area: WMS and tiles as images, WFS as features with their
+/// attributes. Capabilities are fetched when not given; `layer` defaults to
+/// the server's preset layer, then the first.
+#[allow(clippy::too_many_arguments)]
+pub fn service_layer(site: &Site, server: &MapServer, wms_caps: Option<&WmsCaps>, wfs_caps: Option<&WfsCaps>, layer: Option<&str>, resolution: f64, limit: usize, progress: &dyn Fn(String)) -> Result<String, String> {
+    let wanted = layer.filter(|l| !l.is_empty()).or((!server.default_layer.is_empty()).then_some(server.default_layer.as_str()));
+    match server.kind {
+        ServerKind::Xyz => xyz(site, server, &RasterOptions { resolution, format: "image/png".into() }, 0, progress),
+        ServerKind::Wms => {
+            let fetched;
+            let c = match wms_caps {
+                Some(c) => c,
+                None => {
+                    progress("Capabilities ophalen…".into());
+                    fetched = caps::fetch_wms(&server.url)?;
+                    &fetched
+                }
+            };
+            let l = c.layers.iter().find(|l| Some(l.name.as_str()) == wanted).or(c.layers.first()).ok_or("de dienst heeft geen lagen")?;
+            // Keep the image within the pixel limit for large areas.
+            let res = resolution.max((site.width * site.height / raster::MAX_TOTAL_PX).sqrt());
+            wms(site, server, c, l, &RasterOptions { resolution: res, format: raster::default_format(c, &l.name) }, 0, progress)
+        }
+        ServerKind::Wfs => {
+            let fetched;
+            let c = match wfs_caps {
+                Some(c) => c,
+                None => {
+                    progress("Capabilities ophalen…".into());
+                    fetched = caps::fetch_wfs(&server.url)?;
+                    &fetched
+                }
+            };
+            let t = c.types.iter().find(|t| Some(t.name.as_str()) == wanted).or(c.types.first()).ok_or("de dienst heeft geen objecttypen")?;
+            let res = wfs_fetch(site, c, t, limit, progress)?;
+            let names = vector::property_names(&res.features);
+            const HINTS: &[&str] = &["perceelnummer", "flurstueckskennzeichen", "flurstuecksnummer", "nationalCadastralReference", "label", "huisnummer", "naam", "name"];
+            let label = HINTS.iter().find(|h| names.iter().any(|n| n == *h)).map(|h| h.to_string());
+            wfs_place(site, t, &res, &VectorStyle { aci: 2, label_field: label, text_m: 1.0, clip: true })
+        }
+    }
 }
 
 pub fn osm_fetch(site: &Site, theme_ids: &[&str], progress: &dyn Fn(String)) -> Result<Vec<Vec<Feature>>, String> {
@@ -161,12 +205,15 @@ pub fn run_dataset(site: &Site, data: &Dataset, progress: &dyn Fn(String)) -> Re
     match data {
         Dataset::Raster { server } => {
             let srv = servers::find(server).ok_or_else(|| format!("server {server} onbekend"))?;
+            // Large areas: no more pixels than a 4096-wide image (a quick
+            // import of 30 km at 25 cm would be billions of pixels).
+            let cap = |fine: f64| fine.max(site.width.max(site.height) / 4096.0);
             if srv.kind == ServerKind::Xyz {
-                return xyz(site, &srv, &RasterOptions { resolution: 0.5, format: "image/png".into() }, 0, progress);
+                return xyz(site, &srv, &RasterOptions { resolution: cap(0.5), format: "image/png".into() }, 0, progress);
             }
             let caps = caps::fetch_wms(&srv.url)?;
             let layer = caps.layers.iter().find(|l| l.name == srv.default_layer).or(caps.layers.first()).cloned().ok_or("geen lagen")?;
-            let opt = RasterOptions { resolution: 0.25, format: raster::default_format(&caps, &layer.name) };
+            let opt = RasterOptions { resolution: cap(0.25), format: raster::default_format(&caps, &layer.name) };
             wms(site, &srv, &caps, &layer, &opt, 0, progress)
         }
         Dataset::Wfs { server, typename, label, aci } => {
@@ -177,6 +224,37 @@ pub fn run_dataset(site: &Site, data: &Dataset, progress: &dyn Fn(String)) -> Re
             let res = wfs_fetch(site, &caps, &ft, 20_000, progress)?;
             let style = VectorStyle { aci: *aci, label_field: label.map(str::to_string), text_m: 1.0, clip: true };
             wfs_place(site, &ft, &res, &style)
+        }
+    }
+}
+
+/// Import any server (preset, worldwide list or the user's own) by id: an
+/// XYZ/tile server or WMS layer as image, a WFS feature type as vectors.
+/// `layer` overrides the server's default layer; `res` the resolution (m/px).
+pub fn run_server(site: &Site, id: &str, layer: Option<&str>, res: Option<f64>, progress: &dyn Fn(String)) -> Result<String, String> {
+    let srv = servers::find(id).ok_or_else(|| format!("server {id} onbekend (zie de serverlijst in het werkvenster)"))?;
+    // Large areas: no more pixels than a 4096-wide image.
+    let auto = |fine: f64| res.unwrap_or(fine).max(site.width.max(site.height) / 4096.0);
+    match srv.kind {
+        ServerKind::Xyz => xyz(site, &srv, &RasterOptions { resolution: auto(0.5), format: "image/png".into() }, 0, progress),
+        ServerKind::Wms => {
+            let caps = caps::fetch_wms(&srv.url)?;
+            let want = layer.unwrap_or(&srv.default_layer);
+            // A list of layers (`a,b`) goes as one request, on the first's settings.
+            let first = want.split(',').next().unwrap_or("").trim();
+            let mut l = caps.layers.iter().find(|l| l.name == want || l.name == first).or(caps.layers.iter().find(|l| !l.name.is_empty())).cloned().ok_or("geen lagen")?;
+            if want.contains(',') && l.name == first {
+                l.name = want.to_string();
+            }
+            let opt = RasterOptions { resolution: auto(0.25), format: raster::default_format(&caps, &l.name) };
+            wms(site, &srv, &caps, &l, &opt, 0, progress)
+        }
+        ServerKind::Wfs => {
+            let caps = caps::fetch_wfs(&srv.url)?;
+            let want = layer.unwrap_or(&srv.default_layer);
+            let ft = caps.types.iter().find(|t| t.name.eq_ignore_ascii_case(want)).or(caps.types.first()).cloned().ok_or("geen objecttypen")?;
+            let r = wfs_fetch(site, &caps, &ft, 20_000, progress)?;
+            wfs_place(site, &ft, &r, &VectorStyle { aci: 3, label_field: None, text_m: 1.0, clip: true })
         }
     }
 }

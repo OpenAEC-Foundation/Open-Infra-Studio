@@ -75,11 +75,21 @@ impl MeshBuilder {
 
     pub fn quad(&mut self, a: P3, b: P3, c: P3, d: P3) {
         self.room(4);
-        let (i, j, k, l) = (self.vertex(a), self.vertex(b), self.vertex(c), self.vertex(d));
-        if i != j && j != k && k != l && l != i && i != k && j != l {
-            self.faces.push([i, j, k, l]);
-        } else {
-            self.faces.push([i, j, k, NO]);
+        // Corners that coincide (a sliver, a ring of zero radius) drop out;
+        // what is left is a quad, a triangle or nothing.
+        let mut f: Vec<usize> = Vec::with_capacity(4);
+        for v in [self.vertex(a), self.vertex(b), self.vertex(c), self.vertex(d)] {
+            if f.last() != Some(&v) {
+                f.push(v);
+            }
+        }
+        if f.len() > 1 && f.first() == f.last() {
+            f.pop();
+        }
+        match f.len() {
+            4 if f[0] != f[2] && f[1] != f[3] => self.faces.push([f[0], f[1], f[2], f[3]]),
+            3 if f[0] != f[2] => self.faces.push([f[0], f[1], f[2], NO]),
+            _ => {}
         }
     }
 
@@ -133,6 +143,20 @@ fn spec(ctx: &Ctx, group: &str, name: &str) -> Result<LayerSpec, String> {
 }
 
 // ── 3D BAG ──────────────────────────────────────────────────────────────────
+
+/// The ground at `p` (drawing units), calmed: the trimmed mean of five AHN
+/// samples 1.5 m apart, so draped BGT surfaces lie smooth instead of
+/// following every bump and spike of the laser scan.
+fn smooth_ground(bron: &mut super::Hoogtebron, p: XY, f: f64) -> Option<f64> {
+    let r = 1.5 * f;
+    let mut v: Vec<f64> = [p, [p[0] + r, p[1]], [p[0] - r, p[1]], [p[0], p[1] + r], [p[0], p[1] - r]].iter().filter_map(|q| bron.height(*q)).collect();
+    if v.is_empty() {
+        return None;
+    }
+    v.sort_by(f64::total_cmp);
+    let core = if v.len() >= 4 { &v[1..v.len() - 1] } else { &v[..] };
+    Some(core.iter().sum::<f64>() / core.len() as f64)
+}
 
 /// How 3D BAG buildings look.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -285,8 +309,8 @@ fn windows(ring: &[[f64; 3]], out: [f64; 2], ground: f64, eaves: f64, mb: &mut M
 
 /// `CIV_BAG3D`: the buildings of the project area from the 3D BAG, one roof
 /// mesh (OG-BEBOUWING) and one wall mesh (OG-BEBOUWING_HOOFDGEBOUW) each;
-/// with `BagStyle::Mooi` also a window mesh.
-pub fn bag3d(opt: &super::CivielOptions, lod: Lod, max: usize, style: BagStyle, progress: &dyn Fn(String)) -> Result<String, String> {
+/// with `BagStyle::Mooi` also a window mesh (unless `windows` is off: plain facades).
+pub fn bag3d(opt: &super::CivielOptions, lod: Lod, max: usize, style: BagStyle, with_windows: bool, progress: &dyn Fn(String)) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let bbox = project_rd_bbox(&ctx)?;
     let (buildings, cut) = bag3d::fetch(bbox, lod, max, progress)?;
@@ -363,7 +387,7 @@ pub fn bag3d(opt: &super::CivielOptions, lod: Lod, max: usize, style: BagStyle, 
                 }
             }
             // Windows on vertical walls.
-            if style == BagStyle::Mooi && *k == Kind::Wall && !tall_old {
+            if with_windows && style == BagStyle::Mooi && *k == Kind::Wall && !tall_old {
                 if let Some(r) = surf.first() {
                     let (mut nx, mut ny, mut nz) = (0.0, 0.0, 0.0);
                     for i in 0..r.len() {
@@ -923,7 +947,9 @@ pub fn bgt3d(opt: &super::CivielOptions, groups: &[String], with_buildings: bool
         .filter(|g| groups.iter().any(|x| x.eq_ignore_ascii_case(g.id)))
         .flat_map(|g| g.collections.iter().copied())
         .filter(|c| !crate::gis::bgt::is_label(c))
-        .filter(|c| with_buildings || !matches!(*c, "pand" | "overigbouwwerk" | "gebouwinstallatie"))
+        // Without buildings the BGT pand still comes, as ground: so nothing
+        // shows black under or beside the 3D BAG buildings.
+        .filter(|c| with_buildings || !matches!(*c, "overigbouwwerk" | "gebouwinstallatie"))
         .collect();
     if collections.is_empty() {
         return Err(format!("geen BGT-groepen gekozen; kies uit {}", default_groups().join(", ")));
@@ -940,7 +966,8 @@ pub fn bgt3d(opt: &super::CivielOptions, groups: &[String], with_buildings: bool
     let (mut meshes, mut lines, mut symbols, mut faces, mut skipped) = (0usize, 0usize, 0usize, 0usize, 0usize);
     for (ci, (collection, features)) in data.iter().enumerate() {
         progress(format!("BGT in 3D: {collection} ({}/{})…", ci + 1, data.len()));
-        let shape = shape_of(collection);
+        let footprint = !with_buildings && collection == "pand";
+        let shape = if footprint { Shape::Draped } else { shape_of(collection) };
         for feat in features {
             let Some(obj) = nlcs::bgt_lookup(collection, &feat.props).map(|(id, _)| id).or_else(|| nlcs::bgt_default(collection)).and_then(nlcs::object) else {
                 skipped += 1;
@@ -949,7 +976,7 @@ pub fn bgt3d(opt: &super::CivielOptions, groups: &[String], with_buildings: bool
             let layer = nlcs::layer(obj, opt.nlcs.status, &opt.nlcs.discipline, Element::G);
             let id = feat.props.get("lokaal_id").or_else(|| feat.props.get("identificatie_lokaal_id")).and_then(|v| v.as_str()).unwrap_or("").to_string();
             let d = record(&[("bron", "BGT 3D".into()), ("objecttype", collection.clone()), ("lokaal_id", id), ("nlcs", obj.id.to_string())]);
-            let colour = realistic.then(|| natural_colour(collection, &feat.props)).map(|(r, g, b)| Color::Rgb { r, g, b });
+            let colour = realistic.then(|| if footprint { (178, 174, 168) } else { natural_colour(collection, &feat.props) }).map(|(r, g, b)| Color::Rgb { r, g, b });
             let made = object_3d(&mut bron, &*to, f, k, feat, collection, shape, &layer, &d, area, colour, &mut out, &mut faces);
             match made {
                 Made::Mesh => meshes += 1,
@@ -1015,7 +1042,7 @@ fn object_3d(
     if !rings.is_empty() {
         let mut m = MeshBuilder::default();
         for (outer, holes) in polygons(&rings) {
-            let edge: Vec<f64> = outer.iter().filter_map(|p| bron.height(*p)).collect();
+            let edge: Vec<f64> = outer.iter().filter_map(|p| smooth_ground(bron, *p, f)).collect();
             let ground_min = edge.iter().cloned().fold(f64::MAX, f64::min);
             let ground_mid = if edge.is_empty() { 0.0 } else { edge.iter().sum::<f64>() / edge.len() as f64 };
             match shape {
@@ -1023,7 +1050,7 @@ fn object_3d(
                     let area = ring_area(&outer).abs() / (f * f);
                     let s = if area > 50_000.0 { 6.0 * f } else if area > 5_000.0 { 4.0 * f } else { step };
                     for t in draped_triangles(&outer, &holes, s) {
-                        let mut z = |p: XY| bron.height(p).unwrap_or(ground_mid) * f;
+                        let mut z = |p: XY| smooth_ground(bron, p, f).unwrap_or(ground_mid) * f;
                         let (za, zb, zc) = (z(t[0]), z(t[1]), z(t[2]));
                         m.tri([t[0][0], t[0][1], za], [t[1][0], t[1][1], zb], [t[2][0], t[2][1], zc]);
                     }
@@ -1072,7 +1099,7 @@ fn object_3d(
     if !open.is_empty() {
         let mut n = 0;
         for l in open.iter().filter(|l| l.len() >= 2) {
-            let pts: Vec<Vector3> = densify(l, step, false).into_iter().map(|p| v3(p, bron.height(p).unwrap_or(0.0) * f)).collect();
+            let pts: Vec<Vector3> = densify(l, step, false).into_iter().map(|p| v3(p, smooth_ground(bron, p, f).unwrap_or(0.0) * f)).collect();
             let mut e = EntityType::Polyline3D(Polyline3D::from_points(pts));
             let c = e.common_mut();
             c.layer = layer.name.clone();
@@ -1090,7 +1117,7 @@ fn object_3d(
     }
     let h = symbol_height(collection) * f;
     for p in &pts {
-        let z = bron.height(*p).unwrap_or(0.0) * f;
+        let z = smooth_ground(bron, *p, f).unwrap_or(0.0) * f;
         if collection == "vegetatieobject_punt" {
             // A tree: trunk and a round crown (a flattened sphere whose
             // corners are shared, so the host shades it smooth).
@@ -1126,9 +1153,480 @@ fn object_3d(
     Made::Symbols(pts.len())
 }
 
+// ── CityGML ─────────────────────────────────────────────────────────────────
+
+/// The BGT collection whose NLCS layer, colour and 3D shape a CityGML
+/// object gets (CityGML 2.0/3.0 and IMGeo class names).
+fn citygml_collection(class: &str) -> &'static str {
+    match class.to_ascii_lowercase().as_str() {
+        "building" | "buildingpart" | "pand" => "pand",
+        "buildinginstallation" | "gebouwinstallatie" => "gebouwinstallatie",
+        "auxiliarytrafficarea" | "ondersteunendwegdeel" => "ondersteunendwegdeel",
+        "road" | "railway" | "track" | "square" | "trafficarea" | "transportationcomplex" | "wegdeel" | "spoor" => "wegdeel",
+        "plantcover" | "begroeidterreindeel" => "begroeidterreindeel",
+        "solitaryvegetationobject" | "vegetatieobject" => "vegetatieobject_vlak",
+        "waterbody" | "watersurface" | "waterdeel" => "waterdeel",
+        "ondersteunendwaterdeel" => "ondersteunendwaterdeel",
+        "landuse" | "onbegroeidterreindeel" => "onbegroeidterreindeel",
+        "bridge" | "bridgepart" | "overbruggingsdeel" => "overbruggingsdeel",
+        "tunnel" | "tunnelpart" | "tunneldeel" => "tunneldeel",
+        "kunstwerkdeel" => "kunstwerkdeel_vlak",
+        "scheiding" | "wallsurface" => "scheiding_vlak",
+        _ => "overigbouwwerk",
+    }
+}
+
+/// Newell normal of a ring, normalised (zero for a degenerate ring).
+fn normal(r: &[[f64; 3]]) -> [f64; 3] {
+    let mut n = [0.0; 3];
+    for i in 0..r.len() {
+        let (a, c) = (r[i], r[(i + 1) % r.len()]);
+        n[0] += (a[1] - c[1]) * (a[2] + c[2]);
+        n[1] += (a[2] - c[2]) * (a[0] + c[0]);
+        n[2] += (a[0] - c[0]) * (a[1] + c[1]);
+    }
+    let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    if l > 0.0 { [n[0] / l, n[1] / l, n[2] / l] } else { n }
+}
+
+/// `CIV_CITYGML`: a CityGML file (2.0 or 3.0, also IMGeo/BGT) as 3D meshes
+/// in the project area. Buildings get roof and wall meshes on the NLCS
+/// building layers (with `BagStyle::Mooi` in natural colours, walls by year
+/// of construction); other 3D objects one mesh on the NLCS layer of their
+/// BGT counterpart; relief a smooth terrain mesh; 2D objects (IMGeo) are
+/// made 3D like the BGT: draped on the AHN, water level, buildings extruded.
+pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagStyle, progress: &dyn Fn(String)) -> Result<String, String> {
+    use crate::gis::citygml::{self, Part, Theme};
+    let ctx = Ctx::new(opt)?;
+    let site = ctx.site.clone().ok_or("stel eerst de projectlocatie in (GIS → Locatie, of GIS_SITE)")?;
+    let f = ctx.f;
+    let area = site.drawing_rect(f);
+    // Only the objects with a corner in the project area are kept while
+    // reading: a file of a whole city stays manageable.
+    let drawing = |crs: &str| -> Result<Box<dyn Fn(XY) -> Option<XY>>, String> {
+        let s = site.clone();
+        let to_site = crate::gis::vector::data_to_site(&s, crs, &[])?;
+        Ok(Box::new(move |p: XY| to_site(p).map(|q| s.to_drawing(q, f))))
+    };
+    let model = citygml::read_file(
+        path,
+        &|crs| {
+            let to = drawing(crs.unwrap_or(&site.crs))?;
+            Ok(Box::new(move |o: &citygml::CityObject| o.surfaces.iter().flat_map(|(_, r)| r.iter().flatten()).any(|p| to([p[0], p[1]]).is_some_and(|q| crate::gis::vector::inside(q, area)))))
+        },
+        progress,
+    )?;
+    let crs = model.crs.clone().unwrap_or_else(|| site.crs.clone());
+    let to = drawing(&crs)?;
+    let outside = model.seen - model.objects.len();
+    let p3 = |p: &[f64; 3]| to([p[0], p[1]]).map(|q| [q[0], q[1], p[2] * f]);
+    let roofs = spec(&ctx, "OG", "BEBOUWING")?;
+    let walls = spec(&ctx, "OG", "BEBOUWING_HOOFDGEBOUW")?;
+    let relief = spec(&ctx, "OG", "TRIANGULATIE")?;
+    let natural = style != BagStyle::Nlcs;
+    let rgb = |c: (u8, u8, u8)| natural.then_some(Color::Rgb { r: c.0, g: c.1, b: c.2 });
+    let mut bron: Option<super::Hoogtebron> = None;
+    let mut out = Out::default();
+    let (mut faces, mut skipped) = (0usize, 0usize);
+    let mut per_theme: std::collections::BTreeMap<&str, usize> = Default::default();
+    let total = model.seen;
+    for (i, o) in model.objects.iter().enumerate() {
+        if i % 500 == 0 {
+            progress(format!("CityGML: object {}/{}…", i + 1, model.objects.len()));
+        }
+        let collection = citygml_collection(&o.class);
+        let d = record(&[
+            ("bron", "CityGML".into()),
+            ("bestand", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()),
+            ("objecttype", o.class.clone()),
+            ("identificatie", o.id.clone()),
+            ("bouwjaar", o.year.map(|y| y.to_string()).unwrap_or_default()),
+            ("hoogte_m", o.height.map(|h| format!("{h:.2}")).unwrap_or_default()),
+        ]);
+        let mut props = serde_json::Map::new();
+        props.insert("fysiek_voorkomen".into(), o.look.clone().into());
+        let layer = nlcs::bgt_lookup(collection, &props)
+            .map(|(id, _)| id)
+            .or_else(|| nlcs::bgt_default(collection))
+            .and_then(nlcs::object)
+            .map(|obj| nlcs::layer(obj, opt.nlcs.status, &opt.nlcs.discipline, Element::G));
+        if o.flat {
+            // 2D (IMGeo/BGT): like the BGT in 3D.
+            let Some(layer) = layer else {
+                skipped += 1;
+                continue;
+            };
+            if bron.is_none() {
+                bron = Some(super::hoogtebron(&ctx)?);
+            }
+            let feat = Feature { lines: o.surfaces.iter().flat_map(|(_, r)| r.iter().map(|ring| (ring.iter().map(|p| [p[0], p[1]]).collect(), true))).collect(), points: Vec::new(), props: props.clone() };
+            let colour = rgb(natural_colour(collection, &props));
+            let ident = |p: XY| Some(p);
+            let rings: Vec<(Vec<XY>, bool)> = feat.lines.iter().map(|(r, c)| (r.iter().filter_map(|p| to(*p)).collect(), *c)).collect();
+            let feat = Feature { lines: rings, ..feat };
+            match object_3d(bron.as_mut().unwrap(), &ident, f, ctx.k, &feat, collection, shape_of(collection), &layer, &d, area, colour, &mut out, &mut faces) {
+                Made::Nothing => skipped += 1,
+                _ => *per_theme.entry(o.theme.label()).or_default() += 1,
+            }
+            continue;
+        }
+        match o.theme {
+            Theme::Building => {
+                let (mut rm, mut wm) = (MeshBuilder::default(), MeshBuilder::default());
+                let mut pitched = false;
+                for (part, rings) in &o.surfaces {
+                    let n = normal(&rings[0]);
+                    let part = match part {
+                        Part::Any if n[2] > 0.5 => Part::Roof,
+                        Part::Any if n[2] < -0.5 => Part::Ground,
+                        Part::Any => Part::Wall,
+                        p => *p,
+                    };
+                    if part == Part::Ground {
+                        continue;
+                    }
+                    if part == Part::Roof && n[2] < 0.97 {
+                        pitched = true;
+                    }
+                    let target = if part == Part::Roof { &mut rm } else { &mut wm };
+                    target.new_group();
+                    for t in bag3d::triangulate(rings) {
+                        if tri_area(&t[0], &t[1], &t[2]) < 0.02 {
+                            continue;
+                        }
+                        if let (Some(a), Some(b), Some(c)) = (p3(&t[0]), p3(&t[1]), p3(&t[2])) {
+                            target.tri(a, b, c);
+                        }
+                    }
+                }
+                let (roof_c, wall_c) = match style {
+                    BagStyle::Nlcs => (None, None),
+                    BagStyle::Maquette => (rgb((214, 214, 210)), rgb((238, 238, 234))),
+                    _ => (rgb(if pitched { (142, 78, 62) } else { (104, 104, 108) }), rgb(wall_colour(o.year, &o.id))),
+                };
+                faces += rm.faces() + wm.faces();
+                if rm.is_empty() && wm.is_empty() {
+                    skipped += 1;
+                    continue;
+                }
+                out.put(&roofs, rm.finish(&roofs.name, roof_c, Some(&d)));
+                out.put(&walls, wm.finish(&walls.name, wall_c, Some(&d)));
+            }
+            _ => {
+                let (layer, colour, smooth) = if o.theme == Theme::Relief {
+                    (relief.clone(), rgb((128, 140, 104)), true)
+                } else {
+                    let Some(layer) = layer else {
+                        skipped += 1;
+                        continue;
+                    };
+                    (layer, rgb(natural_colour(collection, &props)), false)
+                };
+                let mut m = MeshBuilder::default();
+                for (_, rings) in &o.surfaces {
+                    if !smooth {
+                        m.new_group();
+                    }
+                    for t in bag3d::triangulate(rings) {
+                        if let (Some(a), Some(b), Some(c)) = (p3(&t[0]), p3(&t[1]), p3(&t[2])) {
+                            m.tri(a, b, c);
+                        }
+                    }
+                }
+                if m.is_empty() {
+                    skipped += 1;
+                    continue;
+                }
+                faces += m.faces();
+                out.put(&layer, m.finish(&layer.name, colour, Some(&d)));
+            }
+        }
+        *per_theme.entry(o.theme.label()).or_default() += 1;
+    }
+    let done: usize = per_theme.values().sum();
+    if done == 0 {
+        return Err(format!(
+            "CityGML: geen van de {total} objecten ligt in het projectgebied ({crs}); verschuif de projectlocatie naar de data{}",
+            if skipped > 0 { format!(" ({skipped} zonder bruikbare geometrie)") } else { String::new() }
+        ));
+    }
+    progress("CityGML tekenen…".into());
+    let json = path.to_string_lossy().to_ascii_lowercase().contains(".json");
+    let n = out.write(if json { "CityJSON" } else { "CityGML" })?;
+    if let Some(b) = &bron {
+        crate::bridge::note_source(b.attribution());
+    }
+    super::api::note("objecten", done);
+    super::api::note("buiten_gebied", outside);
+    super::api::note("driehoeken", faces);
+    super::api::note("crs", crs.clone());
+    let themes: Vec<String> = per_theme.iter().map(|(k, v)| format!("{v} {k}")).collect();
+    Ok(format!(
+        "{} ({crs}): {done} objecten ({}) met {faces} driehoeken{}{} — {n} elementen.",
+        if json { "CityJSON" } else { "CityGML" },
+        themes.join(", "),
+        if outside > 0 { format!("; {outside} buiten het projectgebied") } else { String::new() },
+        if skipped > 0 { format!("; {skipped} overgeslagen") } else { String::new() },
+    ))
+}
+
+/// `CIV_DOORZICHT [PCT=70] [ALLES] [UIT]`: make the ground see-through, so
+/// cables, pipes and soil columns show beneath it: every mesh except
+/// buildings, KLIC and subsurface layers gets that transparency (`ALLES`:
+/// buildings too); `UIT` (or PCT=0) makes them opaque again.
+pub fn see_through(pct: f64, all: bool) -> Result<String, String> {
+    use ocs_plugin_api::host::codec::types::Transparency;
+    let doc = crate::bridge::snapshot()?;
+    let t = if pct <= 0.0 { Transparency::ByLayer } else { Transparency::from_percent(pct.min(95.0) / 100.0) };
+    let mut changed = Vec::new();
+    for e in doc.model_space_entities() {
+        // Meshes only, and none the host would refuse back (fewer than three corners).
+        if !matches!(e, EntityType::Mesh(m) if m.vertices.len() >= 3 && !m.faces.is_empty()) {
+            continue;
+        }
+        let l = e.common().layer.as_str();
+        if l.contains("-KL-") || l.contains("-MO-") || (!all && l.contains("BEBOUWING")) {
+            continue;
+        }
+        if e.common().transparency != t {
+            let mut e = e.clone();
+            e.common_mut().transparency = t;
+            changed.push(e);
+        }
+    }
+    let n = crate::bridge::update_entities("Maaiveld doorzichtig", changed)?;
+    super::api::note("elementen", n);
+    Ok(if pct <= 0.0 { format!("Maaiveld weer dicht: {n} vlakken.") } else { format!("Maaiveld {pct:.0} % doorzichtig: {n} vlakken{}; kabels, leidingen en sonderingen blijven dicht.", if all { " (ook gebouwen)" } else { "" }) })
+}
+
+// ── KLIC in 3D ──────────────────────────────────────────────────────────────
+
+/// Usual cover depth (m below ground, to the top of the cable or pipe) per
+/// IMKL theme, used when the delivery gives no depth (nearly always).
+pub fn klic_depth(thema: &str) -> f64 {
+    match thema {
+        "datatransport" => 0.6,
+        "laagspanning" => 0.6,
+        "middenspanning" => 0.8,
+        "hoogspanning" | "landelijkHoogspanningsnet" => 1.2,
+        "gasLageDruk" => 0.8,
+        "gasHogeDruk" | "buisleidingGevaarlijkeInhoud" | "petrochemie" => 1.0,
+        "water" => 1.0,
+        "warmte" => 0.8,
+        "rioolVrijverval" => 2.0,
+        "rioolOnderOverOfOnderdruk" => 1.2,
+        _ => 0.8,
+    }
+}
+
+/// Radius (m) of a cable or pipe: half its diameter in the delivery (mm),
+/// else a typical size per theme.
+fn klic_radius(thema: &str, diameter: Option<f64>) -> f64 {
+    if let Some(d) = diameter.filter(|d| *d > 0.0) {
+        return (d / 2000.0).clamp(0.02, 1.5);
+    }
+    match thema {
+        "datatransport" | "laagspanning" => 0.03,
+        "middenspanning" | "hoogspanning" | "landelijkHoogspanningsnet" => 0.05,
+        "rioolVrijverval" => 0.2,
+        "water" | "gasLageDruk" | "warmte" => 0.08,
+        _ => 0.06,
+    }
+}
+
+/// A tube along a 3D line: 8 sides, shared corners, so it shades round.
+const SIDES: usize = 8;
+
+/// The ring of a tube of radius `r` around `p`, square to direction `t`.
+fn ring(p: P3, t: P3, r: f64) -> Vec<P3> {
+    let l = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt().max(1e-9);
+    let h = (t[0] * t[0] + t[1] * t[1]).sqrt();
+    // Horizontal side vector; a vertical line (a column) has no horizontal
+    // direction to turn, so it takes the x axis.
+    let n = if h > 1e-9 * l { [-t[1] / h, t[0] / h, 0.0] } else { [1.0, 0.0, 0.0] };
+    let tu = [t[0] / l, t[1] / l, t[2] / l];
+    // The "up" perpendicular to the line.
+    let u = [tu[1] * n[2] - tu[2] * n[1], tu[2] * n[0] - tu[0] * n[2], tu[0] * n[1] - tu[1] * n[0]];
+    (0..SIDES)
+        .map(|k| {
+            let w = std::f64::consts::TAU * k as f64 / SIDES as f64;
+            let (c, s) = (w.cos() * r, w.sin() * r);
+            [p[0] + n[0] * c + u[0] * s, p[1] + n[1] * c + u[1] * s, p[2] + n[2] * c + u[2] * s]
+        })
+        .collect()
+}
+
+fn tube(m: &mut MeshBuilder, line: &[P3], r: f64) {
+    let mut prev: Option<Vec<P3>> = None;
+    for i in 0..line.len() {
+        let a = line[i.saturating_sub(1)];
+        let b = line[(i + 1).min(line.len() - 1)];
+        let ring = ring(line[i], [b[0] - a[0], b[1] - a[1], b[2] - a[2]], r);
+        if let Some(q) = &prev {
+            for k in 0..SIDES {
+                let k2 = (k + 1) % SIDES;
+                m.quad(q[k], q[k2], ring[k2], ring[k]);
+            }
+        }
+        prev = Some(ring);
+    }
+}
+
+/// A closed column from `bottom` to `top`: the side as a tube, with a lid
+/// and a base, so it also shows from above.
+fn column(m: &mut MeshBuilder, bottom: P3, top: P3, r: f64) {
+    tube(m, &[bottom, top], r);
+    let t = [top[0] - bottom[0], top[1] - bottom[1], top[2] - bottom[2]];
+    let (base, lid) = (ring(bottom, t, r), ring(top, t, r));
+    for k in 0..SIDES {
+        let k2 = (k + 1) % SIDES;
+        m.tri(bottom, base[k2], base[k]);
+        m.tri(top, lid[k], lid[k2]);
+    }
+}
+
+/// `CIV_KLIC3D [<levering>] [VERGROOT=1]`: the cables and pipes of a KLIC
+/// delivery as 3D tubes under the AHN ground, at the depth the delivery
+/// gives or else the usual cover depth per theme, in IMKL colours on their
+/// NLCS layers; appurtenances as short columns. `VERGROOT=` thickens the
+/// tubes for overview pictures.
+pub fn klic3d(opt: &super::CivielOptions, path: &std::path::Path, scale: f64, progress: &dyn Fn(String)) -> Result<String, String> {
+    use crate::gis::klic;
+    let ctx = Ctx::new(opt)?;
+    let site = ctx.site.clone().ok_or("stel eerst de projectlocatie in (GIS → Locatie, of GIS_SITE)")?;
+    progress("KLIC-levering lezen…".into());
+    let lev = klic::read(path)?;
+    let mut bron = super::hoogtebron(&ctx)?;
+    let to = rd_to_drawing(&ctx)?;
+    let f = ctx.f;
+    let area = site.drawing_rect(f);
+    let mut out = Out::default();
+    let (mut tubes, mut points, mut metres, mut given) = (0usize, 0usize, 0.0f64, 0usize);
+    let mut per_theme: std::collections::BTreeMap<String, usize> = Default::default();
+    let total = lev.features.len();
+    for (i, feat) in lev.features.iter().enumerate() {
+        if i % 200 == 0 {
+            progress(format!("KLIC in 3D: {}/{total}…", i + 1));
+        }
+        let thema = klic::thema(feat);
+        if thema == "graafpolygoon" {
+            continue;
+        }
+        let kind = klic::kind(feat);
+        let Some(obj) = nlcs::klic_object(thema, kind) else { continue };
+        let num = |k: &str| klic::attr(feat, k).and_then(|v| v.replace(',', ".").parse::<f64>().ok());
+        let depth_given = num("diepte").or_else(|| num("diepteTovMaaiveld")).filter(|d| *d > 0.0 && *d < 30.0);
+        given += depth_given.is_some() as usize;
+        let depth = depth_given.unwrap_or_else(|| klic_depth(thema));
+        let casing = matches!(kind, "Mantelbuis" | "Kabelbed" | "Duct");
+        let r = klic_radius(thema, num("diameter").or_else(|| num("buisdiameter"))) * if casing { 1.6 } else { 1.0 } * scale;
+        let layer = nlcs::layer(obj, opt.nlcs.status, &opt.nlcs.discipline, Element::G);
+        let (cr, cg, cb) = nlcs::imkl_rgb(thema);
+        let colour = Some(if casing { Color::Rgb { r: 150, g: 150, b: 150 } } else { Color::Rgb { r: cr, g: cg, b: cb } });
+        let mut pairs: Vec<(String, String)> = vec![("bron".into(), "KLIC 3D".into()), ("meldnummer".into(), lev.meldnummer.clone())];
+        pairs.extend(klic::attributes(feat));
+        pairs.push(("diepte_m".into(), format!("{depth:.2}")));
+        pairs.push(("diepte_bron".into(), if depth_given.is_some() { "levering" } else { "aangenomen (gebruikelijke dekking)" }.into()));
+        let d = record(&pairs.iter().map(|(k, v)| (k.as_str(), v.clone())).collect::<Vec<_>>());
+        let mut m = MeshBuilder::default();
+        for (line, _) in &feat.lines {
+            let pts: Vec<XY> = line.iter().filter_map(|p| to(*p)).collect();
+            for part in crate::gis::vector::clip_line(&pts, area) {
+                if part.len() < 2 {
+                    continue;
+                }
+                let dense = densify(&part, 1.0 * f, false);
+                metres += dense.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum::<f64>() / f;
+                let line3: Vec<P3> = dense.iter().map(|p| [p[0], p[1], (smooth_ground(&mut bron, *p, f).unwrap_or(0.0) - depth - r) * f]).collect();
+                tube(&mut m, &line3, r * f);
+            }
+        }
+        for p in feat.points.iter().filter_map(|p| to(*p)).filter(|p| crate::gis::vector::inside(*p, area)) {
+            // An appurtenance (manhole, joint): a short column to the ground.
+            let g = smooth_ground(&mut bron, p, f).unwrap_or(0.0);
+            column(&mut m, [p[0], p[1], (g - depth - 0.3) * f], [p[0], p[1], (g - 0.05) * f], 0.25 * scale * f);
+            points += 1;
+        }
+        if m.is_empty() {
+            continue;
+        }
+        tubes += !feat.lines.is_empty() as usize;
+        *per_theme.entry(thema.to_string()).or_default() += 1;
+        out.put(&layer, m.finish(&layer.name, colour, Some(&d)));
+    }
+    if per_theme.is_empty() {
+        return Err(format!("KLIC {}: geen kabels of leidingen in het projectgebied", lev.meldnummer));
+    }
+    progress("KLIC in 3D tekenen…".into());
+    let n = out.write(&format!("KLIC {} in 3D", lev.meldnummer))?;
+    crate::bridge::note_source(&format!("KLIC-levering {} (Kadaster)", lev.meldnummer));
+    crate::bridge::note_source(bron.attribution());
+    super::api::note("leidingen", tubes);
+    super::api::note("appurtenances", points);
+    super::api::note("meter", metres.round());
+    super::api::note("diepte_uit_levering", given);
+    let themes: Vec<String> = per_theme.iter().map(|(k, v)| format!("{v} {k}")).collect();
+    Ok(format!(
+        "KLIC {} in 3D: {tubes} kabels/leidingen ({:.0} m) en {points} appurtenances ({}); diepte {} — {n} elementen.",
+        lev.meldnummer,
+        metres,
+        themes.join(", "),
+        if given > 0 { format!("{given}× uit de levering, verder de gebruikelijke dekking per thema") } else { "de gebruikelijke dekking per thema (de levering geeft geen diepte)".into() }
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn mesh_of(m: MeshBuilder) -> Mesh {
+        match m.finish("TEST", None, None).into_iter().next() {
+            Some(EntityType::Mesh(mesh)) => mesh,
+            _ => panic!("no mesh"),
+        }
+    }
+
+    #[test]
+    fn a_vertical_column_has_faces_and_a_footprint() {
+        let mut m = MeshBuilder::default();
+        column(&mut m, [10.0, 20.0, -1.0], [10.0, 20.0, 0.5], 0.25);
+        let mesh = mesh_of(m);
+        // 8 side quads, 8 lid and 8 base triangles.
+        assert_eq!(mesh.faces.len(), 24);
+        let xs: Vec<f64> = mesh.vertices.iter().map(|v| v.x).collect();
+        let ys: Vec<f64> = mesh.vertices.iter().map(|v| v.y).collect();
+        let span = |v: &[f64]| v.iter().cloned().fold(f64::MIN, f64::max) - v.iter().cloned().fold(f64::MAX, f64::min);
+        assert!((span(&xs) - 0.5).abs() < 1e-9 && span(&ys) > 0.45, "footprint {} × {}", span(&xs), span(&ys));
+        assert!(mesh.faces.iter().all(|f| {
+            let mut v = f.vertices.clone();
+            v.sort();
+            v.dedup();
+            v.len() == f.vertices.len()
+        }));
+    }
+
+    #[test]
+    fn a_horizontal_tube_is_unchanged() {
+        let mut m = MeshBuilder::default();
+        tube(&mut m, &[[0.0, 0.0, -1.0], [10.0, 0.0, -1.0], [20.0, 5.0, -1.2]], 0.1);
+        let mesh = mesh_of(m);
+        assert_eq!(mesh.faces.len(), 16);
+        // The ring of the first point stands square to the x axis.
+        assert!(mesh.vertices.iter().filter(|v| v.x.abs() < 1e-9).count() == 8);
+    }
+
+    #[test]
+    fn coinciding_corners_leave_no_degenerate_faces() {
+        let mut m = MeshBuilder::default();
+        let (a, b, c) = ([0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]);
+        m.quad(a, a, b, c);
+        m.quad(a, b, c, a);
+        m.quad(a, a, b, b);
+        m.quad(a, a, a, a);
+        let mesh = mesh_of(m);
+        assert_eq!(mesh.faces.len(), 2);
+        assert!(mesh.faces.iter().all(|f| f.vertices.len() == 3));
+    }
 
     #[test]
     fn building_styles() {

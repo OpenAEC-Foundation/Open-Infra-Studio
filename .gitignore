@@ -9,3 +9,4 @@ CLAUDE.md
 *.ocs-autosave.sv$
 # Python caches (the tracked e2e cache predates this rule)
 __pycache__/
+PROMPTS.md
