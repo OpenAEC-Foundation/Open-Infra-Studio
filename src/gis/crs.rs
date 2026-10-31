@@ -208,6 +208,34 @@ pub fn register(info: CrsInfo) {
     registry().lock().unwrap().entry(info.code.clone()).or_insert(info);
 }
 
+/// How a coordinate system offered by a service can be used here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Support {
+    /// Built in, automatic UTM or already loaded: transforms offline.
+    Builtin,
+    /// Another EPSG code: its definition is fetched once from epsg.io.
+    Online,
+    /// Not an EPSG code (a vendor or local code): no transformation.
+    Unsupported,
+}
+
+/// Web Mercator under its older and vendor codes.
+pub fn is_web_mercator(code: &str) -> bool {
+    matches!(normalize(code).as_str(), "EPSG:3857" | "EPSG:900913" | "EPSG:3785" | "EPSG:102100" | "EPSG:102113")
+}
+
+/// Whether Open Infra can transform from `code`, and how.
+pub fn support(code: &str) -> Support {
+    let c = normalize(code);
+    if known(&c).is_some() || is_web_mercator(&c) {
+        Support::Builtin
+    } else if c.strip_prefix("EPSG:").is_some_and(|n| !n.is_empty() && n.chars().all(|d| d.is_ascii_digit())) {
+        Support::Online
+    } else {
+        Support::Unsupported
+    }
+}
+
 pub fn is_geographic(code: &str) -> bool {
     known(code).map(|i| i.proj4.contains("+proj=longlat")).unwrap_or(false)
 }
@@ -331,6 +359,16 @@ mod tests {
         assert_eq!(suggest_for("ke", 36.82, -1.28), "EPSG:32737");
         let nairobi = transform("EPSG:4326", "EPSG:32737", [36.82017, -1.2851625]).unwrap();
         assert!((nairobi[0] - 257441.2).abs() < 1.0 && (nairobi[1] - 9857847.2).abs() < 1.0, "{nairobi:?}");
+    }
+
+    #[test]
+    fn crs_support_levels() {
+        assert_eq!(support("EPSG:28992"), Support::Builtin);
+        assert_eq!(support("CRS:84"), Support::Builtin);
+        assert_eq!(support("EPSG:32633"), Support::Builtin);
+        assert_eq!(support("EPSG:900913"), Support::Builtin);
+        assert_eq!(support("urn:ogc:def:crs:EPSG::2180"), Support::Online);
+        assert_eq!(support("IGNF:LAMB93"), Support::Unsupported);
     }
 
     #[test]

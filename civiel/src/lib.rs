@@ -1,4 +1,4 @@
-//! Open Infra — Civiel: the second ribbon tab, with Civil 3D-like tools after
+//! Open Infra — Civiel: the second ribbon tab, with civil design tools after
 //! Hakan Seven's FreeCAD Road workbench. Survey points, surfaces (TIN,
 //! contours, height analysis, earthwork), alignments (stationing, offsets,
 //! station/offset), length, design and cross sections. The engine is
@@ -19,7 +19,7 @@ static MANIFEST: PluginManifest = PluginManifest {
     id: "openaec.open-infra-civiel",
     name: "Open Infra — Civiel",
     version: env!("CARGO_PKG_VERSION"),
-    description: "Civil 3D-achtige tools: meetpunten, terrein (TIN), assen met stationering, lengte-, ontwerp- en dwarsprofielen, grondverzet. Op NLCS-lagen.",
+    description: "Civiele ontwerptools: meetpunten, terrein (TIN), assen met stationering, lengte-, ontwerp- en dwarsprofielen, grondverzet. Op NLCS-lagen.",
     api_version: ApiVersion::CURRENT,
     ribbon_order: 61,
     xdata_apps: &[bridge::XDATA_APP],
@@ -53,6 +53,11 @@ const I_BAG3D: IconKind = icon!("bag3d.svg");
 const I_PHOTO: IconKind = icon!("fototerrein.svg");
 const I_BGT3D: IconKind = icon!("bgt3d.svg");
 const I_WATER: IconKind = icon!("waterpeil.svg");
+const I_CITYGML: IconKind = icon!("citygml.svg");
+const I_IFC: IconKind = icon!("ifc.svg");
+const I_KLIC3D: IconKind = icon!("klic3d.svg");
+const I_SEE: IconKind = icon!("doorzicht.svg");
+const I_CPT: IconKind = icon!("sonderingen.svg");
 // Design check, sight distance and rail (as-spoor).
 const I_CRITERIA: IconKind = icon!("ontwerpcriteria.svg");
 const I_CHECK: IconKind = icon!("as-toets.svg");
@@ -99,75 +104,92 @@ impl CadModule for CivielModule {
     fn ribbon_groups(&self) -> &[RibbonGroup] {
         static GROUPS: OnceLock<Vec<RibbonGroup>> = OnceLock::new();
         GROUPS.get_or_init(|| {
-            vec![
-                // Civil 3D "Points" / Road "GeoPoints" and "Input-Output".
+            use open_infra::lang::dutch;
+            let mut groups = vec![
+                // Points (Road "GeoPoints" and "Input-Output").
                 RibbonGroup {
-                    title: "Punten",
+                    title: tr("Punten", "Points"),
                     tools: vec![
-                        file_tool("CIV_PUNTEN_IMPORT", "Punten importeren", I_POINTS, "Puntenbestand openen", "Puntenbestand (PNEZD, PENZD, CSV)", &["csv", "txt", "xyz", "pnt", "asc"], true),
-                        small("CIV_PUNT", "Punt plaatsen", I_PLACE),
-                        small("CIV_PUNTEN_EXPORT", "Punten exporteren", I_EXPORT),
-                        file_tool("CIV_LANDXML", "LandXML", I_LANDXML, "LandXML openen", "LandXML", &["xml", "landxml"], false),
+                        file_tool("CIV_PUNTEN_IMPORT", tr("Punten importeren", "Import points"), I_POINTS, tr("Puntenbestand openen", "Open a point file"), tr("Puntenbestand (PNEZD, PENZD, CSV)", "Point file (PNEZD, PENZD, CSV)"), &["csv", "txt", "xyz", "pnt", "asc"], true),
+                        small("CIV_PUNT", tr("Punt plaatsen", "Place point"), I_PLACE),
+                        small("CIV_PUNTEN_EXPORT", tr("Punten exporteren", "Export points"), I_EXPORT),
+                        file_tool("CIV_LANDXML", "LandXML", I_LANDXML, tr("LandXML openen", "Open LandXML"), "LandXML", &["xml", "landxml"], false),
                     ],
                 },
-                // Civil 3D "Surfaces".
+                // Surfaces.
                 RibbonGroup {
-                    title: "Oppervlak",
+                    title: tr("Oppervlak", "Surface"),
                     tools: vec![
-                        large("CIV_TIN", "TIN maken", I_TIN),
-                        small("CIV_HOOGTELIJNEN", "Hoogtelijnen", I_CONTOURS),
-                        small("CIV_ANALYSE", "Hoogteanalyse", I_ANALYSIS),
-                        small("CIV_VOLUME", "Grondverzet", I_VOLUME),
+                        large("CIV_TIN", tr("TIN maken", "Create TIN"), I_TIN),
+                        small("CIV_HOOGTELIJNEN", tr("Hoogtelijnen", "Contours"), I_CONTOURS),
+                        small("CIV_ANALYSE", tr("Hoogteanalyse", "Elevation analysis"), I_ANALYSIS),
+                        small("CIV_VOLUME", tr("Grondverzet", "Earthworks"), I_VOLUME),
                     ],
                 },
-                // Civil 3D "Alignments".
+                // Alignments.
                 RibbonGroup {
-                    title: "As",
+                    title: tr("As", "Alignment"),
                     tools: vec![
-                        large("CIV_AS", "As maken", I_AXIS),
-                        small("CIV_AS_OFFSET", "As verschuiven", I_OFFSET),
-                        small("CIV_STATION", "Station / offset", I_STATION),
+                        large("CIV_AS", tr("As maken", "Create alignment"), I_AXIS),
+                        small("CIV_AS_OFFSET", tr("As verschuiven", "Offset alignment"), I_OFFSET),
+                        small("CIV_STATION", tr("Station / offset", "Station / offset"), I_STATION),
                     ],
                 },
-                // Civil 3D "Profiles" and "Sections".
+                // Profiles and sections.
                 RibbonGroup {
-                    title: "Profielen",
+                    title: tr("Profielen", "Profiles"),
                     tools: vec![
-                        large("CIV_LENGTEPROFIEL", "Lengteprofiel", I_PROFILE),
-                        small("CIV_ONTWERPPROFIEL", "Ontwerpprofiel", I_DESIGN),
-                        small("CIV_DWARSPROFIELEN", "Dwarsprofielen", I_SECTIONS),
+                        large("CIV_LENGTEPROFIEL", tr("Lengteprofiel", "Length profile"), I_PROFILE),
+                        small("CIV_ONTWERPPROFIEL", tr("Ontwerpprofiel", "Design profile"), I_DESIGN),
+                        small("CIV_DWARSPROFIELEN", tr("Dwarsprofielen", "Cross sections"), I_SECTIONS),
                     ],
                 },
-                // The 3D city and landscape model.
-                RibbonGroup {
-                    title: "3D-model",
-                    tools: vec![
-                        large("CIV_BAG3D", "3D BAG", I_BAG3D),
-                        small("CIV_FOTOTERREIN", "Terrein + luchtfoto", I_PHOTO),
-                        small("CIV_BGT3D", "BGT naar 3D", I_BGT3D),
-                        small("CIV_WATERPEIL", "Waterpeil", I_WATER),
-                    ],
-                },
-                // Civil 3D "Corridors": assembly along axis and design profile.
+                // Corridors: assembly along axis and design profile.
                 RibbonGroup { title: "Corridor", tools: vec![large("CIV_CORRIDOR", "Corridor", I_CORRIDOR)] },
                 // Design criteria, sight distance and rail (as-spoor).
                 RibbonGroup {
-                    title: open_infra::lang::tr("Ontwerptoets", "Design check"),
+                    title: tr("Ontwerptoets", "Design check"),
                     tools: vec![
-                        large("CIV_AS_TOETS", open_infra::lang::tr("As toetsen", "Check alignment"), I_CHECK),
-                        small("CIV_ONTWERPCRITERIA", open_infra::lang::tr("Ontwerpcriteria", "Design criteria"), I_CRITERIA),
-                        small("CIV_ZICHT", open_infra::lang::tr("Zichtafstand", "Sight distance"), I_SIGHT),
+                        large("CIV_AS_TOETS", tr("As toetsen", "Check alignment"), I_CHECK),
+                        small("CIV_ONTWERPCRITERIA", tr("Ontwerpcriteria", "Design criteria"), I_CRITERIA),
+                        small("CIV_ZICHT", tr("Zichtafstand", "Sight distance"), I_SIGHT),
                     ],
                 },
                 RibbonGroup {
-                    title: open_infra::lang::tr("Spoor", "Rail"),
-                    tools: vec![large("CIV_SPOOR", open_infra::lang::tr("Spooras", "Track"), I_RAIL), small("CIV_WISSEL", open_infra::lang::tr("Wissel", "Turnout"), I_TURNOUT)],
+                    title: tr("Spoor", "Rail"),
+                    tools: vec![large("CIV_SPOOR", tr("Spooras", "Track"), I_RAIL), small("CIV_WISSEL", tr("Wissel", "Turnout"), I_TURNOUT)],
                 },
-                RibbonGroup {
-                    title: "Instellingen",
-                    tools: vec![large("CIV_INSTELLINGEN", "Instellingen", I_SETTINGS), small("CIV_INFO", "Modelinfo", I_INFO)],
-                },
-            ]
+            ];
+            // The 3D city and landscape model: open formats for everyone, the
+            // Dutch registers (3D BAG, AHN, BGT, KLIC, BRO) in one menu.
+            let mut model = vec![
+                file_tool("CIV_CITYGML", "CityGML/JSON", I_CITYGML, tr("CityGML of CityJSON openen", "Open CityGML or CityJSON"), "CityGML / CityJSON", &["gml", "xml", "citygml", "json", "jsonl"], true),
+                small("CIV_DOORZICHT", tr("Maaiveld doorzichtig", "See-through ground"), I_SEE),
+                small("CIV_IFC", "IFC 4x3", I_IFC),
+            ];
+            if dutch() {
+                model.push(RibbonItem::LabeledDropdown {
+                    id: "CIV_NL_3D",
+                    label: tr("3D Nederland", "3D Netherlands"),
+                    icon: I_BAG3D,
+                    items: vec![
+                        ("CIV_3DMODEL", tr("3D-model (alles)", "3D model (all)"), I_BAG3D),
+                        ("CIV_BAG3D", "3D BAG", I_BAG3D),
+                        ("CIV_FOTOTERREIN", tr("Terrein + luchtfoto", "Terrain + aerial photo"), I_PHOTO),
+                        ("CIV_BGT3D", tr("BGT naar 3D", "BGT to 3D"), I_BGT3D),
+                        ("CIV_KLIC3D", tr("KLIC in 3D", "KLIC in 3D"), I_KLIC3D),
+                        ("CIV_SONDERINGEN3D", tr("Sonderingen 3D (BRO)", "CPTs in 3D (BRO)"), I_CPT),
+                        ("CIV_WATERPEIL", tr("Waterpeil", "Water level"), I_WATER),
+                    ],
+                    default: "CIV_BAG3D",
+                });
+            }
+            groups.push(RibbonGroup { title: tr("3D-model", "3D model"), tools: model });
+            groups.push(RibbonGroup {
+                title: tr("Instellingen", "Settings"),
+                tools: vec![large("CIV_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS), small("CIV_INFO", tr("Modelinfo", "Model info"), I_INFO)],
+            });
+            groups
         })
     }
 }
@@ -615,14 +637,38 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             });
         }
         "CIV_BAG3D" => {
-            let o = opt(&["LOD", "MAX", "KLEUR", "STIJL"])?;
+            let o = opt(&["LOD", "MAX", "KLEUR", "STIJL", "RAMEN"])?;
             let real = bag_style(args)?;
+            let windows = !matches!(args.str("RAMEN").map(|s| s.to_ascii_lowercase()).as_deref(), Some("nee" | "no" | "0" | "false" | "uit"));
             let lod = match args.str("LOD") {
                 Some(l) => civiel_lod(l)?,
                 None => open_infra::gis::bag3d::Lod::L22,
             };
             let max = args.f64("MAX")?.map(|m| m as usize).unwrap_or(25_000);
-            job(host, "3D BAG", id, move |p| civiel::model3d::bag3d(&o, lod, max, real, p));
+            job(host, "3D BAG", id, move |p| civiel::model3d::bag3d(&o, lod, max, real, windows, p));
+        }
+        "CIV_DOORZICHT" => {
+            let off = args.words.iter().any(|w| w.eq_ignore_ascii_case("UIT") || w.eq_ignore_ascii_case("OFF"));
+            let all = args.words.iter().any(|w| w.eq_ignore_ascii_case("ALLES"));
+            let pct = if off { 0.0 } else { args.f64("PCT")?.unwrap_or(70.0) };
+            job(host, "Maaiveld doorzichtig", id, move |_| civiel::model3d::see_through(pct, all));
+        }
+        "CIV_KLIC3D" => {
+            let file = path().map(std::path::PathBuf::from).or_else(open_infra::basisdata::last_klic);
+            let Some(file) = file else {
+                return Err("geef een KLIC-levering: CIV_KLIC3D <zip of GI_…xml> [VERGROOT=1] (of importeer eerst de KLIC op het GIS-tabblad)".into());
+            };
+            let o = opt(&["VERGROOT"])?;
+            let scale = args.f64("VERGROOT")?.unwrap_or(1.0).clamp(0.2, 20.0);
+            job(host, "KLIC in 3D", id, move |p| civiel::model3d::klic3d(&o, &file, scale, p));
+        }
+        "CIV_CITYGML" => {
+            let Some(file) = path() else {
+                return Err("geef een bestand: CIV_CITYGML <pad> [STIJL=mooi|maquette|nlcs] (of kies via de knop in het lint)".into());
+            };
+            let o = opt(&["STIJL", "KLEUR"])?;
+            let style = bag_style(args)?;
+            job(host, "CityGML", id, move |p| civiel::model3d::citygml(&o, std::path::Path::new(&file), style, p));
         }
         "CIV_FOTOTERREIN" => {
             let o = opt(&[])?;
@@ -646,8 +692,9 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
         }
         "CIV_3DMODEL" => {
             // All at once: photo terrain, 3D BAG, the BGT without its buildings.
-            let o = opt(&["LOD", "MAX", "KLEUR", "STIJL"])?;
+            let o = opt(&["LOD", "MAX", "KLEUR", "STIJL", "RAMEN"])?;
             let real = bag_style(args)?;
+            let windows = !matches!(args.str("RAMEN").map(|s| s.to_ascii_lowercase()).as_deref(), Some("nee" | "no" | "0" | "false" | "uit"));
             let lod = match args.str("LOD") {
                 Some(l) => civiel_lod(l)?,
                 None => open_infra::gis::bag3d::Lod::L22,
@@ -658,9 +705,28 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
                 let mut parts = vec![civiel::model3d::photo_terrain(&o, cell, p)?];
                 let groups: Vec<String> = civiel::model3d::default_groups().into_iter().map(str::to_string).collect();
                 parts.push(civiel::model3d::bgt3d(&o, &groups, false, real != civiel::model3d::BagStyle::Nlcs, p)?);
-                parts.push(civiel::model3d::bag3d(&o, lod, max, real, p)?);
+                parts.push(civiel::model3d::bag3d(&o, lod, max, real, windows, p)?);
                 Ok(parts.join(" | "))
             });
+        }
+        "CIV_SONDERINGEN3D" | "CIV_ONDERGROND3D" => {
+            // LABELS= is the shared point-label setting: plan symbols too.
+            let o = opt(&["BRON", "MAX", "STRAAL", "QC", "MINLAAG"])?;
+            let off = |k: &str| matches!(args.str(k).map(|s| s.to_ascii_lowercase()).as_deref(), Some("nee" | "no" | "0" | "false" | "uit"));
+            let req = civiel::ondergrond::Request {
+                kinds: civiel::ondergrond::kinds(args.str("BRON"))?,
+                max: args.f64("MAX")?.map(|m| m.max(1.0) as usize).unwrap_or(100),
+                radius: args.f64("STRAAL")?.unwrap_or(0.4).clamp(0.05, 5.0),
+                min_layer: args.f64("MINLAAG")?.unwrap_or(0.2).clamp(0.0, 5.0),
+                graphs: !off("QC"),
+                labels: o.point_labels,
+            };
+            job(host, "Sonderingen 3D", id, move |p| civiel::ondergrond::columns(&o, &req, p));
+        }
+        "CIV_IFC" => {
+            opt(&["BESTAND", "PAD", "TEKST"])?;
+            let (file, selection, texts) = open_infra::ifc::args(args);
+            job(host, "IFC 4x3", id, move |p| open_infra::ifc::command(file, selection, texts, p));
         }
         // Design criteria, sight distance and rail (as-spoor).
         "CIV_ONTWERPCRITERIA" => {
@@ -748,8 +814,8 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_TIN [BRON=AHN|PUNTEN|SELECTIE] [LAAG=] [STATUS=B|N] [AFSTAND=] [MAXRIBBE=]; CIV_HOOGTELIJNEN / CIV_ANALYSE [OPPERVLAK=B|N]; CIV_VOLUME [ONTWERP=PEIL] [PEIL=] [CEL=]; \
              CIV_AS AS=<handle> | PI=x,y;x,y;… R=r;… [LS=l;…|A=a;…] [NAAM=] [BEGIN=]; CIV_AS_OFFSET AS= VERSCHUIVING=-3.5;3.5; CIV_STATION AS= x,y; \
              CIV_LENGTEPROFIEL AS= [PLAATS=x,y]; CIV_ONTWERPPROFIEL AS= PVI=station:hoogte;… [BOOG=]; CIV_DWARSPROFIELEN AS= [PLAATS=] [OM=] [LINKS=] [RECHTS=]; \
-             3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>; \
-             CIV_CORRIDOR AS= [SJABLOON=weg|fietspad|snelweg|dijk] [NIVEAU=|BOVEN=] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y]; CIV_INFO; \
+             3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs] [RAMEN=nee], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>, CIV_CITYGML <pad> [STIJL=], CIV_KLIC3D [<levering>] [VERGROOT=], CIV_DOORZICHT [PCT=70] [ALLES] [UIT], CIV_SONDERINGEN3D [BRON=sonderingen|boringen|alles] [MAX=100] [STRAAL=0.4] [MINLAAG=0.2] [QC=nee] [LABELS=nee] (BRO: kolommen met grondsoorten); \
+             CIV_CORRIDOR AS= [SJABLOON=weg|fietspad|snelweg|dijk] [NIVEAU=|BOVEN=] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_INFO; \
              CIV_ONTWERPCRITERIA [RICHTLIJN=roa|noa|crow|aashto CATEGORIE= V=] [AS=]; CIV_AS_TOETS AS= [RICHTLIJN= CATEGORIE= V=] [VERKANTING=%]; \
              CIV_ZICHT AS= [RICHTLIJN= CATEGORIE= V=|NODIG=] [OOG=] [OBJECT=] [OM=10] [RIJLIJN=1.75] [VRIJ=5] [MAX=] [RICHTING=heen|terug|beide] [LAGEN=-OG-BEBOUWING;…] [PLAATS=]; \
              CIV_SPOOR AS=|PI= R= [LS=|A=] V= [VMIN=] [VERKANTING=mm;…] [SPOREN=] [SPOORAFSTAND=] [NAAM=] [PLAATS=]; CIV_WISSEL AS= STATION= [TYPE=1:9|1:12|1:15|…] [ZIJDE=links|rechts] [RICHTING=op|af] [LENGTE=].",

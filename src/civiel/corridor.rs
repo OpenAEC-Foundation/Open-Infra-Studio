@@ -1,4 +1,4 @@
-//! Corridor (Civil 3D "Corridor", Road "Road"): an assembly — the template
+//! Corridor (Road "Road"): an assembly — the template
 //! cross section — swept along an axis and its design profile. Lanes slope
 //! away from the axis and tilt in curves (superelevation, with a runoff
 //! before and after); at the outer edge a slope runs down (fill) or up (cut)

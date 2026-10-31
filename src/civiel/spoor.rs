@@ -131,11 +131,28 @@ pub struct Breach {
     pub source: String,
 }
 
+/// The cant along one piece of the track (m, mm): constant on straights
+/// and curves, linear along clothoids. `side` is +1 in a left curve (the
+/// right rail is raised), −1 in a right curve, 0 on a straight.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CantSeg {
+    pub s0: f64,
+    pub len: f64,
+    pub d0: f64,
+    pub d1: f64,
+    pub side: f64,
+}
+
+/// Distance between the rail heads of standard gauge (m), the s of D = s·v²/(g·R).
+pub const RAIL_HEAD_DISTANCE: f64 = 1.5;
+
 /// The cant of a whole track.
 #[derive(Clone, Debug, Default)]
 pub struct CantPlan {
     pub curves: Vec<CurveCant>,
     pub ramps: Vec<Ramp>,
+    /// Piece by piece, for exchange (IfcAlignmentCant).
+    pub segments: Vec<CantSeg>,
     /// Applied and equilibrium cant (mm) along the track: (m, D, D_eq).
     pub line: Vec<(f64, f64, f64)>,
     pub breaches: Vec<Breach>,
@@ -212,6 +229,9 @@ pub fn cant_plan(al: &Alignment, f: f64, v: f64, vmin: Option<f64>, given: &[f64
     for (i, seg) in al.segs.iter().enumerate() {
         let (s0, len) = (starts[i] / f, seg.length() / f);
         let (d0, d1) = (cant_end(i, true), cant_end(i, false));
+        let (ka, kb) = (seg.curvature(0.0), seg.curvature(seg.length()));
+        let side = if ka.abs() > kb.abs() { ka.signum() } else if kb != 0.0 { kb.signum() } else { 0.0 };
+        plan.segments.push(CantSeg { s0, len, d0, d1, side });
         let eq = |s_local: f64| equilibrium_cant(c, v, 1.0 / seg.curvature(s_local * f).abs().max(1e-300) / f);
         let n = if matches!(seg, Seg::Spiral { .. }) { 8 } else { 1 };
         for j in 0..=n {
@@ -241,6 +261,17 @@ pub fn cant_plan(al: &Alignment, f: f64, v: f64, vmin: Option<f64>, given: &[f64
     plan.line.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9);
     plan.breaches.sort_by(|a, b| a.s0.total_cmp(&b.s0));
     plan
+}
+
+/// The cant of a track as stored on it (`verkanting_mm`, mm per curve),
+/// piece by piece: for the IFC export (IfcAlignmentCant).
+pub fn cant_segments(al: &Alignment, f: f64, cant: &str) -> Vec<CantSeg> {
+    let given: Vec<f64> = cant.split(';').filter_map(|t| t.trim().replace(',', ".").parse().ok()).collect();
+    if given.is_empty() || al.segs.is_empty() {
+        return Vec::new();
+    }
+    // The speed only matters for checks, not for the applied cant.
+    cant_plan(al, f, 0.0, None, &given, &RailTable::load()).segments
 }
 
 /// The diverging track of a turnout: from its start `s` (drawing units)
@@ -660,6 +691,10 @@ mod tests {
         let mid = r.s0 + 60.0;
         let near = plan.line.iter().min_by(|a, b| (a.0 - mid).abs().total_cmp(&(b.0 - mid).abs())).unwrap();
         assert!((near.0 - mid).abs() < 1e-9 && (near.1 - c.d / 2.0).abs() < 1e-9);
+        // Piece by piece: 0 on the straights, ramps along the clothoids, D in the curve (left: +1).
+        let segs: Vec<(f64, f64, f64)> = plan.segments.iter().map(|g| (g.d0, g.d1, g.side)).collect();
+        assert_eq!(segs, vec![(0.0, 0.0, 0.0), (0.0, c.d, 1.0), (c.d, c.d, 1.0), (c.d, 0.0, 1.0), (0.0, 0.0, 0.0)]);
+        assert_eq!(cant_segments(&al, 1.0, "160").iter().map(|g| g.d1).collect::<Vec<_>>(), [0.0, 160.0, 160.0, 0.0, 0.0]);
         // A given cant of 200 mm is too much; a curve without clothoids too.
         let plan = cant_plan(&al, 1.0, 120.0, Some(60.0), &[200.0], &t);
         let checks: Vec<&str> = plan.breaches.iter().map(|b| b.check).collect();
