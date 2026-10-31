@@ -1,0 +1,81 @@
+{
+  "code": "DE",
+  "name_nl": "Duitsland",
+  "name_en": "Germany",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "BKG — Geodatenzentrum",
+    "url": "https://gdz.bkg.bund.de/"
+  },
+  "data": [
+    {
+      "name": "BKG: federale geodata en webdiensten; gedetailleerde Länder-producten met eigen voorwaarden",
+      "url": "https://gdz.bkg.bund.de/",
+      "kind": "catalogue",
+      "service_tested": false
+    },
+    {
+      "name": "Hessen: kadaster, gebouwen, terreinmodellen, orthofoto's — toegangsoverzicht",
+      "url": "https://hvbg.hessen.de/geoinformation/open-data",
+      "kind": "catalogue",
+      "service_tested": false
+    },
+    {
+      "name": "BKG DGM200 — documentatie en downloadinformatie",
+      "url": "https://sg.geodatenzentrum.de/web_public/gdz/dokumentation/deu/dgm200.pdf",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "ETRS89 / UTM zone 32N",
+      "epsg": 25832,
+      "source_url": "https://geodatenportal.sachsen-anhalt.de/gfds/de/datei/download/id/4016%2C501/afis_broschuere.pdf"
+    },
+    {
+      "name": "ETRS89 / UTM zone 33N",
+      "epsg": 25833,
+      "source_url": "https://geodatenportal.sachsen-anhalt.de/gfds/de/datei/download/id/4016%2C501/afis_broschuere.pdf"
+    }
+  ],
+  "vertical_reference": {
+    "name": "DHHN2016 — Normalhöhennull (NHN)",
+    "source_url": "https://geodatenportal.sachsen-anhalt.de/gfds/de/datei/download/id/4016%2C501/afis_broschuere.pdf",
+    "notes": "Normaalhoogten in meters, gerelateerd aan Amsterdam. Oudere DHHN92-, DHHN85-, NN- en regionale hoogten niet gelijkstellen aan DHHN2016."
+  },
+  "units": "Meters voor ligging en NHN-hoogten; lokale projectmaatvoering en projectieschaal expliciet vastleggen.",
+  "drawing_standard": {
+    "name": "Projectspecifieke civiele CAD-afspraken",
+    "source_url": null,
+    "notes": "Geen openbare landelijke civiele CAD-tekenstandaard geverifieerd. Laagnamen, symbolen en oplevereisen per opdrachtgever vaststellen; geen conformiteitsclaim."
+  },
+  "integration": {
+    "next_step": "Selecteer eerst deelstaat en projectgebied; configureer UTM-zone en hoogtereferentie, en test een regionale DGM- en gebouwimport.",
+    "limitations": "BKG biedt federale producten; grootschalige Länder-producten hebben eigen productspecificaties en voorwaarden. Hessen is een regionale startbron. Gedetailleerde kadaster- en hoogtedata, toegangsvoorwaarden en services verschillen per deelstaat. DGM200 is een grof nationaal model en geen ontwerpsurvey. ETRS89-realisatie/epoch en eventuele zoneprefix uit bronmetadata behouden; oude Gauss-Krüger-data vereisen transformatie. Geen service- of importtest uitgevoerd."
+  },
+  "sources": [
+    {
+      "title": "Landesamt Sachsen-Anhalt — Amtliches Raumbezugssystem",
+      "url": "https://geodatenportal.sachsen-anhalt.de/gfds/de/datei/download/id/4016%2C501/afis_broschuere.pdf"
+    },
+    {
+      "title": "HVBG — Open Data",
+      "url": "https://hvbg.hessen.de/geoinformation/open-data"
+    },
+    {
+      "title": "BKG — DGM200-documentatie",
+      "url": "https://sg.geodatenzentrum.de/web_public/gdz/dokumentation/deu/dgm200.pdf"
+    },
+    {
+      "title": "BKG — referentiesystemen Duitsland",
+      "url": "https://crs.bkg.bund.de/crs/eu-countrysel.php?country=DE"
+    },
+    {
+      "title": "BKG — Geodatenzentrum: producten, Open Data en webdiensten",
+      "url": "https://gdz.bkg.bund.de/"
+    }
+  ],
+  "existing_catalogue_services": 119
+}

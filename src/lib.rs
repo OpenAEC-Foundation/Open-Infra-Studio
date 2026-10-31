@@ -23,6 +23,7 @@ pub mod bestand;
 pub mod plannen;
 pub mod bijwerken;
 pub mod lang;
+pub mod localisation;
 pub mod library;
 pub mod riolering;
 pub mod bgt_mutatie;
@@ -88,6 +89,10 @@ enum Quick {
 }
 
 const QUICK: &[(&str, &str, Quick)] = &[
+    ("GIS_US_TOPO", "USGS topografie|USGS topography", Quick::Data(import::Dataset::Raster { server: "w-us-usgs-tnm-topo-3857" })),
+    ("GIS_US_ELEVATION", "USGS 3DEP hoogtekaart|USGS 3DEP elevation map", Quick::Data(import::Dataset::Raster { server: "w-us-usgs-3dep-hillshade-3857" })),
+    ("GIS_US_BOUNDARIES", "Census bestuurlijke grenzen|Census administrative boundaries", Quick::Data(import::Dataset::Raster { server: "w-us-census-tigerweb-boundaries-3857" })),
+    ("GIS_US_SOILS", "NRCS bodemkaart|NRCS soil map", Quick::Data(import::Dataset::Raster { server: "w-us-nrcs-ssurgo-soilmapunits-3857" })),
     ("GIS_Q_LUCHTFOTO", "Luchtfoto (PDOK)|Aerial photo (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-luchtfoto" })),
     ("GIS_Q_KADASTER", "Kadastrale kaart (PDOK)|Cadastral map (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-kadastralekaart-wms" })),
     ("GIS_Q_AHN", "AHN hoogtekaart (PDOK)|AHN elevation map (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-ahn-wms" })),
@@ -105,6 +110,23 @@ const QUICK: &[(&str, &str, Quick)] = &[
     ("GIS_Q_HISGIS", "Minuutplans 1832 (HisGIS)|Cadastral maps 1832 (HisGIS)", Quick::Data(import::Dataset::Raster { server: "hisgis-minuutplans-1832" })),
     ("GIS_Q_TIJDREIS", "Topotijdreis 1900 (Kadaster)|Topotijdreis 1900 (Kadaster)", Quick::Data(import::Dataset::Raster { server: "topotijdreis-1900" })),
 ];
+
+#[cfg(test)]
+mod regional_quick_tests {
+    use super::*;
+    #[test]
+    fn us_ribbon_shortcuts_resolve_to_us_raster_sources() {
+        let catalogue=gis::catalog::all();
+        let mut checked=0;
+        for (command,_,quick) in QUICK.iter().filter(|(c,..)|c.starts_with("GIS_US_")) {
+            if let Quick::Data(import::Dataset::Raster{server})=quick {
+                let source=catalogue.iter().find(|s|s.id==*server).unwrap_or_else(||panic!("{command}: missing source {server}"));
+                assert_eq!(source.country,"US");assert_eq!(source.kind,gis::servers::ServerKind::Wms);checked+=1;
+            }else{panic!("{command}: expected raster source")}
+        }
+        assert_eq!(checked,4);
+    }
+}
 
 /// A quick-import label in the interface language (`"nl|en"`).
 fn ql(label: &'static str) -> &'static str {
@@ -139,7 +161,7 @@ impl CadModule for GisModule {
             use lang::tr;
             let world = |c: &str| matches!(c, "GIS_Q_OSMKAART" | "GIS_Q_SATELLIET" | "GIS_Q_OSM");
             let quick_nl = |raster: bool| -> Vec<(&'static str, &'static str, IconKind)> {
-                QUICK.iter().filter(|(c, _, q)| !world(c) && is_raster(q) == raster).map(|(c, l, _)| (*c, ql(l), I_QUICK)).collect()
+                QUICK.iter().filter(|(c, _, q)| !world(c) && !c.starts_with("GIS_US_") && is_raster(q) == raster).map(|(c, l, _)| (*c, ql(l), I_QUICK)).collect()
             };
             let quick_world: Vec<(&'static str, &'static str, IconKind)> = QUICK.iter().filter(|(c, ..)| world(c)).map(|(c, l, _)| (*c, ql(l), I_QUICK)).collect();
             let small = |id: &'static str, label: &'static str, icon: IconKind| RibbonItem::LabeledTool(ToolDef { id, label, icon, event: ModuleEvent::Command(id.to_string()) });
@@ -245,6 +267,11 @@ impl CadModule for GisModule {
                         ],
                     },
                 );
+            }
+            if localisation::current()==localisation::Region::UnitedStates {
+                let mut tools=vec![small("GIS_US_SERVICES", tr("Services VS", "US services"), I_SERVICES)];
+                tools.extend(QUICK.iter().filter(|(c,..)|c.starts_with("GIS_US_")).map(|(c,l,_)|small(c,ql(l),I_MAP)));
+                groups.insert(3,RibbonGroup{title:tr("Verenigde Staten","United States"),tools});
             }
             groups
         })
@@ -643,7 +670,7 @@ fn site_command(host: &mut dyn HostApi, cmd: &str) {
     bridge::attach(host);
     let args: Vec<&str> = cmd.split_whitespace().skip(1).collect();
     let num = |i: usize| args.get(i).and_then(|a| a.replace(',', ".").parse::<f64>().ok());
-    let mut site = bridge::site().unwrap_or_default();
+    let mut site = bridge::site().unwrap_or_else(||Site::for_region(localisation::current()));
     let rd = args.first().is_some_and(|a| a.eq_ignore_ascii_case("RD"));
     let at = if rd { 1 } else { 0 };
     let (Some(a), Some(b)) = (num(at), num(at + 1)) else {
@@ -788,7 +815,7 @@ fn adopt_geodata(host: &mut dyn HostApi) {
         });
         let Some(g) = found else { return };
         let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
-        match gis::geodata::site_from(&g, unit).and_then(|site| bridge::save_site(&site).map(|_| site)) {
+        match gis::geodata::site_from(&g, unit).and_then(|mut site| {site.region=localisation::current();bridge::save_site(&site).map(|_| site)}) {
             Ok(site) => {
                 bridge::info(&format!("{} {} ({}).", lang::tr("Projectlocatie overgenomen uit het GEODATA-object van de tekening:", "Project location taken from the drawing's GEODATA object:"), site.crs, if site.absolute { lang::tr("absoluut", "absolute") } else { lang::tr("relatief", "relative") }));
                 ui::send(ui::UiMsg::SiteChanged);
@@ -861,7 +888,8 @@ fn services_command(host: &mut dyn HostApi, cmd: &str) {
         let at = services_location(&args)?;
         let limit = args.f64("LIMIET")?.or(args.f64("LIMIT")?).unwrap_or(50.0).max(1.0) as usize;
         let all = catalog::all();
-        let hits = catalog::search(&all, &catalog::Query { text: text.join(" "), categories, kinds, at });
+        let countries=args.str("LAND").or(args.str("COUNTRY")).unwrap_or("").split([';',',']).map(str::trim).filter(|s|!s.is_empty()).map(str::to_uppercase).collect();
+        let hits = catalog::search(&all, &catalog::Query { text: text.join(" "), categories, kinds, at, countries });
         let list: Vec<serde_json::Value> = hits.iter().take(limit).map(|&i| all[i].json(at)).collect();
         civiel::api::note("count", hits.len());
         civiel::api::note("services", list);
@@ -1000,6 +1028,8 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_WFS" => open(host, ui::Tab::Wfs),
             "GIS_OSM" => open(host, ui::Tab::Osm),
             "GIS_PDOK" => open(host, ui::Tab::Pdok),
+            "GIS_LOCALISATION" | "GIS_LOCALISATIE" => open(host,ui::Tab::Localisation),
+            "GIS_US_SERVICES" => {open(host,ui::Tab::Services);ui::send(ui::UiMsg::RegionalServices(localisation::Region::UnitedStates));bridge::reply(true,"US services");}
             "GIS_PLANNEN" | "GIS_PLANS" => open(host, ui::Tab::Planning),
             "GIS_PLAN_SEARCH" | "GIS_PLAN_IMPORT" | "GIS_PLAN_GML" => planning_commands::dispatch(cmd),
             "GIS_SERVERS" => open(host, ui::Tab::Servers),

@@ -1,0 +1,91 @@
+{
+  "code": "DK",
+  "name_nl": "Denemarken",
+  "name_en": "Denmark",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "Dataforsyningen — Danish Data and Map Supply",
+    "url": "https://dataforsyningen.dk/"
+  },
+  "data": [
+    {
+      "name": "Dataforsyningen — geografische datacatalogus",
+      "url": "https://dataforsyningen.dk/",
+      "kind": "catalogue",
+      "service_tested": false
+    },
+    {
+      "name": "Danmarks Højdemodel (DHM) — gedocumenteerde WMS",
+      "url": "https://wms.datafordeler.dk/DHM2015/dhm2015/1.0.0/WMS",
+      "kind": "WMS",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "ETRS89 / UTM zone 32N",
+      "epsg": 25832,
+      "source_url": "https://www.eng.klimadatastyrelsen.dk/mapping/geodesy-and-coordinate-systems"
+    },
+    {
+      "name": "ETRS89 / UTM zone 33N — onder meer Bornholm",
+      "epsg": 25833,
+      "source_url": "https://www.eng.klimadatastyrelsen.dk/mapping/geodesy-and-coordinate-systems"
+    },
+    {
+      "name": "ETRS89 / DKTM zone 1",
+      "epsg": 4093,
+      "source_url": "https://www.eng.klimadatastyrelsen.dk/mapping/geodesy-and-coordinate-systems"
+    },
+    {
+      "name": "ETRS89 / DKTM zone 2",
+      "epsg": 4094,
+      "source_url": "https://www.eng.klimadatastyrelsen.dk/mapping/geodesy-and-coordinate-systems"
+    },
+    {
+      "name": "ETRS89 / DKTM zone 3",
+      "epsg": 4095,
+      "source_url": "https://www.eng.klimadatastyrelsen.dk/mapping/geodesy-and-coordinate-systems"
+    },
+    {
+      "name": "ETRS89 / DKTM zone 4",
+      "epsg": 4096,
+      "source_url": "https://www.eng.klimadatastyrelsen.dk/mapping/geodesy-and-coordinate-systems"
+    }
+  ],
+  "vertical_reference": {
+    "name": "DVR90 — Danish Vertical Reference 1990",
+    "source_url": "https://www.eng.klimadatastyrelsen.dk/mapping/geodesy-and-coordinate-systems",
+    "notes": "Actuele Deense hoogtereferentie (EPSG:5799). Oudere DNN- en lokale hoogten apart behandelen; geen generiek datum voor Groenland of Faeröer afleiden."
+  },
+  "units": "Meters voor geprojecteerde coördinaten en DVR90-hoogten; papier- en detailmaatvoering projectspecifiek.",
+  "drawing_standard": {
+    "name": "Projectspecifieke civiele CAD-afspraken",
+    "source_url": null,
+    "notes": "Geen openbare landelijke civiele CAD-tekenstandaard geverifieerd. Laagnamen, symbolen en oplevereisen per opdrachtgever vaststellen; geen conformiteitsclaim."
+  },
+  "integration": {
+    "next_step": "Kies voor bouw- en infraprojecten een passende DKTM-zone volgens de officiële aanbeveling; gebruik UTM voor passende landelijke bronnen. Test DHM en autorisatie van Datafordeler.",
+    "limitations": "UTM32 wordt ook oostelijk van de formele zonegrens gebruikt; Bornholm gebruikt vaak UTM33. Oude System34/System45-data vereisen specialistische conversie. Deze preset betreft Europees Denemarken; Groenland/Faeröer afzonderlijk onderzoeken. Registratie, token/API-sleutel en productvoorwaarden voor actuele diensten controleren. WMS alleen uit documentatie opgenomen, niet aangeroepen."
+  },
+  "sources": [
+    {
+      "title": "Klimadatastyrelsen — Geodesy and coordinate systems",
+      "url": "https://www.eng.klimadatastyrelsen.dk/mapping/geodesy-and-coordinate-systems"
+    },
+    {
+      "title": "Klimadatastyrelsen — Danish Data and Map Supply",
+      "url": "https://www.eng.klimadatastyrelsen.dk/data/the-danish-data-and-map-supply"
+    },
+    {
+      "title": "Klimadatastyrelsen — Danish Elevation Model",
+      "url": "https://www.eng.klimadatastyrelsen.dk/green-transition-and-climate-adaptation/the-danish-elevation-model-dk-dem"
+    },
+    {
+      "title": "Klimadatastyrelsen — gedocumenteerde WMS-diensten",
+      "url": "https://confluence.kds.dk/display/DML/WMS-%2C%2BWMTS-%2Bog%2BWCS-tjenester"
+    }
+  ],
+  "existing_catalogue_services": 8
+}

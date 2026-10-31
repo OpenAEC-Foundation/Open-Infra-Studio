@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "country_count": 20,
+  "profiles": [
+    {
+      "code": "AT",
+      "name_nl": "Oostenrijk",
+      "file": "AT.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "AU",
+      "name_nl": "Australië",
+      "file": "AU.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "BE",
+      "name_nl": "België",
+      "file": "BE.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "BR",
+      "name_nl": "Brazilië",
+      "file": "BR.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "CA",
+      "name_nl": "Canada",
+      "file": "CA.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "CH",
+      "name_nl": "Zwitserland",
+      "file": "CH.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "DE",
+      "name_nl": "Duitsland",
+      "file": "DE.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "DK",
+      "name_nl": "Denemarken",
+      "file": "DK.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "ES",
+      "name_nl": "Spanje",
+      "file": "ES.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "FI",
+      "name_nl": "Finland",
+      "file": "FI.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "FR",
+      "name_nl": "Frankrijk",
+      "file": "FR.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "GB",
+      "name_nl": "Verenigd Koninkrijk",
+      "file": "GB.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "IE",
+      "name_nl": "Ierland",
+      "file": "IE.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "IT",
+      "name_nl": "Italië",
+      "file": "IT.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "JP",
+      "name_nl": "Japan",
+      "file": "JP.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "NO",
+      "name_nl": "Noorwegen",
+      "file": "NO.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "NZ",
+      "name_nl": "Nieuw-Zeeland",
+      "file": "NZ.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "PL",
+      "name_nl": "Polen",
+      "file": "PL.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "SE",
+      "name_nl": "Zweden",
+      "file": "SE.json",
+      "implementation_status": "research_only"
+    },
+    {
+      "code": "SG",
+      "name_nl": "Singapore",
+      "file": "SG.json",
+      "implementation_status": "research_only"
+    }
+  ]
+}

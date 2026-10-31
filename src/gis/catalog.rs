@@ -459,6 +459,8 @@ pub fn user_service(u: &MapServer) -> Service {
 /// What to look for.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Query {
+    /// ISO region codes; empty = all. Include GLOBAL explicitly when desired.
+    pub countries: Vec<String>,
     pub text: String,
     /// Category ids; empty = all.
     pub categories: Vec<String>,
@@ -477,6 +479,7 @@ pub fn search(services: &[Service], q: &Query) -> Vec<usize> {
     let mut hits: Vec<(usize, u32)> = services
         .iter()
         .enumerate()
+        .filter(|(_,s)|q.countries.is_empty()||q.countries.iter().any(|c|c.eq_ignore_ascii_case(&s.country)))
         .filter(|(_, s)| q.kinds.is_empty() || q.kinds.contains(&s.kind))
         .filter(|(_, s)| q.categories.is_empty() || q.categories.iter().any(|c| c == &s.category))
         .filter(|(_, s)| q.at.is_none_or(|p| s.covers(p) != Some(false)))
@@ -581,6 +584,16 @@ mod tests {
             svc("world-s2", ServerKind::Xyz, "GLOBAL", "aerial", "Sentinel-2 cloudless", "Worldwide", WORLD_BBOX),
             svc("de-dop", ServerKind::Wms, "DE", "aerial", "Digitale Orthophotos", "Germany", [5.87, 47.27, 15.04, 55.06]),
         ]
+    }
+
+    #[test]
+    fn region_filter_keeps_global_sources_but_excludes_other_countries() {
+        let services=sample();
+        let query=Query{countries:vec!["NL".into(),"GLOBAL".into()],..Default::default()};
+        let result=ids(&services,&query);
+        assert!(result.contains(&"nl-bag".into()));assert!(result.contains(&"world-s2".into()));assert!(!result.contains(&"by-flur".into()));
+        let us:Vec<_>=all().into_iter().filter(|s|s.country=="US").collect();
+        assert!(us.len()>=20);
     }
 
     fn ids(s: &[Service], q: &Query) -> Vec<String> {

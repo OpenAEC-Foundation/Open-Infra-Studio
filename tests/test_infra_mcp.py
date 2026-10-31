@@ -39,5 +39,10 @@ class InfraMcpTest(unittest.TestCase):
             if tool['name'].startswith('planning_'):
                 self.assertNotIn('key', tool['inputSchema']['properties'])
 
+    def test_service_country_filter_is_explicit(self):
+        with patch.object(mcp.OCS, 'run', return_value={'ok':True}) as run:
+            mcp.t_services({'country':'US;GLOBAL','query':'elevation'})
+            self.assertIn('COUNTRY=US;GLOBAL',run.call_args.args[0])
+
 if __name__=='__main__':
     unittest.main()

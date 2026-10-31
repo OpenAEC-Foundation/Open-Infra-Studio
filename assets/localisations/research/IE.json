@@ -1,0 +1,66 @@
+{
+  "code": "IE",
+  "name_nl": "Ierland",
+  "name_en": "Ireland",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "GeoHive — nationale geodatahub",
+    "url": "https://www.geohive.ie/"
+  },
+  "data": [
+    {
+      "name": "GeoHive — officiële gegevenscatalogus en overheidskaarten",
+      "url": "https://www.geohive.ie/",
+      "kind": "catalogue",
+      "service_tested": false
+    },
+    {
+      "name": "Geological Survey Ireland — Open Topographic LiDAR",
+      "url": "https://data.gov.ie/dataset/open-topographic-lidar-data",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "ETRS89 / Irish Transverse Mercator (ITM)",
+      "epsg": 2157,
+      "source_url": "https://data.gov.ie/dataset/open-topographic-lidar-data"
+    }
+  ],
+  "vertical_reference": {
+    "name": "Ordnance Datum Malin Head",
+    "source_url": "https://data.gov.ie/dataset/open-topographic-lidar-data",
+    "notes": "De LiDAR-metadata specificeren Malin Ordnance Datum. Houd OSGM15-realisatie waar aanwezig expliciet bij. Oudere Poolbeg-hoogten en lokale staff-gauge-referenties niet gelijkstellen aan Malin Head."
+  },
+  "units": "Meters voor ITM en actuele hoogten; oudere kaarten kunnen andere eenheden of datums hebben.",
+  "drawing_standard": {
+    "name": "Projectspecifieke civiele CAD-afspraken",
+    "source_url": null,
+    "notes": "Geen openbare landelijke civiele CAD-tekenstandaard geverifieerd. Laagnamen, symbolen en oplevereisen per opdrachtgever vaststellen; geen conformiteitsclaim."
+  },
+  "integration": {
+    "next_step": "Zoek per project beschikbare LiDAR-tegels en test ITM-import met expliciete Malin Head-hoogtereferentie. Controleer de actuele GeoHive-doorverwijzingen.",
+    "limitations": "GeoHive meldt dat sommige gehoste hubs vanaf september 2026 verdwijnen of migreren. LiDAR-dekking en meetjaar per gebied controleren. Kadaster- en professionele topografische producten niet automatisch als open data behandelen. Bestaande Irish Grid-data vragen een bewuste conversie via officiële geodetische voorzieningen; services niet getest."
+  },
+  "sources": [
+    {
+      "title": "GeoHive — nationale geodatahub",
+      "url": "https://www.geohive.ie/"
+    },
+    {
+      "title": "Government of Ireland / GSI — Open Topographic LiDAR",
+      "url": "https://data.gov.ie/dataset/open-topographic-lidar-data"
+    },
+    {
+      "title": "Tailte Éireann — Geodetic Services",
+      "url": "https://tailte.ie/services/geodetic/"
+    },
+    {
+      "title": "Marine Institute — datums van getijmetingen",
+      "url": "https://www.marine.ie/site-area/data-services/real-time-observations/tidal-observations-0"
+    }
+  ],
+  "existing_catalogue_services": 3
+}

@@ -1,0 +1,67 @@
+{
+  "code": "BE",
+  "name_nl": "België",
+  "name_en": "Belgium",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "Geo.be — federaal geoportaal",
+    "url": "https://www.geo.be/"
+  },
+  "data": [
+    {
+      "name": "NGI Open Data: vector- en rasterproducten; downloadinformatie",
+      "url": "https://ngi.be/faq-open-data-en/",
+      "kind": "catalogue",
+      "service_tested": false
+    },
+    {
+      "name": "Geopunt — Vlaamse geodata en kaartlagen",
+      "url": "https://www.vlaanderen.be/geopunt/nieuws/functionele-update-van-geopunt-kaart-15",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "ETRS89 / Belgian Lambert 2008",
+      "epsg": 3812,
+      "source_url": "https://ngi.be/aanbod/dienstverlening/geodetische-diensten/belgische-coordinatensystemen/overgang-naar-lambert-2008/"
+    },
+    {
+      "name": "BD72 / Belgian Lambert 72 — bestaande gegevens",
+      "epsg": 31370,
+      "source_url": "https://ngi.be/aanbod/dienstverlening/geodetische-diensten/belgische-coordinatensystemen/overgang-naar-lambert-2008/"
+    }
+  ],
+  "vertical_reference": {
+    "name": "Tweede Algemene Waterpassing (TAW)",
+    "source_url": "https://ngi.be/aanbod/dienstverlening/geodetische-diensten/belgische-coordinatensystemen/overgang-naar-lambert-2008/",
+    "notes": "TAW is een afzonderlijke hoogtereferentie; Lambert 2008 definieert alleen de horizontale ligging. GNSS-ellipsoïdehoogte niet als TAW overnemen."
+  },
+  "units": "Meters voor kaartcoördinaten en TAW-hoogten; detailmaten en papierschaal per project.",
+  "drawing_standard": {
+    "name": "Projectspecifieke civiele CAD-afspraken",
+    "source_url": null,
+    "notes": "Geen openbare landelijke civiele CAD-tekenstandaard geverifieerd. Laagnamen, symbolen en oplevereisen per opdrachtgever vaststellen; geen conformiteitsclaim."
+  },
+  "integration": {
+    "next_step": "Begin met een Lambert 2008-projectprofiel, behoud expliciete importkeuze voor Lambert 72 en controleer transformatieroosters met NGI-controlepunten.",
+    "limitations": "Federale en regionale bronnen afzonderlijk selecteren; Vlaanderen is geen dekking voor heel België. NGI meldt versieafhankelijke problemen met het Lambert72/Lambert2008-transformatierooster; gebruikte CRS-database en rooster verifiëren. Niet alle NGI-producten zijn open data; licentie per dataset controleren. Alleen bronnen onderzocht; services en import niet getest."
+  },
+  "sources": [
+    {
+      "title": "NGI — Overgang naar Lambert 2008",
+      "url": "https://ngi.be/aanbod/dienstverlening/geodetische-diensten/belgische-coordinatensystemen/overgang-naar-lambert-2008/"
+    },
+    {
+      "title": "NGI — FAQ Open Data",
+      "url": "https://ngi.be/faq-open-data-en/"
+    },
+    {
+      "title": "Digitaal Vlaanderen — Geopunt-update 30 maart 2026",
+      "url": "https://www.vlaanderen.be/geopunt/nieuws/functionele-update-van-geopunt-kaart-15"
+    }
+  ],
+  "existing_catalogue_services": 34
+}

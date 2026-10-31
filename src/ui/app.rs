@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 #[path = "services.rs"]
 mod services;
+#[path = "localisation.rs"]
+mod localisation;
 
 use eframe::egui::{self, Color32, RichText, TextureHandle, Vec2};
 
@@ -473,7 +475,7 @@ impl App {
             s.spacing.button_padding = Vec2::new(10.0, 4.0);
         });
         let site = bridge::site();
-        let draft = site.clone().unwrap_or_default();
+        let draft = site.clone().unwrap_or_else(||Site::for_region(crate::localisation::current()));
         Self {
             rx,
             tab: Tab::Location,
@@ -526,6 +528,7 @@ impl App {
     fn handle_messages(&mut self, ctx: &egui::Context) {
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
+                UiMsg::RegionalServices(region) => {self.svc.regional(region);self.tab=Tab::Services;}
                 UiMsg::InfraLibrary => { self.tab = Tab::Library; self.lib.show_infra = true; }
                 UiMsg::Show(tab) => {
                     self.tab = tab;
@@ -2697,47 +2700,59 @@ impl eframe::App for App {
             };
             if civil {
                 ui.label(RichText::new("CIVIEL").small().weak());
-                nav(ui, Tab::Civiel, "axis", "Instellingen en acties");
+                nav(ui, Tab::Civiel, "axis", crate::lang::tr("Instellingen en acties", "Settings and actions"));
                 ui.add_space(8.0);
-                ui.label(RichText::new("ALGEMEEN").small().weak());
-                nav(ui, Tab::Location, "location", "Projectlocatie");
-                nav(ui, Tab::Controle, "check", "NLCS-controle");
-                nav(ui, Tab::Hoeveelheden, "quantities", "Hoeveelheden");
-                nav(ui, Tab::Coords, "point", "Coördinaten");
+                ui.label(RichText::new(crate::lang::tr("ALGEMEEN","GENERAL")).small().weak());
+                nav(ui, Tab::Location, "location", crate::lang::tr("Projectlocatie", "Project location"));
+                nav(ui, Tab::Coords, "point", crate::lang::tr("Coördinaten", "Coordinates"));
+                if bridge::site().map(|s|s.region).unwrap_or(crate::localisation::current())==crate::localisation::Region::Netherlands {
+                    ui.add_space(8.0);
+                    ui.label(RichText::new(crate::lang::tr("NEDERLAND", "NETHERLANDS")).small().weak());
+                    nav(ui, Tab::Controle, "check", crate::lang::tr("NLCS-controle", "NLCS check"));
+                    nav(ui, Tab::Hoeveelheden, "quantities", crate::lang::tr("NLCS-hoeveelheden", "NLCS quantities"));
+                }
             } else {
-            ui.label(RichText::new("WEBSERVICES").small().weak());
-            nav(ui, Tab::Location, "location", "Geografische locatie");
-            nav(ui, Tab::Raster, "map", "WMS / TMS (raster)");
-            nav(ui, Tab::Wfs, "vector", "WFS (vector)");
+            ui.label(RichText::new(crate::lang::tr("WEBSERVICES","WEB SERVICES")).small().weak());
+            nav(ui, Tab::Location, "location", crate::lang::tr("Geografische locatie", "Geographic location"));
+            nav(ui, Tab::Raster, "map", crate::lang::tr("WMS / TMS (raster)", "WMS / TMS (raster)"));
+            nav(ui, Tab::Wfs, "vector", crate::lang::tr("WFS (vector)", "WFS (vector)"));
             nav(ui, Tab::Services, "services", crate::lang::tr("Services wereldwijd", "Services worldwide"));
             nav(ui, Tab::Osm, "globe", "OpenStreetMap");
-            nav(ui, Tab::Pdok, "pdok", "PDOK (NL)");
+            if bridge::site().map(|s|s.region).unwrap_or(crate::localisation::current())==crate::localisation::Region::Netherlands {
+                ui.add_space(8.0);
+                ui.label(RichText::new(crate::lang::tr("NEDERLAND", "NETHERLANDS")).small().weak());
+                nav(ui, Tab::Pdok, "pdok", "PDOK · BAG · NWB");
+                nav(ui, Tab::Nlcs, "nlcs", crate::lang::tr("BGT · Kadaster · KLIC", "BGT · Cadastre · KLIC"));
+                nav(ui, Tab::Ahn, "ahn", crate::lang::tr("AHN-hoogtes", "AHN elevation"));
+                nav(ui, Tab::Planning, "vector", crate::lang::tr("Ruimtelijke plannen", "Spatial plans"));
+                nav(ui, Tab::Controle, "check", crate::lang::tr("NLCS-controle", "NLCS check"));
+                nav(ui, Tab::Hoeveelheden, "quantities", crate::lang::tr("NLCS-hoeveelheden", "NLCS quantities"));
+            }
             ui.add_space(8.0);
-            ui.label(RichText::new("BASISDATA NL").small().weak());
-            nav(ui, Tab::Nlcs, "nlcs", "BGT · Kadaster · KLIC");
-            nav(ui, Tab::Ahn, "ahn", "AHN-hoogtes");
-            nav(ui, Tab::Planning, "vector", crate::lang::tr("Ruimtelijke plannen", "Spatial plans"));
-            ui.add_space(8.0);
-            ui.label(RichText::new("NLCS").small().weak());
-            nav(ui, Tab::Controle, "check", "NLCS-controle");
-            nav(ui, Tab::Hoeveelheden, "quantities", "Hoeveelheden");
-            ui.add_space(8.0);
-            ui.label(RichText::new("HULPMIDDELEN").small().weak());
-            nav(ui, Tab::Coords, "point", "Coördinaten");
-            nav(ui, Tab::Servers, "server", "Servers");
+            ui.label(RichText::new(crate::lang::tr("HULPMIDDELEN","TOOLS")).small().weak());
+            nav(ui, Tab::Coords, "point", crate::lang::tr("Coördinaten", "Coordinates"));
+            nav(ui, Tab::Servers, "server", crate::lang::tr("Servers", "Servers"));
             ui.add_space(8.0);
             ui.label(RichText::new(crate::lang::tr("BESTANDEN EN BIBLIOTHEEK", "FILES AND LIBRARY")).small().weak());
             nav(ui, Tab::Files, "file", crate::lang::tr("GIS-bestand", "GIS file"));
             nav(ui, Tab::Library, "vehicle", crate::lang::tr("Bibliotheek", "Library"));
+            }
+            ui.add_space(8.0);
+            nav(ui, Tab::Localisation, "globe", crate::lang::tr("Localisatie", "Localisation"));
+            if !civil && bridge::site().map(|s|s.region).unwrap_or(crate::localisation::current())==crate::localisation::Region::UnitedStates {
+                ui.add_space(8.0);
+                ui.label(RichText::new(crate::lang::tr("VERENIGDE STATEN","UNITED STATES")).small().weak());
+                if ui.button(crate::lang::tr("USGS · Census · NRCS","USGS · Census · NRCS")).clicked(){self.svc.regional(crate::localisation::Region::UnitedStates);self.tab=Tab::Services;}
             }
             super::library::language_switch(ui);
             ui.add_space(14.0);
 
             egui::Frame::group(ui.style()).inner_margin(egui::Margin::same(8)).show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.label(RichText::new("PROJECTLOCATIE").small().strong().color(ACCENT));
+                ui.label(RichText::new(crate::lang::tr("PROJECTLOCATIE","PROJECT LOCATION")).small().strong().color(ACCENT));
                 if let Some(s) = bridge::site() {
                     ui.label(RichText::new(&s.label).small());
+                    ui.label(RichText::new(s.region.label()).small().strong());
                     ui.label(RichText::new(format!("{}\nX {:.1}\nY {:.1}\n{} × {} m · {}", s.crs, s.origin_e, s.origin_n, s.width, s.height, if s.absolute { "absoluut" } else { "relatief" })).small().monospace().weak());
                 } else {
                     ui.label(RichText::new("Nog niet ingesteld").small().color(WARN));
@@ -2779,6 +2794,10 @@ impl eframe::App for App {
             }
             egui::ScrollArea::vertical().scroll_source(egui::scroll_area::ScrollSource::MOUSE_WHEEL).auto_shrink([false, false]).show(ui, |ui| {
                 ui.set_max_width(ui.available_width() - 6.0);
+                let project_region=bridge::site().map(|s|s.region).unwrap_or(crate::localisation::current());
+                if project_region!=crate::localisation::Region::Netherlands && matches!(self.tab,Tab::Civiel|Tab::Library|Tab::Controle|Tab::Hoeveelheden) {
+                    ui.colored_label(WARN,crate::lang::tr("De civiele ontwerptools en infra-bibliotheek gebruiken momenteel NLCS-lagen. Voor dit project is een afzonderlijke mapping naar de opleverstandaard nodig.","Civil design tools and the infrastructure library currently use NLCS layers. This project needs a separate mapping to its delivery standard."));
+                }
                 match self.tab {
                     Tab::Location => self.location(ui),
                     Tab::Raster => self.raster(ui),
@@ -2795,6 +2814,7 @@ impl eframe::App for App {
                     Tab::Files => self.files.page(ui),
                     Tab::Civiel => self.civiel_page(ui),
                     Tab::Services => self.services_page(ui),
+                    Tab::Localisation => self.localisation_page(ui),
                     Tab::Planning => self.planning.page(ui),
                 }
             });

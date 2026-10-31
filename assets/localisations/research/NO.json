@@ -1,0 +1,76 @@
+{
+  "code": "NO",
+  "name_nl": "Noorwegen",
+  "name_en": "Norway",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "Geonorge — officiële nationale geodatacatalogus",
+    "url": "https://www.geonorge.no/"
+  },
+  "data": [
+    {
+      "name": "Geonorge — openbare kaarten, datasets en downloads",
+      "url": "https://www.geonorge.no/",
+      "kind": "catalogue",
+      "service_tested": false
+    },
+    {
+      "name": "FKB — gedetailleerde basisgegevens en distributiespecificatie",
+      "url": "https://dokument.geonorge.no/produktspesifikasjoner/fkb-generell-del/Versjon%205.1/index.html",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "EUREF89 / UTM zone 32N",
+      "epsg": 25832,
+      "source_url": "https://dokument.geonorge.no/produktspesifikasjoner/fkb-generell-del/Versjon%205.1/index.html"
+    },
+    {
+      "name": "EUREF89 / UTM zone 33N",
+      "epsg": 25833,
+      "source_url": "https://dokument.geonorge.no/produktspesifikasjoner/fkb-generell-del/Versjon%205.1/index.html"
+    },
+    {
+      "name": "EUREF89 / UTM zone 35N",
+      "epsg": 25835,
+      "source_url": "https://dokument.geonorge.no/produktspesifikasjoner/fkb-generell-del/Versjon%205.1/index.html"
+    }
+  ],
+  "vertical_reference": {
+    "name": "NN2000 — Normal Null 2000",
+    "source_url": "https://www.kartverket.no/til-lands/posisjon/ta-i-bruk-nn2000",
+    "notes": "Alle gemeenten gebruiken NN2000, maar oudere lopende projecten kunnen NN1954 behouden. GNSS-hoogten vereisen een passende HREF-hoogtereferentiemodelconversie; zeekaartnul is een andere referentie."
+  },
+  "units": "Meters voor projectcoördinaten en hoogten; SOSI-bestandsresolutie en eenheidsmetadata expliciet interpreteren.",
+  "drawing_standard": {
+    "name": "Projectspecifieke CAD-afspraken; SOSI/FKB voor geodata-uitwisseling",
+    "source_url": "https://dokument.geonorge.no/produktspesifikasjoner/fkb-generell-del/Versjon%205.1/index.html",
+    "notes": "FKB 5.1 beschrijft geodata en uitwisselformaten. Dit is geen algemene landelijke civiele CAD-laag- of tekenset; teken- en opdrachteisen afzonderlijk verifiëren."
+  },
+  "integration": {
+    "next_step": "Selecteer lokale UTM-zone en NN2000, lees SOSI/GML-metadata en test een FKB-terrein/gebouwimport. Beoordeel producttoegang in Geonorge.",
+    "limitations": "FKB gebruikt lokaal zone32 in zuidelijk/midden Noorwegen, zone33 in Nordland/Troms en zone35 in Finnmark; landelijke distributie vaak zone33. Productlicentie en GeoID-toegang kunnen verschillen. NN1954 niet zonder transformatie combineren. Svalbard/Jan Mayen apart onderzoeken. Geen download of service getest."
+  },
+  "sources": [
+    {
+      "title": "Geonorge — nationale catalogus",
+      "url": "https://www.geonorge.no/"
+    },
+    {
+      "title": "Kartverket / Geonorge — FKB 5.1",
+      "url": "https://dokument.geonorge.no/produktspesifikasjoner/fkb-generell-del/Versjon%205.1/index.html"
+    },
+    {
+      "title": "Kartverket — NN2000 gebruiken",
+      "url": "https://www.kartverket.no/til-lands/posisjon/ta-i-bruk-nn2000"
+    },
+    {
+      "title": "Kartverket — land- en zeereferentieniveaus",
+      "url": "https://www.kartverket.no/til-sjos/se-havniva/referanseniva/hva-er-et-referanseniva"
+    }
+  ],
+  "existing_catalogue_services": 15
+}

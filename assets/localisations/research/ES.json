@@ -1,0 +1,75 @@
+{
+  "code": "ES",
+  "name_nl": "Spanje",
+  "name_en": "Spain",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "CNIG Centro de Descargas",
+    "url": "https://centrodedescargas.cnig.es/CentroDescargas/"
+  },
+  "data": [
+    {
+      "name": "PNOA LiDAR en digitale terrein- en oppervlaktemodellen",
+      "url": "https://centrodedescargas.cnig.es/CentroDescargas/modelos-digitales-elevaciones",
+      "kind": "download",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "ETRS89 / UTM zone 29N",
+      "epsg": 25829,
+      "source_url": "https://nco.ign.es/VisorNCOConMarco/widgets/print/pdf/CodigosEPSG.pdf"
+    },
+    {
+      "name": "ETRS89 / UTM zone 30N",
+      "epsg": 25830,
+      "source_url": "https://nco.ign.es/VisorNCOConMarco/widgets/print/pdf/CodigosEPSG.pdf"
+    },
+    {
+      "name": "ETRS89 / UTM zone 31N",
+      "epsg": 25831,
+      "source_url": "https://nco.ign.es/VisorNCOConMarco/widgets/print/pdf/CodigosEPSG.pdf"
+    },
+    {
+      "name": "REGCAN95 / UTM zone 28N voor de Canarische Eilanden",
+      "epsg": 4083,
+      "source_url": "https://nco.ign.es/VisorNCOConMarco/widgets/print/pdf/CodigosEPSG.pdf"
+    }
+  ],
+  "vertical_reference": {
+    "name": "REDNAP / datum Alicante; eiland- en datasetvariant controleren",
+    "source_url": "https://www.ign.es/web/calculadora-geodesica",
+    "notes": "IGN beschrijft EGM2008-REDNAP en afzonderlijke grids voor schiereiland/Balearen/Ceuta/Melilla en Canarias. EVRS is een andere hoogtevariant; niet via een gemiddelde vaste offset omzetten."
+  },
+  "units": "UTM-coordinaten en hoogten in meter; E,N-asvolgorde onderscheiden van N,E-varianten.",
+  "drawing_standard": {
+    "name": "Projectspecifiek; nationale civiele CAD-standaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "Bouwheer- en regionale tekenvoorschriften nog onderzoeken."
+  },
+  "integration": {
+    "next_step": "Kies UTM-zone en datum op projectlocatie, download een PNOA-tegel en controleer dekking, opnamejaar, hoogtevariant en productkwaliteit.",
+    "limitations": "ETRS89 geldt voor schiereiland/Balearen; Canarias gebruikt REGCAN95. IGN vermeldt ook REGCAN95 zone 27N; deze configuratie beperkt zich tot de bevestigde zone 28N-optie. De nieuwste terreinresolutie is niet overal dezelfde. Geen service of download getest."
+  },
+  "sources": [
+    {
+      "title": "IGN: EPSG-codes en asvolgorde",
+      "url": "https://nco.ign.es/VisorNCOConMarco/widgets/print/pdf/CodigosEPSG.pdf"
+    },
+    {
+      "title": "IGN: geodetische berekening en hoogteconversie",
+      "url": "https://www.ign.es/web/calculadora-geodesica"
+    },
+    {
+      "title": "CNIG: modelos digitales de elevaciones",
+      "url": "https://centrodedescargas.cnig.es/CentroDescargas/modelos-digitales-elevaciones"
+    },
+    {
+      "title": "Spaanse overheid: gids publicatie ruimtelijke gegevens",
+      "url": "https://datos.gob.es/sites/default/files/doc/file/guia_publicacion_datos_espaciales.pdf"
+    }
+  ],
+  "existing_catalogue_services": 22
+}

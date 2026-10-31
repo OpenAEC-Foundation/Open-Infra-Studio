@@ -1,0 +1,62 @@
+{
+  "code": "PL",
+  "name_nl": "Polen",
+  "name_en": "Poland",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "GUGiK Geoportal",
+    "url": "https://www.geoportal.gov.pl/"
+  },
+  "data": [
+    {
+      "name": "NMT digitaal terreinmodel",
+      "url": "https://www.geoportal.gov.pl/pl/dane/numeryczny-model-terenu-nmt/",
+      "kind": "download",
+      "service_tested": false
+    },
+    {
+      "name": "EGiB: kadastrale percelen en gebouwen; dienstenoverzicht",
+      "url": "https://www.geoportal.gov.pl/en/data/land-and-building-register-egib/",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "PUWG 1992",
+      "epsg": 2180,
+      "source_url": "https://www.geoportal.gov.pl/en/data/land-and-building-register-egib/"
+    }
+  ],
+  "vertical_reference": {
+    "name": "PL-EVRF2007-NH; PL-KRON86-NH als afzonderlijke bronvariant",
+    "source_url": "https://www.geoportal.gov.pl/pl/dane/numeryczny-model-terenu-nmt/",
+    "notes": "Geoportal onderscheidt beide hoogtevarianten bij NMT-downloads. Downloadlaag en metadata moeten de gekozen projecthoogtereferentie bevestigen."
+  },
+  "units": "Geprojecteerde coordinaten en hoogten in meter; asvolgorde expliciet controleren.",
+  "drawing_standard": {
+    "name": "Projectspecifiek; nationale civiele CAD-standaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "Landmeetkundige en gemeentelijke oplevervoorschriften apart onderzoeken."
+  },
+  "integration": {
+    "next_step": "Importeer een NMT-tegel met expliciete hoogtevariant en onderzoek EGiB-vectorlevering per powiat; verifieer gedetailleerde bronprojectie voordat geometrie wordt gecombineerd.",
+    "limitations": "2180 is bevestigd voor de landelijke ULDK-uitwisseling; dat bewijst niet dat alle lokale ontwerp- en kadasterbestanden die projectie gebruiken. EGiB-WMS geeft kaartbeelden; beschikbare WFS- en downloadbronnen verschillen. Geen service of download getest."
+  },
+  "sources": [
+    {
+      "title": "GUGiK: numeryczny model terenu",
+      "url": "https://www.geoportal.gov.pl/pl/dane/numeryczny-model-terenu-nmt/"
+    },
+    {
+      "title": "GUGiK: land and building register",
+      "url": "https://www.geoportal.gov.pl/en/data/land-and-building-register-egib/"
+    },
+    {
+      "title": "GUGiK: ULDK API-documentatie",
+      "url": "https://uldk.gugik.gov.pl/opis.html"
+    }
+  ],
+  "existing_catalogue_services": 9
+}

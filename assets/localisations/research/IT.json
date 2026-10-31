@@ -1,0 +1,56 @@
+{
+  "code": "IT",
+  "name_nl": "Italië",
+  "name_en": "Italy",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "RNDT - Repertorio Nazionale dei Dati Territoriali",
+    "url": "https://geodati.gov.it/geoportale/"
+  },
+  "data": [
+    {
+      "name": "RNDT: catalogus overheidsgeodata en services",
+      "url": "https://geodati.gov.it/geoportale/eng/catalogo",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "RDN2008 / ETRF2000, epoche 2008.0; projectie per regio/dataset kiezen",
+      "epsg": null,
+      "source_url": "https://igmi.esercito.difesa.it/en/product-description/geodetic-elements/"
+    }
+  ],
+  "vertical_reference": {
+    "name": "Genova 1942 voor het beschreven IGMI VMAP-product; overige varianten nog te verifieren",
+    "source_url": "https://igmi.esercito.difesa.it/en/product-description/digital-maps/vmap-level-1/",
+    "notes": "De productbron bevestigt Genova 1942, maar bewijst geen uniforme hoogtereferentie voor alle huidige Italiaanse datasets of eilanden. Bronhoogten per dataset verplicht controleren."
+  },
+  "units": "Geprojecteerde ontwerpcoordinaten en hoogten in meter; geografische coordinaten en asvolgorde apart vastleggen.",
+  "drawing_standard": {
+    "name": "Projectspecifiek; nationale civiele CAD-standaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "RNDT-metadataregels zijn geen complete civiele tekenstandaard."
+  },
+  "integration": {
+    "next_step": "Zoek in RNDT op regionale topografische databases, gebouwen, kadaster en terreinmodellen; verifieer leverende instantie, downloadrechten, UTM-zone, exact EPSG-nummer en hoogtevariant.",
+    "limitations": "RNDT is een metadataregister: toegang en actualiteit hangen af van de gegevensbeheerder. IGMI beschrijft het referentiekader, maar een exacte projectiecode is hier niet op primaire bron bevestigd; daarom epsg null. IGMI-pagina's waren via webindex leesbaar, direct openen gaf deels 403. Geen services getest."
+  },
+  "sources": [
+    {
+      "title": "RNDT: catalogus en verantwoordelijkheid bronbeheerder",
+      "url": "https://geodati.gov.it/geoportale/eng/catalogo"
+    },
+    {
+      "title": "IGMI: geodetic elements",
+      "url": "https://igmi.esercito.difesa.it/en/product-description/geodetic-elements/"
+    },
+    {
+      "title": "IGMI: VMAP Level 1, vertical datum",
+      "url": "https://igmi.esercito.difesa.it/en/product-description/digital-maps/vmap-level-1/"
+    }
+  ],
+  "existing_catalogue_services": 10
+}

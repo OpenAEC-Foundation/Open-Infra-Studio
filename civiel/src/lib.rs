@@ -142,15 +142,19 @@ impl CadModule for CivielModule {
             ];
             // The 3D city and landscape model: open formats for everyone, the
             // Dutch registers (3D BAG, AHN, BGT, KLIC, BRO) in one menu.
-            let mut model = vec![
+            let model = vec![
                 file_tool("CIV_CITYGML", "CityGML/JSON", I_CITYGML, tr("CityGML of CityJSON openen", "Open CityGML or CityJSON"), "CityGML / CityJSON", &["gml", "xml", "citygml", "json", "jsonl"], true),
                 small("CIV_DOORZICHT", tr("Maaiveld doorzichtig", "See-through ground"), I_SEE),
+                small("CIV_WATERPEIL", tr("Waterpeil", "Water level"), I_WATER),
                 small("CIV_IFC", "IFC 4x3", I_IFC),
             ];
+            groups.push(RibbonGroup { title: tr("3D-model", "3D model"), tools: model });
             if dutch() {
-                model.push(RibbonItem::LabeledDropdown {
+                groups.push(RibbonGroup {
+                    title: tr("Nederland", "Netherlands"),
+                    tools: vec![RibbonItem::LabeledDropdown {
                     id: "CIV_NL_3D",
-                    label: tr("3D Nederland", "3D Netherlands"),
+                    label: tr("3D-basisdata", "3D base data"),
                     icon: I_BAG3D,
                     items: vec![
                         ("CIV_3DMODEL", tr("3D-model (alles)", "3D model (all)"), I_BAG3D),
@@ -159,12 +163,11 @@ impl CadModule for CivielModule {
                         ("CIV_BGT3D", tr("BGT naar 3D", "BGT to 3D"), I_BGT3D),
                         ("CIV_KLIC3D", tr("KLIC in 3D", "KLIC in 3D"), I_KLIC3D),
                         ("CIV_SONDERINGEN3D", tr("Sonderingen 3D (BRO)", "CPTs in 3D (BRO)"), I_CPT),
-                        ("CIV_WATERPEIL", tr("Waterpeil", "Water level"), I_WATER),
                     ],
                     default: "CIV_BAG3D",
+                    }],
                 });
             }
-            groups.push(RibbonGroup { title: tr("3D-model", "3D model"), tools: model });
             groups.push(RibbonGroup {
                 title: tr("Instellingen", "Settings"),
                 tools: vec![large("CIV_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS), small("CIV_INFO", tr("Modelinfo", "Model info"), I_INFO)],

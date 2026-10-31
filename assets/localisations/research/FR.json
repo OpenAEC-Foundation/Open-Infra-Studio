@@ -1,0 +1,56 @@
+{
+  "code": "FR",
+  "name_nl": "Frankrijk",
+  "name_en": "France",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "IGN Geoservices / Geoplateforme",
+    "url": "https://geoservices.ign.fr/"
+  },
+  "data": [
+    {
+      "name": "RGE: topografie, orthofoto, percelen en hoogtemodellen",
+      "url": "https://www.data.gouv.fr/datasets/referentiel-a-grande-echelle-rge",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "RGF93 v1 / Lambert-93; daadwerkelijke realisatie per dataset controleren",
+      "epsg": 2154,
+      "source_url": "https://geodesie.ign.fr/actualites/evolution-venir-des-codes-epsg-du-rgf93"
+    }
+  ],
+  "vertical_reference": {
+    "name": "NGF-IGN69 op het vasteland; NGF-IGN78 op Corsica",
+    "source_url": "https://geoservices.ign.fr/sites/default/files/2021-07/DC_Ref3DNat_1-0-2.pdf",
+    "notes": "Overzeese gebieden hebben eigen horizontale en verticale referenties; vallen buiten deze eerste configuratie."
+  },
+  "units": "Geprojecteerde ontwerpcoordinaten en hoogten in meter; papier- en detailmaten projectspecifiek vastleggen.",
+  "drawing_standard": {
+    "name": "Projectspecifiek; algemene nationale civiele CAD-standaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "Een gegevensreferentiemodel of CRS vormt geen bewijs voor een complete tekenstandaard."
+  },
+  "integration": {
+    "next_step": "Kies een RGE-dataset en controleer actuele service, licentie, realisatie van RGF93, projectie en hoogtereferentie voor import.",
+    "limitations": "IGN beschrijft in mei/juni 2026 voorstellen voor wijziging van EPSG-gebruik. Code 2154 is volgens die bron strikt v1, terwijl veel datasets v2b gebruiken; geen uitwisselbare precisie aannemen. CC-zones en overzeese referenties vereisen aparte keuze. Geen serviceverzoeken getest."
+  },
+  "sources": [
+    {
+      "title": "IGN: evolution a venir des codes EPSG du RGF93",
+      "url": "https://geodesie.ign.fr/actualites/evolution-venir-des-codes-epsg-du-rgf93"
+    },
+    {
+      "title": "IGN: Ref3DNat, systemen en eenheden",
+      "url": "https://geoservices.ign.fr/sites/default/files/2021-07/DC_Ref3DNat_1-0-2.pdf"
+    },
+    {
+      "title": "IGN: Referentiel a grande echelle",
+      "url": "https://www.data.gouv.fr/datasets/referentiel-a-grande-echelle-rge"
+    }
+  ],
+  "existing_catalogue_services": 25
+}

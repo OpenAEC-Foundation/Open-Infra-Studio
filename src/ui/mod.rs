@@ -20,6 +20,7 @@ use eframe::egui;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
+    Localisation,
     Location,
     Raster,
     Wfs,
@@ -60,6 +61,7 @@ pub fn product() -> Product {
 }
 
 pub enum UiMsg {
+    RegionalServices(crate::localisation::Region),
     InfraLibrary,
     Show(Tab),
     /// A point picked in the drawing (project CRS), for the coordinate tab.

@@ -27,6 +27,8 @@ Open, scriptable GIS and civil design inside CAD. Open Infra Studio is a plugin 
 - **AHN heights**: spot heights, contour lines and length profiles from AHN4, and the AHN5 point cloud attached in 3D.
 - **3D city and landscape model**: the AHN terrain coloured by the aerial photo, 3D BAG buildings (LoD 1.2–2.2), the whole BGT in 3D, KLIC cables and pipes in 3D under a see-through ground, and the subsurface: BRO cone penetration tests and boreholes as columns of soil layers.
 
+**Regional profiles:** Netherlands, United States and International. Interface language, application defaults and drawing jurisdiction are separate choices under **Localisation** (`GIS_LOCALISATION`). The US profile provides USGS topography/3DEP, Census boundaries and NRCS soil-map shortcuts, plus a regional service filter. Existing civil/library tools still produce NLCS layers; choosing the US profile does not certify US CAD-standard compliance. Use a metric project CRS; drawing units may be metres, international feet or historical US survey feet. See [localisations and international research](docs/localisations.md) for sources, tested services, geodetic requirements and current limits.
+
 [![Open Infra Studio in one minute: watch the video](docs/video/open-infra-poster.jpg)](docs/video/open-infra.mp4)
 
 <sub>Open Infra Studio in one minute (MP4, 64 s): the application and its 3D model, 2D drawings to NLCS, map services in Paris, Cologne and Zurich, historical maps of the Netherlands, KLIC and CPTs under a see-through ground. Click the image to play.</sub>

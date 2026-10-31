@@ -376,13 +376,14 @@ SERVICE_CATEGORIES = ["cadastre", "aerial", "elevation", "subsurface", "zoning",
 @tool("gis_services", "Search the catalogue of about 620 public WMS, WFS and XYZ tile services in 50+ countries (cadastral parcels, "
       "aerial photos, elevation, geology, zoning, buildings …). Free text in Dutch or English (e.g. 'cadastral parcels Bavaria', "
       "'luchtfoto', 'Flurstücke'); `here` keeps only services covering the project location, or give lon/lat. Returns id, type, "
-      "name, provider, country, coverage, category, url, default_layer, crs (request CRS first), license and bbox per service.",
+      "name, provider, country, coverage, category, url, default_layer, crs (request CRS first), license and bbox per service. "
+      "country filters ISO codes separated by semicolons, e.g. US;GLOBAL; omit it for all regions.",
       {"query": STR, "category": {"type": "string", "enum": SERVICE_CATEGORIES}, "type": {"type": "string", "enum": ["WMS", "WFS", "XYZ"]},
-       "here": {"type": "boolean"}, "lon": NUM, "lat": NUM, "limit": NUM})
+       "country": STR, "here": {"type": "boolean"}, "lon": NUM, "lat": NUM, "limit": NUM})
 def t_services(a):
     words = " HIER" if a.get("here") and a.get("lon") is None else ""
     return OCS.run("GIS_SERVICES " + _kv(ZOEK=a.get("query"), CATEGORIE=a.get("category"), TYPE=a.get("type"),
-                                         LON=a.get("lon"), LAT=a.get("lat"), LIMIET=a.get("limit") or 50) + words)
+                                         COUNTRY=a.get("country"), LON=a.get("lon"), LAT=a.get("lat"), LIMIET=a.get("limit") or 50) + words)
 
 
 @tool("gis_service_load", "Load one layer of a catalogue service (id from gis_services) into the project area: WMS and tiles as "

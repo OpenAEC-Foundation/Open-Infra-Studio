@@ -1,0 +1,62 @@
+{
+  "code": "CH",
+  "name_nl": "Zwitserland",
+  "name_en": "Switzerland",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "geo.admin.ch",
+    "url": "https://map.geo.admin.ch/"
+  },
+  "data": [
+    {
+      "name": "Federale geografische lagen",
+      "url": "https://wms.geo.admin.ch/",
+      "kind": "WMS",
+      "service_tested": false
+    },
+    {
+      "name": "swissALTIRegio terreinmodel",
+      "url": "https://www.swisstopo.admin.ch/en/height-model-swissaltiregio",
+      "kind": "download",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "CH1903+ / LV95",
+      "epsg": 2056,
+      "source_url": "https://www.swisstopo.admin.ch/en/height-model-swissaltiregio"
+    }
+  ],
+  "vertical_reference": {
+    "name": "LN02; LHN95 als afzonderlijk hoogtereferentiekader",
+    "source_url": "https://www.swisstopo.admin.ch/de/lokale-bezugsrahmen-schweiz",
+    "notes": "LN02 blijft officieel; LHN95 gebruikt orthometrische hoogten en is niet zonder transformatie uitwisselbaar. swissALTIRegio levert LN02 binnen Zwitserland, maar buitenlandse bronhoogten zijn niet naar LN02 getransformeerd."
+  },
+  "units": "LV95-coordinaten en modelhoogten in meter; detail- en papiermaten projectspecifiek.",
+  "drawing_standard": {
+    "name": "Projectspecifiek; civiele CAD-opleverstandaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "Kantonale gegevensmodellen, laagcodes en projectspecificaties afzonderlijk onderzoeken."
+  },
+  "integration": {
+    "next_step": "Test WMS-capabilities en kies een gedetailleerd terreinproduct en eventuele kantonale kadastrale bron. Bewaar LV95 en de hoogtevariant in projectmetadata.",
+    "limitations": "Een WMS levert kaartbeelden. Het 10 m swissALTIRegio-model is een orientatiebron; resolutie is geen gegarandeerde ontwerpmeetnauwkeurigheid. Buitenlandse hoogten en oudere LV03-data vereisen expliciete transformatie. Geen serviceverzoeken getest."
+  },
+  "sources": [
+    {
+      "title": "geo.admin.ch: beschikbare WMS-diensten",
+      "url": "https://www.geo.admin.ch/de/wms-verfuegbare-dienste-und-daten"
+    },
+    {
+      "title": "swisstopo: lokale referentiekaders",
+      "url": "https://www.swisstopo.admin.ch/de/lokale-bezugsrahmen-schweiz"
+    },
+    {
+      "title": "swisstopo: swissALTIRegio",
+      "url": "https://www.swisstopo.admin.ch/en/height-model-swissaltiregio"
+    }
+  ],
+  "existing_catalogue_services": 24
+}

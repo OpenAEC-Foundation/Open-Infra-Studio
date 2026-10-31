@@ -1,0 +1,71 @@
+{
+  "code": "NZ",
+  "name_nl": "Nieuw-Zeeland",
+  "name_en": "New Zealand",
+  "portal": {
+    "name": "LINZ Data Service",
+    "url": "https://data.linz.govt.nz/"
+  },
+  "data": [
+    {
+      "name": "LINZ Data Service: hoogten, topografie, percelen en wegen",
+      "url": "https://www.linz.govt.nz/products-services/data/linz-data-service?mdrv=www.linz.govt.nz",
+      "kind": "catalogue",
+      "service_tested": false
+    },
+    {
+      "name": "NZ Property Boundaries",
+      "url": "https://data.linz.govt.nz/layer/122657-nz-property-boundaries/",
+      "kind": "download",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "NZGD2000 / New Zealand Transverse Mercator 2000 (NZTM2000)",
+      "epsg": 2193,
+      "source_url": "https://www.linz.govt.nz/guidance/data-service/linz-data-service-guide/web-services/axis-ordering"
+    },
+    {
+      "name": "NZGD2000, geografisch",
+      "epsg": 4167,
+      "source_url": "https://www.linz.govt.nz/guidance/data-service/linz-data-service-guide/web-services/axis-ordering"
+    }
+  ],
+  "vertical_reference": {
+    "name": "New Zealand Vertical Datum 2016 (NZVD2016)",
+    "source_url": "https://www.linz.govt.nz/guidance/geodetic-system/coordinate-systems-used-new-zealand/vertical-datums/new-zealand-vertical-datum-2016-nzvd2016",
+    "notes": "Normaal-orthometrische hoogten; ellipsoïdische NZGD2000-hoogten en historische lokale hoogtedatums vereisen de passende LINZ-transformatie."
+  },
+  "units": "Meters in NZTM2000 en voor hoogten; graden in NZGD2000 geografisch.",
+  "integration": {
+    "next_step": "Begin met NZTM2000 en NZVD2016; selecteer LINZ-laag, API-toegang en assenvolgorde, en controleer een terrein- en perceelimport.",
+    "limitations": "LDS-assenvolgorde verschilt per WFS-versie. Offshore-eilanden hebben eigen projecties. Property Boundaries combineert verschillende bronsoorten en vervangt geen terreinmeting; toegangseisen en dekking per laag controleren."
+  },
+  "sources": [
+    {
+      "title": "LINZ — Data Service",
+      "url": "https://www.linz.govt.nz/products-services/data/linz-data-service?mdrv=www.linz.govt.nz"
+    },
+    {
+      "title": "LINZ — Axis ordering",
+      "url": "https://www.linz.govt.nz/guidance/data-service/linz-data-service-guide/web-services/axis-ordering"
+    },
+    {
+      "title": "LINZ — NZVD2016",
+      "url": "https://www.linz.govt.nz/guidance/geodetic-system/coordinate-systems-used-new-zealand/vertical-datums/new-zealand-vertical-datum-2016-nzvd2016"
+    },
+    {
+      "title": "LINZ — NZ Property Boundaries",
+      "url": "https://data.linz.govt.nz/layer/122657-nz-property-boundaries/"
+    }
+  ],
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "drawing_standard": {
+    "name": "Projectspecifiek; nationale civiele CAD-laagstandaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "GIS- of landmeetkundige referenties bewijzen geen conformiteit van tekenlagen, symbolen of opleverbestanden. Verifieer de actuele eisen van opdrachtgever en lokale beheerder."
+  },
+  "existing_catalogue_services": 4
+}
