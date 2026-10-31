@@ -1038,6 +1038,8 @@ impl<'a, W: Write> Exporter<'a, W> {
             let key = match cl.role {
                 Role::Terrain => format!("terrain:{layer}:{}:{}", get(&data, "bron").unwrap_or(""), road_of(&data).unwrap_or("")),
                 Role::Building => format!("building:{}", id.clone().unwrap_or_else(|| format!("{h:?}"))),
+                // A point cloud mesh (CIV_MESH) can span several MESH entities: one object.
+                _ if cl.ifc != "IfcAnnotation" && get(&data, "mesh").is_some() => format!("mesh:{layer}:{}", get(&data, "mesh").unwrap_or("")),
                 _ if cl.ifc != "IfcAnnotation" && id.is_some() => format!("{}:{}", cl.ifc, id.clone().unwrap_or_default()),
                 _ => format!("entity:{}", handle_text(h)),
             };

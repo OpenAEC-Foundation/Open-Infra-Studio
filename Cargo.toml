@@ -45,7 +45,9 @@ klic2geo = { git = "https://github.com/OpenAEC-Foundation/crates-warehouse" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # AHN: height grids (WCS GeoTIFF float32) and point clouds (COPC)
 tiff = "0.11"
-copc-rs = "0.5"
+# copc-rs from git: the released 0.5 does not build against las 0.9.11 and
+# laz 0.12, which pointcloud-core needs (fixed upstream, not yet released).
+copc-rs = { git = "https://github.com/pka/copc-rs", rev = "1cff2a6be1f4d9a421610c22268af2a920cee1c8" }
 # Local GIS files: Shapefile, GeoPackage (SQLite, built in), KMZ (zip)
 shapefile = "0.9"
 rusqlite = { version = "0.41", features = ["bundled"] }
@@ -57,6 +59,11 @@ las-crs = "0.1"
 delaunator = "1"
 # 3D: triangulating planar polygons with holes (3D BAG surfaces, BGT areas)
 earcutr = "0.4"
+# Point clouds (Civiel → Puntenwolk): the E57, PLY, PTS and XYZ readers and
+# the closed mesher of OpenAEC's Open Pointcloud Studio (LGPL-3.0-or-later,
+# a GUI-free crate), and the E57 coordinate metadata (MIT).
+pointcloud-core = { git = "https://github.com/OpenAEC-Foundation/open-pointcloud-studio", rev = "b2735904020f38530376c26ce15ebf617021d429", default-features = false }
+e57 = "0.11"
 
 # Workbench window (runs in the plugin process, beside the host)
 eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }

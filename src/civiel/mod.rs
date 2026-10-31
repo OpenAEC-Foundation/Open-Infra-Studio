@@ -20,6 +20,9 @@ pub mod kruispunt;
 pub mod profieltype;
 pub mod hydrologie;
 pub mod percelen;
+// Point clouds: TIN, profiles, ground filter (puntenwolk) and 3D meshes (mesh).
+pub mod mesh;
+pub mod puntenwolk;
 
 use std::sync::{Mutex, OnceLock};
 
@@ -73,6 +76,9 @@ pub struct CivielOptions {
     pub assembly: String,
     pub corridor_every: f64,
     pub corridor_views: bool,
+    /// Profiles and sections: ground from a point cloud instead of the TIN
+    /// or AHN (`BRON=PUNTENWOLK`); not kept between commands.
+    pub puntenwolk: Option<puntenwolk::Grondbron>,
 }
 
 impl Default for CivielOptions {
@@ -103,6 +109,7 @@ impl Default for CivielOptions {
             assembly: "weg".into(),
             corridor_every: 10.0,
             corridor_views: false,
+            puntenwolk: None,
         }
     }
 }
@@ -381,11 +388,17 @@ impl Hoogtebron {
 pub enum Maaiveld {
     Tin(terrein::Tin),
     Bron(Hoogtebron),
+    /// A strip of ground points along the axis (`BRON=PUNTENWOLK`).
+    Puntenwolk(puntenwolk::Strook),
 }
 
 impl Maaiveld {
-    /// The TIN on the triangulation layers of the drawing, or AHN.
+    /// The TIN on the triangulation layers of the drawing, or AHN; a point
+    /// cloud when the command asks for one.
     pub fn find(ctx: &Ctx, doc: &ocs_plugin_api::host::codec::CadDocument) -> Result<Maaiveld, String> {
+        if let Some(g) = &ctx.opt.puntenwolk {
+            return Ok(Maaiveld::Puntenwolk(puntenwolk::Strook::new(ctx, g)?));
+        }
         match terrein::Tin::from_document(doc) {
             Some(t) => Ok(Maaiveld::Tin(t)),
             None => Ok(Maaiveld::Bron(hoogtebron(ctx)?)),
@@ -397,6 +410,7 @@ impl Maaiveld {
         match self {
             Maaiveld::Tin(t) => t.height(p).map(|z| z / f),
             Maaiveld::Bron(b) => b.height(p),
+            Maaiveld::Puntenwolk(s) => s.height(p),
         }
     }
 
@@ -404,6 +418,7 @@ impl Maaiveld {
         match self {
             Maaiveld::Tin(t) => format!("terrein (TIN, {} driehoeken)", t.triangles.len()),
             Maaiveld::Bron(b) => b.label().to_string(),
+            Maaiveld::Puntenwolk(s) => s.label(),
         }
     }
 
@@ -411,12 +426,18 @@ impl Maaiveld {
         if let Maaiveld::Bron(b) = self {
             bridge::note_source(b.attribution());
         }
+        if let Maaiveld::Puntenwolk(s) = self {
+            if let Some(a) = s.attribution() {
+                bridge::note_source(&a);
+            }
+        }
     }
 
     pub fn error(&self) -> Option<String> {
         match self {
             Maaiveld::Tin(_) => None,
             Maaiveld::Bron(b) => b.error(),
+            Maaiveld::Puntenwolk(s) => s.error(),
         }
     }
 }

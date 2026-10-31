@@ -302,6 +302,7 @@ The NLCS tables and the official NLCS-BGT 5.0 mapping are built in from [`assets
   - It is saved as `.rcs` next to the drawing and attached with POINTCLOUDATTACH.
   - Example: 300 × 250 m at 0.25 m spacing is about 1.4 million points and a 29 MB file.
 - **Punt info** also reports the AHN ground and surface height of the picked point.
+- **Point clouds in the civil tools:** a TIN, length profiles and cross sections, a ground filter and 3D meshes from AHN or E57/PLY/PTS/XYZ/LAS files: see [docs/civiel-puntenwolk.md](docs/civiel-puntenwolk.md).
 
 Length profile across the Grotekerksplein: the ground line breaks at the harbour water and the buildings.
 
