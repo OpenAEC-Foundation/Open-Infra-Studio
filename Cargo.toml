@@ -1,10 +1,10 @@
 [package]
 name = "open-infra"
-version = "2026.44.2"
+version = "2026.44.5"
 edition = "2021"
 description = "Open Infra — GIS-workbench voor Open CAD Studio (infra en civiele techniek, NL en wereldwijd)."
 license = "GPL-3.0-only"
-repository = "https://github.com/OpenAEC-Foundation/Open-Infra"
+repository = "https://github.com/OpenAEC-Foundation/Open-Infra-Studio"
 
 [lib]
 # cdylib: the GIS plugin the host loads; rlib: the engine for `cargo test`
@@ -35,7 +35,7 @@ proj4rs = "0.2"
 ureq = "3"
 roxmltree = "0.21"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["raw_value"] }
 # Large drawings: entities of the host's shared-memory view are bincode-encoded
 bincode = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

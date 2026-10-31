@@ -31,6 +31,8 @@ pub enum Tab {
     Coords,
     Library,
     Files,
+    /// Service browser: WMS/WFS/tile services worldwide.
+    Services,
     /// The Civiel plugin's settings and actions.
     Civiel,
 }
@@ -107,7 +109,8 @@ pub fn open(tab: Tab) -> Result<(), String> {
                     .with_title(if product() == Product::Civiel { "Open Infra — Civiel" } else { "Open Infra — GIS-workbench" })
                     .with_app_id(if product() == Product::Civiel { "open-infra-civiel" } else { "open-infra-gis" })
                     .with_inner_size([1280.0, 1000.0])
-                    .with_min_inner_size([760.0, 560.0]),
+                    .with_min_inner_size([760.0, 560.0])
+                    .with_icon(std::sync::Arc::new(app_icon())),
                 ..Default::default()
             };
             options.event_loop_builder = Some(Box::new(|builder| {
@@ -134,4 +137,10 @@ pub fn open(tab: Tab) -> Result<(), String> {
         })
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// The window and taskbar icon: a map pin for GIS, a profile for Civiel.
+fn app_icon() -> egui::IconData {
+    let png: &[u8] = if product() == Product::Civiel { include_bytes!("../../assets/app-icon-civiel.png") } else { include_bytes!("../../assets/app-icon-gis.png") };
+    eframe::icon_data::from_png_bytes(png).unwrap_or_default()
 }

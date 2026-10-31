@@ -1,4 +1,4 @@
-//! NLCS validation of a drawing (the InfraCAD "NLCS-controle"): layer names,
+//! NLCS validation of a drawing: layer names,
 //! layer colour/lineweight/linetype per drawing status, element properties
 //! ByLayer, elements on layer 0, text heights and empty layers. Findings
 //! that can be repaired carry their repair.

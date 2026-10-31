@@ -15,6 +15,7 @@ pub mod civiel;
 pub mod emit;
 pub mod hoeveelheden;
 pub mod hoogte;
+pub mod ifc;
 pub mod gis;
 pub mod import;
 pub mod basisdata;
@@ -62,6 +63,7 @@ const I_BGT: IconKind = IconKind::Svg(include_bytes!("../assets/bgt.svg"));
 const I_KADASTER: IconKind = IconKind::Svg(include_bytes!("../assets/kadaster.svg"));
 const I_KLIC: IconKind = IconKind::Svg(include_bytes!("../assets/klic.svg"));
 const I_SHEET: IconKind = IconKind::Svg(include_bytes!("../assets/sheet.svg"));
+const I_IFC: IconKind = IconKind::Svg(include_bytes!("../assets/ifc.svg"));
 const I_AHN: IconKind = IconKind::Svg(include_bytes!("../assets/ahn.svg"));
 const I_CONTOURS: IconKind = IconKind::Svg(include_bytes!("../assets/hoogtelijnen.svg"));
 const I_PROFILE: IconKind = IconKind::Svg(include_bytes!("../assets/profiel.svg"));
@@ -74,6 +76,8 @@ const I_CHECK: IconKind = IconKind::Svg(include_bytes!("../assets/nlcs-controle.
 const I_QUANTITIES: IconKind = IconKind::Svg(include_bytes!("../assets/hoeveelheden.svg"));
 const I_TABLE: IconKind = IconKind::Svg(include_bytes!("../assets/hoeveelhedenstaat.svg"));
 const I_MUTATION: IconKind = IconKind::Svg(include_bytes!("../assets/bgt-mutatie.svg"));
+const I_CPT: IconKind = IconKind::Svg(include_bytes!("../assets/sonderingen.svg"));
+const I_SERVICES: IconKind = IconKind::Svg(include_bytes!("../assets/services.svg"));
 
 /// One-click imports from the ribbon (no window): command → what to fetch.
 enum Quick {
@@ -82,18 +86,29 @@ enum Quick {
 }
 
 const QUICK: &[(&str, &str, Quick)] = &[
-    ("GIS_Q_LUCHTFOTO", "Luchtfoto (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-luchtfoto" })),
-    ("GIS_Q_KADASTER", "Kadastrale kaart (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-kadastralekaart-wms" })),
-    ("GIS_Q_AHN", "AHN hoogtekaart (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-ahn-wms" })),
-    ("GIS_Q_OSMKAART", "OpenStreetMap-kaart (wereld)", Quick::Data(import::Dataset::Raster { server: "osm-tiles" })),
-    ("GIS_Q_SATELLIET", "Sentinel-2 satelliet (wereld)", Quick::Data(import::Dataset::Raster { server: "eox-s2-wms" })),
-    ("GIS_Q_BAG", "BAG panden (PDOK)", Quick::Data(import::Dataset::Wfs { server: "pdok-bag-wfs", typename: "bag:pand", label: None, aci: 30 })),
-    ("GIS_Q_PERCELEN", "Kadastrale percelen (PDOK)", Quick::Data(import::Dataset::Wfs { server: "pdok-kadastralekaart-wfs", typename: "kadastralekaart:Perceel", label: Some("perceelnummer"), aci: 3 })),
-    ("GIS_Q_NWB", "NWB wegvakken (RWS)", Quick::Data(import::Dataset::Wfs { server: "pdok-nwbwegen-wfs", typename: "nwbwegen:wegvakken", label: Some("stt_naam"), aci: 2 })),
-    ("GIS_Q_HECTO", "NWB hectometerpunten (RWS)", Quick::Data(import::Dataset::Wfs { server: "pdok-nwbwegen-wfs", typename: "nwbwegen:hectopunten", label: Some("hectomtrng"), aci: 2 })),
-    ("GIS_Q_SPOOR", "Spoorassen (ProRail)", Quick::Data(import::Dataset::Wfs { server: "pdok-spoorwegen-wfs", typename: "spoorwegen:spooras", label: None, aci: 6 })),
-    ("GIS_Q_OSM", "OpenStreetMap-vectoren (wereld)", Quick::Osm),
+    ("GIS_Q_LUCHTFOTO", "Luchtfoto (PDOK)|Aerial photo (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-luchtfoto" })),
+    ("GIS_Q_KADASTER", "Kadastrale kaart (PDOK)|Cadastral map (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-kadastralekaart-wms" })),
+    ("GIS_Q_AHN", "AHN hoogtekaart (PDOK)|AHN elevation map (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-ahn-wms" })),
+    ("GIS_Q_OSMKAART", "OpenStreetMap-kaart (wereld)|OpenStreetMap map (world)", Quick::Data(import::Dataset::Raster { server: "osm-tiles" })),
+    ("GIS_Q_SATELLIET", "Sentinel-2 satelliet (wereld)|Sentinel-2 satellite (world)", Quick::Data(import::Dataset::Raster { server: "eox-s2-wms" })),
+    ("GIS_Q_BAG", "BAG panden (PDOK)|BAG buildings (PDOK)", Quick::Data(import::Dataset::Wfs { server: "pdok-bag-wfs", typename: "bag:pand", label: None, aci: 30 })),
+    ("GIS_Q_PERCELEN", "Kadastrale percelen (PDOK)|Cadastral parcels (PDOK)", Quick::Data(import::Dataset::Wfs { server: "pdok-kadastralekaart-wfs", typename: "kadastralekaart:Perceel", label: Some("perceelnummer"), aci: 3 })),
+    ("GIS_Q_NWB", "NWB wegvakken (RWS)|NWB road sections (RWS)", Quick::Data(import::Dataset::Wfs { server: "pdok-nwbwegen-wfs", typename: "nwbwegen:wegvakken", label: Some("stt_naam"), aci: 2 })),
+    ("GIS_Q_HECTO", "NWB hectometerpunten (RWS)|NWB hectometre posts (RWS)", Quick::Data(import::Dataset::Wfs { server: "pdok-nwbwegen-wfs", typename: "nwbwegen:hectopunten", label: Some("hectomtrng"), aci: 2 })),
+    ("GIS_Q_SPOOR", "Spoorassen (ProRail)|Rail centrelines (ProRail)", Quick::Data(import::Dataset::Wfs { server: "pdok-spoorwegen-wfs", typename: "spoorwegen:spooras", label: None, aci: 6 })),
+    ("GIS_Q_OSM", "OpenStreetMap-vectoren (wereld)|OpenStreetMap vectors (world)", Quick::Osm),
+    ("GIS_Q_NATURA2000", "Natura 2000 (PDOK)|Natura 2000 (PDOK)", Quick::Data(import::Dataset::Raster { server: "pdok-natura2000-wms" })),
+    ("GIS_Q_GEOMORFOLOGIE", "Geomorfologische kaart (BRO)|Geomorphological map (BRO)", Quick::Data(import::Dataset::Raster { server: "pdok-bro-geomorfologie-wms" })),
+    ("GIS_Q_BODEMKAART", "Bodemkaart (BRO)|Soil map (BRO)", Quick::Data(import::Dataset::Raster { server: "pdok-bro-bodemkaart-wms" })),
+    ("GIS_Q_HISGIS", "Minuutplans 1832 (HisGIS)|Cadastral maps 1832 (HisGIS)", Quick::Data(import::Dataset::Raster { server: "hisgis-minuutplans-1832" })),
+    ("GIS_Q_TIJDREIS", "Topotijdreis 1900 (Kadaster)|Topotijdreis 1900 (Kadaster)", Quick::Data(import::Dataset::Raster { server: "topotijdreis-1900" })),
 ];
+
+/// A quick-import label in the interface language (`"nl|en"`).
+fn ql(label: &'static str) -> &'static str {
+    let (nl, en) = label.split_once('|').unwrap_or((label, label));
+    lang::tr(nl, en)
+}
 
 fn is_raster(q: &Quick) -> bool {
     matches!(q, Quick::Data(import::Dataset::Raster { .. }))
@@ -115,108 +130,119 @@ impl CadModule for GisModule {
     fn ribbon_groups(&self) -> &[RibbonGroup] {
         static GROUPS: OnceLock<Vec<RibbonGroup>> = OnceLock::new();
         GROUPS.get_or_init(|| {
-            // Worldwide tools first and large; the Dutch (PDOK) data in one
-            // compact group of small buttons and menus (about a fifth of the
-            // ribbon at most).
+            // Worldwide tools first and large; the Dutch registers (PDOK, BGT,
+            // BRK, KLIC, AHN, BRO, NLCS) in one compact group of menus, at most
+            // a fifth of the ribbon, and off altogether with `netherlands:
+            // false` in the settings.
+            use lang::tr;
             let world = |c: &str| matches!(c, "GIS_Q_OSMKAART" | "GIS_Q_SATELLIET" | "GIS_Q_OSM");
             let quick_nl = |raster: bool| -> Vec<(&'static str, &'static str, IconKind)> {
-                QUICK.iter().filter(|(c, _, q)| !world(c) && is_raster(q) == raster).map(|(c, l, _)| (*c, *l, I_QUICK)).collect()
+                QUICK.iter().filter(|(c, _, q)| !world(c) && is_raster(q) == raster).map(|(c, l, _)| (*c, ql(l), I_QUICK)).collect()
             };
-            let quick_world: Vec<(&'static str, &'static str, IconKind)> = QUICK.iter().filter(|(c, ..)| world(c)).map(|(c, l, _)| (*c, *l, I_QUICK)).collect();
+            let quick_world: Vec<(&'static str, &'static str, IconKind)> = QUICK.iter().filter(|(c, ..)| world(c)).map(|(c, l, _)| (*c, ql(l), I_QUICK)).collect();
             let small = |id: &'static str, label: &'static str, icon: IconKind| RibbonItem::LabeledTool(ToolDef { id, label, icon, event: ModuleEvent::Command(id.to_string()) });
             let menu = |id: &'static str, label: &'static str, icon: IconKind, items: Vec<(&'static str, &'static str, IconKind)>, default: &'static str| RibbonItem::LabeledDropdown { id, label, icon, items, default };
-            vec![
+            let mut groups = vec![
                 RibbonGroup {
-                    title: lang::tr("Locatie", "Location"),
+                    title: tr("Locatie", "Location"),
                     tools: vec![
-                        tool("GIS_LOCATIE", "Geo-locatie", I_LOCATION),
-                        small("GIS_GEBIED", "Gebied", I_AREA),
-                        small("GIS_PUNT", "Punt info", I_POINT),
-                        small("GIS_COORD", "Coördinaten", I_POINT),
+                        tool("GIS_LOCATIE", tr("Geo-locatie", "Geolocation"), I_LOCATION),
+                        small("GIS_GEBIED", tr("Gebied", "Area"), I_AREA),
+                        small("GIS_PUNT", tr("Punt info", "Point info"), I_POINT),
+                        small("GIS_COORD", tr("Coördinaten", "Coordinates"), I_POINT),
                     ],
                 },
                 // Like the FreeCAD GIS workbench toolbars: any server, worldwide.
                 RibbonGroup {
-                    title: lang::tr("Kaarten & data", "Maps & data"),
+                    title: tr("Kaarten & data", "Maps & data"),
                     tools: vec![
+                        tool("GIS_SERVICES", tr("Services wereldwijd", "Services worldwide"), I_SERVICES),
                         tool("GIS_KAART", "WMS / TMS", I_MAP),
                         tool("GIS_WFS", "WFS", I_VECTOR),
                         tool("GIS_OSM", "OpenStreetMap", I_GLOBE),
-                        RibbonItem::LargeDropdown { id: "GIS_Q_WERELD", label: lang::tr("Snel (wereld)", "Quick (world)"), icon: I_LAYERS, items: quick_world, default: "GIS_Q_OSMKAART" },
+                        RibbonItem::LargeDropdown { id: "GIS_Q_WERELD", label: tr("Snel (wereld)", "Quick (world)"), icon: I_LAYERS, items: quick_world, default: "GIS_Q_OSMKAART" },
                         // One file dialog for vector files, rasters and point clouds.
                         RibbonItem::LargeTool(ToolDef {
                             id: "GIS_BESTAND",
-                            label: lang::tr("Bestand openen", "Open file"),
+                            label: tr("Bestand openen", "Open file"),
                             icon: I_FILE,
                             event: ModuleEvent::PluginFileDialog {
                                 command: "GIS_BESTAND".into(),
-                                title: lang::tr("Geodatabestand openen", "Open a geodata file").into(),
+                                title: tr("Geodatabestand openen", "Open a geodata file").into(),
                                 filter_name: "GeoJSON, Shapefile, GeoPackage, KML/KMZ, GPX, GML, CSV, GeoTIFF, ASC, JPG/PNG + world file, LAS/LAZ, E57, PLY, PTS, XYZ".into(),
                                 extensions: gis::files::EXTENSIONS.iter().chain(gis::rasterbestand::EXTENSIONS.iter()).map(|e| e.to_string()).collect(),
                             },
                         }),
                     ],
                 },
-                // The Netherlands: PDOK, BGT/BRK/KLIC conform NLCS, AHN.
+                // Heights: the AHN in the Netherlands, Terrain Tiles elsewhere.
                 RibbonGroup {
-                    title: lang::tr("Nederland (PDOK)", "Netherlands (PDOK)"),
+                    title: tr("Hoogte", "Elevation"),
                     tools: vec![
-                        small("GIS_PDOK", "PDOK-catalogus", I_PDOK),
-                        menu(
-                            "GIS_NL_BASIS",
-                            "BGT · BRK · KLIC",
-                            I_BGT,
-                            vec![
-                                ("GIS_BGT", "BGT · BRK · KLIC (venster)", I_BGT),
-                                ("GIS_Q_BGT", "BGT importeren", I_BGT),
-                                ("GIS_BGT_BIJWERKEN", "BGT bijwerken", I_BGT),
-                                ("GIS_Q_GWSW", "GWSW-riolering", I_BGT),
-                                ("GIS_Q_BRK", "Kadaster importeren", I_KADASTER),
-                                ("GIS_KLIC", "KLIC-levering", I_KLIC),
-                                ("GIS_TEKENBLAD", "Tekenblad", I_SHEET),
-                            ],
-                            "GIS_BGT",
-                        ),
-                        menu(
-                            "GIS_NL_AHN",
-                            "AHN-hoogtes",
-                            I_AHN,
-                            vec![
-                                ("GIS_AHN", "AHN (venster)", I_AHN),
-                                ("GIS_HOOGTEPUNTEN", "Hoogtepunten", I_POINT),
-                                ("GIS_HOOGTELIJNEN", "Hoogtelijnen", I_CONTOURS),
-                                ("GIS_PROFIEL", "Profiel", I_PROFILE),
-                                ("GIS_PUNTENWOLK", "Puntenwolk", I_CLOUD),
-                            ],
-                            "GIS_AHN",
-                        ),
-                        menu("GIS_NL_KAART", "Kaartbeeld NL", I_LAYERS, quick_nl(true), "GIS_Q_LUCHTFOTO"),
-                        menu("GIS_NL_DATA", "Vectordata NL", I_QUICK, quick_nl(false), "GIS_Q_BAG"),
-                        small("GIS_TEKENBLAD", "Tekenblad", I_SHEET),
+                        small("GIS_HOOGTEPUNTEN", tr("Hoogtepunten", "Spot heights"), I_POINT),
+                        small("GIS_HOOGTELIJNEN", tr("Hoogtelijnen", "Contours"), I_CONTOURS),
+                        small("GIS_PROFIEL", tr("Profiel", "Profile"), I_PROFILE),
                     ],
                 },
-                // InfraCAD NLCS validation and quantities.
                 RibbonGroup {
-                    title: "NLCS",
-                    tools: vec![
-                        small("GIS_NLCS_CONTROLE", "Controle", I_CHECK),
-                        small("GIS_HOEVEELHEDEN", "Hoeveelheden", I_QUANTITIES),
-                        small("GIS_HOEVEELHEDEN_TABEL", "Hoeveelhedenstaat", I_TABLE),
-                        small("GIS_BGT_MUTATIE", "BGT-mutatie", I_MUTATION),
-                    ],
+                    title: tr("Uitvoer", "Output"),
+                    tools: vec![tool("GIS_TEKENBLAD", tr("Tekenblad", "Drawing sheet"), I_SHEET), small("GIS_IFC", "IFC 4x3", I_IFC), small("GIS_SERVERS", "Servers", I_SERVER)],
                 },
-                RibbonGroup { title: lang::tr("Hulpmiddelen", "Tools"), tools: vec![tool("GIS_SERVERS", "Servers", I_SERVER)] },
                 // Block libraries (vehicles), like the vehicle sets of
                 // swept-path software.
                 RibbonGroup {
-                    title: lang::tr("Bibliotheek", "Library"),
+                    title: tr("Bibliotheek", "Library"),
                     tools: vec![
-                        tool("GIS_VOERTUIGEN", lang::tr("Voertuigen", "Vehicles"), I_VEHICLE),
-                        tool("GIS_VOERTUIGOVERZICHT", lang::tr("Overzicht", "Catalogue"), I_CATALOGUE),
-                        tool("GIS_VEEGPAD", lang::tr("Veegpad", "Swept path"), I_SWEPT),
+                        tool("GIS_VOERTUIGEN", tr("Voertuigen", "Vehicles"), I_VEHICLE),
+                        small("GIS_VOERTUIGOVERZICHT", tr("Overzicht", "Catalogue"), I_CATALOGUE),
+                        small("GIS_VEEGPAD", tr("Veegpad", "Swept path"), I_SWEPT),
                     ],
                 },
-            ]
+            ];
+            if lang::dutch() {
+                // The Netherlands: PDOK, BGT/BRK/KLIC/BRO to NLCS, AHN, NLCS checks.
+                groups.insert(
+                    3,
+                    RibbonGroup {
+                        title: tr("Nederland", "Netherlands"),
+                        tools: vec![
+                            menu(
+                                "GIS_NL_BASIS",
+                                tr("Basisdata NL", "Dutch base data"),
+                                I_BGT,
+                                vec![
+                                    ("GIS_BGT", tr("BGT · BRK · KLIC (venster)", "BGT · BRK · KLIC (window)"), I_BGT),
+                                    ("GIS_Q_BGT", tr("BGT importeren", "Import BGT"), I_BGT),
+                                    ("GIS_BGT_BIJWERKEN", tr("BGT bijwerken", "Update BGT"), I_BGT),
+                                    ("GIS_Q_BRK", tr("Kadaster importeren", "Import cadastre"), I_KADASTER),
+                                    ("GIS_KLIC", tr("KLIC-levering", "KLIC delivery"), I_KLIC),
+                                    ("GIS_Q_GWSW", tr("GWSW-riolering", "GWSW sewers"), I_BGT),
+                                    ("GIS_Q_SONDERINGEN", tr("Sonderingen en boringen (BRO)", "CPTs and boreholes (BRO)"), I_CPT),
+                                    ("GIS_AHN", tr("AHN (venster)", "AHN (window)"), I_AHN),
+                                    ("GIS_PUNTENWOLK", tr("AHN-puntenwolk", "AHN point cloud"), I_CLOUD),
+                                    ("GIS_PDOK", tr("PDOK-catalogus", "PDOK catalogue"), I_PDOK),
+                                ],
+                                "GIS_BGT",
+                            ),
+                            menu("GIS_NL_KAART", tr("Kaartbeeld NL", "Dutch maps"), I_LAYERS, quick_nl(true), "GIS_Q_LUCHTFOTO"),
+                            menu("GIS_NL_DATA", tr("Vectordata NL", "Dutch vector data"), I_QUICK, quick_nl(false), "GIS_Q_BAG"),
+                            menu(
+                                "GIS_NL_NLCS",
+                                "NLCS",
+                                I_CHECK,
+                                vec![
+                                    ("GIS_NLCS_CONTROLE", tr("Controle", "Check"), I_CHECK),
+                                    ("GIS_HOEVEELHEDEN", tr("Hoeveelheden", "Quantities"), I_QUANTITIES),
+                                    ("GIS_HOEVEELHEDEN_TABEL", tr("Hoeveelhedenstaat", "Bill of quantities"), I_TABLE),
+                                    ("GIS_BGT_MUTATIE", tr("BGT-mutatie", "BGT mutation"), I_MUTATION),
+                                ],
+                                "GIS_NLCS_CONTROLE",
+                            ),
+                        ],
+                    },
+                );
+            }
+            groups
         })
     }
 }
@@ -527,6 +553,47 @@ fn mutation_command(host: &mut dyn HostApi, cmd: &str) {
     });
 }
 
+/// `GIS_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee]`: the drawing as IFC 4.3
+/// (IFC4X3_ADD2), beside it as `<tekening>_IFC4X3.ifc`.
+fn ifc_command(host: &mut dyn HostApi, cmd: &str) {
+    let args = civiel::api::Args::parse(cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or(""));
+    let (path, selection, texts) = ifc::args(&args);
+    host.push_info("[Open Infra] IFC 4x3 exporteren …");
+    std::thread::spawn(move || {
+        let _ = civiel::api::take();
+        match ifc::command(path, selection, texts, &|_| {}) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&format!("GIS_IFC: {e}")),
+        }
+    });
+}
+
+/// `GIS_Q_SERVER <id> [LAAG=] [RES=m/px]` (or `JAAR=` for Topotijdreis):
+/// import any server of the catalogue by id, for scripts and agents.
+fn server_command(host: &mut dyn HostApi, cmd: &str) {
+    let words: Vec<&str> = cmd.split_whitespace().skip(1).collect();
+    let kv = |k: &str| words.iter().find_map(|w| w.split_once('=').filter(|(a, _)| a.eq_ignore_ascii_case(k)).map(|(_, v)| v.to_string()));
+    let id = match kv("JAAR") {
+        Some(y) => format!("topotijdreis-{y}"),
+        None => match words.iter().find(|w| !w.contains('=')) {
+            Some(id) => id.to_string(),
+            None => {
+                host.push_error("[Open Infra] GIS_Q_SERVER <id> [LAAG=] [RES=] of GIS_Q_SERVER JAAR=<1815–2014>");
+                bridge::reply(false, "GIS_Q_SERVER <id> [LAAG=] [RES=]");
+                return;
+            }
+        },
+    };
+    let Some(site) = require_site(host) else { return };
+    let layer = kv("LAAG");
+    let res = kv("RES").and_then(|r| r.replace(',', ".").parse::<f64>().ok());
+    host.push_info(&format!("[Open Infra] {id} ophalen…"));
+    std::thread::spawn(move || match import::run_server(&site, &id, layer.as_deref(), res, &|_| {}) {
+        Ok(m) => bridge::info(&m),
+        Err(e) => bridge::error(&format!("GIS_Q_SERVER {id}: {e}")),
+    });
+}
+
 fn require_site(host: &mut dyn HostApi) -> Option<Site> {
     let s = bridge::site();
     if s.is_none() {
@@ -615,22 +682,33 @@ fn site_command(host: &mut dyn HostApi, cmd: &str) {
     } else {
         format!("{b:.5} N {a:.5} E")
     };
-    if rd {
-        site.reproject_origin();
-        site.set_origin(a, b);
-    } else {
-        site.lon = a;
-        site.lat = b;
-        site.reproject_origin();
-    }
-    std::thread::spawn(move || match bridge::save_site(&site) {
+    // A CRS that is not built in comes from epsg.io first (off the host's
+    // thread); without it the origin would keep the previous location.
+    std::thread::spawn(move || {
+        if let Err(e) = gis::crs::ensure(&site.crs) {
+            return bridge::error(&format!("GIS_SITE: {}: {e}", site.crs));
+        }
+        if rd {
+            site.reproject_origin();
+            site.set_origin(a, b);
+        } else {
+            site.lon = a;
+            site.lat = b;
+            site.reproject_origin();
+        }
+        save_site_reply(site)
+    });
+}
+
+fn save_site_reply(site: Site) {
+    match bridge::save_site(&site) {
         Ok(()) => {
             civiel::api::note("projectlocatie", serde_json::json!({"naam": site.label, "crs": site.crs, "x": site.origin_e, "y": site.origin_n, "breedte": site.width, "hoogte": site.height, "absoluut": site.absolute}));
             bridge::info(&format!("Projectlocatie {}: X {:.2} Y {:.2} ({}), {} × {} m.", site.label, site.origin_e, site.origin_n, site.crs, site.width, site.height));
             ui::send(ui::UiMsg::SiteChanged);
         }
         Err(e) => bridge::error(&format!("GIS_SITE: {e}")),
-    });
+    }
 }
 
 /// Base data from the command line or a ribbon button, without the window.
@@ -673,7 +751,7 @@ fn words(cmd: &str) -> Vec<&str> {
 }
 
 /// A drawing without an Open Infra site but with a GEODATA object (set in
-/// AutoCAD, Civil 3D or BricsCAD) gets its site from that object, once per
+/// other CAD programs) gets its site from that object, once per
 /// tab. The drawing is read on a worker through the bridge, never with
 /// `host.document()` in dispatch (that stalls dispatch on large drawings); a
 /// drawing too large for a full snapshot is skipped.
@@ -728,6 +806,107 @@ fn file_import(host: &mut dyn HostApi, path: &str, crs: Option<String>) {
     std::thread::spawn(move || match bestand::import_path(&site, &path, crs.as_deref(), &|_| {}) {
         Ok(m) => bridge::info(&m),
         Err(e) => bridge::error(&format!("{}: {e}", path.display())),
+    });
+}
+
+/// The point `GIS_SERVICES` filters on: `LON=`/`LAT=`, or the site with `HIER`.
+fn services_location(args: &civiel::api::Args) -> Result<Option<[f64; 2]>, String> {
+    let (lon, lat) = (args.f64("LON")?, args.f64("LAT")?);
+    if let (Some(lon), Some(lat)) = (lon, lat) {
+        return Ok(Some([lon, lat]));
+    }
+    if args.words.iter().any(|w| w.eq_ignore_ascii_case("HIER") || w.eq_ignore_ascii_case("HERE")) {
+        let s = bridge::site().ok_or("HIER: geen projectlocatie; geef LON= en LAT= of stel eerst GIS_SITE in")?;
+        return Ok(Some([s.lon, s.lat]));
+    }
+    Ok(None)
+}
+
+/// `GIS_SERVICES [ZOEK=<tekst>] [CATEGORIE=<c>[;<c>]] [TYPE=WMS|WFS|XYZ] [HIER | LON= LAT=] [LIMIET=50]`:
+/// search the service catalogue; the matches come back as JSON (`ID=`).
+/// Without arguments it opens the service browser.
+fn services_command(host: &mut dyn HostApi, cmd: &str) {
+    let rest = cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or("");
+    let args = civiel::api::Args::parse(rest);
+    if args.is_empty() {
+        open(host, ui::Tab::Services);
+        bridge::reply(true, "servicebrowser geopend");
+        return;
+    }
+    let result = (|| -> Result<String, String> {
+        use gis::catalog;
+        let mut text: Vec<String> = ["ZOEK", "SEARCH", "Q"].iter().filter_map(|k| args.str(k)).map(str::to_string).collect();
+        text.extend(args.words.iter().filter(|w| !w.eq_ignore_ascii_case("HIER") && !w.eq_ignore_ascii_case("HERE")).cloned());
+        let mut categories = Vec::new();
+        for c in args.str("CATEGORIE").or(args.str("CATEGORY")).unwrap_or("").split([';', ',']).map(|c| catalog::fold(c.trim())).filter(|c| !c.is_empty()) {
+            let found = catalog::categories_for(&c);
+            if found.is_empty() {
+                return Err(format!("onbekende categorie '{c}'; bekend: {}", catalog::CATEGORIES.iter().map(|c| c.0).collect::<Vec<_>>().join(", ")));
+            }
+            categories.extend(found.into_iter().map(str::to_string));
+        }
+        let mut kinds = Vec::new();
+        for t in args.str("TYPE").unwrap_or("").split([';', ',']).map(str::trim).filter(|t| !t.is_empty()) {
+            kinds.push(match t.to_ascii_uppercase().as_str() {
+                "WMS" => gis::servers::ServerKind::Wms,
+                "WFS" => gis::servers::ServerKind::Wfs,
+                "XYZ" | "TMS" | "TILES" => gis::servers::ServerKind::Xyz,
+                other => return Err(format!("TYPE={other}: kies WMS, WFS of XYZ")),
+            });
+        }
+        let at = services_location(&args)?;
+        let limit = args.f64("LIMIET")?.or(args.f64("LIMIT")?).unwrap_or(50.0).max(1.0) as usize;
+        let all = catalog::all();
+        let hits = catalog::search(&all, &catalog::Query { text: text.join(" "), categories, kinds, at });
+        let list: Vec<serde_json::Value> = hits.iter().take(limit).map(|&i| all[i].json(at)).collect();
+        civiel::api::note("count", hits.len());
+        civiel::api::note("services", list);
+        if let Some(p) = at {
+            civiel::api::note("location", serde_json::json!({"lon": p[0], "lat": p[1]}));
+        }
+        let names: Vec<String> = hits.iter().take(5).map(|&i| format!("{} ({}, {})", all[i].name, all[i].kind.label(), all[i].country)).collect();
+        Ok(format!("{} {}{}{}", hits.len(), lang::tr("diensten gevonden", "services found"), if names.is_empty() { "" } else { ": " }, names.join("; ")))
+    })();
+    match result {
+        Ok(m) => {
+            host.push_info(&format!("[Open Infra] {m}"));
+            bridge::reply(true, &m);
+        }
+        Err(e) => {
+            host.push_error(&format!("[Open Infra] GIS_SERVICES: {e}"));
+            bridge::reply(false, &e);
+        }
+    }
+}
+
+/// `GIS_SERVICE_LOAD DIENST=<id> [LAAG=<laag>] [RESOLUTIE=0.25] [LIMIET=5000]`: one
+/// layer of a catalogue service (id from `GIS_SERVICES`) into the project area.
+fn service_load_command(host: &mut dyn HostApi, cmd: &str) {
+    let Some(site) = require_site(host) else { return };
+    let rest = cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or("");
+    let args = civiel::api::Args::parse(rest);
+    let id = args.str("DIENST").or(args.str("SERVICE")).or(args.words.first().map(String::as_str)).unwrap_or("").to_string();
+    let Some(service) = gis::catalog::all().into_iter().find(|s| s.id.eq_ignore_ascii_case(&id)) else {
+        let msg = format!("GIS_SERVICE_LOAD DIENST=<id> [LAAG=<laag>]: {} '{id}' ({})", lang::tr("onbekende dienst", "unknown service"), lang::tr("zie GIS_SERVICES", "see GIS_SERVICES"));
+        host.push_error(&format!("[Open Infra] {msg}"));
+        bridge::reply(false, &msg);
+        return;
+    };
+    let layer = args.str("LAAG").or(args.str("LAYER")).map(str::to_string);
+    let num = |nl: &str, en: &str| -> Result<Option<f64>, String> { Ok(args.f64(nl)?.or(args.f64(en)?)) };
+    let (res, limit) = match (num("RESOLUTIE", "RESOLUTION"), num("LIMIET", "LIMIT")) {
+        (Ok(r), Ok(l)) => (r.unwrap_or(if service.kind == gis::servers::ServerKind::Xyz { 0.5 } else { 0.25 }).max(0.02), l.unwrap_or(5000.0).max(1.0) as usize),
+        (Err(e), _) | (_, Err(e)) => {
+            host.push_error(&format!("[Open Infra] GIS_SERVICE_LOAD: {e}"));
+            bridge::reply(false, &e);
+            return;
+        }
+    };
+    host.push_info(&format!("[Open Infra] {} {} …", service.name, lang::tr("laden", "loading")));
+    let server = service.to_map_server();
+    std::thread::spawn(move || match import::service_layer(&site, &server, None, None, layer.as_deref(), res, limit, &|_| {}) {
+        Ok(m) => bridge::info(&m),
+        Err(e) => bridge::error(&format!("GIS_SERVICE_LOAD {}: {e}", server.id)),
     });
 }
 
@@ -816,6 +995,8 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_OSM" => open(host, ui::Tab::Osm),
             "GIS_PDOK" => open(host, ui::Tab::Pdok),
             "GIS_SERVERS" => open(host, ui::Tab::Servers),
+            "GIS_SERVICES" | "GIS_DIENSTEN" => services_command(host, cmd),
+            "GIS_SERVICE_LOAD" | "GIS_DIENST_LADEN" => service_load_command(host, cmd),
             "GIS_COORD" => open(host, ui::Tab::Coords),
             "GIS_BGT" | "GIS_NLCS" => open(host, ui::Tab::Nlcs),
             "GIS_AHN" => open(host, ui::Tab::Ahn),
@@ -838,6 +1019,7 @@ impl BuiltinPlugin for OpenInfra {
             }
             "GIS_HOEVEELHEDEN_TABEL" => host.start_interactive(Box::new(TableCmd)),
             "GIS_BGT_MUTATIE" => mutation_command(host, cmd),
+            "GIS_IFC" => ifc_command(host, cmd),
             "GIS_HOOGTEPUNTEN" | "GIS_HOOGTELIJNEN" | "GIS_PUNTENWOLK" => ahn_command(host, &verb),
             "GIS_PROFIEL" => {
                 let Some(site) = require_site(host) else { return true };
@@ -851,6 +1033,7 @@ impl BuiltinPlugin for OpenInfra {
                 }
             }
             "GIS_SITE" => site_command(host, cmd),
+            "GIS_Q_SERVER" => server_command(host, cmd),
             "GIS_Q_BGT" | "GIS_Q_BRK" | "GIS_TEKENBLAD" | "GIS_KLIC_IMPORT" => {
                 let arg = cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or("");
                 base_data(host, &verb, arg);
@@ -935,6 +1118,26 @@ impl BuiltinPlugin for OpenInfra {
                     }
                 });
             }
+            "GIS_Q_SONDERINGEN" | "GIS_SONDERINGEN" => {
+                // The CPTs and boreholes of the BRO in plan; BRON=sonderingen|boringen.
+                if require_site(host).is_none() {
+                    return true;
+                }
+                let args = civiel::api::Args::parse(cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or(""));
+                let kinds = match civiel::ondergrond::kinds(args.str("BRON")) {
+                    Ok(k) => k,
+                    Err(e) => {
+                        host.push_error(&format!("[Open Infra] GIS_Q_SONDERINGEN: {e}"));
+                        bridge::reply(false, &e);
+                        return true;
+                    }
+                };
+                host.push_info(&format!("[Open Infra] {} …", lang::tr("Sonderingen en boringen (BRO) ophalen", "Fetching CPTs and boreholes (BRO)")));
+                std::thread::spawn(move || match civiel::ondergrond::overview(&civiel::settings(), &kinds, &|_| {}) {
+                    Ok(m) => bridge::info(&m),
+                    Err(e) => bridge::error(&format!("BRO: {e}")),
+                });
+            }
             "GIS_BESTAND_IMPORT" | "GIS_FILE_IMPORT" => {
                 let rest = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim()).unwrap_or("");
                 let (path, crs) = match rest.rsplit_once(char::is_whitespace) {
@@ -951,9 +1154,12 @@ impl BuiltinPlugin for OpenInfra {
                  snel: GIS_Q_LUCHTFOTO, GIS_Q_KADASTER, GIS_Q_AHN, GIS_Q_OSMKAART, GIS_Q_SATELLIET, GIS_Q_BAG, \
                  GIS_Q_PERCELEN, GIS_Q_NWB, GIS_Q_HECTO, GIS_Q_SPOOR, GIS_Q_OSM; \
                  GIS_SITE <lon> <lat> [b] [h] [EPSG:code] [RELATIEF] [naam] | GIS_SITE RD <x> <y> [b] [h] [RELATIEF] [naam]; \
+                 diensten / services: GIS_SERVICES | GIS_DIENSTEN (venster) of [ZOEK=<tekst>] [CATEGORIE=kadaster] [TYPE=WMS|WFS|XYZ] [HIER | LON= LAT=] [LIMIET=50], \
+                 GIS_SERVICE_LOAD | GIS_DIENST_LADEN DIENST=<id> [LAAG=<laag>] [RESOLUTIE=0.25] [LIMIET=5000]; \
                  NLCS: GIS_NLCS_CONTROLE, GIS_NLCS_RAPPORT, GIS_NLCS_HERSTEL, GIS_HOEVEELHEDEN, GIS_HOEVEELHEDEN_CSV, GIS_HOEVEELHEDEN_TABEL, GIS_BGT_MUTATIE [BRONHOUDER=G0505] [GEREALISEERD] [SELECTIE]; \
+                 IFC 4x3: GIS_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee]; \
                  AHN: GIS_AHN (venster), GIS_HOOGTEPUNTEN, GIS_HOOGTELIJNEN, GIS_PROFIEL, GIS_PUNTENWOLK; \
-                 NLCS: GIS_BGT (venster), GIS_Q_BGT, GIS_BGT_BIJWERKEN | GIS_BGT_UPDATE, GIS_Q_BRK, GIS_Q_GWSW, GIS_KLIC [bestand], GIS_KLIC_IMPORT <bestand>, GIS_TEKENBLAD [onderwerp]; \
+                 NLCS: GIS_BGT (venster), GIS_Q_BGT, GIS_BGT_BIJWERKEN | GIS_BGT_UPDATE, GIS_Q_BRK, GIS_Q_GWSW, GIS_Q_SONDERINGEN [BRON=sonderingen|boringen] (BRO), GIS_KLIC [bestand], GIS_KLIC_IMPORT <bestand>, GIS_TEKENBLAD [onderwerp]; \
                  Bibliotheek / library: GIS_VOERTUIGEN | GIS_VEHICLES (venster), GIS_VOERTUIG | GIS_VEHICLE <id> [ZIJ|SIDE], \
                  GIS_VOERTUIGOVERZICHT | GIS_VEHICLE_CATALOG [categorie] [ZIJ|SIDE], \
                  GIS_VEEGPAD | GIS_SWEPT_PATH <id> [interval m] (geselecteerde lijn of punten); \
@@ -961,7 +1167,7 @@ impl BuiltinPlugin for OpenInfra {
                  GIS_RASTER_IMPORT <GeoTIFF/ASC/JPG/PNG+world file/LAS/LAZ/E57/PLY/PTS/XYZ>; scripts: ID=<naam> → <config>/OpenCADStudio/open-infra/api/<naam>.json.",
             ),
             v => match QUICK.iter().find(|(c, ..)| *c == v) {
-                Some((_, label, q)) => quick(host, q, label),
+                Some((_, label, q)) => quick(host, q, ql(label)),
                 None => {
                     host.push_error(&format!("[Open Infra] onbekend commando {v} — zie GIS_HELP"));
                     bridge::reply(false, &format!("onbekend commando {v}"));

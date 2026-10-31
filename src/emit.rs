@@ -59,6 +59,9 @@ pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64
                 ur[1] - ll[1],
             );
             img.fade = fade.min(90);
+            // PNG maps (cadastre, Natura 2000, …) lie over the photo: let
+            // their transparent background show what is beneath.
+            img.set_transparent(p.path.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")));
             on_layer(EntityType::RasterImage(img), layer)
         })
         .collect()

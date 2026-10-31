@@ -76,6 +76,21 @@ pub struct WorldPreset {
     pub attribution: String,
     #[serde(default)]
     pub terms: String,
+    #[serde(default)]
+    pub provider: String,
+    #[serde(default)]
+    pub license: String,
+    /// Where the service has data, as GIS2BIM describes it.
+    #[serde(default)]
+    pub coverage: String,
+    /// Coordinate systems, the one GIS2BIM requests first.
+    #[serde(default)]
+    pub crs: Vec<String>,
+    /// Coverage in WGS 84 [west, south, east, north].
+    #[serde(default)]
+    pub bbox: Option<[f64; 4]>,
+    #[serde(default)]
+    pub verified: String,
 }
 
 pub fn world() -> &'static [WorldPreset] {
@@ -105,7 +120,7 @@ pub fn presets() -> Vec<MapServer> {
     v
 }
 
-fn builtin() -> Vec<MapServer> {
+pub(crate) fn builtin() -> Vec<MapServer> {
     use ServerKind::*;
     let nl = crate::lang::tr("Nederland", "Netherlands");
     let vl = crate::lang::tr("België (Vlaanderen)", "Belgium (Flanders)");
@@ -125,6 +140,16 @@ fn builtin() -> Vec<MapServer> {
         preset("pdok-spoorwegen-wfs", Wfs, nl, "PDOK Spoorwegen (ProRail)", "https://service.pdok.nl/prorail/spoorwegen/wfs/v1_0", "spoorwegen:spooras", "ProRail / PDOK"),
         preset("pdok-bestuurlijk-wfs", Wfs, nl, "PDOK Bestuurlijke gebieden", "https://service.pdok.nl/kadaster/bestuurlijkegebieden/wfs/v1_0", "", "Kadaster / PDOK"),
         preset("pdok-natura2000-wfs", Wfs, nl, "PDOK Natura 2000", "https://service.pdok.nl/rvo/natura2000/wfs/v1_0", "", "RVO / PDOK"),
+        preset("pdok-natura2000-wms", Wms, nl, "PDOK Natura 2000 (kaart)", "https://service.pdok.nl/rvo/natura2000/wms/v1_0", "natura2000", "RVO / PDOK"),
+        preset("pdok-bro-geomorfologie-wms", Wms, nl, "BRO Geomorfologische kaart", "https://service.pdok.nl/bzk/bro-geomorfologischekaart/wms/v2_0", "geomorphological_area", "BRO / TNO / PDOK"),
+        preset("pdok-bro-bodemkaart-wms", Wms, nl, "BRO Bodemkaart", "https://service.pdok.nl/bzk/bro-bodemkaart/wms/v1_0", "soilarea", "BRO / WUR / PDOK"),
+        // Nederland — historische kaarten
+        preset("hisgis-minuutplans-1832", Xyz, nl, "HisGIS — kadastrale minuutplans 1832", "https://geoservices.hisgis.nl/tiles/minuutplans/{z}/{x}/{y}", "", "HisGIS (Fryske Akademy / KNAW)"),
+        preset("hisgis-kaart-1832", Xyz, nl, "HisGIS — kaart van 1832", "https://geoservices.hisgis.nl/wmts/osm1832/{z}/{x}/{y}.png", "", "HisGIS (Fryske Akademy / KNAW)"),
+        tijdreis(1850),
+        tijdreis(1900),
+        tijdreis(1950),
+        tijdreis(2000),
         // België — Vlaanderen
         preset("vl-ortho-wms", Wms, vl, "Digitaal Vlaanderen — Orthofoto", "https://geo.api.vlaanderen.be/OMWRGBMRVL/wms", "", "Digitaal Vlaanderen"),
         preset("vl-grb-wfs", Wfs, vl, "Digitaal Vlaanderen — GRB", "https://geo.api.vlaanderen.be/GRB/wfs", "", "Digitaal Vlaanderen"),
@@ -176,5 +201,25 @@ pub fn all() -> Vec<MapServer> {
 }
 
 pub fn find(id: &str) -> Option<MapServer> {
+    if let Some(year) = id.strip_prefix("topotijdreis-").and_then(|y| y.parse().ok()) {
+        return Some(tijdreis(year));
+    }
     all().into_iter().find(|s| s.id.eq_ignore_ascii_case(id))
+}
+
+/// Topotijdreis: the Kadaster topographic map of a year (1815–2014), an
+/// ArcGIS tile cache in RD (`topotijdreis-<jaar>` works for every year).
+pub fn tijdreis(year: u32) -> MapServer {
+    let nl = crate::lang::tr("Nederland", "Netherlands");
+    let mut s = preset(
+        &format!("topotijdreis-{year}"),
+        ServerKind::Xyz,
+        nl,
+        &format!("Topotijdreis {year} (Kadaster)"),
+        &format!("https://tiles.arcgis.com/tiles/nSZVuSZjHpEZZbRo/arcgis/rest/services/Historische_tijdreis_{year}/MapServer"),
+        "",
+        "Kadaster / Esri Nederland (Topotijdreis)",
+    );
+    s.max_zoom = None;
+    s
 }

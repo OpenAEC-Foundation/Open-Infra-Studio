@@ -65,7 +65,27 @@ pub fn get(url: &str) -> Result<Fetched, String> {
 
 pub fn get_text(url: &str) -> Result<String, String> {
     let f = get(url)?;
-    String::from_utf8(f.body).map_err(|_| format!("{}: geen geldige UTF-8 tekst", host_of(url)))
+    Ok(decode_text(f.body))
+}
+
+/// UTF-8, or else Latin-1 (some services answer in ISO-8859-1, e.g. the
+/// Spanish cadastre): every byte one character, and an XML declaration that
+/// names the old encoding says UTF-8 from then on.
+pub fn decode_text(body: Vec<u8>) -> String {
+    match String::from_utf8(body) {
+        Ok(s) => s,
+        Err(e) => {
+            let text: String = e.into_bytes().iter().map(|b| *b as char).collect();
+            match text.find("?>").filter(|_| text.starts_with("<?xml")) {
+                Some(end) => {
+                    let decl = &text[..end];
+                    let fixed = ["ISO-8859-1", "iso-8859-1", "ISO-8859-15", "windows-1252", "Windows-1252"].iter().fold(decl.to_string(), |d, enc| d.replace(enc, "UTF-8"));
+                    format!("{fixed}{}", &text[end..])
+                }
+                None => text,
+            }
+        }
+    }
 }
 
 pub fn get_json(url: &str) -> Result<serde_json::Value, String> {
@@ -112,6 +132,11 @@ pub fn post_form(url: &str, form: &[(&str, &str)], timeout_s: u64) -> Result<Fet
     finish(url, agent(timeout_s).post(url).send_form(form.iter().copied()))
 }
 
+/// POST a JSON body (search APIs such as the BRO's) with an explicit timeout.
+pub fn post_json(url: &str, body: &serde_json::Value, timeout_s: u64) -> Result<Fetched, String> {
+    finish(url, agent(timeout_s).post(url).header("Content-Type", "application/json").header("Accept-Language", "nl,en").send(body.to_string()))
+}
+
 /// Fetch an image; an XML/HTML answer is turned into the server's own error.
 pub fn get_image(url: &str) -> Result<Vec<u8>, String> {
     let f = get(url)?;
@@ -126,7 +151,8 @@ pub fn get_image(url: &str) -> Result<Vec<u8>, String> {
 
 /// The message of an OGC ServiceException / ows:ExceptionText.
 pub fn service_error(text: &str) -> Option<String> {
-    for tag in ["<ServiceException>", "<ServiceException ", ":ServiceException>", ":ServiceException ", ":ExceptionText>", "<ExceptionText>"] {
+    // OGC exceptions, and the BRO's `brocom:rejectionReason`.
+    for tag in ["<ServiceException>", "<ServiceException ", ":ServiceException>", ":ServiceException ", ":ExceptionText>", "<ExceptionText>", ":rejectionReason>"] {
         let Some(open) = text.find(tag) else { continue };
         let Some(start) = text[open..].find('>').map(|i| open + i + 1) else { continue };
         let Some(end) = text[start..].find("</").map(|i| start + i) else { continue };
@@ -189,6 +215,12 @@ pub fn clean_service_url(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn latin1_text() {
+        let t = decode_text(b"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><a>Espa\xf1a</a>".to_vec());
+        assert_eq!(t, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><a>España</a>");
+    }
 
     #[test]
     fn params_replace_existing_case_insensitively() {

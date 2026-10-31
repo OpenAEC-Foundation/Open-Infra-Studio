@@ -331,7 +331,9 @@ class Tester:
         title = WINDOWS[key][0]
         w = self.window(key)
         nodes = self.ui.nodes(w)
-        pages = [n["name"] for n in nodes if is_button(n) and 0 <= n["x"] < NAV_X and n["name"]]
+        # The language and Dutch-modules switches sit in the navigation column too.
+        switches = {"NL", "EN", "aan", "uit", "on", "off"}
+        pages = [n["name"] for n in nodes if is_button(n) and 0 <= n["x"] < NAV_X and n["name"] and n["name"] not in switches]
         print(f"\n=== {title}: {len(pages)} pagina's: {', '.join(pages)}", flush=True)
         for page in pages:
             if self.a.pagina and self.a.pagina.lower() not in page.lower():
