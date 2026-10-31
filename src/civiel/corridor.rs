@@ -1490,7 +1490,9 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
     // The design surface and the corridor's lines, for later commands.
     let first_line = (mesh_count + other_meshes).min(handles.len());
     crate::bridge::index_add("tin", "N", &handles[..mesh_count.min(handles.len())], false);
-    crate::bridge::index_add("corridor", &format!("Corridor {name}"), &handles[first_line..(first_line + lines_n).min(handles.len())], true);
+    // A corridor over a station range joins the others on its axis.
+    let whole = req.from.is_none() && req.to.is_none();
+    crate::bridge::index_add("corridor", &format!("Corridor {name}"), &handles[first_line..(first_line + lines_n).min(handles.len())], whole);
     // The earthwork list beside the drawing.
     let mut csv = String::from(crate::lang::tr(
         "Station;Afstand (m);Ontwerphoogte (m);Afgraven (m2);Ophogen (m2);Afgraven (m3);Ophogen (m3);Balans (m3);Afgraven tot onderkant (m3);Ophogen tot onderkant (m3)\n",

@@ -275,8 +275,10 @@ def main():
             return False, r["message"]
         k = r["data"]["klassen"]
         text = path.read_text(errors="replace") if path.exists() else ""
-        ok = k.get("IfcCourse", 0) >= 10 and k.get("IfcKerb", 0) >= 3 and k.get("IfcRoad", 0) >= 8
+        # One road per axis (the arm corridors of an axis share it), the junction and the roundabout.
+        ok = k.get("IfcCourse", 0) >= 10 and k.get("IfcKerb", 0) >= 3 and k.get("IfcRoad", 0) >= 6
         ok &= "IFCCOURSE(" in text and ".PAVEMENT." in text and "IFCKERB(" in text and "'menggranulaat (fundering)'" in text
+        ok &= "IFCROAD(" in text and "'Kruispunt Hoofdstraat / Zijweg'" in text and "'Rotonde Rotonde-WO / Rotonde-ZN'" in text
         ok &= r["data"]["overgeslagen"].get("profieltype", 0) > 0
         return ok, ", ".join(f"{c} {n}" for c, n in sorted(k.items()) if c != "IfcAnnotation") + f"; overgeslagen {r['data']['overgeslagen']}"
 
