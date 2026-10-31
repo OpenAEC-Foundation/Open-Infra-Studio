@@ -352,6 +352,9 @@ fn geometry(e: &EntityType, fr: &Frame) -> Result<Geo, &'static str> {
         }
         EntityType::RasterImage(_) => Err("kaartbeeld (raster)"),
         EntityType::Hatch(_) => Err("arcering"),
+        // A survey symbol (placed from a point code) stands for its object at
+        // the measured point; other blocks (vehicles, sheets) stay out.
+        EntityType::Insert(i) if crate::civiel::data_value(e, "code").is_some() => Ok(Geo::Point(p(&i.insert_point))),
         EntityType::Insert(_) => Err("blokverwijzing"),
         EntityType::Viewport(_) => Err("viewport"),
         EntityType::Dimension(_) => Err("maatvoering"),
@@ -411,6 +414,12 @@ fn get<'a>(d: &'a Data, key: &str) -> Option<&'a str> {
 /// KLIC cables and pipes, after the NLCS objects of `nlcs::klic_object`.
 fn klic(o: &str, ot: Option<String>) -> Class {
     let electric = o.starts_with("ET_") || o.starts_with("DATA_");
+    if o.contains("BRANDHYDRANT") {
+        return class("IfcFireSuppressionTerminal", Some("FIREHYDRANT"), ot);
+    }
+    if o.contains("STRAATPOT") {
+        return class("IfcPipeFitting", Some("NOTDEFINED"), ot);
+    }
     if o.contains("MANTELBUIS") || o.contains("KABELBED") {
         return class("IfcCableCarrierSegment", Some("CONDUITSEGMENT"), ot);
     }
@@ -430,6 +439,12 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
     }
     if get(data, "bron") == Some("waterpeil") {
         return Ok(Class { role: Role::Terrain, ..class("IfcGeographicElement", Some("USERDEFINED"), Some("Waterpeil".into())) });
+    }
+    // Civil analyses without an NLCS object, by their object data.
+    for (key, what) in [("stroomgebied", "Stroomgebied"), ("plas", "Plas"), ("waterdruppel", "Waterdruppel"), ("vak", "Parkeervak")] {
+        if get(data, key).is_some() && ln.is_none() {
+            return Ok(annotation("USERDEFINED", Some(what.into())));
+        }
     }
     let Some(ln) = ln else {
         // Not an NLCS layer: GIS imports (OpenStreetMap, WFS, files) and the rest.
@@ -483,6 +498,7 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
         "KL" => klic(o, ot),
         "RI" => match o {
             _ if o.contains("PUT") => class("IfcDistributionChamberElement", Some("MANHOLE"), ot),
+            _ if o.contains("KOLK") => class("IfcDistributionChamberElement", Some("SUMP"), ot),
             _ if o.contains("GOOT") => class("IfcPipeSegment", Some("GUTTER"), ot),
             _ => class("IfcPipeSegment", Some("NOTDEFINED"), ot),
         },
@@ -1654,6 +1670,35 @@ pub mod tests {
         }
         // Local coordinates: metres from the base point; the base point in the map conversion.
         assert!(ifc.contains(",105000.,425000.,0.,1.,0.,$);"));
+    }
+
+    #[test]
+    fn survey_symbols_parcels_and_water_analyses() {
+        use ocs_plugin_api::host::codec::entities::Insert;
+        let mut doc = CadDocument::new();
+        let tree = on(EntityType::Insert(Insert::new("OI_SYMBOOL_BOOM", Vector3::new(10.0, 5.0, 1.5))), &nl("GR", "BOOM", Element::S, Status::B), &[("code", "SBM"), ("soort", "Eik")]);
+        let gully = on(EntityType::Insert(Insert::new("OI_SYMBOOL_KOLK", Vector3::new(12.0, 5.0, 1.5))), &nl("RI", "GWA_KOLK", Element::S, Status::B), &[("code", "SSK")]);
+        let hydrant = on(EntityType::Insert(Insert::new("OI_SYMBOOL_BRANDKRAAN", Vector3::new(14.0, 5.0, 1.5))), &nl("KL", "WATER_BRANDLEIDING_BRANDHYDRANT", Element::S, Status::B), &[("code", "SBKR")]);
+        let vehicle = on(EntityType::Insert(Insert::new("OI_CAR_TOP", Vector3::new(0.0, 0.0, 0.0))), "OI-VOERTUIGEN", &[("vehicle", "car")]);
+        let parcel = on(lw(&[[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]], true, 0.0), &nl("KG", "GRENS_PERCEEL", Element::G, Status::N), &[("perceel", "P1"), ("oppervlakte_m2", "400.00")]);
+        let catchment = on(lw(&[[0.0, 0.0], [30.0, 0.0], [30.0, 30.0]], true, 0.0), "OI-STROOMGEBIED", &[("stroomgebied", "SG1"), ("oppervlakte_m2", "450.0")]);
+        let pond = on(lw(&[[1.0, 1.0], [3.0, 1.0], [3.0, 3.0]], true, 0.0), "OI-PLAS", &[("plas", "1"), ("volume_m3", "0.40")]);
+        let drop = on(line3(&[[0.0, 0.0, 2.0], [5.0, 0.0, 1.5]]), "OI-WATERDRUPPEL", &[("waterdruppel", "1")]);
+        for e in [tree, gully, hydrant, vehicle, parcel, catchment, pond, drop] {
+            doc.add_entity(e).unwrap();
+        }
+        let src = Source { doc: &doc, f: 1.0, site: None, name: "overig.dwg".into() };
+        let mut r = Report::default();
+        let out = String::from_utf8(export(&src, &Options::default(), Vec::new(), &mut r).unwrap()).unwrap();
+        let n = |k: &str| r.classes.get(k).copied().unwrap_or(0);
+        assert_eq!(n("IfcGeographicElement"), 1, "the tree: {:?}", r.classes);
+        assert_eq!(n("IfcDistributionChamberElement"), 1, "the gully");
+        assert_eq!(n("IfcFireSuppressionTerminal"), 1, "the hydrant");
+        assert_eq!(n("IfcAnnotation"), 4, "parcel, catchment, pond and drop: {:?}", r.classes);
+        assert_eq!(r.skipped.get("blokverwijzing"), Some(&1), "the vehicle stays out");
+        for needle in [".VEGETATION.", ".SUMP.", ".FIREHYDRANT.", "'Stroomgebied'", "'Plas'", "'Waterdruppel'", "IFCLABEL('P1')", "IFCLABEL('SG1')"] {
+            assert!(out.contains(needle), "missing {needle}");
+        }
     }
 
     #[test]
