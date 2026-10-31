@@ -54,7 +54,7 @@ def main(src, dst):
     # Colours: NLCS colour number (0-255) -> RGB.
     cols = [[x[3], x[4]] for x in rows(os.path.join(src, "lijnkleuren.csv"))[1:]]
     write(os.path.join(dst, "colors.tsv"), ["number", "hex"], cols)
-    write(os.path.join(dst, "linetypes.tsv"), ["name", "group", "autocad"],
+    write(os.path.join(dst, "linetypes.tsv"), ["name", "group", "lin"],
           [[x[3], x[2], x[6]] for x in rows(os.path.join(src, "lijntypes.csv"))[1:]])
     write(os.path.join(dst, "statuses.tsv"), ["code", "description"],
           [[x[2], x[3]] for x in rows(os.path.join(src, "statussen.csv"))[1:]])

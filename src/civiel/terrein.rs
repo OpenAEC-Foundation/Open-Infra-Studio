@@ -591,7 +591,7 @@ fn surfaces(doc: &CadDocument) -> Result<(Option<Tin>, Option<Tin>), String> {
     Ok((design, Tin::from_faces(&rest)))
 }
 
-/// Colours from low (blue) to high (red), as AutoCAD colour indices.
+/// Colours from low (blue) to high (red), as ACI colour indices.
 const RAMP: [u8; 9] = [170, 150, 130, 110, 90, 70, 50, 30, 10];
 
 /// A plain tool layer (no NLCS object) in a colour index.
@@ -617,7 +617,7 @@ fn solid(pts: [XY; 4], layer: &str) -> EntityType {
     e
 }
 
-/// `CIV_ANALYSE`: the terrain coloured in height bands (Civil 3D elevation
+/// `CIV_ANALYSE`: the terrain coloured in height bands (elevation
 /// analysis), with a legend beside it. Tool layers OI-ANALYSE-HOOGTE-nn.
 pub fn analysis(opt: &super::CivielOptions, which: Surface) -> Result<String, String> {
     let opt = opt.clone();

@@ -85,7 +85,7 @@ The message gives the counts. Cadastre and KLIC can follow the same way.
 
 ## GEODATA (issue #8, reading)
 
-A drawing from AutoCAD, Civil 3D or BricsCAD with a geographic location (GEOGRAPHICLOCATION, GEOMAP) and no Open Infra site takes its site from the GEODATA object:
+A drawing from other CAD programs with a geographic location (GEOGRAPHICLOCATION, GEOMAP) and no Open Infra site takes its site from the GEODATA object:
 - **CRS:** from the MapGuide XML or the WKT;
 - **absolute or relative:** absolute when the design point equals the reference point.
 

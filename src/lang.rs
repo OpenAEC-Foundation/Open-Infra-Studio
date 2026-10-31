@@ -47,10 +47,18 @@ fn from_locale() -> Lang {
     Lang::En
 }
 
+/// Open CAD Studio's interface language; `None` for "system" or unknown.
+fn from_host() -> Option<Option<Lang>> {
+    let path = crate::gis::servers::config_dir().parent()?.join("settings.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let code = v.get("language")?.as_str()?;
+    Some(if code.eq_ignore_ascii_case("system") { None } else { Some(if code.to_ascii_lowercase().starts_with("nl") { Lang::Nl } else { Lang::En }) })
+}
+
 /// The interface language, decided once per session.
 pub fn current() -> Lang {
     static L: OnceLock<Lang> = OnceLock::new();
-    *L.get_or_init(|| from_settings().unwrap_or_else(from_locale))
+    *L.get_or_init(|| from_settings().or_else(|| from_host().flatten()).unwrap_or_else(from_locale))
 }
 
 /// Store the language for the next session (the ribbon is built at load).
@@ -58,6 +66,31 @@ pub fn save(lang: Lang) -> Result<(), String> {
     let path = settings_file();
     let mut v: serde_json::Value = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
     v["language"] = serde_json::Value::String(if lang == Lang::Nl { "nl" } else { "en" }.into());
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&path, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+}
+
+/// The Dutch modules (PDOK, BGT, BRK, KLIC, AHN, BRO, 3D BAG, NLCS) in the
+/// ribbons: `netherlands` in settings.json, on unless switched off. Read
+/// once per session, like the language (the ribbon is built at load).
+pub fn dutch() -> bool {
+    static D: OnceLock<bool> = OnceLock::new();
+    *D.get_or_init(|| {
+        std::fs::read_to_string(settings_file())
+            .ok()
+            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+            .and_then(|v| v.get("netherlands").and_then(|b| b.as_bool()))
+            .unwrap_or(true)
+    })
+}
+
+/// Store the Dutch-modules switch for the next session.
+pub fn save_dutch(on: bool) -> Result<(), String> {
+    let path = settings_file();
+    let mut v: serde_json::Value = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
+    v["netherlands"] = serde_json::Value::Bool(on);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }

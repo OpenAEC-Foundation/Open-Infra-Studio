@@ -65,8 +65,9 @@ pub fn default_format(caps: &WmsCaps, layer: &str) -> String {
     }
 }
 
-/// The project CRS when the layer offers it, otherwise a common fallback.
-fn request_crs(layer: &WmsLayer, site_crs: &str) -> String {
+/// The project CRS when the layer offers it, otherwise a common fallback,
+/// otherwise a system that transforms offline, otherwise the layer's first.
+pub fn request_crs(layer: &WmsLayer, site_crs: &str) -> String {
     if layer.crs.is_empty() || layer.crs.iter().any(|c| c == site_crs) {
         return site_crs.to_string();
     }
@@ -74,6 +75,9 @@ fn request_crs(layer: &WmsLayer, site_crs: &str) -> String {
         if layer.crs.iter().any(|x| x == c) {
             return if c == "EPSG:900913" { "EPSG:3857".into() } else { c.into() };
         }
+    }
+    if let Some(c) = layer.crs.iter().find(|c| super::crs::support(c) == super::crs::Support::Builtin) {
+        return c.clone();
     }
     layer.crs[0].clone()
 }
@@ -178,6 +182,8 @@ pub fn import_wms(
 ) -> Result<Vec<PlacedImage>, String> {
     std::fs::create_dir_all(out_dir).map_err(|e| format!("{}: {e}", out_dir.display()))?;
     let crs = request_crs(layer, &site.crs);
+    // A system outside the built-in list: its definition from epsg.io, once.
+    super::crs::ensure(&crs)?;
     let parts = tiles(site.bbox(), opt.resolution);
     let jpeg = opt.format == "image/jpeg";
     let ext = if jpeg { "jpg" } else { "png" };
@@ -212,6 +218,16 @@ const MAX_TILES: u32 = 64;
 pub fn import_xyz(site: &Site, server: &MapServer, opt: &Options, out_dir: &Path, progress: &dyn Fn(String)) -> Result<Vec<PlacedImage>, String> {
     std::fs::create_dir_all(out_dir).map_err(|e| format!("{}: {e}", out_dir.display()))?;
     let bbox = site.bbox();
+    if super::arcgis::is_tile_cache(&server.url) {
+        let (canvas, crs, src_bbox) = super::arcgis::fetch(site, &server.url, opt.resolution, MAX_TILES, progress)?;
+        progress(format!("Herprojecteren naar {}…", site.crs));
+        let res = opt.resolution.max(site.width.max(site.height) / 4096.0);
+        let (w, h) = ((site.width / res).round() as u32, (site.height / res).round() as u32);
+        let img = warp(&canvas, &crs, src_bbox, &site.crs, bbox, w.max(1), h.max(1))?;
+        let path = out_dir.join(format!("{}_{}.png", slug(&server.id), stamp()));
+        save(&img, &path, false)?;
+        return Ok(vec![PlacedImage { path, bbox, px: [w, h] }]);
+    }
     let merc = envelope(bbox, &Transformer::new(&site.crs, "EPSG:3857")?)?;
     let max_zoom = server.max_zoom.unwrap_or(19) as i32;
     let z_ideal = (2.0 * ORIGIN * site.lat.to_radians().cos() / (256.0 * opt.resolution)).log2();
@@ -273,6 +289,16 @@ mod tests {
         assert_eq!(t[1].0, [0.0, 512.0, 512.0, 600.0]);
         assert_eq!((t[3].1, t[3].2), (1952, 352));
     }
+
+    #[test]
+    fn wms_request_crs_prefers_transformable() {
+        let layer = |crs: &[&str]| WmsLayer { name: "l".into(), title: "l".into(), crs: crs.iter().map(|c| c.to_string()).collect(), bbox: None };
+        assert_eq!(request_crs(&layer(&["EPSG:28992", "EPSG:3857"]), "EPSG:28992"), "EPSG:28992");
+        assert_eq!(request_crs(&layer(&["EPSG:25832", "EPSG:900913"]), "EPSG:28992"), "EPSG:3857");
+        // No common fallback: a built-in system before an unknown first one.
+        assert_eq!(request_crs(&layer(&["EPSG:2180", "EPSG:25833"]), "EPSG:28992"), "EPSG:25833");
+        assert_eq!(request_crs(&layer(&["EPSG:2180"]), "EPSG:28992"), "EPSG:2180");
+    }
 }
 
 /// A small preview raster for the workbench map, with its corners in lon/lat
@@ -297,7 +323,8 @@ fn preview_size(site: &Site, max_px: u32) -> (u32, u32) {
 /// delivers it (no reprojection; corners place it on the map).
 pub fn preview_wms(site: &Site, caps: &WmsCaps, layer: &WmsLayer, format: &str, max_px: u32) -> Result<Preview, String> {
     let crs = request_crs(layer, &site.crs);
-    let data_crs = if crs == "CRS:84" { "EPSG:4326".to_string() } else { crs.clone() };
+    super::crs::ensure(&crs)?;
+    let data_crs =if crs == "CRS:84" { "EPSG:4326".to_string() } else { crs.clone() };
     let b = if crs == site.crs { site.bbox() } else { envelope(site.bbox(), &Transformer::new(&site.crs, &data_crs)?)? };
     let (w, h) = preview_size(site, max_px);
     let img = decode(&http::get_image(&get_map_url(caps, &layer.name, &crs, b, w, h, format))?)?;
@@ -306,6 +333,11 @@ pub fn preview_wms(site: &Site, caps: &WmsCaps, layer: &WmsLayer, format: &str, 
 
 /// "Test" for a tile server: the tiles covering the import area, stitched.
 pub fn preview_xyz(site: &Site, server: &MapServer) -> Result<Preview, String> {
+    if super::arcgis::is_tile_cache(&server.url) {
+        let res = site.width.max(site.height) / 768.0;
+        let (canvas, crs, b) = super::arcgis::fetch(site, &server.url, res, 9, &|_| {})?;
+        return Ok(Preview { size: [canvas.width() as usize, canvas.height() as usize], rgba: canvas.into_raw(), corners: corners_lonlat(b, &crs)? });
+    }
     let merc = envelope(site.bbox(), &Transformer::new(&site.crs, "EPSG:3857")?)?;
     let mut z = (server.max_zoom.unwrap_or(19) as i32).min(19);
     let range = |z: i32| {

@@ -1,0 +1,12 @@
+{
+  "dordrecht_binnenstad": {"site": "GIS_SITE RD 104920 425330 1000 800 Dordrecht binnenstad", "crs": "EPSG:28992", "grote_kerk": [104885, 425335]},
+  "grote_kerk": {"site": "GIS_SITE RD 104885 425330 700 450 Grote Kerk", "crs": "EPSG:28992"},
+  "drechtsteden_biesbosch": {"site": "GIS_SITE RD 109000 423500 32000 20000 Drechtsteden en Biesbosch", "crs": "EPSG:28992"},
+  "parijs": {"site": "GIS_SITE 2.3490 48.8530 420 300 EPSG:2154 Parijs", "luchtfoto": "w-fr-ign-bdortho-2154", "kadaster": "w-fr-ign-parcellaireexpress-map-2154"},
+  "keulen": {"site": "GIS_SITE 6.9583 50.9413 420 300 EPSG:25832 Keulen", "luchtfoto": "w-de-nw-geobasisnrw-dop-25832", "kadaster": "w-de-nw-geobasisnrw-alkis-25832",
+             "citygml": "https://www.opengeodata.nrw.de/produkte/geobasis/3dg/lod2_gml/lod2_gml/LoD2_32_356_5645_1_NW.gml"},
+  "zurich": {"site": "GIS_SITE 8.5437 47.3717 420 300 EPSG:2056 Zurich", "luchtfoto": "w-ch-swisstopo-swissimage-2056", "kadaster_wfs": "w-ch-geodienste-av-liegenschaften-2056"},
+  "barcelona": {"site": "GIS_SITE 2.1744 41.4036 420 300 EPSG:25831 Barcelona", "luchtfoto": "w-es-ct-icgc-orthophoto-wms-25831", "kadaster": "w-es-catastro-cadastralparcel-wms-25830"},
+  "wenen": {"site": "GIS_SITE 16.3731 48.2084 420 300 EPSG:31256 Wenen", "luchtfoto": "w-at-w-wien-orthofoto-3857"},
+  "klic_levering": "GIS2BIM/supportfiles/Sandbox/KLIC/Levering_21O072584_1.zip (Lange Geldersekade, Dordrecht)"
+}
