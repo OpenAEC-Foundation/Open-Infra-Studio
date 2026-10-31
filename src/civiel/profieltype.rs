@@ -592,7 +592,7 @@ pub fn draw(opt: &super::CivielOptions, a: &Assembly, at: XY) -> Result<usize, S
                 if let Some(c) = p.condition {
                     t.push_str(if c.cut { tr(" (ingraving)", " (in cut)") } else { tr(" (ophoging)", " (in fill)") });
                 }
-                let mut e = crate::emit::text(pt(mid, 0.4), &t, 0.08 * f, std::f64::consts::FRAC_PI_2, &text_l.name, None);
+                let mut e = crate::emit::text(pt(mid, 0.4), &t, 0.08 * f, std::f64::consts::FRAC_PI_2, &text_l.name, Some(&data));
                 if let ocs_plugin_api::host::codec::EntityType::Text(tx) = &mut e {
                     tx.horizontal_alignment = ocs_plugin_api::host::codec::entities::TextHorizontalAlignment::Left;
                 }
@@ -600,7 +600,7 @@ pub fn draw(opt: &super::CivielOptions, a: &Assembly, at: XY) -> Result<usize, S
             }
         }
         let title = trf!("Profieltype {} — {} (maaiveld {} m)", "Assembly {} — {} (ground {} m)", a.name, label, num(dz, 1));
-        out.put(&text_l, [crate::emit::text(pt(0.0, 3.2), &title, 0.25 * f, 0.0, &text_l.name, None)]);
+        out.put(&text_l, [crate::emit::text(pt(0.0, 3.2), &title, 0.25 * f, 0.0, &text_l.name, Some(&data))]);
         y -= (6.0 + (-zlo).max(1.0)) * f;
     }
     out.write(&trf!("Profieltype {}", "Assembly {}", a.name))

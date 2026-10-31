@@ -542,7 +542,15 @@ pub struct Body {
     /// Area (m²).
     pub area: f64,
     pub kerb: bool,
+    /// Surfacing (true) or foundation; a kerb counts as surfacing.
+    pub bound: bool,
+    /// Which body it is, the same in every section: side, part, layer (the
+    /// kerb element itself is layer `KERB`).
+    pub key: (usize, usize, usize),
 }
+
+/// The layer index of a kerb element in `Body::key`.
+pub const KERB: usize = usize::MAX;
 
 /// One computed cross section.
 #[derive(Clone, Debug)]
@@ -731,11 +739,11 @@ fn side(asm: &Assembly, si: usize, z0: f64, lane_slope: f64, ground: &mut dyn Fn
                 out.pts.push(Pt { o, z, code: "BA", nlcs: p.surface });
                 let (b0, b1) = (top - p.height, z - p.height);
                 let poly = vec![(o0, b0), (o0, zs.max(b0)), (o0 + batter, top), (o, z), (o, b1)];
-                out.bodies.push(Body { material: p.name.clone(), nlcs: p.surface, area: polygon_area(&poly), poly, kerb: true });
+                out.bodies.push(Body { material: p.name.clone(), nlcs: p.surface, area: polygon_area(&poly), poly, kerb: true, bound: true, key: (si, pi, KERB) });
                 let mut d = 0.0;
-                for l in &p.layers {
+                for (li, l) in p.layers.iter().enumerate() {
                     let poly = vec![(o0, b0 - d), (o, b1 - d), (o, b1 - d - l.thickness), (o0, b0 - d - l.thickness)];
-                    out.bodies.push(Body { material: l.material.clone(), nlcs: l.nlcs, area: (o - o0) * l.thickness, poly, kerb: false });
+                    out.bodies.push(Body { material: l.material.clone(), nlcs: l.nlcs, area: (o - o0) * l.thickness, poly, kerb: false, bound: l.bound, key: (si, pi, li) });
                     d += l.thickness;
                 }
                 out.datum.push((o0, b0 - depth));
@@ -801,9 +809,9 @@ fn side(asm: &Assembly, si: usize, z0: f64, lane_slope: f64, ground: &mut dyn Fn
                 z += slope * w;
                 out.pts.push(Pt { o, z, code: p.kind.code(), nlcs: p.surface });
                 let mut d = 0.0;
-                for l in &p.layers {
+                for (li, l) in p.layers.iter().enumerate() {
                     let poly = vec![(o0, zs - d), (o, z - d), (o, z - d - l.thickness), (o0, zs - d - l.thickness)];
-                    out.bodies.push(Body { material: l.material.clone(), nlcs: l.nlcs, area: w * l.thickness, poly, kerb: false });
+                    out.bodies.push(Body { material: l.material.clone(), nlcs: l.nlcs, area: w * l.thickness, poly, kerb: false, bound: l.bound, key: (si, pi, li) });
                     d += l.thickness;
                 }
                 let bound: f64 = p.layers.iter().take_while(|l| l.bound).map(|l| l.thickness).sum();
@@ -1087,6 +1095,69 @@ fn crossings(p: XY, n: XY, f: f64, line: &[(XY, Option<f64>)]) -> Vec<(f64, Opti
     out
 }
 
+/// The corridor's materials as 3D bodies, for 3D views and IFC: every
+/// pavement layer and kerb swept from section to section (closed, with end
+/// caps), one mesh per material; and the ditches' slopes and bottom as one
+/// surface. Positions come from `p3` (section, offset, height → drawing).
+pub struct Bodies {
+    /// (material, NLCS object, kerb, surfacing) → mesh.
+    pub solids: BTreeMap<(String, NlcsId, bool, bool), MeshBuilder>,
+    pub ditches: MeshBuilder,
+}
+
+pub fn bodies(sections: &[Section], p3: &dyn Fn(&Section, f64, f64) -> P3) -> Bodies {
+    let mut out = Bodies { solids: BTreeMap::new(), ditches: MeshBuilder::default() };
+    let find = |s: &Section, key: (usize, usize, usize)| s.bodies.iter().find(|b| b.key == key).cloned();
+    let cap = |m: &mut MeshBuilder, s: &Section, poly: &[(f64, f64)]| {
+        let p: Vec<P3> = poly.iter().map(|q| p3(s, q.0, q.1)).collect();
+        for i in 1..p.len().saturating_sub(1) {
+            m.tri(p[0], p[i], p[i + 1]);
+        }
+    };
+    for (i, sct) in sections.iter().enumerate() {
+        let next = sections.get(i + 1);
+        for b in &sct.bodies {
+            let m = out.solids.entry((b.material.clone(), b.nlcs, b.kerb, b.bound)).or_default();
+            m.new_group();
+            let starts = i == 0 || find(&sections[i - 1], b.key).is_none_or(|q| q.poly.len() != b.poly.len());
+            if starts {
+                cap(m, sct, &b.poly);
+            }
+            match next.and_then(|n| find(n, b.key).map(|q| (n, q))) {
+                Some((n, q)) if q.poly.len() == b.poly.len() => {
+                    let k = b.poly.len();
+                    for j in 0..k {
+                        let (a0, a1) = (b.poly[j], b.poly[(j + 1) % k]);
+                        let (c0, c1) = (q.poly[j], q.poly[(j + 1) % k]);
+                        m.quad(p3(sct, a0.0, a0.1), p3(sct, a1.0, a1.1), p3(n, c1.0, c1.1), p3(n, c0.0, c0.1));
+                    }
+                }
+                _ => {
+                    let rev: Vec<(f64, f64)> = b.poly.iter().rev().copied().collect();
+                    cap(m, sct, &rev);
+                }
+            }
+        }
+        // Ditches: from the inner edge over the bottom to the outer edge, per side.
+        let ditch = |s: &Section, side: usize| -> Option<Vec<(f64, f64)>> {
+            let idx: Vec<usize> = s.pts.iter().enumerate().filter(|(_, p)| p.code == "SL" && (p.o > 0.0) == (side == 1)).map(|(j, _)| j).collect();
+            let (lo, hi) = (*idx.first()?, *idx.last()?);
+            let (a, b) = (lo.checked_sub(1)?, (hi + 1).min(s.pts.len() - 1));
+            Some(s.pts[a..=b].iter().map(|p| (p.o, p.z)).collect())
+        };
+        if let Some(n) = next {
+            for side in 0..2 {
+                if let (Some(a), Some(b)) = (ditch(sct, side), ditch(n, side)) {
+                    let la: Vec<(f64, P3)> = a.iter().map(|q| (q.0, p3(sct, q.0, q.1))).collect();
+                    let lb: Vec<(f64, P3)> = b.iter().map(|q| (q.0, p3(n, q.0, q.1))).collect();
+                    stitch(&la, &lb, &mut out.ditches);
+                }
+            }
+        }
+    }
+    out
+}
+
 pub struct Request {
     pub axis: Option<Handle>,
     pub assembly: Assembly,
@@ -1331,6 +1402,37 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
         }
     }
     let handles = out.write_handles(&format!("Corridor {name}"))?;
+    // The materials in 3D (pavement layers, kerbs, ditches): one more step.
+    let solids = bodies(&sections, &p3);
+    let mut bout = Out::default();
+    let colour = |id: NlcsId| {
+        req.natural.then(|| {
+            let (r, g, b) = surface_colour(id);
+            ocs_plugin_api::host::codec::Color::Rgb { r, g, b }
+        })
+    };
+    for ((material, id, kerb, bound), m) in solids.solids {
+        if m.is_empty() {
+            continue;
+        }
+        let spec = nlcs_layer(&ctx, id, Element::G)?;
+        let mut pairs = vec![("corridor", format!("Corridor {name}")), ("as", al.name.clone()), ("naam", format!("{name}: {material}"))];
+        if kerb {
+            pairs.push(("band", material.clone()));
+        } else {
+            pairs.push(("laag", material.clone()));
+            pairs.push(("rol", if bound { "verharding" } else { "fundering" }.into()));
+        }
+        bout.put(&spec, m.finish(&spec.name, colour(id), Some(&record(&pairs))));
+    }
+    let ditch_faces = solids.ditches.faces();
+    if ditch_faces > 0 {
+        let spec = ctx.layer("GW", "WATERGANG_SLOOT", Element::G)?;
+        let d = record(&[("corridor", format!("Corridor {name}")), ("as", al.name.clone()), ("onderdeel", "sloot".into()), ("naam", format!("{name}: {}", crate::lang::tr("sloot", "ditch")))]);
+        bout.put(&spec, solids.ditches.finish(&spec.name, colour(nlcs_id("GW", "WATERGANG_SLOOT_BODEM")), Some(&d)));
+    }
+    let body_count = if bout.is_empty() { 0 } else { bout.write(&trf!("Corridor {} in 3D", "Corridor {} in 3D", name))? };
+    super::api::note("lichamen", body_count);
     // Section views with the design and its layers, when asked: one more step.
     let mut view_rows = 0;
     let mut view_count = 0;
@@ -1500,7 +1602,7 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
         face_count,
         lines_n,
         views_t,
-        handles.len() + view_count,
+        handles.len() + body_count + view_count,
         csv_path.display()
     ))
 }

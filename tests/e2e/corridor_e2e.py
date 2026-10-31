@@ -267,6 +267,19 @@ def main():
             done.append(f"{axes[h]}{a['richting']} {r['data']['dwarsprofielen']}")
         return True, "armcorridors: " + ", ".join(done)
 
+    def ifc():
+        """Main's IFC 4.3 export: courses per pavement layer, kerbs, roads."""
+        path = OUT / "corridor.ifc"
+        r = cmd(f"CIV_IFC BESTAND={path}", "ifc", 600)
+        if not r["ok"]:
+            return False, r["message"]
+        k = r["data"]["klassen"]
+        text = path.read_text(errors="replace") if path.exists() else ""
+        ok = k.get("IfcCourse", 0) >= 10 and k.get("IfcKerb", 0) >= 3 and k.get("IfcRoad", 0) >= 8
+        ok &= "IFCCOURSE(" in text and ".PAVEMENT." in text and "IFCKERB(" in text and "'menggranulaat (fundering)'" in text
+        ok &= r["data"]["overgeslagen"].get("profieltype", 0) > 0
+        return ok, ", ".join(f"{c} {n}" for c, n in sorted(k.items()) if c != "IfcAnnotation") + f"; overgeslagen {r['data']['overgeslagen']}"
+
     def info():
         r = cmd("CIV_INFO", "info")
         n = len(r["data"].get("corridors", []))
@@ -324,6 +337,7 @@ def main():
         if step("roundabout", roundabout):
             step("arm corridors", arms)
         step("model info", info)
+        step("IFC 4.3 export", ifc)
         step("captures", captures)
     try:
         ocs.run(f"QSAVEAS {OUT / 'corridor.dwg'}")

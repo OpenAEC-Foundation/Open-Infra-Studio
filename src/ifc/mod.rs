@@ -408,6 +408,11 @@ fn get<'a>(d: &'a Data, key: &str) -> Option<&'a str> {
     d.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str()).filter(|v| !v.is_empty())
 }
 
+/// The road (IfcRoad) an object belongs to: its corridor, junction or roundabout.
+fn road_of(d: &Data) -> Option<&str> {
+    get(d, "corridor").or_else(|| get(d, "kruispunt")).or_else(|| get(d, "rotonde"))
+}
+
 /// KLIC cables and pipes, after the NLCS objects of `nlcs::klic_object`.
 fn klic(o: &str, ot: Option<String>) -> Class {
     let electric = o.starts_with("ET_") || o.starts_with("DATA_");
@@ -470,6 +475,13 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
             _ if is_mesh => class("IfcGeographicElement", Some("USERDEFINED"), ot),
             _ => annotation("USERDEFINED", ot),
         },
+        // A corridor's pavement layers as bodies: one course per material.
+        "VH" if is_mesh && get(data, "laag").is_some() => {
+            class("IfcCourse", Some(if get(data, "rol") == Some("verharding") { "PAVEMENT" } else { "USERDEFINED" }), get(data, "laag").map(str::to_string))
+        }
+        // A corridor's formation and subgrade surfaces.
+        "VH" | "GW" if is_mesh && get(data, "oppervlak").is_some() => Class { role: Role::Terrain, ..class("IfcGeographicElement", Some("USERDEFINED"), get(data, "oppervlak").map(str::to_string)) },
+        "GW" if o.starts_with("WATERGANG") => class("IfcGeographicElement", Some("USERDEFINED"), ot),
         "VH" => match o {
             _ if o.starts_with("ONVERHARD") => class("IfcGeographicElement", Some("TERRAIN"), ot),
             _ if o.starts_with("KANTOPSLUITING") => class("IfcKerb", Some("NOTDEFINED"), ot),
@@ -965,6 +977,11 @@ impl<'a, W: Write> Exporter<'a, W> {
                 skip("profiel- en dwarsprofielweergave");
                 continue;
             }
+            // An assembly drawn as a template section is no object.
+            if get(&data, "profieltype").is_some() {
+                skip("profieltype");
+                continue;
+            }
             let mut cl = match classify(ln.as_ref(), &layer, &data, &geo) {
                 Ok(c) => c,
                 Err(r) => {
@@ -991,7 +1008,7 @@ impl<'a, W: Write> Exporter<'a, W> {
             let id = get(&data, "identificatie").or_else(|| get(&data, "lokaal_id")).map(str::to_string);
             let bro = get(&data, "bro_id").map(str::to_string);
             let key = match cl.role {
-                Role::Terrain => format!("terrain:{layer}:{}", get(&data, "bron").unwrap_or("")),
+                Role::Terrain => format!("terrain:{layer}:{}:{}", get(&data, "bron").unwrap_or(""), road_of(&data).unwrap_or("")),
                 Role::Building => format!("building:{}", id.clone().unwrap_or_else(|| format!("{h:?}"))),
                 _ if cl.ifc != "IfcAnnotation" && id.is_some() => format!("{}:{}", cl.ifc, id.clone().unwrap_or_default()),
                 _ => format!("entity:{}", handle_text(h)),
@@ -1011,7 +1028,7 @@ impl<'a, W: Write> Exporter<'a, W> {
                             })
                             .unwrap_or_else(|| cl.object_type.clone().unwrap_or_else(|| layer.clone())),
                     };
-                    let road = get(&data, "corridor").map(str::to_string);
+                    let road = road_of(&data).map(str::to_string);
                     groups.push(Group {
                         class: cl.clone(),
                         name,
@@ -1612,6 +1629,36 @@ pub mod tests {
         let mut report = Report::default();
         let out = export(&src, &Options::default(), Vec::new(), &mut report).unwrap();
         (String::from_utf8(out).unwrap(), report)
+    }
+
+    /// A corridor's bodies, a junction and an assembly drawing (corridor stream).
+    #[test]
+    fn corridor_parts_and_layers() {
+        let mut doc = CadDocument::new();
+        let mut add = |e: EntityType| {
+            doc.add_entity(e).unwrap();
+        };
+        let road = [("corridor", "Corridor A1"), ("as", "A1")];
+        let with = |extra: &[(&'static str, &'static str)]| -> Vec<(&'static str, &'static str)> { road.iter().chain(extra).copied().collect() };
+        let block = |x: f64, z: f64| mesh(&[[x, 0.0, z], [x + 10.0, 0.0, z], [x + 10.0, 3.0, z], [x, 3.0, z - 0.1]], &[&[0, 1, 2], &[0, 2, 3]], None);
+        add(on(block(0.0, 1.0), &nl("VH", "GESLOTENVERHARDING_ASFALT_DEKLAAG", Element::G, Status::N), &with(&[("laag", "AC 11 surf (deklaag)"), ("rol", "verharding")])));
+        add(on(block(0.0, 0.7), &nl("VH", "FUNDERING_GRANULAAT", Element::G, Status::N), &with(&[("laag", "menggranulaat (fundering)"), ("rol", "fundering")])));
+        add(on(block(20.0, 1.1), &nl("VH", "KANTOPSLUITING_TROTTOIRBAND", Element::G, Status::N), &with(&[("band", "trottoirband 13/15x25")])));
+        add(on(block(40.0, 0.2), &nl("GW", "WATERGANG_SLOOT", Element::G, Status::N), &with(&[("onderdeel", "sloot")])));
+        add(on(block(60.0, 0.3), &nl("GW", "CUNET_BODEM", Element::G, Status::N), &with(&[("oppervlak", "onderkant verhardingsconstructie (subgrade)")])));
+        add(on(line3(&[[0.0, 5.0, 1.0], [100.0, 5.0, 1.0]]), &nl("GW", "WATERGANG_SLOOT_BODEM", Element::G, Status::N), &[]));
+        add(on(block(80.0, 1.0), &nl("OG", "TRIANGULATIE", Element::G, Status::N), &[("kruispunt", "Kruispunt A1 / B1")]));
+        add(on(lw(&[[500.0, 0.0], [510.0, 0.0]], false, 0.0), &nl("VH", "GESLOTENVERHARDING_ASFALT_DEKLAAG", Element::G, Status::N), &[("profieltype", "stadsstraat")]));
+        let src = Source { doc: &doc, f: 1.0, site: None, name: "corridor.dwg".into() };
+        let mut r = Report::default();
+        let out = String::from_utf8(export(&src, &Options::default(), Vec::new(), &mut r).unwrap()).unwrap();
+        let n = |k: &str| r.classes.get(k).copied().unwrap_or(0);
+        assert_eq!(n("IfcCourse"), 2, "{:?}", r.classes);
+        assert_eq!(n("IfcKerb"), 1);
+        assert_eq!(n("IfcGeographicElement"), 4, "ditch body and bottom line, subgrade, junction surface: {:?}", r.classes);
+        assert_eq!(n("IfcRoad"), 2, "the corridor and the junction");
+        assert_eq!(r.skipped.get("profieltype"), Some(&1), "{:?}", r.skipped);
+        assert!(out.contains(".PAVEMENT.") && out.contains("'menggranulaat (fundering)'"), "courses: surfacing and a named foundation");
     }
 
     #[test]
