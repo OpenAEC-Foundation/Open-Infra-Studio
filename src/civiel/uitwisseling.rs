@@ -1,5 +1,5 @@
-//! The exchange model: what the LandXML and IFC exports write, gathered
-//! from the drawing's Open Infra objects (the object index `OPENINFRA/INDEX`
+//! The exchange model: what the LandXML export writes, gathered from the
+//! drawing's Open Infra objects (the object index `OPENINFRA/INDEX`
 //! and the object data `OPENINFRA` on the entities). Everything is in
 //! project coordinates: easting and northing in metres in the site's CRS,
 //! heights in metres (NAP in the Netherlands).
@@ -15,7 +15,7 @@ use super::{data_value, Ctx, Maaiveld};
 use crate::lang::tr;
 use crate::gis::crs::XY;
 
-/// The site's coordinate reference system, as both formats write it.
+/// The site's coordinate reference system, as LandXML writes it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Crs {
     /// "EPSG:28992".
@@ -24,12 +24,8 @@ pub struct Crs {
     pub name: String,
     /// The height reference: "NAP" in the Netherlands, else "MSL".
     pub vertical: String,
-    /// The site's base point (m): the local origin of the IFC file.
+    /// The site's base point (m).
     pub base: XY,
-    pub lon: f64,
-    pub lat: f64,
-    /// A CRS in degrees: no map conversion possible.
-    pub geographic: bool,
 }
 
 impl Crs {
@@ -42,9 +38,6 @@ impl Crs {
             name: if site.crs_name.is_empty() { site.crs.clone() } else { site.crs_name.clone() },
             vertical: if nl { "NAP".into() } else { "MSL".into() },
             base: [site.origin_e, site.origin_n],
-            lon: site.lon,
-            lat: site.lat,
-            geographic: crate::gis::crs::is_geographic(&site.crs),
         }
     }
 }
@@ -168,33 +161,9 @@ pub struct Corridor {
     pub axis: String,
     /// Assembly name (weg, fietspad, snelweg, dijk, …).
     pub template: String,
-    /// Its axis in project metres (also when the axis itself is not exported).
-    pub axis_segs: Vec<Seg>,
     pub lines: Vec<FeatureLine>,
     /// Its design surface: an index into `Model::surfaces`.
     pub surface: Option<usize>,
-    /// The existing ground under each vertex of that surface (m); filled
-    /// for the IFC export (earthworks).
-    pub ground: Vec<Option<f64>>,
-    /// Where the ground came from.
-    pub ground_label: String,
-}
-
-impl Corridor {
-    /// The largest offset (m) of the feature lines of one kind: the edge of
-    /// that part of the assembly (lanes, shoulders, crest).
-    pub fn edge(&self, kind: LineKind) -> Option<f64> {
-        self.lines.iter().filter(|l| l.kind == kind).filter_map(|l| l.offset.map(f64::abs)).fold(None, |m, o| Some(m.map_or(o, |m: f64| m.max(o))))
-    }
-}
-
-/// A 3D BAG building: roof and wall triangles (m).
-#[derive(Clone, Debug, Default)]
-pub struct Building {
-    pub id: String,
-    pub year: String,
-    pub roof: Vec<[P3; 3]>,
-    pub walls: Vec<[P3; 3]>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -206,14 +175,11 @@ pub struct Model {
     pub surfaces: Vec<Surface>,
     pub axes: Vec<Axis>,
     pub corridors: Vec<Corridor>,
-    pub buildings: Vec<Building>,
-    /// What was left out, and why.
-    pub notes: Vec<String>,
 }
 
 impl Model {
     pub fn is_empty(&self) -> bool {
-        self.points.is_empty() && self.surfaces.is_empty() && self.axes.is_empty() && self.corridors.is_empty() && self.buildings.is_empty()
+        self.points.is_empty() && self.surfaces.is_empty() && self.axes.is_empty() && self.corridors.is_empty()
     }
 }
 
@@ -247,30 +213,6 @@ impl Scope {
     }
 }
 
-/// Triangles of a mesh or 3D face (drawing units).
-fn triangles_of(e: &EntityType) -> Vec<[P3; 3]> {
-    match e {
-        EntityType::Mesh(m) => {
-            let p = |i: usize| m.vertices.get(i).map(|v| [v.x, v.y, v.z]);
-            let mut out = Vec::new();
-            for f in &m.faces {
-                for k in 1..f.vertices.len().saturating_sub(1) {
-                    if let (Some(a), Some(b), Some(c)) = (p(f.vertices[0]), p(f.vertices[k]), p(f.vertices[k + 1])) {
-                        out.push([a, b, c]);
-                    }
-                }
-            }
-            out
-        }
-        EntityType::Face3D(f) => {
-            let p = |v: &ocs_plugin_api::host::codec::Vector3| [v.x, v.y, v.z];
-            let (a, b, c, d) = (p(&f.first_corner), p(&f.second_corner), p(&f.third_corner), p(&f.fourth_corner));
-            if d == c { vec![[a, b, c]] } else { vec![[a, b, c], [a, c, d]] }
-        }
-        _ => Vec::new(),
-    }
-}
-
 /// All values of an entity's object data, as one key.
 fn record_key(e: &EntityType) -> String {
     e.common()
@@ -301,16 +243,15 @@ fn unique(name: &str, taken: &mut HashSet<String>) -> String {
 }
 
 /// Read the drawing: the Open Infra objects of the index, or of the whole
-/// drawing when Open CAD Studio shares it. `ifc` also samples the ground
-/// under the corridors (earthworks) and collects 3D BAG buildings.
-pub fn gather(ctx: &Ctx, all: bool, ifc: bool, progress: &dyn Fn(String)) -> Result<Model, String> {
+/// drawing when Open CAD Studio shares it.
+pub fn gather(ctx: &Ctx, all: bool, progress: &dyn Fn(String)) -> Result<Model, String> {
     progress(tr("Tekening lezen…", "Reading the drawing…").into());
     let doc = super::document(&["tin", "as", "lengteprofiel", "ontwerpprofiel", "corridor", "punten"], &[])?;
     let selection: HashSet<Handle> = if all { HashSet::new() } else { crate::bridge::selection().unwrap_or_default().into_iter().collect() };
     let index = crate::bridge::index_read();
     let scope = Scope { all, selection };
     let mut ground = Ground::new(Box::new(|| Maaiveld::find(ctx, &doc).ok()));
-    let mut model = gather_from(ctx, &doc, &scope, &index, ifc, &mut ground, progress)?;
+    let mut model = gather_from(ctx, &doc, &scope, &index, &mut ground, progress)?;
     model.name = ctx.site.as_ref().map(|s| s.label.clone()).filter(|l| !l.is_empty()).unwrap_or_else(crate::bridge::drawing_name);
     Ok(model)
 }
@@ -335,14 +276,13 @@ impl<'a> Ground<'a> {
 }
 
 /// [`gather`] on a document in hand: `index` is the object index (kind,
-/// key, handles); `ground` gives the existing ground (TIN or AHN) when
-/// profiles or earthworks need it.
+/// key, handles); `ground` gives the existing ground (TIN or AHN) when a
+/// ground profile needs it.
 pub fn gather_from(
     ctx: &Ctx,
     doc: &CadDocument,
     scope: &Scope,
     index: &[(String, String, Vec<Handle>)],
-    ifc: bool,
     ground: &mut Ground,
     progress: &dyn Fn(String),
 ) -> Result<Model, String> {
@@ -479,14 +419,7 @@ pub fn gather_from(
         let info = |k: &str| axis_line.and_then(|e| data_value(e, k)).or_else(|| mesh.and_then(|e| data_value(e, k))).unwrap_or_default();
         let axis_name = info("as");
         let al = axes_drawing.get(&axis_name);
-        let mut c = Corridor {
-            name: name.clone(),
-            axis: axis_name.clone(),
-            template: info("sjabloon"),
-            axis_segs: al.map(|a| a.segs.iter().map(|s| seg_to_project(ctx, s)).collect()).unwrap_or_default(),
-            surface,
-            ..Default::default()
-        };
+        let mut c = Corridor { name: name.clone(), axis: axis_name.clone(), template: info("sjabloon"), surface, ..Default::default() };
         let mut count: HashMap<(LineKind, i8), usize> = HashMap::new();
         for e in &lines {
             let EntityType::Polyline3D(p) = e else { continue };
@@ -513,13 +446,6 @@ pub fn gather_from(
             }
             c.lines.push(FeatureLine { name: label, kind, offset, pts: pts.into_iter().map(to_project).collect() });
         }
-        if ifc {
-            if let (Some(i), Some(g)) = (surface, ground.get()) {
-                progress(format!("{} {name}…", tr("Maaiveld onder", "Ground under")));
-                c.ground_label = g.label();
-                c.ground = model.surfaces[i].points.iter().map(|p| g.height(ctx.to_drawing([p[0], p[1]]), f)).collect();
-            }
-        }
         model.corridors.push(c);
     }
     // A corridor brings its design surface, even when only its lines were selected.
@@ -539,31 +465,6 @@ pub fn gather_from(
         c.surface = c.surface.and_then(|i| new_index[i]);
     }
 
-    // 3D BAG buildings (IFC only): roof and wall meshes by BAG id. They are
-    // not in the index, so only a drawing Open CAD Studio shares whole has them.
-    if ifc {
-        let mut by_id: Vec<Building> = Vec::new();
-        for e in doc.model_space_entities() {
-            if !matches!(e, EntityType::Mesh(_)) || !data_value(e, "bron").is_some_and(|b| b.starts_with("3D BAG")) || !scope.wants([&e.common().handle]) {
-                continue;
-            }
-            let Some(id) = data_value(e, "identificatie") else { continue };
-            let tris: Vec<[P3; 3]> = triangles_of(e).into_iter().map(|t| t.map(to_project)).collect();
-            let i = match by_id.iter().position(|b| b.id == id) {
-                Some(i) => i,
-                None => {
-                    by_id.push(Building { id: id.clone(), year: data_value(e, "bouwjaar").unwrap_or_default(), ..Default::default() });
-                    by_id.len() - 1
-                }
-            };
-            if e.common().layer.contains("-OG-BEBOUWING_HOOFDGEBOUW-") {
-                by_id[i].walls.extend(tris);
-            } else {
-                by_id[i].roof.extend(tris);
-            }
-        }
-        model.buildings = by_id;
-    }
     Ok(model)
 }
 
@@ -577,7 +478,7 @@ pub(crate) fn sample_model() -> Model {
     let len = al.length();
     Model {
         name: "Dordrecht & co".into(),
-        crs: Some(Crs { code: "EPSG:28992".into(), epsg: Some(28992), name: "Amersfoort / RD New".into(), vertical: "NAP".into(), base: o, lon: 4.66, lat: 51.81, geographic: false }),
+        crs: Some(Crs { code: "EPSG:28992".into(), epsg: Some(28992), name: "Amersfoort / RD New".into(), vertical: "NAP".into(), base: o }),
         points: vec![
             SurveyPoint { name: "101".into(), e: o[0] + 1.25, n: o[1] - 3.5, z: Some(1.2345), code: "PUT".into() },
             SurveyPoint { name: "101".into(), e: o[0] + 2.0, n: o[1] + 4.0, z: None, code: String::new() },
@@ -660,7 +561,7 @@ mod tests {
         let index = vec![("tin".to_string(), "B".to_string(), vec![tin]), ("corridor".to_string(), "Corridor As 1".to_string(), vec![edge, axis3])];
         let tin_b = Tin::from_document(&doc).unwrap();
         let mut ground = Ground::new(Box::new(move || Some(Maaiveld::Tin(Tin::from_faces(&tin_b.triangles.iter().map(|t| t.map(|i| tin_b.points[i])).collect::<Vec<_>>()).unwrap()))));
-        let m = gather_from(&ctx, &doc, &Scope::everything(), &index, true, &mut ground, &|_| {}).unwrap();
+        let m = gather_from(&ctx, &doc, &Scope::everything(), &index, &mut ground, &|_| {}).unwrap();
         assert_eq!(m.surfaces.len(), 1);
         let s = &m.surfaces[0];
         assert_eq!((s.name.as_str(), s.status, s.triangles.len()), ("Terrein 1", 'B', 2));
@@ -682,10 +583,9 @@ mod tests {
         assert_eq!(c.lines[0].kind, LineKind::Pavement);
         assert!((c.lines[0].offset.unwrap() + 3.0).abs() < 1e-9, "left is negative");
         assert_eq!(c.lines[0].name, format!("Corridor As 1 {} {}", tr("Kant verharding", "Pavement edge"), tr("links", "left")));
-        assert_eq!(c.edge(LineKind::Pavement), Some(3.0));
         // A selection of the axis only: no TIN, no corridor.
         let only = Scope { all: false, selection: [axis].into_iter().collect() };
-        let m = gather_from(&ctx, &doc, &only, &index, false, &mut Ground::new(Box::new(|| None)), &|_| {}).unwrap();
+        let m = gather_from(&ctx, &doc, &only, &index, &mut Ground::new(Box::new(|| None)), &|_| {}).unwrap();
         assert_eq!((m.axes.len(), m.surfaces.len(), m.corridors.len()), (1, 0, 0));
     }
 

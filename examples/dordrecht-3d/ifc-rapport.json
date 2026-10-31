@@ -1,0 +1,32 @@
+{
+ "assen": 1,
+ "bestand": "dordrecht-3d.ifc",
+ "crs": "EPSG:28992",
+ "instanties": 489690,
+ "klassen": {
+  "IfcAlignment": 1,
+  "IfcAnnotation": 7586,
+  "IfcBorehole": 27,
+  "IfcBuilding": 2392,
+  "IfcBuildingElementProxy": 1219,
+  "IfcCableCarrierSegment": 213,
+  "IfcCableFitting": 190,
+  "IfcCableSegment": 478,
+  "IfcCivilElement": 3267,
+  "IfcDistributionChamberElement": 30,
+  "IfcGeographicElement": 1259,
+  "IfcGeotechnicalStratum": 581,
+  "IfcKerb": 221,
+  "IfcPavement": 1447,
+  "IfcPipeFitting": 42,
+  "IfcPipeSegment": 130,
+  "IfcRailing": 142,
+  "IfcRoad": 1,
+  "IfcSurfaceFeature": 558,
+  "IfcWall": 283
+ },
+ "overgeslagen": {
+  "profiel- en dwarsprofielweergave": 138,
+  "tekenblad en profielkader": 554
+ }
+}

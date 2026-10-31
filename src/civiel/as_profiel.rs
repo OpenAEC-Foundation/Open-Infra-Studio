@@ -294,7 +294,7 @@ impl Alignment {
         bounds((0..=n).map(|i| self.at(len * i as f64 / n as f64).0))
     }
 
-    /// An axis through points of intersection (Civil 3D "by layout"): the
+    /// An axis through points of intersection ("by layout"): the
     /// straights between them, a circular curve of the given radius at each
     /// inner PI (the last radius repeats; 0 leaves a corner).
     pub fn from_pis(pis: &[XY], radii: &[f64]) -> Result<Alignment, String> {
@@ -950,7 +950,7 @@ pub fn draw_section_views(ctx: &Ctx, al: &Alignment, views: &[SectionView], left
 }
 
 /// `CIV_AS_OFFSET`: lines beside the selected axis at the offsets of the
-/// settings (Civil 3D offset alignments), on AM-STRING_HULP.
+/// settings (offset alignments), on AM-STRING_HULP.
 pub fn offsets(opt: &super::CivielOptions, handle: Option<Handle>) -> Result<String, String> {
     let opt = opt.clone();
     let ctx = Ctx::new(&opt)?;

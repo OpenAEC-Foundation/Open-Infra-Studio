@@ -6,6 +6,9 @@
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 
+#[path = "services.rs"]
+mod services;
+
 use eframe::egui::{self, Color32, RichText, TextureHandle, Vec2};
 
 use super::jobs::{poll, Job};
@@ -74,6 +77,7 @@ fn icon(name: &str) -> egui::Image<'static> {
         "check" => include_str!("../../assets/nlcs-controle.svg"),
         "quantities" => include_str!("../../assets/hoeveelheden.svg"),
         "axis" => include_str!("../../assets/as.svg"),
+        "services" => include_str!("../../assets/services.svg"),
         _ => include_str!("../../assets/list.svg"),
     };
     let bytes = svg.replace("currentColor", "#dfe5ea").into_bytes();
@@ -453,6 +457,7 @@ pub struct App {
     servers: Vec<MapServer>,
     lib: super::library::LibraryPage,
     files: super::files::FilesPage,
+    svc: services::ServicesPage,
 }
 
 impl App {
@@ -491,6 +496,7 @@ impl App {
             servers: servers::all(),
             lib: Default::default(),
             files: Default::default(),
+            svc: Default::default(),
         }
     }
 
@@ -522,6 +528,7 @@ impl App {
                     self.tab = tab;
                     self.reload_site();
                     self.servers = servers::all();
+                    self.svc.refresh();
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
@@ -2276,7 +2283,7 @@ impl App {
                 Err(e) => self.err(e),
             }
         }
-        page_header(ui, "axis", "Civiel — instellingen", "Civil 3D-achtige tools op het tabblad Civiel: meetpunten, terrein (TIN), assen, profielen en grondverzet. De instellingen gelden ook voor de knoppen in het lint.");
+        page_header(ui, "axis", "Civiel — instellingen", "Civiele ontwerptools op het tabblad Civiel: meetpunten, terrein (TIN), assen, profielen en grondverzet. De instellingen gelden ook voor de knoppen in het lint.");
         let o = &mut self.civ.opt;
         let num = |ui: &mut egui::Ui, v: &mut f64, lo: f64, hi: f64, speed: f64, suffix: &str| {
             ui.add(egui::DragValue::new(v).range(lo..=hi).speed(speed).suffix(suffix));
@@ -2440,6 +2447,7 @@ impl App {
                     match servers::save_user(&user) {
                         Ok(()) => {
                             self.servers = servers::all();
+                            self.svc.refresh();
                             self.srv.url.clear();
                             self.srv.name.clear();
                             self.ok(format!("Server \"{name}\" toegevoegd."));
@@ -2511,7 +2519,10 @@ impl App {
         if let Some(id) = remove {
             let user: Vec<MapServer> = servers::load_user().into_iter().filter(|s| s.id != id).collect();
             match servers::save_user(&user) {
-                Ok(()) => self.servers = servers::all(),
+                Ok(()) => {
+                    self.servers = servers::all();
+                    self.svc.refresh();
+                }
                 Err(e) => self.err(e),
             }
         }
@@ -2695,6 +2706,7 @@ impl eframe::App for App {
             nav(ui, Tab::Location, "location", "Geografische locatie");
             nav(ui, Tab::Raster, "map", "WMS / TMS (raster)");
             nav(ui, Tab::Wfs, "vector", "WFS (vector)");
+            nav(ui, Tab::Services, "services", crate::lang::tr("Services wereldwijd", "Services worldwide"));
             nav(ui, Tab::Osm, "globe", "OpenStreetMap");
             nav(ui, Tab::Pdok, "pdok", "PDOK (NL)");
             ui.add_space(8.0);
@@ -2744,7 +2756,7 @@ impl eframe::App for App {
         });
         egui::CentralPanel::default().show(ui, |ui| {
             // OK / Test / Annuleren stay visible at the bottom, as in the FreeCAD dialogs.
-            let has_actions = matches!(self.tab, Tab::Location | Tab::Raster | Tab::Wfs | Tab::Osm | Tab::Pdok | Tab::Nlcs | Tab::Ahn | Tab::Controle | Tab::Hoeveelheden | Tab::Civiel);
+            let has_actions = matches!(self.tab, Tab::Location | Tab::Raster | Tab::Wfs | Tab::Osm | Tab::Pdok | Tab::Nlcs | Tab::Ahn | Tab::Controle | Tab::Hoeveelheden | Tab::Civiel | Tab::Services);
             if has_actions {
                 egui::Panel::bottom("actions").frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 8))).show(ui, |ui| match self.tab {
                     Tab::Location => self.location_actions(ui),
@@ -2757,6 +2769,7 @@ impl eframe::App for App {
                     Tab::Controle => self.controle_actions(ui),
                     Tab::Hoeveelheden => self.hoeveelheden_actions(ui),
                     Tab::Civiel => self.civiel_actions(ui),
+                    Tab::Services => self.services_actions(ui),
                     _ => {}
                 });
             }
@@ -2777,6 +2790,7 @@ impl eframe::App for App {
                     Tab::Library => self.lib.page(ui),
                     Tab::Files => self.files.page(ui),
                     Tab::Civiel => self.civiel_page(ui),
+                    Tab::Services => self.services_page(ui),
                 }
             });
         });

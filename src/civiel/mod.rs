@@ -8,10 +8,9 @@ pub mod corridor;
 pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
+pub mod ondergrond;
 pub mod terrein;
-// Exchange: LandXML and IFC 4.3 export (stream uitwisseling).
-pub mod ifc;
-pub mod step;
+// Exchange: LandXML export (stream uitwisseling).
 pub mod uitwisseling;
 
 use std::sync::{Mutex, OnceLock};
@@ -53,7 +52,7 @@ pub struct CivielOptions {
     pub right: f64,
     pub section_exaggeration: f64,
     pub per_row: usize,
-    /// Offset lines beside the axis (m, right > 0), like Civil 3D offset alignments.
+    /// Offset lines beside the axis (m, right > 0), as offset alignments.
     pub offsets: Vec<f64>,
     /// Design profile: length of the vertical curves (m).
     pub vertical_curve: f64,

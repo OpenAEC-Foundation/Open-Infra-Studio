@@ -539,7 +539,7 @@ pub fn write(m: &super::uitwisseling::Model, stamp: &Stamp) -> String {
 pub fn export(opt: &super::CivielOptions, path: Option<std::path::PathBuf>, all: bool, progress: &dyn Fn(String)) -> Result<String, String> {
     use crate::lang::tr;
     let ctx = Ctx::new(opt)?;
-    let m = super::uitwisseling::gather(&ctx, all, false, progress)?;
+    let m = super::uitwisseling::gather(&ctx, all, progress)?;
     if m.is_empty() {
         return Err(tr("niets om te exporteren: geen meetpunten, TIN's, assen of corridors (in de selectie)", "nothing to export: no survey points, TINs, alignments or corridors (in the selection)").into());
     }
