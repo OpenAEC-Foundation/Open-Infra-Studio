@@ -126,6 +126,51 @@ pub fn voxel_for(points: usize, plan_area_m2: f64) -> f64 {
     (2.5 * spacing).clamp(0.02, 0.5)
 }
 
+/// The point spacing of a cloud (m): the median distance to the nearest
+/// neighbour of up to 2000 points spread over it. `guess` sizes the search
+/// grid (about the spacing).
+pub fn spacing(pts: &[[f64; 3]], guess: f64) -> Option<f64> {
+    if pts.len() < 2 {
+        return None;
+    }
+    let g = guess.max(1e-3);
+    let key = |p: &[f64; 3]| ((p[0] / g).floor() as i64, (p[1] / g).floor() as i64, (p[2] / g).floor() as i64);
+    let mut grid: std::collections::HashMap<(i64, i64, i64), Vec<usize>> = std::collections::HashMap::new();
+    for (i, p) in pts.iter().enumerate() {
+        grid.entry(key(p)).or_default().push(i);
+    }
+    let every = (pts.len() / 2000).max(1);
+    let mut d: Vec<f64> = Vec::new();
+    for i in (0..pts.len()).step_by(every) {
+        let p = pts[i];
+        let (a, b, c) = key(&p);
+        let mut best = f64::INFINITY;
+        for x in a - 1..=a + 1 {
+            for y in b - 1..=b + 1 {
+                for z in c - 1..=c + 1 {
+                    for &j in grid.get(&(x, y, z)).into_iter().flatten() {
+                        if j != i {
+                            let q = pts[j];
+                            let dd = ((p[0] - q[0]).powi(2) + (p[1] - q[1]).powi(2) + (p[2] - q[2]).powi(2)).sqrt();
+                            if dd > 1e-6 {
+                                best = best.min(dd);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if best.is_finite() {
+            d.push(best);
+        }
+    }
+    if d.is_empty() {
+        return None;
+    }
+    d.sort_by(f64::total_cmp);
+    Some(d[d.len() / 2])
+}
+
 /// The closed mesh of points (metres, scene coordinates), with a coarser
 /// voxel when the first try gives more triangles than allowed.
 pub fn mesh_points(pts: &[[f64; 3]], voxel: f64, gap: f64, side: MeshOrientation, max_triangles: usize) -> Result<(pointcloud_core::MeshGeometry, pointcloud_core::ClosedMeshReport), String> {
@@ -213,7 +258,12 @@ pub fn create(opt: &CivielOptions, v: &MeshVraag, progress: &dyn Fn(String)) -> 
         return Err(trf!("{} punten in het gebied: te weinig voor een mesh", "{} points in the area: too few for a mesh", pts.len()));
     }
     let plan = polygon_area(&polygon) / (f * f);
-    let voxel = v.voxel.unwrap_or_else(|| voxel_for(pts.len(), plan));
+    // The voxel: twice the measured point spacing (a 3D object holds more
+    // points per square metre of plan than a surface).
+    let voxel = v.voxel.unwrap_or_else(|| {
+        let guess = (plan / pts.len() as f64).sqrt();
+        spacing(&pts, guess.max(0.01)).map(|s| (2.0 * s).clamp(0.02, 0.5)).unwrap_or_else(|| voxel_for(pts.len(), plan))
+    });
     let side = match &v.zijde {
         Some(Zijde::Boven) => MeshOrientation::Upward,
         Some(Zijde::Midden) => MeshOrientation::Automatic,
@@ -231,10 +281,15 @@ pub fn create(opt: &CivielOptions, v: &MeshVraag, progress: &dyn Fn(String)) -> 
     let (mesh, report) = mesh_points(&pts, voxel, v.gat, side, v.max_driehoeken)?;
     let object = SOORTEN.iter().find(|(k, _)| *k == v.soort).map(|(_, o)| *o).unwrap_or("KUNSTWERK");
     let layer = ctx.layer("KW", object, Element::G)?;
-    let name = v.naam.clone().unwrap_or_else(|| format!("Mesh {}", bron.label()));
+    // A name that tells meshes apart: the middle of the area (project coordinates).
+    let name = v.naam.clone().unwrap_or_else(|| {
+        let c = ctx.from_drawing(mid);
+        format!("{} {:.0},{:.0}", tr("Mesh", "Mesh"), c[0], c[1])
+    });
     let closed = report.topology.open_edges == 0 && report.topology.non_manifold_edges == 0;
     let d = record(&[
         ("mesh", name.clone()),
+        ("naam", name.clone()),
         ("bron", bron.label()),
         ("punten", pts.len().to_string()),
         ("driehoeken", mesh.triangles.len().to_string()),
@@ -342,6 +397,58 @@ mod tests {
         }
         assert!(r.deviation.p95 < 0.05, "{:?}", r.deviation);
         assert_eq!(r.topology.open_edges, 0, "{:?}", r.topology);
+    }
+
+    /// The IFC export takes a mesh of several MESH entities as one civil
+    /// element, and a point cloud TIN as terrain.
+    #[test]
+    fn meshes_and_point_cloud_tins_reach_the_ifc_export() {
+        use crate::nlcs::{self, Status};
+        use ocs_plugin_api::host::codec::entities::{Mesh, MeshFace};
+        use ocs_plugin_api::host::codec::{CadDocument, EntityType, Vector3};
+        let layer = |g: &str, o: &str| nlcs::layer(nlcs::object_by_name(g, o).unwrap(), Status::B, "XX", Element::G).name;
+        let tri = |z: f64, layer: &str, data: &[(&str, String)]| {
+            let mut m = Mesh::new();
+            m.vertices = vec![Vector3::new(0.0, 0.0, z), Vector3::new(10.0, 0.0, z), Vector3::new(0.0, 10.0, z + 1.0)];
+            m.faces = vec![MeshFace::new(vec![0, 1, 2])];
+            let mut e = EntityType::Mesh(m);
+            e.common_mut().layer = layer.to_string();
+            e.common_mut().extended_data.add_record(record(data));
+            e
+        };
+        let mut doc = CadDocument::new();
+        let bridge = [("mesh", "Brug 1".to_string()), ("naam", "Brug 1".to_string()), ("bron", "AHN5-puntenwolk".to_string())];
+        let tin = [("terrein", "Terrein 1".to_string()), ("bron", "AHN5-puntenwolk, klassen 2;9, cel 0,5 m, tol 0,1 m".to_string())];
+        doc.add_entity(tri(4.0, &layer("KW", "KUNSTWERK_BRUG"), &bridge)).unwrap();
+        doc.add_entity(tri(5.0, &layer("KW", "KUNSTWERK_BRUG"), &bridge)).unwrap();
+        doc.add_entity(tri(0.0, &layer("OG", "TRIANGULATIE"), &tin)).unwrap();
+        doc.add_entity(tri(0.5, &layer("OG", "TRIANGULATIE"), &tin)).unwrap();
+        let src = crate::ifc::Source { doc: &doc, f: 1.0, site: None, name: "puntenwolk.dwg".into() };
+        let mut report = crate::ifc::Report::default();
+        let out = crate::ifc::export(&src, &crate::ifc::Options::default(), Vec::new(), &mut report).unwrap();
+        let ifc = String::from_utf8(out).unwrap();
+        assert_eq!(report.classes.get("IfcCivilElement"), Some(&1), "{:?}", report.classes);
+        assert_eq!(report.classes.get("IfcGeographicElement"), Some(&1), "{:?}", report.classes);
+        assert!(ifc.contains("'Brug 1'"));
+        assert!(ifc.contains("IFCGEOGRAPHICELEMENT(") && ifc.contains(".TERRAIN."));
+    }
+
+    /// The footbridge of tests/data/puntenwolk (sampled every 0.12 m): the
+    /// spacing is found, and the mesh at twice it stays close to the points.
+    #[test]
+    fn the_test_bridge_meshes() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/puntenwolk/brug.ply");
+        let mut pts = Vec::new();
+        crate::gis::pointcloud::stream_file(&path, None, 0.0, &|_| {}, &mut |s| {
+            pts.push([s.xyz[0] - 105_420.0, s.xyz[1] - 425_272.0, s.xyz[2]]);
+            true
+        })
+        .unwrap();
+        let s = spacing(&pts, 0.3).unwrap();
+        assert!((s - 0.12).abs() < 0.03, "spacing {s}");
+        let (m, r) = mesh_points(&pts, 2.0 * s, 1.0, MeshOrientation::Automatic, 400_000).unwrap();
+        assert!(m.triangles.len() > 500);
+        assert!(r.deviation.p95 < 0.15, "{:?}", r.deviation);
     }
 
     #[test]

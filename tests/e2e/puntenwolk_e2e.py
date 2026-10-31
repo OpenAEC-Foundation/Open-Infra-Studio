@@ -17,7 +17,9 @@ A synthetic site (tests/data/puntenwolk, made by maak_testwolk.py):
   tin_las       ``CIV_TIN BESTAND=onbewerkt.las``: an unclassified scan;
                 the ground filter finds the ground (no roof, no crowns).
   ply           ``GIS_BESTAND brug.ply``: a PLY imported as a scan (RCS).
-  mesh_ply      ``CIV_MESH BESTAND=brug.ply``: a closed mesh of the bridge.
+  mesh_ply      ``CIV_MESH BESTAND=brug.ply``: a mesh of the bridge.
+  ifc_export    ``CIV_IFC``: the TIN goes out as terrain, the mesh as a civil
+                element.
 
 Captures go to target/e2e-puntenwolk/*.png, the drawings and the report
 (rapport.md) beside them.
@@ -191,9 +193,11 @@ def main():
 
     def save_dordrecht():
         path = OUT / "puntenwolk_dordrecht.dwg"
-        ocs.run(f"QSAVEAS {path}")
-        time.sleep(4)
-        return path.exists(), str(path)
+        if path.exists():
+            path.unlink()
+        r = ocs.call("/save", {"path": str(path), "document_id": ocs.doc()}, timeout=300)
+        time.sleep(2)
+        return path.exists(), f"{path} ({r.get('ok', r)})"
 
     # ── Synthetic data: unclassified LAS, PLY ──────────────────────────────
     def new_drawing():
@@ -226,8 +230,19 @@ def main():
     def mesh_ply():
         r = civ(f"CIV_MESH BESTAND={DATA / 'brug.ply'} GEBIED=105405,425265;105435,425280 SOORT=brug NAAM=Testbrug", "mesh_ply", 600)
         d = r.get("data", {})
-        ok = r["ok"] and d.get("driehoeken", 0) > 200 and d.get("afwijking_p95_m", 1) < 0.15
+        ok = r["ok"] and d.get("driehoeken", 0) > 500 and d.get("afwijking_p95_m", 1) < 0.15
         return ok, r["message"]
+
+    def ifc_export():
+        # Main's IFC 4.3 export picks up the point cloud TIN (terrain) and the mesh (civil element).
+        path = OUT / "puntenwolk_testwolk.ifc"
+        r = civ(f"CIV_IFC BESTAND={path}", "ifc", 600)
+        k = r.get("data", {}).get("klassen", {})
+        ok = r["ok"] and path.exists() and k.get("IfcGeographicElement", 0) >= 1 and k.get("IfcCivilElement", 0) >= 1
+        if ok:
+            text = path.read_text(errors="replace")
+            ok = "'Testbrug'" in text and ".TERRAIN." in text
+        return ok, f"{r['message']} | {k}"
 
     def captures_test():
         ocs.run("-VIEW TOP")
@@ -242,9 +257,11 @@ def main():
 
     def save_test():
         path = OUT / "puntenwolk_testwolk.dwg"
-        ocs.run(f"QSAVEAS {path}")
-        time.sleep(4)
-        return path.exists(), str(path)
+        if path.exists():
+            path.unlink()
+        r = ocs.call("/save", {"path": str(path), "document_id": ocs.doc()}, timeout=300)
+        time.sleep(2)
+        return path.exists(), f"{path} ({r.get('ok', r)})"
 
     try:
         step("site", site)
@@ -260,6 +277,7 @@ def main():
         step("contours_las", contours_las)
         step("ply_import", ply_import)
         step("mesh_ply", mesh_ply)
+        step("ifc_export", ifc_export)
         step("captures_test", captures_test)
         step("save_test", save_test)
     finally:

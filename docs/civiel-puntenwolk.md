@@ -133,7 +133,7 @@ A mesh of the points inside the selected closed polyline (or `GEBIED`), optional
   - A signed distance to the surface is found at the corners of a voxel lattice.
   - Dual contouring takes the surface out (after Ju et al. 2002).
   - The mesh is closed wherever the scan has data or a gap narrower than `GAT` (at most 3.2 m and 32 voxels).
-- **Voxel.** By default 2.5 × the point spacing, between 0.02 and 0.5 m (the mesher allows 0.005–0.5 m). AHN gives 0.5 m. When the mesh would exceed `MAX` triangles, the voxel grows (× 1.6) up to 0.5 m.
+- **Voxel.** By default twice the point spacing, measured as the median distance to the nearest neighbour, between 0.02 and 0.5 m (the mesher allows 0.005–0.5 m). AHN gives about 0.5 m. When the mesh would exceed `MAX` triangles, the voxel grows (× 1.6) up to 0.5 m.
 - **Side.** Which way a surface faces where no scanner position is known:
   - `BOVEN` for data measured from above (the default for AHN);
   - `MIDDEN` faces the middle of the area, right for a tunnel or room seen from inside (the default for files);
@@ -141,11 +141,17 @@ A mesh of the points inside the selected closed polyline (or `GEBIED`), optional
 - **Output.**
   - MESH entities of at most 100,000 vertices, sent in batches under the host's 64 MB message limit.
   - The layer is the NLCS object of `SOORT` (KW-KUNSTWERK by default, KW-KUNSTWERK_BRUG for `SOORT=brug`, …) at the drawing status.
-  - Object data: `mesh`, `bron`, `punten`, `driehoeken`, `voxel_m`, `gesloten`, `afwijking_p95_m`.
+  - Object data: `mesh`, `naam`, `bron`, `punten`, `driehoeken`, `voxel_m`, `gesloten`, `afwijking_p95_m`. Without `NAAM=` the mesh is named after the middle of its area.
   - The answer adds the number of open edges, pieces, mean and 95 % deviation of the points from the mesh, and the handles.
 - **Limits.** At most 600 × 600 m and 12 million points; more are thinned evenly. The mesher runs on two threads.
 
 AHN measures from the air: a bridge from AHN gives its deck, parapets and some of the piers, not its underside. A terrestrial scan (E57) gives the whole object.
+
+## IFC
+
+The IFC 4.3 export (`GIS_IFC` / `CIV_IFC`) takes both:
+- a point cloud TIN lies on `OG-TRIANGULATIE`, so it goes out as `IfcGeographicElement` (TERRAIN), like every TIN;
+- a mesh lies on its KW layer, so it goes out as `IfcCivilElement`, with its object data as a property set. The MESH entities of one mesh become one object (grouped by the `mesh` object data).
 
 ## Tests
 
@@ -155,12 +161,13 @@ AHN measures from the air: a bridge from AHN gives its deck, parapets and some o
   - SMRF and the spike filter;
   - LAS, PLY, PTS, XYZ and TXT readers;
   - the unclassified test file end to end (ground filter, TIN within the tolerance, the building a hole);
-  - a closed mesh of a scanned box;
+  - a closed mesh of a scanned box, and the mesh of the test bridge (95 % of its points within 0.15 m);
+  - the IFC export of a point cloud TIN and a two-part mesh;
   - argument parsing.
 - **Test data:** `tests/data/puntenwolk/maak_testwolk.py` (standard library only) makes `onbewerkt.las`, an unclassified scan of 80 × 60 m (0.6 MB), and `brug.ply`, a footbridge (0.5 MB).
 - **End to end:** `tests/e2e/puntenwolk_e2e.py` (port 18811, isolated `XDG_CONFIG_HOME`).
   - Dordrecht: TIN from AHN, contours, analysis, earthwork, a length profile over the TIN and from points, cross sections from points, the mesh of a footbridge.
-  - The synthetic site: TIN from the unclassified LAS through the ground filter, contours, PLY import, the mesh of the PLY bridge.
+  - The synthetic site: TIN from the unclassified LAS through the ground filter, contours, PLY import, the mesh of the PLY bridge, the IFC export.
   - Captures in `target/e2e-puntenwolk/`.
 
 ## Sources
@@ -190,5 +197,5 @@ None of these is a standard value; they are estimates, set for AHN-like data.
 | `MAX` | 200,000 triangles | Keeps the drawing responsive |
 | `GAT` | 2 m | Bridges alleys, leaves buildings out |
 | `STROOK` | 1 m | About ten AHN ground points per station |
-| Mesh voxel | 2.5 × point spacing | Enough points per voxel for a plane fit |
+| Mesh voxel | 2 × point spacing | Keeps the 0.6 m deck of the test bridge 2.5 voxels thick; 95 % of its points lie within 6 cm of the mesh |
 | Mesh `GAT` | 1 m | Closes gaps between scan lines, keeps doorways |
