@@ -470,6 +470,21 @@ def t_bgt3d(a):
     return OCS.run(f"CIV_BGT3D {_kv(GROEPEN=groups, PANDEN=a.get('buildings'), KLEUR=a.get('colours'))}", 1800)
 
 
+# Exchange: LandXML 1.2 and IFC 4.3 export (stream uitwisseling).
+EXPORT = {"path": {"type": "string", "description": "Output file; empty = beside the drawing"},
+          "all": {"type": "boolean", "description": "Everything (default); false = only the objects in the selection"}}
+
+
+@tool("civ_landxml_export", "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.", EXPORT)
+def t_landxml_export(a):
+    return OCS.run(f"CIV_LANDXML_EXPORT {_kv(BESTAND=a.get('path'))}{' ALLES' if a.get('all', True) else ''}")
+
+
+@tool("civ_ifc_export", "Export IFC 4.3 (IFC4X3_ADD2), georeferenced: alignments (horizontal and vertical), terrain, corridors as roads with pavement and earthworks, 3D BAG buildings.", EXPORT)
+def t_ifc_export(a):
+    return OCS.run(f"CIV_IFC_EXPORT {_kv(BESTAND=a.get('path'))}{' ALLES' if a.get('all', True) else ''}", 1800)
+
+
 @tool("oi_view", "Set the view: preset (TOP, SWISO, SEISO, NEISO, NWISO, FRONT…), visual style (GOURAUDSHADED, FLATSHADED, WIREFRAME2D, HIDDENLINE…) and zoom to extents.",
       {"preset": STR, "style": STR, "zoom_extents": {"type": "boolean"}})
 def t_view(a):
