@@ -18,6 +18,8 @@ pub mod labels;
 // Corridor stream: junctions and roundabouts, assemblies as JSON.
 pub mod kruispunt;
 pub mod profieltype;
+pub mod hydrologie;
+pub mod percelen;
 
 use std::sync::{Mutex, OnceLock};
 

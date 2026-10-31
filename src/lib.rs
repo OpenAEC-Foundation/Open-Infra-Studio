@@ -71,6 +71,7 @@ const I_CLOUD: IconKind = IconKind::Svg(include_bytes!("../assets/puntenwolk.svg
 const I_VEHICLE: IconKind = IconKind::Svg(include_bytes!("../assets/vehicle.svg"));
 const I_CATALOGUE: IconKind = IconKind::Svg(include_bytes!("../assets/catalogue.svg"));
 const I_SWEPT: IconKind = IconKind::Svg(include_bytes!("../assets/swept.svg"));
+const I_PARKING: IconKind = IconKind::Svg(include_bytes!("../assets/parkeren.svg"));
 const I_FILE: IconKind = IconKind::Svg(include_bytes!("../assets/file.svg"));
 const I_CHECK: IconKind = IconKind::Svg(include_bytes!("../assets/nlcs-controle.svg"));
 const I_QUANTITIES: IconKind = IconKind::Svg(include_bytes!("../assets/hoeveelheden.svg"));
@@ -196,6 +197,7 @@ impl CadModule for GisModule {
                         tool("GIS_VOERTUIGEN", tr("Voertuigen", "Vehicles"), I_VEHICLE),
                         small("GIS_VOERTUIGOVERZICHT", tr("Overzicht", "Catalogue"), I_CATALOGUE),
                         small("GIS_VEEGPAD", tr("Veegpad", "Swept path"), I_SWEPT),
+                        small("GIS_PARKEERVAKKEN", tr("Parkeervakken", "Parking bays"), I_PARKING),
                     ],
                 },
             ];
@@ -928,26 +930,11 @@ fn vehicle_command(host: &mut dyn HostApi, cmd: &str) {
     host.start_interactive(Box::new(library::place::InsertCmd::new(v, view, unit)));
 }
 
-/// `GIS_VEEGPAD <id> [interval]`: drive a vehicle along a selected polyline
-/// (or picked points) and draw its swept path.
+/// `GIS_VEEGPAD <id> [interval] [ACHTERUIT] [KNIK=] [PAD=]`: drive a vehicle
+/// along a selected polyline (or picked points, or `PAD=`) and draw its
+/// swept path, forward or in reverse.
 fn swept_command(host: &mut dyn HostApi, cmd: &str) {
-    let args = words(cmd);
-    let Some(v) = args.first().and_then(|id| library::find(id)) else {
-        host.push_error(&format!("[Open Infra] GIS_SWEPT_PATH <{}> [{}]", lang::tr("voertuig", "vehicle"), lang::tr("interval in m", "interval in m")));
-        open(host, ui::Tab::Library);
-        return;
-    };
-    let every = args.get(1).and_then(|a| a.replace(',', ".").parse::<f64>().ok()).unwrap_or(10.0);
-    let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
-    let mut sc = library::place::SweptCmd { vehicle: v, every, path: Vec::new(), unit };
-    match selected_route(host) {
-        Some(route) => {
-            sc.path = route;
-            host.push_info(&format!("[Open Infra] {}", lang::tr("Veegpad langs de geselecteerde lijn.", "Swept path along the selected line.")));
-            library::place::swept_now(&sc);
-        }
-        None => host.start_interactive(Box::new(sc)),
-    }
+    library::place::swept_command(host, cmd);
 }
 
 /// `GIS_VOERTUIGOVERZICHT [categorie] [ZIJ|SIDE]`: lay out the library.
@@ -1148,6 +1135,7 @@ impl BuiltinPlugin for OpenInfra {
             }
             "GIS_VOERTUIG" | "GIS_VEHICLE" => vehicle_command(host, cmd),
             "GIS_VEEGPAD" | "GIS_SWEPT_PATH" | "GIS_SWEPTPATH" => swept_command(host, cmd),
+            "GIS_PARKEERVAKKEN" | "GIS_PARKING" => library::parking::command(host, cmd),
             "GIS_VOERTUIGOVERZICHT" | "GIS_VEHICLE_CATALOG" | "GIS_VEHICLE_CATALOGUE" => catalogue_command(host, cmd),
             "GIS_HELP" => host.push_info(
                 "[Open Infra] GIS_LOCATIE, GIS_GEBIED, GIS_PUNT, GIS_KAART, GIS_WFS, GIS_OSM, GIS_PDOK, GIS_COORD, GIS_SERVERS; \
@@ -1162,7 +1150,8 @@ impl BuiltinPlugin for OpenInfra {
                  NLCS: GIS_BGT (venster), GIS_Q_BGT, GIS_BGT_BIJWERKEN | GIS_BGT_UPDATE, GIS_Q_BRK, GIS_Q_GWSW, GIS_Q_SONDERINGEN [BRON=sonderingen|boringen] (BRO), GIS_KLIC [bestand], GIS_KLIC_IMPORT <bestand>, GIS_TEKENBLAD [onderwerp]; \
                  Bibliotheek / library: GIS_VOERTUIGEN | GIS_VEHICLES (venster), GIS_VOERTUIG | GIS_VEHICLE <id> [ZIJ|SIDE], \
                  GIS_VOERTUIGOVERZICHT | GIS_VEHICLE_CATALOG [categorie] [ZIJ|SIDE], \
-                 GIS_VEEGPAD | GIS_SWEPT_PATH <id> [interval m] (geselecteerde lijn of punten); \
+                 GIS_VEEGPAD | GIS_SWEPT_PATH <id> [interval m] [ACHTERUIT|REVERSE] [KNIK=graden] [PAD=x,y;x,y] (geselecteerde lijn of punten); \
+                 GIS_PARKEERVAKKEN | GIS_PARKING [HOEK=90|80|70|65|60|45|30|LANGS] [KLASSE=openbaar|intensief|nietopenbaar|stalling] [BREEDTE=2.50] [ZIJDE=beide|links|rechts] [LIJN=x,y;x,y] [MET_VEEGPAD=<id>] [VAK=n] [START=1]; \
                  bestanden / files: GIS_BESTAND | GIS_FILE [pad] (venster; vector, raster, puntenwolk), GIS_BESTAND_IMPORT | GIS_FILE_IMPORT <pad> [EPSG:code], \
                  GIS_RASTER_IMPORT <GeoTIFF/ASC/JPG/PNG+world file/LAS/LAZ>; scripts: ID=<naam> → <config>/OpenCADStudio/open-infra/api/<naam>.json.",
             ),

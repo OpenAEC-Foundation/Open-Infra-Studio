@@ -75,6 +75,12 @@ const I_LABELS_UPDATE: IconKind = icon!("labels-bijwerken.svg");
 const I_ASSEMBLY: IconKind = icon!("profieltype.svg");
 const I_JUNCTION: IconKind = icon!("kruispunt.svg");
 const I_ROUNDABOUT: IconKind = icon!("rotonde.svg");
+const I_CODES: IconKind = icon!("codes.svg");
+const I_PARCELS: IconKind = icon!("percelen.svg");
+const I_PARCEL_INFO: IconKind = icon!("perceel-info.svg");
+const I_DROP: IconKind = icon!("waterdruppel.svg");
+const I_CATCHMENT: IconKind = icon!("stroomgebied.svg");
+const I_PONDS: IconKind = icon!("plassen.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -178,6 +184,24 @@ impl CadModule for CivielModule {
                     ],
                 },
             ];
+            // Survey codes to linework, and parcels.
+            groups.push(RibbonGroup {
+                title: tr("Landmeten", "Survey"),
+                tools: vec![
+                    large("CIV_PERCELEN", tr("Percelen", "Parcels"), I_PARCELS),
+                    small("CIV_PERCEEL_INFO", tr("Perceelinfo", "Parcel info"), I_PARCEL_INFO),
+                    small("CIV_CODES_TOEPASSEN", tr("Codes toepassen", "Apply codes"), I_CODES),
+                ],
+            });
+            // Water: drop paths, catchments, ponds.
+            groups.push(RibbonGroup {
+                title: tr("Water", "Water"),
+                tools: vec![
+                    large("CIV_STROOMGEBIED", tr("Stroomgebied", "Catchment"), I_CATCHMENT),
+                    small("CIV_WATERDRUPPEL", tr("Waterdruppel", "Water drop"), I_DROP),
+                    small("CIV_PLASSEN", tr("Plassen", "Ponds"), I_PONDS),
+                ],
+            });
             // The 3D city and landscape model: open formats for everyone, the
             // Dutch registers (3D BAG, AHN, BGT, KLIC, BRO) in one menu.
             let mut model = vec![
@@ -445,6 +469,42 @@ impl InteractiveCommand for HeightPointCmd {
     }
 }
 
+/// `CIV_WATERDRUPPEL`: click points; each gets the path of a drop.
+struct DropCmd {
+    cell: f64,
+}
+
+fn drops() -> &'static Mutex<Option<civiel::hydrologie::DropSession>> {
+    static D: OnceLock<Mutex<Option<civiel::hydrologie::DropSession>>> = OnceLock::new();
+    D.get_or_init(|| Mutex::new(None))
+}
+
+impl InteractiveCommand for DropCmd {
+    fn prompt(&self) -> String {
+        open_infra::lang::tr("Civiel: startpunt van de waterdruppel [Enter = klaar]", "Civil: start of the water drop [Enter = done]").into()
+    }
+    fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
+        let cell = self.cell;
+        std::thread::spawn(move || {
+            let mut guard = drops().lock().unwrap();
+            if guard.is_none() {
+                match civiel::hydrologie::DropSession::new(&civiel::settings(), cell, &|_| {}) {
+                    Ok(s) => *guard = Some(s),
+                    Err(e) => return bridge::error(&format!("{}: {e}", open_infra::lang::tr("Waterdruppel", "Water drop"))),
+                }
+            }
+            match guard.as_mut().unwrap().run(&[[pt[0], pt[1]]]) {
+                Ok(m) => bridge::info(&m),
+                Err(e) => bridge::error(&format!("{}: {e}", open_infra::lang::tr("Waterdruppel", "Water drop"))),
+            }
+        });
+        CommandStep::NeedPoint
+    }
+    fn on_enter(&mut self) -> CommandStep {
+        CommandStep::Done
+    }
+}
+
 /// Slopes when none are given: the corridor's road template (fill 1:3, cut
 /// 1:2); a starting value, not a standard.
 const DEFAULT_CUT: f64 = 2.0;
@@ -664,6 +724,77 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
     Ok(true)
 }
 
+/// `CIV_STROOMGEBIED`: click the outlets (gullies, manholes, a culvert),
+/// Enter computes their catchments.
+struct OutletCmd {
+    points: Vec<[f64; 2]>,
+    req: Option<civiel::hydrologie::CatchmentRequest>,
+}
+
+impl InteractiveCommand for OutletCmd {
+    fn prompt(&self) -> String {
+        let (first, next) = (
+            open_infra::lang::tr("Civiel: afvoerpunt (kolk, put, duiker)", "Civil: outlet (gully, manhole, culvert)"),
+            open_infra::lang::tr("Civiel: volgend afvoerpunt [Enter = berekenen]", "Civil: next outlet [Enter = compute]"),
+        );
+        if self.points.is_empty() { first.into() } else { next.into() }
+    }
+    fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
+        self.points.push([pt[0], pt[1]]);
+        CommandStep::NeedPoint
+    }
+    fn on_enter(&mut self) -> CommandStep {
+        let Some(mut req) = self.req.take() else { return CommandStep::Cancel };
+        if self.points.is_empty() {
+            return CommandStep::Cancel;
+        }
+        req.outlets.points = std::mem::take(&mut self.points);
+        std::thread::spawn(move || match civiel::hydrologie::catchment(&civiel::settings(), req, &|_| {}) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&format!("{}: {e}", open_infra::lang::tr("Stroomgebied", "Catchment"))),
+        });
+        CommandStep::Done
+    }
+    fn on_cursor_move(&mut self, pt: [f64; 3]) -> Vec<PreviewWire> {
+        self.points
+            .iter()
+            .chain(std::iter::once(&[pt[0], pt[1]]))
+            .map(|p| {
+                let r = 1.0;
+                let ring: Vec<[f64; 3]> = (0..=16).map(|k| {
+                    let a = k as f64 / 16.0 * std::f64::consts::TAU;
+                    [p[0] + r * a.cos(), p[1] + r * a.sin(), 0.0]
+                }).collect();
+                PreviewWire::with_color(ring, [0.4, 0.8, 1.0, 1.0])
+            })
+            .collect()
+    }
+}
+
+/// The catchment arguments of `CIV_STROOMGEBIED` / `CIV_PLASSEN`.
+fn catchment_request(args: &Args, ponds_only: bool) -> Result<civiel::hydrologie::CatchmentRequest, String> {
+    let yes = |k: &str, default: bool| match args.str(k).map(|v| v.to_ascii_lowercase()) {
+        None => Ok(default),
+        Some(v) if matches!(v.as_str(), "ja" | "1" | "true" | "aan") => Ok(true),
+        Some(v) if matches!(v.as_str(), "nee" | "0" | "false" | "uit") => Ok(false),
+        Some(_) => Err(format!("{k}: {}", open_infra::lang::tr("ja of nee", "ja (yes) or nee (no)"))),
+    };
+    let points = match args.points("PUNTEN")? {
+        Some(p) => p.into_iter().map(to_drawing).collect::<Result<Vec<_>, _>>()?,
+        None => Vec::new(),
+    };
+    let layers = args.str("LAAG").map(|l| l.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default();
+    Ok(civiel::hydrologie::CatchmentRequest {
+        source: args.str("BRON").map(str::to_string),
+        cell: args.f64("CEL")?.unwrap_or(1.0).max(0.25),
+        outlets: if ponds_only { Default::default() } else { civiel::hydrologie::Outlets { points, layers } },
+        snap: args.f64("SNAP")?.unwrap_or(2.0).max(0.0),
+        ponds: ponds_only || yes("PLASSEN", true)?,
+        min_depth: args.f64("MINDIEPTE")?.unwrap_or(0.05).max(0.0),
+        min_area: args.f64("MINOPP")?.unwrap_or(2.0).max(0.0),
+    })
+}
+
 fn open_settings(host: &mut dyn HostApi) {
     if let Err(e) = ui::open(ui::Tab::Civiel) {
         host.push_error(&format!("[Open Infra] {e}"));
@@ -772,11 +903,18 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let Some(file) = path() else {
                 return Err("geef een bestand: CIV_PUNTEN_IMPORT <pad> (of kies via de knop in het lint)".into());
             };
-            let o = opt(&[])?;
+            let o = opt(&["CODES", "CODETABEL"])?;
             if verb == "CIV_LANDXML" {
                 job(host, "LandXML", id, move |p| landxml::import(std::path::Path::new(&file), &o, p));
             } else {
-                job(host, "Punten importeren", id, move |_| landmeten::import(std::path::Path::new(&file), &o));
+                // CODES=JA: the point codes become linework and symbols.
+                let table = args.str("CODETABEL").map(std::path::PathBuf::from);
+                let codes = match args.str("CODES").map(|v| v.to_ascii_lowercase()) {
+                    Some(v) if matches!(v.as_str(), "ja" | "1" | "true" | "aan") => Some(landmeten::CodeOptions { table }),
+                    None if table.is_some() => Some(landmeten::CodeOptions { table }),
+                    _ => None,
+                };
+                job(host, "Punten importeren", id, move |_| landmeten::import_coded(std::path::Path::new(&file), &o, codes));
             }
         }
         "CIV_PUNTEN_EXPORT" => {
@@ -1114,6 +1252,87 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
                 Ok(parts.join(" | "))
             });
         }
+        "CIV_CODES_TOEPASSEN" => {
+            let o = opt(&["CODETABEL"])?;
+            let table = args.str("CODETABEL").map(std::path::PathBuf::from);
+            job(host, open_infra::lang::tr("Codes toepassen", "Apply codes"), id, move |_| landmeten::apply_in_drawing(&o, landmeten::CodeOptions { table }));
+        }
+        "CIV_PERCELEN" => {
+            use civiel::percelen::{Direction, Remainder, Request, Sizing};
+            let mut o = opt(&["KAVEL", "STRAAT", "N", "OPP", "FRONT", "RICHTING", "REST", "PREFIX", "START"])?;
+            // New parcels are design (N) unless STATUS= says otherwise.
+            if args.str("STATUS").is_none() {
+                o.nlcs.status = open_infra::nlcs::Status::N;
+            }
+            let rest = match args.str("REST").map(|v| v.to_ascii_lowercase()) {
+                None => Remainder::Last,
+                Some(v) if v == "laatste" || v == "last" => Remainder::Last,
+                Some(v) if v == "apart" || v == "eigen" || v == "own" => Remainder::Own,
+                Some(v) if v == "verdelen" || v == "spread" => Remainder::Spread,
+                Some(_) => return Err(open_infra::lang::tr("REST: laatste, apart of verdelen", "REST: laatste (last), apart (own) or verdelen (spread)").into()),
+            };
+            let (n, area, front) = (args.f64("N")?, args.f64("OPP")?, args.f64("FRONT")?);
+            let sizing = match (n, area, front) {
+                (Some(n), _, _) => Sizing::Equal((n.round() as usize).clamp(1, 10_000)),
+                (None, None, None) => Sizing::Equal(2),
+                (None, a, w) => Sizing::Min { area: a, front: w, rest },
+            };
+            let direction = match (args.f64("RICHTING")?, args.handle("STRAAT")?) {
+                (Some(deg), _) => Direction::Angle(deg),
+                (None, Some(h)) => Direction::Street(Some(h)),
+                (None, None) => Direction::Street(None),
+            };
+            let plot = args.handle("KAVEL")?;
+            if plot.is_none() && host.selection().is_empty() {
+                return Err(open_infra::lang::tr(
+                    "selecteer het perceel (gesloten polylijn) en eventueel de straatlijn, of geef KAVEL=<handle> [STRAAT=<handle>] N=|OPP=|FRONT=",
+                    "select the plot (closed polyline) and optionally the street line, or give KAVEL=<handle> [STRAAT=<handle>] N=|OPP=|FRONT=",
+                )
+                .into());
+            }
+            let req = Request {
+                plot,
+                direction,
+                sizing,
+                prefix: args.str("PREFIX").unwrap_or("P").to_string(),
+                first: args.f64("START")?.map(|v| v.max(0.0) as usize).unwrap_or(1),
+                id: id.clone(),
+            };
+            job(host, open_infra::lang::tr("Percelen", "Parcels"), id, move |_| civiel::percelen::parcels(&o, req));
+        }
+        "CIV_PERCEEL_INFO" => {
+            let o = opt(&["PERCEEL", "STRAAT"])?;
+            let hs = args.str("PERCEEL").map(|v| v.split(';').filter(|t| !t.trim().is_empty()).map(api::parse_handle).collect::<Result<Vec<_>, _>>()).transpose()?.unwrap_or_default();
+            let street = args.handle("STRAAT")?;
+            job(host, open_infra::lang::tr("Perceelinfo", "Parcel info"), id, move |_| civiel::percelen::info(&o, hs, street));
+        }
+        "CIV_WATERDRUPPEL" => {
+            let o = opt(&["PUNTEN"])?;
+            let cell = args.f64("CEL")?.unwrap_or(1.0).max(0.25);
+            let mut pts: Vec<[f64; 2]> = args.points("PUNTEN")?.unwrap_or_default();
+            pts.extend(args.coords()?.into_iter().map(|c| [c[0], c[1]]));
+            if pts.is_empty() {
+                *drops().lock().unwrap() = None;
+                host.start_interactive(Box::new(DropCmd { cell }));
+                return Ok(());
+            }
+            let pts: Vec<[f64; 2]> = pts.into_iter().map(to_drawing).collect::<Result<_, _>>()?;
+            job(host, open_infra::lang::tr("Waterdruppel", "Water drop"), id, move |p| civiel::hydrologie::DropSession::new(&o, cell, p)?.run(&pts));
+        }
+        "CIV_STROOMGEBIED" | "CIV_PLASSEN" => {
+            let o = opt(&["PUNTEN", "LAAG", "BRON", "SNAP", "PLASSEN", "MINDIEPTE", "MINOPP"])?;
+            let ponds_only = verb == "CIV_PLASSEN";
+            let req = catchment_request(args, ponds_only)?;
+            if !ponds_only && req.outlets.points.is_empty() && req.outlets.layers.is_empty() {
+                if scripted && id.is_some() {
+                    return Err(open_infra::lang::tr("geef afvoerpunten: PUNTEN=x,y;… of LAAG=<laag>, bijv. LAAG=*KOLK*", "give outlets: PUNTEN=x,y;… or LAAG=<layer>, e.g. LAAG=*KOLK*").into());
+                }
+                host.start_interactive(Box::new(OutletCmd { points: Vec::new(), req: Some(req) }));
+                return Ok(());
+            }
+            let label = if ponds_only { open_infra::lang::tr("Plassen", "Ponds") } else { open_infra::lang::tr("Stroomgebied", "Catchment") };
+            job(host, label, id, move |p| civiel::hydrologie::catchment(&o, req, p));
+        }
         "CIV_SONDERINGEN3D" | "CIV_ONDERGROND3D" => {
             // LABELS= is the shared point-label setting: plan symbols too.
             let o = opt(&["BRON", "MAX", "STRAAL", "QC", "MINLAAG"])?;
@@ -1214,7 +1433,9 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs] [RAMEN=nee], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>, CIV_CITYGML <pad> [STIJL=], CIV_KLIC3D [<levering>] [VERGROOT=], CIV_DOORZICHT [PCT=70] [ALLES] [UIT], CIV_SONDERINGEN3D [BRON=sonderingen|boringen|alles] [MAX=100] [STRAAL=0.4] [MINLAAG=0.2] [QC=nee] [LABELS=nee] (BRO: kolommen met grondsoorten); \
              CIV_CORRIDOR AS= [PROFIELTYPE=<naam>|<pad.json>] [NIVEAU=|BOVEN=] [VAN=] [TOT=] [DOELEN=naam:handle;…] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y] [KLEUR=nlcs]; \
              CIV_PROFIELTYPEN, CIV_PROFIELTYPE NAAM= [KOPIE=] [PLAATS=x,y]; CIV_KRUISPUNT HOOFD= ZIJ= [R=8;…] [PROFIELTYPE=] [NIVEAU=]; \
-             CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_INFO.",
+             CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_INFO; \
+             codes: CIV_PUNTEN_IMPORT <pad> CODES=JA [CODETABEL=], CIV_CODES_TOEPASSEN [CODETABEL=]; percelen: CIV_PERCELEN KAVEL= [STRAAT=|RICHTING=graden] N=|OPP=|FRONT= [REST=laatste|apart|verdelen] [PREFIX=P] [START=1], CIV_PERCEEL_INFO [PERCEEL=h;h] [STRAAT=]; \
+             water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=].",
         ),
         _ => return Err(format!("onbekend commando {verb}; zie CIV_HELP")),
     }
