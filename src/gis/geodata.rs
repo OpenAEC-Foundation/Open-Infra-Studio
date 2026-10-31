@@ -1,5 +1,5 @@
-//! The drawing's own geographic location: the GEODATA object that AutoCAD
-//! (GEOGRAPHICLOCATION), Civil 3D and BricsCAD (GEOMAP) write. Open Infra
+//! The drawing's own geographic location: the GEODATA object that other CAD
+//! programs write (GEOGRAPHICLOCATION, GEOMAP). Open Infra
 //! reads it to set the project site of a drawing that has none yet.
 //!
 //! Open CAD Studio's plugin API cannot create objects other than XRecords,
@@ -10,7 +10,7 @@ use super::crs;
 use super::files::epsg_from_wkt;
 use super::site::Site;
 
-/// MapGuide coordinate system names AutoCAD uses, with their EPSG codes.
+/// MapGuide coordinate system names in DWG GEODATA, with their EPSG codes.
 const MAPGUIDE: &[(&str, &str)] = &[
     ("LL84", "EPSG:4326"),
     ("WGS84.PSEUDOMERCATOR", "EPSG:3857"),

@@ -1,12 +1,18 @@
 name: release
 
-# Build the plugin for each desktop platform and attach the binaries plus
-# plugin.toml to a GitHub Release on a v* tag. Open CAD Studio's Plugin Manager
-# picks the asset for the user's platform and installs it.
+# Build the plugins for each desktop platform, sign them with the OpenAEC
+# organisation's credentials and attach them plus plugin.toml to a GitHub
+# Release on a v* tag. Open CAD Studio's Plugin Manager picks the asset for the
+# user's platform and installs it. Run by hand with a tag, it rebuilds that
+# tag, signs it and replaces the assets of its release.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to rebuild, sign and replace the assets of (empty: build and sign only)"
+        required: false
 
 permissions:
   contents: write
@@ -15,6 +21,8 @@ env:
   # Must equal the rustc that built the Open CAD Studio release this plugin
   # targets: the host compares plugin.toml's rustc_version byte for byte.
   RUST_TOOLCHAIN: "1.99.1"
+  # The release to publish to: the pushed tag, or the tag given by hand.
+  RELEASE_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
 
 jobs:
   build:
@@ -27,8 +35,12 @@ jobs:
             civiel: libopen_infra_civiel.so
             asset: openaec.open-infra-linux-x86_64.so
             zip: open-infra-civiel-linux-x86_64.zip
-            # plugin.toml is identical for every platform; one job ships it.
-            toml: dist/plugin.toml
+            # plugin.toml is identical for every platform; one job ships it,
+            # with the OpenPGP signatures and the public key.
+            extra: |
+              dist/plugin.toml
+              dist/*.asc
+              dist/openaec-signing-fingerprint.txt
           - os: windows-latest
             lib: open_infra.dll
             civiel: open_infra_civiel.dll
@@ -42,37 +54,169 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Version matches the tag
+        if: env.RELEASE_TAG != ''
+        shell: bash
+        run: |
+          want="${RELEASE_TAG#v}"
+          for f in Cargo.toml civiel/Cargo.toml plugin.toml civiel/plugin.toml; do
+            got=$(grep -m1 -E '^version = ' "$f" | cut -d'"' -f2)
+            [ "$got" = "$want" ] || { echo "::error::$f has version $got, the tag is $RELEASE_TAG: run scripts/version.sh $want"; exit 1; }
+          done
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       - run: cargo test --lib --locked -p open-infra
       # Two plugins from one engine: separate builds, so the Civiel plugin
-      # links the engine without the GIS plugin's entry points.
+      # links the engine without the GIS plugin's entry points. That second
+      # build rewrites target/release/<gis lib> without them, so copy the GIS
+      # library before it runs.
       - run: cargo build --release --locked -p open-infra
-      - run: cargo build --release --locked -p open-infra-civiel
-      - name: Stage release assets
+      - name: Stage the GIS library
         shell: bash
         run: |
-          mkdir -p dist civiel-pkg/openaec.open-infra-civiel
+          mkdir -p dist
           cp "target/release/${{ matrix.lib }}" "dist/${{ matrix.asset }}"
+      - run: cargo build --release --locked -p open-infra-civiel
+      - name: Stage the Civiel plugin and plugin.toml
+        shell: bash
+        run: |
+          mkdir -p civiel-pkg/openaec.open-infra-civiel
           acadrust_source=$(awk '/^name = "acadrust"$/{f=1} f&&/^source = /{gsub(/^source = "|"$/,""); print; exit}' Cargo.lock)
           stamp() { sed -e "s|__RUSTC_VERSION__|$(rustc --version)|" -e "s|__ACADRUST_SOURCE__|$acadrust_source|" "$1"; }
           stamp plugin.toml > dist/plugin.toml
           # The Civiel plugin as a folder for <config>/OpenCADStudio/plugins/.
           cp "target/release/${{ matrix.civiel }}" civiel-pkg/openaec.open-infra-civiel/
           stamp civiel/plugin.toml > civiel-pkg/openaec.open-infra-civiel/plugin.toml
+
+      # Signing with the organisation's credentials (#12): Authenticode on
+      # Windows, Developer ID plus notarization on macOS, both before the Civiel
+      # library is zipped; a detached OpenPGP signature per Linux asset.
+      - name: Authenticode-sign the libraries (Windows)
+        if: runner.os == 'Windows'
+        uses: azure/trusted-signing-action@v1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
+          cache-dependencies: false
+          files: |
+            ${{ github.workspace }}\dist\${{ matrix.asset }}
+            ${{ github.workspace }}\civiel-pkg\openaec.open-infra-civiel\${{ matrix.civiel }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Verify the Authenticode signatures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          foreach ($f in "dist/${{ matrix.asset }}", "civiel-pkg/openaec.open-infra-civiel/${{ matrix.civiel }}") {
+            $s = Get-AuthenticodeSignature $f
+            if ($s.Status -ne 'Valid' -or -not $s.TimeStamperCertificate) { throw "${f}: $($s.Status) $($s.StatusMessage)" }
+            "${f}: signed by $($s.SignerCertificate.Subject), timestamped"
+          }
+      - name: Developer ID-sign and notarize the libraries (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY_CONTENT APPLE_API_KEY APPLE_API_ISSUER; do
+            test -n "${!name}" || { echo "::error::Organisation secret $name is not available"; exit 1; }
+          done
+          case "$APPLE_SIGNING_IDENTITY" in "Developer ID Application:"*) ;; *) echo "::error::APPLE_SIGNING_IDENTITY is not a Developer ID Application identity"; exit 1 ;; esac
+          password=$(openssl rand -base64 32)
+          echo "::add-mask::$password"
+          keychain="$RUNNER_TEMP/release-signing.keychain-db"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/release.p12"
+          printf '%s' "$APPLE_API_KEY_CONTENT" > "$RUNNER_TEMP/notary.p8"
+          chmod 600 "$RUNNER_TEMP/release.p12" "$RUNNER_TEMP/notary.p8"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/release.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          libs=("dist/${{ matrix.asset }}" "civiel-pkg/openaec.open-infra-civiel/${{ matrix.civiel }}")
+          for lib in "${libs[@]}"; do
+            codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$lib"
+            codesign --verify --strict --verbose=2 "$lib"
+          done
+          # A loose dylib cannot be stapled: Apple checks the libraries in a zip.
+          mkdir -p "$RUNNER_TEMP/notarize"
+          cp "${libs[@]}" "$RUNNER_TEMP/notarize/"
+          ditto -c -k --keepParent "$RUNNER_TEMP/notarize" "$RUNNER_TEMP/notarize.zip"
+          auth=(--key "$RUNNER_TEMP/notary.p8" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER")
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" "${auth[@]}" --wait --timeout 25m --output-format json > "$RUNNER_TEMP/notarization.json"
+          status=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("status", ""))' "$RUNNER_TEMP/notarization.json")
+          id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("id", ""))' "$RUNNER_TEMP/notarization.json")
+          echo "Notarization $id: $status"
+          if [ "$status" != Accepted ]; then
+            [ -n "$id" ] && xcrun notarytool log "$id" "${auth[@]}" || true
+            exit 1
+          fi
+      - name: Remove the signing keychain
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/release-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/release.p12" "$RUNNER_TEMP/notary.p8"
+
+      - name: Zip the Civiel plugin
+        shell: bash
+        run: |
           cd civiel-pkg
           if command -v zip >/dev/null; then zip -qr "../dist/${{ matrix.zip }}" openaec.open-infra-civiel; else 7z a -tzip "../dist/${{ matrix.zip }}" openaec.open-infra-civiel >/dev/null; fi
+      - name: OpenPGP-sign the assets (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          OPENAEC_GPG_PRIVATE_KEY: ${{ secrets.OPENAEC_GPG_PRIVATE_KEY }}
+          OPENAEC_GPG_PASSPHRASE: ${{ secrets.OPENAEC_GPG_PASSPHRASE }}
+          OPENAEC_GPG_FINGERPRINT: ${{ vars.OPENAEC_GPG_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          : "${OPENAEC_GPG_PRIVATE_KEY:?Organisation secret OPENAEC_GPG_PRIVATE_KEY is not available}"
+          : "${OPENAEC_GPG_FINGERPRINT:?Organisation variable OPENAEC_GPG_FINGERPRINT is not available}"
+          export GNUPGHOME
+          GNUPGHOME=$(mktemp -d)
+          chmod 700 "$GNUPGHOME"
+          trap 'gpgconf --kill gpg-agent; rm -rf "$GNUPGHOME"' EXIT
+          printf '%s' "$OPENAEC_GPG_PRIVATE_KEY" | gpg --batch --import
+          fingerprint=$(printf '%s' "$OPENAEC_GPG_FINGERPRINT" | tr -d '[:space:]' | tr '[:lower:]' '[:upper:]')
+          actual=$(gpg --batch --with-colons --list-secret-keys "$fingerprint" | awk -F: '$1=="fpr" {print $10; exit}')
+          test "$actual" = "$fingerprint"
+          cd dist
+          for f in "${{ matrix.asset }}" "${{ matrix.zip }}"; do
+            printf '%s' "${OPENAEC_GPG_PASSPHRASE:-}" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --local-user "$fingerprint" --armor --detach-sign "$f"
+            gpg --batch --verify "$f.asc" "$f"
+          done
+          gpg --armor --export "$fingerprint" > openaec-signing-public-key.asc
+          printf '%s\n' "$fingerprint" > openaec-signing-fingerprint.txt
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
           path: dist/
       - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: env.RELEASE_TAG != ''
         with:
-          name: Open Infra ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Open Infra Studio ${{ env.RELEASE_TAG }}
           body_path: RELEASE_NOTES.md
+          fail_on_unmatched_files: true
           files: |
             dist/${{ matrix.asset }}
             dist/${{ matrix.zip }}
-            ${{ matrix.toml }}
+            ${{ matrix.extra }}

@@ -1,4 +1,4 @@
-//! Quantities per NLCS layer (the InfraCAD "Hoeveelheden"): count, length
+//! Quantities per NLCS layer: count, length
 //! and area of the elements, grouped by layer, with the NLCS object, status
 //! and element read from the layer name. Lengths in m, areas in m².
 
@@ -128,7 +128,7 @@ fn dist3(a: [f64; 3], b: [f64; 3]) -> f64 {
 }
 
 /// Length and area of a polyline with bulges (arc segments). The area of a
-/// closed one is the polygon area plus the arc segments, as AutoCAD reports
+/// closed one is the polygon area plus the arc segments, as CAD programs report
 /// it.
 fn ring_measure(pts: &[([f64; 2], f64)], closed: bool) -> (f64, f64, bool) {
     let n = pts.len();

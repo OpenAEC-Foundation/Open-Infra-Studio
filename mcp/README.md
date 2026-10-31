@@ -37,12 +37,12 @@ Claude Desktop (`claude_desktop_config.json`): dezelfde regel onder `mcpServers`
 | Groep | Tools |
 |---|---|
 | Sessie | `oi_sessions`, `oi_status` (assen, profielen, corridors, terreinen met handles), `oi_command` (elk `GIS_`/`CIV_`-commando of hostcommando) |
-| Project en data | `oi_site` (projectlocatie en gebied), `gis_import` (BGT, BRK, luchtfoto, BAG, NWB, spoor, OSM, AHN, tekenblad …), `nlcs_check`, `quantities`, `bgt_mutation` (NLCS-ontwerp als BGT-mutatie in IMGeo-GML) |
+| Project en data | `oi_site` (projectlocatie en gebied), `gis_services` (WMS/WFS/tegeldiensten wereldwijd zoeken), `gis_service_load` (een laag daarvan laden), `gis_import` (BGT, BRK, luchtfoto, BAG, NWB, spoor, OSM, AHN, tekenblad …), `nlcs_check`, `quantities`, `bgt_mutation` (NLCS-ontwerp als BGT-mutatie in IMGeo-GML), `ifc_export` (de tekening als IFC 4.3) |
 | Landmeten | `civ_points_import` (PNEZD/CSV), `civ_points`, `civ_points_export`, `civ_landxml` |
 | Terrein | `civ_tin` (AHN, meetpunten, selectie of laag; status B of N), `civ_contours`, `civ_analysis`, `civ_volume` |
 | As en profielen | `civ_alignment` (PI's met boogstralen), `civ_offsets`, `civ_station`, `civ_length_profile`, `civ_design_profile` (PVI's met verticale bogen), `civ_cross_sections` |
 | Corridor | `civ_corridor`: sjabloon `weg`, `fietspad`, `snelweg` of `dijk`, met rijstrook, berm, helling, taluds, kruin, verkanting, aansluiting op maaiveld, ontwerp-TIN, kantlijnen, grondverzet per dwarsprofiel |
-| 3D-model | `civ_photo_terrain` (AHN met luchtfoto), `civ_bag3d` (3D BAG LoD 1.2/1.3/2.2, stijl mooi of maquette), `civ_bgt3d` (BGT in 3D), `civ_water_level` (waterpeil) |
+| 3D-model | `civ_photo_terrain` (AHN met luchtfoto), `civ_bag3d` (3D BAG LoD 1.2/1.3/2.2, stijl mooi of maquette), `civ_bgt3d` (BGT in 3D), `civ_water_level` (waterpeil), `civ_subsurface` (BRO-sonderingen en -boringen als 3D-kolommen met grondsoorten), `civ_klic3d` (KLIC als 3D-buizen), `civ_see_through` (maaiveld doorzichtig), `civ_citygml` (CityGML/CityJSON) |
 | Beeld | `oi_view` (aanzicht en visuele stijl), `oi_capture` (PNG terug als afbeelding), `oi_save`, `oi_open` |
 
 ## Voorbeeld
