@@ -42,20 +42,6 @@ macro_rules! t {
     };
 }
 
-/// The Dutch modules switch: `netherlands` in settings.json, on unless
-/// switched off; read once per session. The same as `lang::dutch()` on main,
-/// which this branch predates: after the merge, use that one.
-pub fn dutch() -> bool {
-    static D: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *D.get_or_init(|| {
-        std::fs::read_to_string(crate::gis::servers::config_dir().join("settings.json"))
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .and_then(|v| v.get("netherlands").and_then(|b| b.as_bool()))
-            .unwrap_or(true)
-    })
-}
-
 // ── Design values (sources: docs/civiel-riolering.md) ───────────────────────
 
 /// Minimum cover above the top of the pipe, outside of the wall (m):

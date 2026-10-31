@@ -8,6 +8,7 @@ pub mod corridor;
 pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
+pub mod ondergrond;
 pub mod riool;
 pub mod terrein;
 
@@ -50,7 +51,7 @@ pub struct CivielOptions {
     pub right: f64,
     pub section_exaggeration: f64,
     pub per_row: usize,
-    /// Offset lines beside the axis (m, right > 0), like Civil 3D offset alignments.
+    /// Offset lines beside the axis (m, right > 0), as offset alignments.
     pub offsets: Vec<f64>,
     /// Design profile: length of the vertical curves (m).
     pub vertical_curve: f64,

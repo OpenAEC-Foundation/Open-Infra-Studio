@@ -11,7 +11,7 @@ pub struct Theme {
     pub id: &'static str,
     pub label: &'static str,
     pub layer: &'static str,
-    /// AutoCAD colour index for the layer.
+    /// ACI colour index for the layer.
     pub aci: i16,
     /// Overpass statements; `{bbox}` is replaced by the site extent.
     pub query: &'static str,

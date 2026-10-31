@@ -1,5 +1,5 @@
 //! AHN in the drawing: spot heights, contour lines, profiles and the point
-//! cloud — the InfraCAD Map "AHN-hoogtes" and InfraCAD CE profile tools.
+//! cloud.
 //! Heights are NAP; entities sit at their true elevation (Z).
 
 use std::sync::atomic::{AtomicUsize, Ordering};

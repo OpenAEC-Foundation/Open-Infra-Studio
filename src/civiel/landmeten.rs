@@ -160,7 +160,7 @@ pub fn parse(text: &str, format: Format) -> Result<Parsed, String> {
     Ok(Parsed { points, format: used, skipped })
 }
 
-/// The point file text: comma separated, decimal points (Road, Civil 3D).
+/// The point file text: comma separated, decimal points (Road).
 pub fn write(points: &[SurveyPoint], format: Format) -> String {
     let format = if format == Format::Auto { Format::Penzd } else { format };
     let mut out = String::new();
@@ -366,7 +366,7 @@ mod tests {
         assert_eq!(p.points[0], SurveyPoint { name: "1".into(), e: 105000.12, n: 425000.34, z: Some(1.23), code: "put".into() });
         assert_eq!(p.points[1].code, "boom eik");
         assert_eq!(p.skipped, 1);
-        // Civil 3D / Road: PNEZD with commas.
+        // Road: PNEZD with commas.
         let p = parse("P1,425000.5,105000.25,2.0,TOP\nP2,425010,105020,2.5,TOP\n", Format::Auto).unwrap();
         assert_eq!(p.format, Format::Pnezd);
         assert_eq!((p.points[0].e, p.points[0].n), (105000.25, 425000.5));

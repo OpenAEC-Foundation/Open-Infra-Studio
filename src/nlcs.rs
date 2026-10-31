@@ -238,7 +238,7 @@ pub fn color_rgb(n: u8) -> (u8, u8, u8) {
 #[derive(Clone, Debug)]
 pub struct LayerSpec {
     pub name: String,
-    /// NLCS colour number, which is the AutoCAD colour index.
+    /// NLCS colour number, which is the ACI colour index.
     pub color: u8,
     pub rgb: (u8, u8, u8),
     /// A true colour in place of the NLCS colour (the IMKL display option).

@@ -676,6 +676,22 @@ pub fn send_to_back(handles: &[Handle]) {
     }
 }
 
+/// A new map image behind the drawing's vectors, but on top of the images
+/// already there (newest map on top: a cadastre overlay over the photo).
+pub fn image_to_back(new: &[Handle]) {
+    send_to_back(new);
+    let older: Vec<Handle> = view()
+        .map(|d| {
+            d.model_space_entities()
+                .filter(|e| matches!(e, EntityType::RasterImage(_)))
+                .map(|e| e.common().handle)
+                .filter(|h| !new.contains(h))
+                .collect()
+        })
+        .unwrap_or_default();
+    send_to_back(&older);
+}
+
 /// Run a command line in the active drawing (tokens answer its prompts).
 pub fn execute(command: &str) -> Result<(), String> {
     match request(PluginRequest::ExecuteCommand(command.into()))? {
