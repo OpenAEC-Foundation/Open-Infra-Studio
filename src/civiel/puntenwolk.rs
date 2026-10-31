@@ -379,6 +379,7 @@ pub struct Grond {
 }
 
 /// Stream an area once into a cell grid and keep its ground.
+#[allow(clippy::too_many_arguments)]
 pub fn ground_points(
     bron: &Bron,
     rect: Option<[f64; 4]>,

@@ -100,7 +100,12 @@ fn point_cloud_group() -> RibbonGroup {
         &["las", "laz", "e57", "ply", "pts", "xyz", "txt"],
         !dutch(),
     ));
-    tools.push(small("CIV_MESH", tr("3D-mesh", "3D mesh"), I_MESH));
+    // The mesh of the AHN points, or (without the Dutch modules) of a file.
+    if dutch() {
+        tools.push(small("CIV_MESH", tr("3D-mesh", "3D mesh"), I_MESH));
+    } else {
+        tools.push(file_tool("CIV_MESH", tr("3D-mesh", "3D mesh"), I_MESH, tr("Puntenwolk openen", "Open a point cloud"), tr("Puntenwolk (LAS, LAZ, E57, PLY, PTS, XYZ)", "Point cloud (LAS, LAZ, E57, PLY, PTS, XYZ)"), &["las", "laz", "e57", "ply", "pts", "xyz", "txt"], false));
+    }
     RibbonGroup { title: tr("Puntenwolk", "Point cloud"), tools }
 }
 
@@ -646,7 +651,12 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
         }
         "CIV_MESH" => {
             let o = opt(civiel::mesh::MeshVraag::ARGS)?;
-            let v = civiel::mesh::MeshVraag::from_args(args)?;
+            let mut v = civiel::mesh::MeshVraag::from_args(args)?;
+            // From the file dialog: the path as the rest of the line.
+            let loose = args.words.join(" ");
+            if args.str("BESTAND").is_none() && !loose.trim().is_empty() {
+                v.invoer = civiel::puntenwolk::Invoer::file(&loose)?;
+            }
             job(host, open_infra::lang::tr("3D-mesh", "3D mesh"), id, move |p| civiel::mesh::create(&o, &v, p));
         }
         "CIV_INFO" => {
