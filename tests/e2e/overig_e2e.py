@@ -204,16 +204,22 @@ def main():
         rows = out["data"].get("druppels", [])
         lines = on_layer("OI-WATERDRUPPEL", kind=("polyline3d", "polyline"))
         down = all(r["verval_m"] >= 0 for r in rows)
-        return out["ok"] and len(rows) >= 2 and down and len(lines) >= 2, f"{[(r['lengte_m'], r['verval_m'], r['einde']) for r in rows]}; {len(lines)} 3D polylines"
+        moved = sum(1 for r in rows if r["lengte_m"] > 1.0)
+        return out["ok"] and len(rows) == 3 and down and moved >= 2 and len(lines) >= 3, f"{[(r['lengte_m'], r['verval_m'], r['einde']) for r in rows]}; {len(lines)} 3D polylines"
+
+    pond_points = []
 
     def catchments():
-        out = cmd("CIV_STROOMGEBIED BRON=AHN CEL=1 SNAP=3 PUNTEN=104860,425300;104905,425345", "sg", 600)
+        # Outlets: the bottoms of the two largest ponds, and a point on a
+        # street that may fall on a cell without a height (it snaps).
+        pts = ";".join(f"{x},{y}" for x, y in pond_points[:2]) + ";104860,425300"
+        out = cmd(f"CIV_STROOMGEBIED BRON=AHN CEL=1 SNAP=3 PLASSEN=nee PUNTEN={pts}", "sg", 600)
         d = out["data"]
         sg = d.get("stroomgebieden", [])
         ponds = d.get("plassen", [])
         outlines = on_layer("OI-STROOMGEBIED")
-        ok = out["ok"] and len(sg) == 2 and all(r["oppervlakte_m2"] > 0 for r in sg) and len(outlines) >= 2
-        return ok, f"{[(r['stroomgebied'], r['oppervlakte_m2']) for r in sg]}; {len(ponds)} ponds (deepest {ponds[0]['diepte_m'] if ponds else '-'} m, {ponds[0]['volume_m3'] if ponds else '-'} m³)"
+        ok = out["ok"] and len(sg) >= 2 and all(r["oppervlakte_m2"] > 0 for r in sg) and len(outlines) >= 2
+        return ok, f"{[(r['stroomgebied'], r['afvoerpunt'], r['oppervlakte_m2']) for r in sg]}; skipped {d.get('overgeslagen', [])}"
 
     def catchments_gullies():
         out = cmd("CIV_STROOMGEBIED BRON=TIN CEL=1 LAAG=*KOLK* PLASSEN=nee", "sg2", 600)
@@ -225,6 +231,7 @@ def main():
         out = cmd("CIV_PLASSEN BRON=AHN CEL=1 MINDIEPTE=0.05 MINOPP=2", "ponds", 600)
         ponds = out["data"].get("plassen", [])
         layer = on_layer("OI-PLAS")
+        pond_points.extend((p["x"], p["y"]) for p in sorted(ponds, key=lambda p: -p["volume_m3"]))
         return out["ok"] and all(p["diepte_m"] >= 0.05 and p["volume_m3"] > 0 for p in ponds), f"{len(ponds)} ponds, {len(layer)} entities on OI-PLAS; {out['message']}"
 
     # ── 4. Reverse swept paths ───────────────────────────────────────────
@@ -269,6 +276,17 @@ def main():
         c = d.get("controle") or {}
         return out["ok"] and d.get("vakken") == 8 and c.get("achteruit") is True and c.get("past") is True, out["message"]
 
+    def ifc():
+        path = OUT / "overig.ifc"
+        if path.exists():
+            path.unlink()
+        out = cmd(f"CIV_IFC BESTAND={path}", "ifc", 600)
+        text = path.read_text(errors="replace") if path.exists() else ""
+        classes = out["data"].get("klassen", {})
+        needles = ["IFCKERB(", ".SUMP.", ".MANHOLE.", ".VEGETATION.", "'Stroomgebied'", "'Plas'", "'Waterdruppel'", "'Parkeervak'", "IFCLABEL('P1')", "IFCLABEL('K11')"]
+        missing = [n for n in needles if n not in text]
+        return out["ok"] and not missing, f"missing {missing}; {classes}"
+
     def captures():
         ok = capture("overzicht")
         ok &= capture("codes", [104795, 425265, 104880, 425330])
@@ -290,10 +308,11 @@ def main():
     step("swept path reversing, jackknife", swept_jackknife)
     step("TIN from AHN", tin)
     step("water drops", drops)
+    step("ponds", ponds_only)
     step("catchments on AHN", catchments)
     step("catchments of the coded gullies on the TIN", catchments_gullies)
-    step("ponds", ponds_only)
     step("captures", captures)
+    step("IFC 4.3 export", ifc)
     try:
         ocs.run(f"QSAVEAS {OUT / 'overig.dwg'}")
         time.sleep(3)

@@ -98,7 +98,7 @@ pub struct DropPath {
 
 impl DropPath {
     pub fn length(&self) -> f64 {
-        self.points.windows(2).map(|w| (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1])).sum()
+        self.points.windows(2).fold(0.0, |s, w| s + (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]))
     }
     pub fn drop(&self) -> f64 {
         match (self.points.first(), self.points.last()) {
@@ -217,6 +217,51 @@ impl Flow {
         a[2] + g[0] * (p[0] - a[0]) + g[1] * (p[1] - a[1])
     }
 
+    /// From a vertex without a way down, across the vertices of the same
+    /// height (breadth first, a few thousand at most) to the nearest one with
+    /// a lower neighbour or on the outline: the route there, `v` left out.
+    fn across_level(&self, v: usize) -> Option<Vec<usize>> {
+        let z = self.tin.points[v][2];
+        let tol = 1e-6 * (1.0 + z.abs());
+        let neighbours = |u: usize| -> Vec<usize> {
+            let mut out = Vec::new();
+            for &t in &self.around[u] {
+                for w in self.tin.triangles[t] {
+                    if w != u && !out.contains(&w) {
+                        out.push(w);
+                    }
+                }
+            }
+            out
+        };
+        let mut parent: HashMap<usize, usize> = HashMap::new();
+        let mut queue = std::collections::VecDeque::from([v]);
+        parent.insert(v, v);
+        while let Some(u) = queue.pop_front() {
+            if parent.len() > 5000 {
+                return None;
+            }
+            let ns = neighbours(u);
+            if u != v && (self.border[u] || ns.iter().any(|w| self.tin.points[*w][2] < z - tol)) {
+                let mut route = vec![u];
+                let mut x = u;
+                while parent[&x] != v {
+                    x = parent[&x];
+                    route.push(x);
+                }
+                route.reverse();
+                return Some(route);
+            }
+            for w in ns {
+                if (self.tin.points[w][2] - z).abs() <= tol && !parent.contains_key(&w) {
+                    parent.insert(w, u);
+                    queue.push_back(w);
+                }
+            }
+        }
+        None
+    }
+
     /// The path of a drop let go at `p`.
     pub fn drop_path(&self, p: XY) -> Option<DropPath> {
         enum At {
@@ -233,11 +278,20 @@ impl Flow {
                 At::Tri(t) => {
                     let g = self.grad[t];
                     let gl = len(g);
+                    let tri = self.tin.triangles[t];
                     if gl < 1e-12 {
-                        return Some(DropPath { points: pts, stop: Stop::Flat });
+                        // A level triangle: on to its nearest corner, and
+                        // from there across the level ground.
+                        let v = *tri.iter().min_by(|a, b| len(sub(self.xy(**a), cur)).total_cmp(&len(sub(self.xy(**b), cur)))).unwrap();
+                        if seen.contains(&v) {
+                            return Some(DropPath { points: pts, stop: Stop::Flat });
+                        }
+                        pts.push(self.tin.points[v]);
+                        cur = self.xy(v);
+                        state = At::Vert(v);
+                        continue;
                     }
                     let d = [-g[0] / gl, -g[1] / gl];
-                    let tri = self.tin.triangles[t];
                     let size = (0..3).map(|k| len(sub(self.xy(tri[(k + 1) % 3]), self.xy(tri[k])))).fold(0.0, f64::max);
                     let tol = 1e-9 * size.max(1e-6);
                     let mut best: Option<(f64, usize, f64)> = None;
@@ -323,6 +377,21 @@ impl Flow {
                             if zw < zv && l > 0.0 {
                                 consider((zv - zw) / l, false, w);
                             }
+                        }
+                    }
+                    if best.is_none() && !self.border[v] {
+                        // Level ground: across it to the nearest vertex that
+                        // has a way down (or lies on the outline).
+                        if let Some(route) = self.across_level(v) {
+                            for w in &route {
+                                seen.insert(*w);
+                                pts.push(self.tin.points[*w]);
+                            }
+                            let w = *route.last().unwrap();
+                            cur = self.xy(w);
+                            seen.remove(&w);
+                            state = At::Vert(w);
+                            continue;
                         }
                     }
                     match best {
@@ -505,6 +574,30 @@ pub fn snap(g: &Grid, d: &Drainage, i: usize, radius: usize) -> usize {
         }
     }
     best
+}
+
+/// The nearest cell with a height within `radius` cells of `i`.
+pub fn nearest_valid(g: &Grid, i: usize, radius: usize) -> Option<usize> {
+    if g.valid(i) {
+        return Some(i);
+    }
+    let (c, r) = ((i % g.w) as i64, (i / g.w) as i64);
+    let rad = radius as i64;
+    let mut best: Option<(i64, usize)> = None;
+    for dr in -rad..=rad {
+        for dc in -rad..=rad {
+            let d2 = dc * dc + dr * dr;
+            let (cc, rr) = (c + dc, r + dr);
+            if d2 > rad * rad || cc < 0 || rr < 0 || cc as usize >= g.w || rr as usize >= g.h {
+                continue;
+            }
+            let j = rr as usize * g.w + cc as usize;
+            if g.valid(j) && best.is_none_or(|b| d2 < b.0) {
+                best = Some((d2, j));
+            }
+        }
+    }
+    best.map(|b| b.1)
 }
 
 /// Per cell the index of the outlet it drains to first (-1: none).
@@ -942,8 +1035,14 @@ pub fn catchment(opt: &super::CivielOptions, req: CatchmentRequest, progress: &d
     let mut names: Vec<String> = Vec::new();
     let mut skipped = Vec::new();
     for (name, p) in &wanted {
-        let Some(c) = (m.to_grid)(*p).and_then(|q| g.cell_at(q)).filter(|c| g.valid(*c)) else {
+        let Some(c) = (m.to_grid)(*p).and_then(|q| g.cell_at(q)) else {
             skipped.push(t!("{name} (buiten het raster)", "{name} (outside the grid)"));
+            continue;
+        };
+        // On a cell without a height (a building, water, a hole in the
+        // TIN): the nearest cell with one, within the snap distance.
+        let Some(c) = nearest_valid(g, c, radius.max(3)) else {
+            skipped.push(t!("{name} (geen hoogte)", "{name} (no height)"));
             continue;
         };
         let c = snap(g, &d, c, radius);
@@ -1141,6 +1240,23 @@ mod tests {
         assert_eq!(p.stop, Stop::Edge);
         let end = p.points.last().unwrap();
         assert!(end[0].abs() < 1e-6 && (end[1] + 20.0).abs() < 1e-6, "{end:?}");
+    }
+
+    #[test]
+    fn a_drop_crosses_level_ground() {
+        // A level terrace (z = 1) for x < 10, falling to the east beyond it:
+        // a drop let go on the terrace walks across it to the nearest way
+        // down (the slope, not the far western edge) and runs down.
+        let flow = Flow::new(tin_of(|x, _| if x < 10.0 { 1.0 } else { 1.0 - (x - 10.0) * 0.1 }, 10, 2.5));
+        let p = flow.drop_path([5.3, 3.1]).unwrap();
+        assert_eq!(p.stop, Stop::Edge, "{:?}", p.points.last());
+        let end = p.points.last().unwrap();
+        assert!((end[0] - 25.0).abs() < 1e-6 && end[2] < 0.0, "{end:?}");
+        assert!(p.length() > 19.0, "{}", p.length());
+        // A level bowl bottom without a way out is a pit.
+        let flow = Flow::new(tin_of(|x, y| (x.abs().max(y.abs()) - 5.0).max(0.0), 6, 2.5));
+        let p = flow.drop_path([1.1, 0.7]).unwrap();
+        assert_eq!(p.stop, Stop::Pit);
     }
 
     fn grid(w: usize, h: usize, f: impl Fn(f64, f64) -> f64) -> Grid {

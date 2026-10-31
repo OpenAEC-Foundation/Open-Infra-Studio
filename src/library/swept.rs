@@ -346,9 +346,18 @@ pub fn drive_rear(v: &Vehicle, path: &[P], step: f64, ghost_every: f64, reversin
         let hitch: Vec<P> = (0..n).map(|k| add(axle[i + 1][k], mul(dirs[i + 1][k], rb - king))).collect();
         let (_, r) = geo[i];
         let e = r - crate::library::draw::hitch_x(&v.units[i]);
-        // Start of the stable integration: in line with the unit behind.
+        // Start of the stable integration: along the hitch's track, which is
+        // where the unit settles anyway (it removes the start-up wobble).
         let from_end = (e > 0.0) == reversing;
-        let h0 = if from_end { dirs[i + 1][n - 1] } else { dirs[i + 1][0] };
+        let k0 = if from_end { n - 1 } else { 0 };
+        let track = sub(hitch[(k0 + m).min(n - 1)], hitch[k0.saturating_sub(m)]);
+        let h0 = if len(track) < 1e-9 {
+            dirs[i + 1][k0]
+        } else if reversing {
+            unit(mul(track, -1.0))
+        } else {
+            unit(track)
+        };
         dirs[i] = follow(&hitch, e, h0, reversing);
         axle[i] = (0..n).map(|k| sub(hitch[k], mul(dirs[i][k], e))).collect();
     }
