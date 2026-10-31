@@ -100,6 +100,24 @@ An `opbouw.json` beside your assemblies (`{"opbouw": {"naam": {"omschrijving": "
   - per kerb its length (m) and volume (m³).
   All by average end areas between the sections.
 - **Section views** (`DWARSPROFIELEN=ja`): the ground, the design and the outline of every layer and kerb.
+- **3D bodies** (a second undo step): every pavement layer and kerb swept from section to section as a closed mesh, one per material, on its NLCS layer (`VH-GESLOTENVERHARDING_ASFALT_DEKLAAG`, `VH-FUNDERING_GRANULAAT`, `VH-KANTOPSLUITING_TROTTOIRBAND`, …). The ditches' slopes and bottom form a surface on `GW-WATERGANG_SLOOT`. They carry the object data `corridor`, `naam` and `laag` with `rol` (`verharding` or `fundering`), `band`, or `onderdeel=sloot`.
+
+## IFC 4.3
+
+The IFC 4.3 export (`CIV_IFC` / `GIS_IFC`) puts each corridor, junction and roundabout in an `IfcRoad` of its own (by the object data `corridor`, `kruispunt` or `rotonde`):
+
+| What | IFC |
+|---|---|
+| a pavement layer body (`laag`) | `IfcCourse`: `PAVEMENT` for the surfacing, `USERDEFINED` with the material as object type for the foundation |
+| a kerb body or kerb line | `IfcKerb` |
+| the ditch surface and its lines | `IfcGeographicElement` (`USERDEFINED`, "Watergang sloot") |
+| the design surface, the formation and the subgrade | `IfcGeographicElement` surfaces |
+| other edge lines (asphalt, tiles, paving) | `IfcPavement` |
+| give-way triangles | `IfcSurfaceFeature` or `IfcCivilElement` |
+| the axis | `IfcAlignment` with its design profile |
+| an assembly drawn with `CIV_PROFIELTYPE … PLAATS=` | left out |
+
+The courses are not aggregated into one `IfcPavement` per part. Each material of a corridor is one course.
 
 ## Your own assemblies (JSON)
 
