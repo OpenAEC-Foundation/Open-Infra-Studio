@@ -293,6 +293,9 @@ def main():
         ok &= capture("percelen", [104885, 425320, 104975, 425395])
         ok &= capture("parkeren", [104795, 425240, 104960, 425295])
         ok &= capture("veegpad", [104770, 425335, 104870, 425395])
+        ok &= capture("parkeren-90", [104912, 425246, 104948, 425274])
+        ok &= capture("parkeren-langs", [104798, 425243, 104842, 425259])
+        ok &= capture("water", [104785, 425245, 104985, 425395])
         return ok, ", ".join(images)
 
     step("site", site)
