@@ -527,19 +527,19 @@ fn gml_curve(root: roxmltree::Node) -> Result<Vec<XY>, String> {
             continue;
         }
         let parts: Vec<_> = match name {
-        "Curve" => node.children().find(|n| n.has_tag_name("segments"))
-            .ok_or("GML: Curve zonder segments")?.children().filter(|n| n.is_element()).collect(),
-        "Ring" | "CompositeCurve" => {
-            let mut parts = Vec::new();
-            for member in node.children().filter(|n| n.has_tag_name("curveMember")) {
-                let part = member.children().find(|n| n.is_element())
-                    .ok_or("GML: curveMember zonder inline curve wordt niet ondersteund")?;
-                parts.push(part);
+            "Curve" => node.children().find(|n| n.has_tag_name("segments"))
+                .ok_or("GML: Curve zonder segments")?.children().filter(|n| n.is_element()).collect(),
+            "Ring" | "CompositeCurve" => {
+                let mut parts = Vec::new();
+                for member in node.children().filter(|n| n.has_tag_name("curveMember")) {
+                    let part = member.children().find(|n| n.is_element())
+                        .ok_or("GML: curveMember zonder inline curve wordt niet ondersteund")?;
+                    parts.push(part);
+                }
+                if parts.is_empty() { return Err(format!("GML: {name} zonder curveMember")); }
+                parts
             }
-            if parts.is_empty() { return Err(format!("GML: {name} zonder curveMember")); }
-            parts
-        }
-        _ => return Err(format!("GML: curveonderdeel {name} wordt niet ondersteund")),
+            _ => return Err(format!("GML: curveonderdeel {name} wordt niet ondersteund")),
         };
         // XML nodes form an acyclic tree. An explicit stack keeps arbitrary
         // nesting off the Rust call stack without imposing a schema limit.
@@ -553,30 +553,30 @@ fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> Result<bool, String> 
     let mut pending = vec![node];
     let mut recognized = false;
     while let Some(node) = pending.pop() {
-    let name = node.tag_name().name();
-    match name {
-        "Point" => {
-            let points = gml_coords(node, 2)?;
-            if points.len() != 1 { return Err("GML: Point verwacht één coördinaat".into()); }
-            f.points.extend(points);
+        let name = node.tag_name().name();
+        match name {
+            "Point" => {
+                let points = gml_coords(node, 2)?;
+                if points.len() != 1 { return Err("GML: Point verwacht één coördinaat".into()); }
+                f.points.extend(points);
+            }
+            "LineString" | "Curve" | "LineStringSegment" | "LinearRing" | "Ring" | "CompositeCurve" => {
+                let ring = matches!(name, "LinearRing" | "Ring");
+                let points = gml_curve(node)?;
+                if ring && points.len() < 3 { return Err(format!("GML: te weinig coördinaten in {name}")); }
+                if !points.is_empty() { f.lines.push((points, ring)); }
+            }
+            "Polygon" | "Surface" | "PolygonPatch" => {
+                let rings: Vec<_> = node.descendants().filter(|d| d.has_tag_name("LinearRing") || d.has_tag_name("Ring")).collect();
+                pending.extend(rings.into_iter().rev());
+            }
+            "MultiPoint" | "MultiCurve" | "MultiLineString" | "MultiSurface" | "MultiPolygon" | "MultiGeometry" | "CompositeSurface" => {
+                // pointMember / surfaceMembers: the geometries one level down.
+                let parts: Vec<_> = node.children().filter(|c| c.is_element()).flat_map(|m| m.children().filter(|c| c.is_element())).collect();
+                pending.extend(parts.into_iter().rev());
+            }
+            _ => continue,
         }
-        "LineString" | "Curve" | "LineStringSegment" | "LinearRing" | "Ring" | "CompositeCurve" => {
-            let ring = matches!(name, "LinearRing" | "Ring");
-            let points = gml_curve(node)?;
-            if ring && points.len() < 3 { return Err(format!("GML: te weinig coördinaten in {name}")); }
-            if !points.is_empty() { f.lines.push((points, ring)); }
-        }
-        "Polygon" | "Surface" | "PolygonPatch" => {
-            let rings: Vec<_> = node.descendants().filter(|d| d.has_tag_name("LinearRing") || d.has_tag_name("Ring")).collect();
-            pending.extend(rings.into_iter().rev());
-        }
-        "MultiPoint" | "MultiCurve" | "MultiLineString" | "MultiSurface" | "MultiPolygon" | "MultiGeometry" | "CompositeSurface" => {
-            // pointMember / surfaceMembers: the geometries one level down.
-            let parts: Vec<_> = node.children().filter(|c| c.is_element()).flat_map(|m| m.children().filter(|c| c.is_element())).collect();
-            pending.extend(parts.into_iter().rev());
-        }
-        _ => continue,
-    }
         recognized = true;
     }
     Ok(recognized)
@@ -860,6 +860,7 @@ mod tests {
                 assert_eq!(data.features.len(), 2, "{container}, depth {depth}");
                 assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0]], false));
                 assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+                assert_eq!(data.skipped, 0);
             }
         }
     }

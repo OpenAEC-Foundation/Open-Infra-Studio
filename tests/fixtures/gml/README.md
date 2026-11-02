@@ -30,3 +30,9 @@ gebruiken de bestaande teksten van main.
 Aanvullende varianten controleren hogere dimensies in losse `pos`-elementen,
 witruimte rond de dimensie en alle tekstdelen rond XML-commentaar. Een
 getal na commentaar mag niet verdwijnen achter een geldig gelezen begin.
+
+Diepe varianten nesten 65 en 256 `CompositeCurve`- of `MultiGeometry`-
+containers rond één lijn. De lezer van main houdt die lijn en het buurpunt
+behouden. De verwerking gebruikt daarom een expliciete werklijst in plaats
+van recursie met een vaste dieptelimiet. De testgevallen volgen de geneste
+geometrietypen uit `geometryAggregates.xsd` en `geometryComplexes.xsd`.
