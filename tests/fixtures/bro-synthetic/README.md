@@ -16,4 +16,8 @@ een kapotte offset in het middelste van drie objecten mag de twee geldige
 buren niet veranderen. De nieuwe regressietest vergelijkt hun volledige
 zoekmetadata en controleert een melding met het overgeslagen BRO-id.
 Aanvullende tests controleren de bestaande nilwaarden en de geselecteerde
-Nederlands/Engels-route voor nieuwe leesmeldingen.
+Nederlands/Engels-route voor interne leesdetails. Deze details worden tot
+Ethans besluit niet aan voortgang of eindtekst toegevoegd. De lijst in het
+zoekresultaat telt de overgeslagen objecten. Een onleesbaar afzonderlijk
+CPT/BHR-object gebruikt de bestaande foutmelding voor een ontbrekend
+bruikbaar object.
