@@ -579,8 +579,8 @@ fn number(s: &str) -> Option<f64> {
 /// Points from a table with coordinate columns: x/y, easting/northing,
 /// lon/lat (also Dutch names). `;`, tab or `,` separated.
 pub fn csv(text: &str) -> Result<FileData, String> {
-    let mut lines = text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty());
-    let (_, head) = lines.next().ok_or("CSV: empty file")?;
+    let mut lines = text.lines().filter(|l| !l.trim().is_empty());
+    let head = lines.next().ok_or("CSV: empty file")?;
     let sep = [';', '\t', ','].into_iter().max_by_key(|s| head.matches(*s).count()).unwrap_or(',');
     let cols: Vec<String> = split_line(head, sep).into_iter().map(|c| c.trim_start_matches('\u{feff}').to_string()).collect();
     let find = |names: &[&str]| cols.iter().position(|c| names.iter().any(|n| c.eq_ignore_ascii_case(n)));
@@ -592,16 +592,9 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         return Err(format!("CSV: no coordinate columns (x/y, easting/northing or lon/lat) in {}", cols.join(", ")));
     };
     let mut features = Vec::new();
-    let mut warnings = Vec::new();
-    for (line_index, line) in lines {
+    for line in lines {
         let vals = split_line(line, sep);
-        let coordinate = |index: usize| {
-            vals.get(index).and_then(|v| number(v)).filter(|v| v.is_finite()).ok_or_else(|| format!("CSV: regel {}: ontbrekende of ongeldige coördinaat in kolom {}", line_index + 1, cols[index]))
-        };
-        let (x, y) = match coordinate(ix).and_then(|x| coordinate(iy).map(|y| (x, y))) {
-            Ok(xy) => xy,
-            Err(error) => { warnings.push(format!("{error}; rij overgeslagen")); continue; }
-        };
+        let (Some(x), Some(y)) = (vals.get(ix).and_then(|v| number(v)), vals.get(iy).and_then(|v| number(v))) else { continue };
         let mut f = Feature { points: vec![[x, y]], ..Default::default() };
         for (i, c) in cols.iter().enumerate() {
             if i != ix && i != iy {
@@ -612,7 +605,7 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings })
+    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings: Vec::new() })
 }
 
 #[cfg(test)]
@@ -707,7 +700,45 @@ mod tests {
         assert_eq!(d.features[0].points[0], [1.0, 2.0]);
     }
 
-    const CSV_POINTS: &str = include_str!("../../tests/fixtures/csv/points.csv");
+    #[test]
+    fn csv_multiline_records_keep_the_points_read_by_main() {
+        let text = include_str!("../../tests/fixtures/csv/multiline.csv");
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+    }
+
+    #[test]
+    fn csv_multiline_records_preserve_the_whole_quoted_attribute() {
+        for newline in ["\n", "\r\n"] {
+            let text = include_str!("../../tests/fixtures/csv/multiline.csv").replace('\n', newline);
+            let data = csv(&text).unwrap();
+            assert_eq!(data.features.len(), 2);
+            assert_eq!(data.features[0].props["note"], format!("put{newline}west"));
+            assert!(data.warnings.is_empty());
+            let text = text.replace(&format!("put{newline}west"), &format!("put{newline}{newline}\"\"west\"\", vijf"));
+            let data = csv(&text).unwrap();
+            assert_eq!(data.features[0].props["note"], format!("put{newline}{newline}\"west\", vijf"));
+            assert_eq!(data.features[1].points, vec![[110.0, 220.0]]);
+            assert!(data.warnings.is_empty());
+        }
+    }
+
+    #[test]
+    fn csv_multiline_records_report_the_physical_start_line_of_a_bad_record() {
+        let text = "\nx,y,note\n100,200,\"put\nwest\"\nbad,220,kapot\n110,220,normaal\n";
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains(crate::lang::tr("regel 5", "line 5")));
+    }
+
+    #[test]
+    fn csv_unterminated_quotes_keep_the_points_read_by_main() {
+        for note in ["text\"", "\"unfinished"] {
+            let data = csv(&format!("x,y,note\n100,200,{note}\n110,220,normaal\n")).unwrap();
+            assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+        }
+    }
 
     #[test]
     fn csv_fixture_preserves_decimal_commas_quotes_and_optional_fields() {
