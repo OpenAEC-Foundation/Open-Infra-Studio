@@ -1,7 +1,7 @@
 [plugin]
 id = "openaec.open-infra-civiel"
 name = "Open Infra — Civiel"
-version = "2026.44.5"
+version = "2026.45.0"
 description = "Civiele ontwerptools: meetpunten (PNEZD, LandXML), terrein (TIN, hoogtelijnen, hoogteanalyse, grondverzet), assen met stationering, lengte-, ontwerp- en dwarsprofielen. Op NLCS-lagen, over AHN of een eigen TIN."
 author = "OpenAEC Foundation"
 license = "GPL-3.0-only"
