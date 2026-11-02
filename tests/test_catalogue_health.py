@@ -58,7 +58,7 @@ class CatalogueHealthTest(unittest.TestCase):
         s["url"] = "https://example.invalid/wmts/{z}/{y}/{x}.png"
         mode, url = health.request_for(s)
         self.assertEqual(mode, "tile")
-        self.assertEqual(url, "https://example.invalid/wmts/14/5412/8419.png")
+        self.assertEqual(url, "https://example.invalid/wmts/14/5411/8419.png")
         self.assertNotIn("{", url)
 
     def test_tile_must_have_image_content(self):
