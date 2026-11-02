@@ -16,6 +16,8 @@ class ReleaseDependencyCacheTest(unittest.TestCase):
         self.assertEqual(len(caches), 1, 'alle native matrixjobs moeten dependencies kunnen herstellen')
         cache = caches[0]
         self.assertLess(toolchains[0], cache)
+        self.assertNotRegex(steps[cache], r'(?m)^\s+if:')
+        self.assertNotRegex(steps[cache], r'cache-targets:\s*[\x22\x27]?false')
         self.assertRegex(steps[cache], r'uses: Swatinem/rust-cache@[0-9a-f]{40}\b')
         self.assertRegex(steps[cache], r'(?m)^\s+shared-key: release\s*$')
         self.assertNotRegex(steps[cache], r'(cache-workspace-crates|cache-on-failure):\s*[\x22\x27]?true')
@@ -38,8 +40,10 @@ class ReleaseDependencyCacheTest(unittest.TestCase):
         self.assertIn('permissions:\n  contents: read', workflow)
         self.assertNotRegex(workflow, r'secrets\.|action-gh-release|signing-action|notarytool|codesign')
         release = (ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8')
-        for text in [workflow, release]:
-            self.assertRegex(text, r'(?m)^  RUST_TOOLCHAIN: "1\.99\.1"$')
+        versions = [re.findall(r'^  RUST_TOOLCHAIN: "([^"]+)"$', text, re.MULTILINE)
+                    for text in [workflow, release]]
+        self.assertEqual(len(versions[0]), 1)
+        self.assertEqual(versions[0], versions[1])
         self.assertEqual(set(re.findall(r'os: ([\w.-]+)', workflow)),
                          set(re.findall(r'os: ([\w.-]+)', release)))
         self.assertEqual(re.findall(r'^      - run: (cargo .+)$', workflow, re.MULTILINE),
@@ -47,6 +51,8 @@ class ReleaseDependencyCacheTest(unittest.TestCase):
         steps = re.split(r'^      - ', workflow, flags=re.MULTILINE)[1:]
         cache = [i for i, step in enumerate(steps) if 'uses: Swatinem/rust-cache@' in step]
         self.assertEqual(len(cache), 1)
+        self.assertNotRegex(steps[cache[0]], r'(?m)^\s+if:')
+        self.assertNotRegex(steps[cache[0]], r'(cache-targets|save-if):\s*[\x22\x27]?false')
         self.assertIn('id: cache', steps[cache[0]])
         self.assertRegex(steps[cache[0]], r'Swatinem/rust-cache@[0-9a-f]{40}\b')
         self.assertRegex(steps[cache[0]], r'(?m)^\s+shared-key: release\s*$')
