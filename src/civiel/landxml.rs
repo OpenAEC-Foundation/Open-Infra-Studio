@@ -334,6 +334,20 @@ mod tests {
     const SITE: &str = include_str!("../../tests/fixtures/landxml/site.xml");
 
     #[test]
+    fn one_bad_landxml_object_keeps_unrelated_points_surfaces_and_axes() {
+        for (from, to, expected) in [
+            ("<CgPoint name=\"1\">200 100 5</CgPoint>", "<CgPoint name=\"1\">200 bad 5</CgPoint>", (0, 1, 1)),
+            ("<P id=\"2\">200 110 6</P>", "<P id=\"2\">200 bad 6</P>", (1, 0, 1)),
+            ("<Start>200 100</Start>", "<Start>200 bad</Start>", (1, 1, 0)),
+        ] {
+            let text = SITE.replace(from, to);
+            assert_ne!(text, SITE);
+            let data = parse(&text).unwrap();
+            assert_eq!((data.points.len(), data.surfaces.len(), data.alignments.len()), expected);
+        }
+    }
+
+    #[test]
     fn fixture_reads_points_tin_and_axis_in_easting_northing_order() {
         let xml = parse(SITE).unwrap();
         assert_eq!((xml.points.len(), xml.surfaces.len(), xml.alignments.len()), (1, 1, 1));
