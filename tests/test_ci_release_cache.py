@@ -25,5 +25,39 @@ class ReleaseDependencyCacheTest(unittest.TestCase):
             self.assertLess(cache, i)
 
 
+    def test_default_branch_prepares_the_cache_for_future_tags(self):
+        path = ROOT / '.github/workflows/native-cache.yml'
+        self.assertTrue(path.exists(), 'nieuwe tags kunnen caches van andere tags niet lezen')
+        workflow = path.read_text(encoding='utf-8')
+        self.assertRegex(workflow, r'(?m)^  push:\n    branches: \[main\]$')
+        self.assertNotRegex(workflow, r'(?m)^  (pull_request|pull_request_target|schedule):')
+        self.assertNotRegex(workflow, r'(?m)^    tags:')
+        for path in ['Cargo.toml', 'Cargo.lock', 'civiel/Cargo.toml',
+                     '.github/workflows/release.yml', '.github/workflows/native-cache.yml']:
+            self.assertIn(f'      - "{path}"', workflow)
+        self.assertIn('permissions:\n  contents: read', workflow)
+        self.assertNotRegex(workflow, r'secrets\.|action-gh-release|signing-action|notarytool|codesign')
+        release = (ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8')
+        for text in [workflow, release]:
+            self.assertRegex(text, r'(?m)^  RUST_TOOLCHAIN: "1\.99\.1"$')
+        self.assertEqual(set(re.findall(r'os: ([\w.-]+)', workflow)),
+                         set(re.findall(r'os: ([\w.-]+)', release)))
+        self.assertEqual(re.findall(r'^      - run: (cargo .+)$', workflow, re.MULTILINE),
+                         re.findall(r'^      - run: (cargo .+)$', release, re.MULTILINE))
+        steps = re.split(r'^      - ', workflow, flags=re.MULTILINE)[1:]
+        cache = [i for i, step in enumerate(steps) if 'uses: Swatinem/rust-cache@' in step]
+        self.assertEqual(len(cache), 1)
+        self.assertIn('id: cache', steps[cache[0]])
+        self.assertRegex(steps[cache[0]], r'Swatinem/rust-cache@[0-9a-f]{40}\b')
+        self.assertRegex(steps[cache[0]], r'(?m)^\s+shared-key: release\s*$')
+        self.assertNotRegex(steps[cache[0]], r'(cache-workspace-crates|cache-on-failure):\s*[\x22\x27]?true')
+        toolchain = next(i for i, step in enumerate(steps) if 'dtolnay/rust-toolchain@' in step)
+        self.assertLess(toolchain, cache[0])
+        for i, step in enumerate(steps):
+            if re.search(r'\bcargo (test|build)\b', step):
+                self.assertLess(cache[0], i)
+                self.assertIn("if: steps.cache.outputs.cache-hit != 'true'", step)
+
+
 if __name__ == '__main__':
     unittest.main()
