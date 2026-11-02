@@ -345,17 +345,22 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
     let gi = names.iter().position(|n| n.eq_ignore_ascii_case(&geom_col)).ok_or("GeoPackage: geometry column missing")?;
     let mut rows = st.query([]).map_err(err)?;
     let mut features = Vec::new();
-    while let Some(row) = rows.next().map_err(err)? {
+    let mut warnings = Vec::new();
+    let mut row_index = 0;
+    'rows: while let Some(row) = rows.next().map_err(err)? {
+        row_index += 1;
         let mut f = Feature::default();
         for (i, n) in names.iter().enumerate() {
             let v = row.get_ref(i).map_err(err)?;
             if i == gi {
                 if let ValueRef::Blob(b) = v {
                     if !gpkg_geometry(b, &mut f) {
-                        return Err(format!("GeoPackage: ongeldige geometrie in laag {table}, rij {}", features.len() + 1));
+                        warnings.push(format!("GeoPackage: onleesbare of niet ondersteunde geometrie in laag {table}, rij {row_index}; object overgeslagen"));
+                        continue 'rows;
                     }
                 } else if !matches!(v, ValueRef::Null) {
-                    return Err(format!("GeoPackage: geometrie is geen blob in laag {table}, rij {}", features.len() + 1));
+                    warnings.push(format!("GeoPackage: geometrie is geen blob in laag {table}, rij {row_index}; object overgeslagen"));
+                    continue 'rows;
                 }
                 continue;
             }
@@ -370,7 +375,7 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
         }
         features.push(f);
     }
-    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings: Vec::new() })
+    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings })
 }
 
 // ── KML / KMZ / GPX ─────────────────────────────────────────────────────────
@@ -897,6 +902,15 @@ mod tests {
     }
 
     #[test]
+    fn gpkg_legacy_extended_flag_keeps_the_readable_point_from_main() {
+        let mut blob = gpkg_blob(WKB_POINT);
+        blob[3] |= 0x20;
+        let mut feature = Feature::default();
+        assert!(gpkg_geometry(&blob, &mut feature));
+        assert_eq!(feature.points, vec![[2600000.25, 1200000.5]]);
+    }
+
+    #[test]
     fn gpkg_sql_null_geometry_preserves_the_feature_and_attributes() {
         let path = temporary_gpkg("null", &gpkg_blob(WKB_POINT));
         {
@@ -980,7 +994,7 @@ mod tests {
     }
 
     #[test]
-    fn gpkg_rejects_deep_collections_and_nonfinite_lines() {
+    fn gpkg_reads_deep_collections_and_rejects_nonfinite_lines() {
         let mut nested = WKB_POINT.to_vec();
         for _ in 0..100 {
             let mut outer = vec![1];
@@ -989,7 +1003,7 @@ mod tests {
             outer.extend(nested);
             nested = outer;
         }
-        assert!(!gpkg_geometry(&nested, &mut Feature::default()));
+        assert!(gpkg_geometry(&nested, &mut Feature::default()));
         for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             let mut line = WKB_LINE.to_vec();
             line[9..17].copy_from_slice(&value.to_le_bytes());
