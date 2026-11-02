@@ -180,10 +180,21 @@ def capability_layers(body, kind):
                 "wfs": {"WFS_Capabilities"}, "wmts": {"Capabilities"}}[kind]
     if local_name(root.tag) not in expected or (kind == "wmts" and not root.tag.startswith("{http://www.opengis.net/wmts/1.0}")):
         raise ServiceError("Onverwacht document voor " + kind.upper() + ": " + local_name(root.tag))
-    container, field = {"wms": ("Layer", "Name"), "wfs": ("FeatureType", "Name"),
-                        "wmts": ("Layer", "Identifier")}[kind]
-    layers = {n.text.strip() for layer in root.iter() if local_name(layer.tag) == container
-              for n in layer if local_name(n.tag) == field and n.text and n.text.strip()}
+    section, container, field = {"wms": ("Capability", "Layer", "Name"),
+                                 "wfs": ("FeatureTypeList", "FeatureType", "Name"),
+                                 "wmts": ("Contents", "Layer", "Identifier")}[kind]
+    content = next((n for n in root if local_name(n.tag) == section), None)
+    if content is None:
+        raise ServiceError("Capabilities mist verplichte container: " + section)
+    layers, pending = set(), [content]
+    while pending:
+        for layer in pending.pop():
+            if local_name(layer.tag) != container:
+                continue
+            layers.update(n.text.strip() for n in layer
+                          if local_name(n.tag) == field and n.text and n.text.strip())
+            if kind == "wms":  # Alleen WMS kent geneste lagen binnen een Layer.
+                pending.append(layer)
     if not layers:
         raise ServiceError("Capabilities bevat geen benoemde lagen of objecttypen")
     return layers
