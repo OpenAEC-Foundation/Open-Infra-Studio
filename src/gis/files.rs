@@ -470,9 +470,9 @@ fn gml_numbers(text: &str, separator: Option<char>) -> Result<Vec<f64>, String> 
 
 fn gml_dimension(node: roxmltree::Node, fallback: usize) -> Result<usize, String> {
     match node.ancestors().find_map(|n| n.attribute("srsDimension")) {
-        Some(text) => match text.parse::<usize>() {
-            Ok(d @ (2 | 3)) => Ok(d),
-            _ => Err(format!("GML: ongeldige srsDimension '{text}' (2 of 3 verwacht)")),
+        Some(text) => match text.trim().parse::<usize>() {
+            Ok(d) if d >= 2 => Ok(d),
+            _ => Err(format!("GML: srsDimension '{text}' kan niet naar XY worden gelezen")),
         },
         None => Ok(fallback),
     }
@@ -490,23 +490,66 @@ fn gml_coords(node: roxmltree::Node, dim: usize) -> Result<Vec<XY>, String> {
     for p in node.descendants().filter(|d| d.has_tag_name("pos")) {
         let v = gml_numbers(p.text().unwrap_or("").trim(), None)?;
         let d = gml_dimension(p, v.len())?;
-        if !(2..=3).contains(&v.len()) || v.len() != d { return Err("GML: onvolledige coördinaat in pos".into()); }
+        if d < 2 || v.len() != d { return Err("GML: onvolledige coördinaat in pos".into()); }
         pos.push([v[0], v[1]]);
     }
     if !pos.is_empty() { return Ok(pos); }
     // GML 2: x,y[,z] tuples, separated by whitespace.
     if let Some(c) = node.descendants().find(|d| d.has_tag_name("coordinates")) {
+        let mut dimension = None;
         return c.text().unwrap_or("").split_whitespace().map(|tuple| {
             let v = gml_numbers(tuple, Some(','))?;
-            if !(2..=3).contains(&v.len()) { return Err("GML: onvolledige coordinates-tuple".into()); }
+            let d = *dimension.get_or_insert(gml_dimension(c, v.len())?);
+            if d < 2 || v.len() != d { return Err("GML: onvolledige coordinates-tuple".into()); }
             Ok([v[0], v[1]])
         }).collect();
     }
     Ok(Vec::new())
 }
 
+// A Ring/Curve contains ordered curve parts. Read every supported part before
+// applying any length check; an unhandled part must not become a partial ring.
+fn gml_curve(node: roxmltree::Node, depth: usize) -> Result<Vec<XY>, String> {
+    if depth > 64 { return Err("GML: te diep geneste curve (leeslimiet 64)".into()); }
+    let name = node.tag_name().name();
+    if matches!(name, "LineString" | "LineStringSegment" | "LinearRing") {
+        let points = gml_coords(node, 2)?;
+        if points.len() < if name == "LinearRing" { 3 } else { 2 } { return Err(format!("GML: te weinig coördinaten in {name}")); }
+        return Ok(points);
+    }
+    let parts: Vec<_> = match name {
+        "Curve" => node.children().find(|n| n.has_tag_name("segments"))
+            .ok_or("GML: Curve zonder segments")?.children().filter(|n| n.is_element()).collect(),
+        "Ring" | "CompositeCurve" => {
+            let mut parts = Vec::new();
+            for member in node.children().filter(|n| n.has_tag_name("curveMember")) {
+                let part = member.children().find(|n| n.is_element())
+                    .ok_or("GML: curveMember zonder inline curve wordt niet ondersteund")?;
+                parts.push(part);
+            }
+            if parts.is_empty() { return Err(format!("GML: {name} zonder curveMember")); }
+            parts
+        }
+        _ => return Err(format!("GML: curveonderdeel {name} wordt niet ondersteund")),
+    };
+    let mut points = Vec::new();
+    for part in parts {
+        let next = gml_curve(part, depth + 1)?;
+        if next.is_empty() { continue; }
+        let shared = points.last().is_some_and(|p| *p == next[0]);
+        if !points.is_empty() && !shared { return Err("GML: curveonderdelen sluiten niet aan".into()); }
+        points.extend(next.into_iter().skip(usize::from(shared)));
+    }
+    Ok(points)
+}
+
 /// The geometry elements directly under a property, read into `f`.
 fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> Result<bool, String> {
+    gml_geometry_at(node, f, 0)
+}
+
+fn gml_geometry_at(node: roxmltree::Node, f: &mut Feature, depth: usize) -> Result<bool, String> {
+    if depth > 64 { return Err("GML: te diep geneste geometrie (leeslimiet 64)".into()); }
     let name = node.tag_name().name();
     match name {
         "Point" => {
@@ -514,22 +557,22 @@ fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> Result<bool, String> 
             if points.len() != 1 { return Err("GML: Point verwacht één coördinaat".into()); }
             f.points.extend(points);
         }
-        "LineString" | "Curve" | "LineStringSegment" | "LinearRing" | "Ring" => {
+        "LineString" | "Curve" | "LineStringSegment" | "LinearRing" | "Ring" | "CompositeCurve" => {
             let ring = matches!(name, "LinearRing" | "Ring");
-            let points = gml_coords(node, 2)?;
-            if points.len() < if ring { 3 } else { 2 } { return Err(format!("GML: te weinig coördinaten in {name}")); }
-            f.lines.push((points, ring));
+            let points = gml_curve(node, 0)?;
+            if ring && points.len() < 3 { return Err(format!("GML: te weinig coördinaten in {name}")); }
+            if !points.is_empty() { f.lines.push((points, ring)); }
         }
         "Polygon" | "Surface" | "PolygonPatch" => {
             for r in node.descendants().filter(|d| d.has_tag_name("LinearRing") || d.has_tag_name("Ring")) {
-                gml_geometry(r, f)?;
+                gml_geometry_at(r, f, depth + 1)?;
             }
         }
-        "MultiPoint" | "MultiCurve" | "MultiLineString" | "MultiSurface" | "MultiPolygon" | "MultiGeometry" | "CompositeCurve" | "CompositeSurface" => {
+        "MultiPoint" | "MultiCurve" | "MultiLineString" | "MultiSurface" | "MultiPolygon" | "MultiGeometry" | "CompositeSurface" => {
             for m in node.children().filter(|c| c.is_element()) {
                 // pointMember / surfaceMembers: the geometries one level down.
                 for g in m.children().filter(|c| c.is_element()) {
-                    gml_geometry(g, f)?;
+                    gml_geometry_at(g, f, depth + 1)?;
                 }
             }
         }
@@ -561,7 +604,10 @@ pub fn gml(text: &str) -> Result<FileData, String> {
         })
         .collect();
     let mut features = Vec::new();
-    for fnode in members {
+    let mut warnings = Vec::new();
+    for (index, fnode) in members.into_iter().enumerate() {
+        let id = fnode.attributes().find(|a| a.name() == "id").map(|a| a.value().to_string());
+        let parsed = (|| -> Result<Feature, String> {
         let mut f = Feature::default();
         for prop in fnode.children().filter(|c| c.is_element()) {
             let mut geom = false;
@@ -576,12 +622,17 @@ pub fn gml(text: &str) -> Result<FileData, String> {
                 }
             }
         }
-        if let Some(id) = fnode.attributes().find(|a| a.name() == "id").map(|a| a.value().to_string()) {
-            f.props.entry("gml_id").or_insert(Value::String(id));
+        if let Some(id) = &id {
+            f.props.entry("gml_id").or_insert(Value::String(id.clone()));
         }
-        features.push(f);
+        Ok(f)
+        })();
+        match parsed {
+            Ok(f) => features.push(f),
+            Err(error) => warnings.push(format!("GML: object {} overgeslagen: {error}", id.unwrap_or_else(|| (index + 1).to_string()))),
+        }
     }
-    Ok(FileData { format: "GML", features, crs, layers: Vec::new(), warnings: Vec::new() })
+    Ok(FileData { format: "GML", features, crs, layers: Vec::new(), warnings })
 }
 
 // ── CSV ─────────────────────────────────────────────────────────────────────
@@ -661,7 +712,7 @@ mod tests {
     }
 
     #[test]
-    fn gml_rejects_invalid_or_incomplete_coordinate_tuples() {
+    fn gml_skips_invalid_or_incomplete_coordinate_tuples_with_a_warning() {
         for (from, to) in [
             ("2600000 1200000 5 2600010 1200020 6", "2600000 bad 1200000 5 2600010 1200020 6"),
             ("2600000 1200000 5 2600010 1200020 6", "2600000 1200000 5 2600010 1200020"),
@@ -675,7 +726,10 @@ mod tests {
         ] {
             let bad = GML.replace(from, to);
             assert_ne!(bad, GML);
-            assert!(gml(&bad).unwrap_err().starts_with("GML:"), "{from} -> {to}");
+            let data = gml(&bad).unwrap();
+            assert_eq!(data.features.len(), 1, "{from} -> {to}");
+            assert_eq!(data.warnings.len(), 1, "{from} -> {to}");
+            assert!(data.warnings[0].contains("overgeslagen"));
         }
     }
 
@@ -684,7 +738,10 @@ mod tests {
         let text = GML.replace("<gml:pos>2600005 1200005</gml:pos>", "<gml:coordinates>2600005,1200005,7</gml:coordinates>");
         assert_eq!(gml(&text).unwrap().features[1].points[0], [2600005.0, 1200005.0]);
         for tuple in ["2600005,bad,1200005", "2600005,NaN,7", "2600005,1200005,inf", "2600005"] {
-            assert!(gml(&text.replace("2600005,1200005,7", tuple)).is_err(), "{tuple}");
+            let data = gml(&text.replace("2600005,1200005,7", tuple)).unwrap();
+            assert_eq!(data.features.len(), 1, "{tuple}");
+            assert_eq!(data.features[0].props["gml_id"], "line-1");
+            assert_eq!(data.warnings.len(), 1);
         }
     }
 
@@ -726,6 +783,7 @@ mod tests {
         assert_eq!(data.features.len(), 2);
         assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]], true));
         assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+        assert!(data.warnings.is_empty());
     }
 
     #[test]
@@ -754,6 +812,36 @@ mod tests {
         let data = gml(&GML.replace("2600000 1200000 5 2600010 1200020 6", "2600000 broken 5 2600010 1200020 6")).unwrap();
         assert_eq!(data.features.len(), 1);
         assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("line-1 overgeslagen"));
+        assert!(data.report("1 object gelezen").contains(&data.warnings[0]));
+    }
+
+    #[test]
+    fn gml_linear_segments_are_joined_and_unsupported_parts_are_reported() {
+        let line = "<gml:LineString srsName=\"urn:ogc:def:crs:EPSG::2056\" srsDimension=\"3\">\n      <gml:posList>2600000 1200000 5 2600010 1200020 6</gml:posList>\n    </gml:LineString>";
+        let curve = "<gml:Curve><gml:segments><gml:LineStringSegment><gml:posList>0 0 10 0</gml:posList></gml:LineStringSegment><gml:LineStringSegment><gml:posList>10 0 10 10</gml:posList></gml:LineStringSegment></gml:segments></gml:Curve>";
+        let data = gml(&GML.replace(line, curve)).unwrap();
+        assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]], false));
+        assert!(data.warnings.is_empty());
+        for curve in [curve.replace("LineStringSegment", "Arc"), curve.replace("10 0 10 10", "20 0 10 10")] {
+            let data = gml(&GML.replace(line, &curve)).unwrap();
+            assert_eq!(data.features.len(), 1);
+            assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+            assert_eq!(data.warnings.len(), 1);
+        }
+    }
+
+    #[test]
+    fn gml_file_import_reports_a_skipped_feature_and_keeps_the_good_one() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/gml/mixed.gml");
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+        assert_eq!(data.warnings.len(), 1);
+        let message = data.report("GML: 1 object gelezen");
+        assert!(message.contains("broken-line overgeslagen"));
+        assert!(message.contains("ongeldig coördinaatgetal"));
     }
 
     #[test]
