@@ -66,7 +66,7 @@ pub fn import_path(site: &Site, path: &Path, crs: Option<&str>, progress: &dyn F
 /// Draw file features: polylines and rings, points as small circles, labels,
 /// all with their attributes as object data.
 pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, progress: &dyn Fn(String)) -> Result<String, String> {
-    for warning in &data.warnings { progress(warning.clone()); }
+    for warning in data.import_warnings() { progress(warning.clone()); }
     if data.format == "IMRO" {
         if opt.clip { return Err("IMRO-vlakken worden met volledige binnenringen ingelezen; zet bijsnijden uit.".into()); }
         let mut plans = crate::gis::planning::Data::from_file_data(data)?;
