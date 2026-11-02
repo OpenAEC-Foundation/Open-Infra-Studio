@@ -355,6 +355,51 @@ mod tests {
     const SITE: &str = include_str!("../../tests/fixtures/landxml/site.xml");
 
     #[test]
+    fn sol_start_coordinate_text_overrides_pntref() {
+        let text = SITE.replace("<Start>200 100</Start>", "<Start pntRef=\"1\">205 105</Start>");
+        assert_ne!(text, SITE);
+        let data = parse(&text).unwrap();
+        assert_eq!(data.alignments.len(), 1);
+        assert_eq!(data.alignments[0].segs[0], Seg::Line { a: [105.0, 205.0], b: [110.0, 200.0] });
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn sol_named_cgpoint_coordinate_text_overrides_pntref() {
+        let point = "<CgPoint name=\"2\" pntRef=\"1\">205 105 7</CgPoint>";
+        let text = SITE.replace("</CgPoints>", &format!("{point}</CgPoints>"));
+        let data = parse(&text).unwrap();
+        assert_eq!(data.points.len(), 2);
+        let point = &data.points[1];
+        assert_eq!(point.name, "2");
+        assert_eq!((point.e, point.n, point.z), (105.0, 205.0, Some(7.0)));
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn sol_unnamed_cgpoint_coordinate_text_overrides_pntref() {
+        let point = "<CgPoint pntRef=\"1\">205 105 7</CgPoint>";
+        let text = SITE.replace("</CgPoints>", &format!("{point}</CgPoints>"));
+        let data = parse(&text).unwrap();
+        assert_eq!(data.points.len(), 2);
+        assert_eq!((data.points[1].e, data.points[1].n, data.points[1].z), (105.0, 205.0, Some(7.0)));
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn sol_negative_infinite_spiral_radius_keeps_zero_start_curvature() {
+        let text = SAMPLE.replace("INF", "-INF");
+        assert!(text.contains("radiusStart=\"-INF\""));
+        let data = parse(&text).unwrap();
+        assert_eq!(data.alignments.len(), 1);
+        assert_eq!(data.alignments[0].spirals, 1);
+        // INF means zero start curvature. The literal -INF substitution
+        // must retain exactly the same axis, including all spiral chords.
+        assert_eq!(data.alignments[0].segs, parse(SAMPLE).unwrap().alignments[0].segs);
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
     fn one_bad_landxml_object_keeps_unrelated_points_surfaces_and_axes() {
         for (from, to, expected) in [
             ("<CgPoint name=\"1\">200 100 5</CgPoint>", "<CgPoint name=\"1\">200 bad 5</CgPoint>", (0, 1, 1)),
