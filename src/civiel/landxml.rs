@@ -3,6 +3,7 @@
 //! northing before easting.
 
 use std::f64::consts::PI;
+use std::collections::HashMap;
 
 use ocs_plugin_api::host::codec::EntityType;
 
@@ -53,17 +54,30 @@ fn numbers(s: &str, unit: f64) -> Result<Vec<f64>, String> {
     }).collect()
 }
 
-/// "N E" in a node's text → [E, N] in metres.
-fn en(n: Option<roxmltree::Node>, unit: f64) -> Result<Option<XY>, String> {
+fn point_values<'a, 'i>(n: roxmltree::Node<'a, 'i>, unit: f64, points: &HashMap<String, roxmltree::Node<'a, 'i>>, depth: usize) -> Result<Vec<f64>, String> {
+    if depth > 64 { return Err("LandXML: puntverwijzing te diep of cyclisch".into()); }
+    if let Some(reference) = n.attribute("pntRef") {
+        if n.text().is_some_and(|text| !text.trim().is_empty()) {
+            return Err("LandXML: punt bevat zowel pntRef als coördinaattekst".into());
+        }
+        let reference = reference.trim();
+        let target = points.get(reference).ok_or_else(|| format!("LandXML: onbekende puntverwijzing '{reference}'"))?;
+        return point_values(*target, unit, points, depth + 1);
+    }
+    numbers(n.text().unwrap_or(""), unit)
+}
+
+/// "N E" or a point reference → [E, N] in metres.
+fn en<'a, 'i>(n: Option<roxmltree::Node<'a, 'i>>, unit: f64, points: &HashMap<String, roxmltree::Node<'a, 'i>>) -> Result<Option<XY>, String> {
     let Some(n) = n else { return Ok(None) };
-    let v = numbers(n.text().unwrap_or(""), unit)?;
+    let v = point_values(n, unit, points, 0)?;
     if !(2..=3).contains(&v.len()) { return Err(format!("LandXML: {} verwacht twee of drie coördinaten", local(&n))); }
     Ok(Some([v[1], v[0]]))
 }
 
 fn number_attr(n: roxmltree::Node, name: &str, unit: f64) -> Result<Option<f64>, String> {
     n.attribute(name).map(|text| {
-        let value = text.parse::<f64>().map_err(|_| format!("LandXML: ongeldig {name}: '{text}'"))? * unit;
+        let value = text.trim().parse::<f64>().map_err(|_| format!("LandXML: ongeldig {name}: '{text}'"))? * unit;
         if !value.is_finite() { return Err(format!("LandXML: niet-eindig {name}")); }
         Ok(value)
     }).transpose()
@@ -112,23 +126,30 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
         }
     }
     let unit = out.unit;
-    // Points.
-    for set in children(root, "CgPoints") {
-        for p in set.descendants().filter(|n| n.is_element() && local(n) == "CgPoint") {
-            let v = numbers(p.text().unwrap_or(""), unit)?;
-            if !(2..=3).contains(&v.len()) {
-                return Err("LandXML: CgPoint verwacht twee of drie coördinaten".into());
-            }
-            let name = p.attribute("name").or(p.attribute("oID")).unwrap_or("").to_string();
-            let code = p.attribute("code").or(p.attribute("desc")).unwrap_or("").to_string();
-            out.points.push(SurveyPoint {
-                name: if name.is_empty() { (out.points.len() + 1).to_string() } else { name },
-                e: v[1],
-                n: v[0],
-                z: v.get(2).copied(),
-                code,
-            });
+    // Index all point definitions first, including those after a reference.
+    let survey_points: Vec<_> = children(root, "CgPoints").flat_map(|set| set.descendants().filter(|n| n.is_element() && local(n) == "CgPoint")).collect();
+    let mut points = HashMap::new();
+    for p in &survey_points {
+        if let Some(name) = p.attribute("name").or(p.attribute("oID")) {
+            points.entry(name.trim().to_string()).or_insert(*p);
         }
+    }
+    // Points. A group's unnamed reference is membership, not another point.
+    for p in survey_points {
+        let v = point_values(p, unit, &points, 0)?;
+        if !(2..=3).contains(&v.len()) {
+            return Err("LandXML: CgPoint verwacht twee of drie coördinaten".into());
+        }
+        let name = p.attribute("name").or(p.attribute("oID")).unwrap_or("").to_string();
+        if p.attribute("pntRef").is_some() && name.is_empty() { continue; }
+        let code = p.attribute("code").or(p.attribute("desc")).unwrap_or("").to_string();
+        out.points.push(SurveyPoint {
+            name: if name.is_empty() { (out.points.len() + 1).to_string() } else { name },
+            e: v[1],
+            n: v[0],
+            z: v.get(2).copied(),
+            code,
+        });
     }
     // Surfaces: points by id, faces by three ids; i="1" faces are invisible.
     for surf in root.descendants().filter(|n| n.is_element() && local(n) == "Surface") {
@@ -136,7 +157,7 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
         let mut ids = std::collections::HashMap::new();
         if let Some(pnts) = child(def, "Pnts") {
             for p in children(pnts, "P") {
-                let v = numbers(p.text().unwrap_or(""), unit)?;
+                let v = point_values(p, unit, &points, 0)?;
                 if v.len() != 3 { return Err("LandXML: TIN-punt verwacht drie coördinaten".into()); }
                 if let Some(id) = p.attribute("id") {
                     ids.insert(id.to_string(), [v[1], v[0], v[2]]);
@@ -168,13 +189,13 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
         let mut spirals = 0;
         for g in geom.children().filter(|c| c.is_element()) {
             if !matches!(local(&g), "Line" | "Curve" | "Spiral") { continue; }
-            let start = en(child(g, "Start"), unit)?;
-            let end = en(child(g, "End"), unit)?;
+            let start = en(child(g, "Start"), unit, &points)?;
+            let end = en(child(g, "End"), unit, &points)?;
             if start.is_none() || end.is_none() { return Err(format!("LandXML: {} zonder Start of End", local(&g))); }
             match (local(&g), start, end) {
                 ("Line", Some(a), Some(b)) => segs.push(Seg::Line { a, b }),
                 ("Curve", Some(a), Some(b)) => {
-                    let c = en(child(g, "Center"), unit)?.ok_or("LandXML: Curve zonder Center")?;
+                    let c = en(child(g, "Center"), unit, &points)?.ok_or("LandXML: Curve zonder Center")?;
                     let r = (a[0] - c[0]).hypot(a[1] - c[1]);
                     if !r.is_finite() || r <= 0.0 { return Err("LandXML: ongeldige boogstraal".into()); }
                     let a0 = (a[1] - c[1]).atan2(a[0] - c[0]);
@@ -193,7 +214,7 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
                     // to radiusEnd ("INF" is straight).
                     let len = number_attr(g, "length", unit)?.unwrap_or_else(|| (b[0] - a[0]).hypot(b[1] - a[1]));
                     if !len.is_finite() || len <= 0.0 { return Err("LandXML: ongeldige spiraallengte".into()); }
-                    let pi = en(child(g, "PI"), unit)?.unwrap_or(b);
+                    let pi = en(child(g, "PI"), unit, &points)?.unwrap_or(b);
                     let dir = (pi[1] - a[1]).atan2(pi[0] - a[0]);
                     let left = if g.attribute("rot") == Some("cw") { -1.0 } else { 1.0 };
                     let k = |attr: &str| -> Result<f64, String> {
