@@ -480,7 +480,7 @@ mod tests {
             let source = ASC.lines().collect::<Vec<_>>().join(ending) + ending;
             assert!(read_asc(&source).is_ok(), "geldige fixture met {ending:?}");
             for line in ["ncols 3", "nrows 2", "cellsize 5", "xllcorner 100", "yllcorner 200", "4 -9999 6"] {
-                let incomplete = source.replace(&format!("{line}\n"), "");
+                let incomplete = source.replace(&format!("{line}{ending}"), "");
                 assert_ne!(incomplete, source, "de test moet {line:?} met {ending:?} werkelijk verwijderen");
                 asc_error(&incomplete);
             }
