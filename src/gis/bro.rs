@@ -705,6 +705,32 @@ mod tests {
     }
 
     #[test]
+    fn bhr_broken_middle_search_object_preserves_both_valid_neighbours() {
+        let original = include_str!("../../tests/fixtures/bro-synthetic/borehole-characteristics.xml");
+        let complete = parse_characteristics(original).unwrap();
+        assert_eq!(complete.points.len(), 3);
+        assert!(complete.warnings.is_empty());
+        assert_eq!(complete.points[1].id, "BHR000000000102");
+        let expected = vec![
+            Point { id: "BHR000000000101".into(), cpt: false, rd: Some([100.0, 200.0]), lonlat: Some([4.1, 51.1]), surface: Some(1.25), datum: "NAP".into(), reference: "maaiveld".into(), end_depth: Some(5.5), date: "2026-01-02".into(), regime: "IMBRO".into(), deregistered: false },
+            Point { id: "BHR000000000103".into(), cpt: false, rd: Some([120.0, 220.0]), lonlat: Some([4.3, 51.3]), surface: Some(-0.75), datum: "NAP".into(), reference: "waterbodem".into(), end_depth: Some(7.5), date: "2026-01-04".into(), regime: "IMBRO/A".into(), deregistered: false },
+        ];
+        assert_eq!(vec![complete.points[0].clone(), complete.points[2].clone()], expected);
+        for (from, to) in [
+            ("<offset uom=\"m\">2.5</offset>", "<offset uom=\"m\">broken</offset>"),
+            ("<finalDepthBoring uom=\"m\">6.5</finalDepthBoring>", "<finalDepthBoring uom=\"m\">broken</finalDepthBoring>"),
+        ] {
+            assert_eq!(original.matches(from).count(), 1);
+            let broken = original.replacen(from, to, 1);
+            let result = parse_characteristics(&broken).unwrap();
+            assert_eq!(result.points, expected, "{from}");
+            assert_eq!(result.warnings.len(), 1);
+            assert!(result.warnings[0].contains("BHR000000000102"));
+            assert!(result.warnings[0].contains(tr("overgeslagen", "skipped")));
+        }
+    }
+
+    #[test]
     fn internal_bro_diagnostics_follow_the_selected_language() {
         let xml = SYNTHETIC_CPT.replace("<pos>100 200</pos>", "<pos>100 broken 200</pos>");
         let doc = Document::parse(&xml).unwrap();
