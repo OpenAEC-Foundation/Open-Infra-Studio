@@ -331,6 +331,21 @@ mod tests {
     }
 
     #[test]
+    fn rejects_invalid_spiral_numbers_and_nonfinite_arc_radius() {
+        for (from, to) in [
+            ("length=\"30\"", "length=\"0\""),
+            ("length=\"30\"", "length=\"NaN\""),
+            ("length=\"30\"", "length=\"bad\""),
+            ("radiusEnd=\"200\"", "radiusEnd=\"NaN\""),
+            ("radiusEnd=\"200\"", "radiusEnd=\"bad\""),
+            ("<Center>50 100</Center>", "<Center>-1.7e308 -1.7e308</Center>"),
+        ] {
+            assert_ne!(SAMPLE.replace(from, to), SAMPLE, "fixture substitution: {from}");
+            assert!(parse(&SAMPLE.replace(from, to)).is_err(), "{from} -> {to}");
+        }
+    }
+
+    #[test]
     fn rejects_empty_wrong_root_and_truncated_xml() {
         for text in ["", "<Other/>", "<LandXML/>", "<LandXML>", &SITE[..SITE.len() / 2]] {
             assert!(parse(text).is_err());
