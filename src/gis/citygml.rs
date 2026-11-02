@@ -336,7 +336,7 @@ fn validate_coordinates(root: Node, fallback_dim: usize) -> Result<(), String> {
             Ok(v)
         }).collect()
     };
-    for n in root.descendants().filter(|n| n.is_element()) {
+    for n in root.ancestors().chain(root.descendants()).filter(|n| n.is_element()) {
         if let Some(dim) = n.attribute("srsDimension") {
             if !dim.trim().parse::<usize>().is_ok_and(|d| d >= 2) { return Err(format!("CityGML: srsDimension '{dim}' kan niet naar XYZ worden gelezen")); }
         }
@@ -344,7 +344,7 @@ fn validate_coordinates(root: Node, fallback_dim: usize) -> Result<(), String> {
             "posList" => {
                 let values = numbers(n.text().unwrap_or(""))?;
                 let dim = dimension(n, fallback_dim);
-                if values.is_empty() || values.len() % dim != 0 { return Err("CityGML: onvolledige posList".into()); }
+                if dim < 2 || values.is_empty() || values.len() % dim != 0 { return Err("CityGML: onvolledige posList".into()); }
             }
             "pos" => {
                 let values = numbers(n.text().unwrap_or(""))?;
