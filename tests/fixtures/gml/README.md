@@ -13,7 +13,7 @@ GML 2 worden komma-gescheiden coördinaten uit dezelfde waarden gemaakt.
 
 `mixed.gml` is eveneens zelfgemaakt en valt onder dezelfde licentie. Eén
 lijn bevat bewust kapotte coördinaattekst; het losse punt blijft geldig.
-De bestandsroute moet het punt behouden en de overgeslagen lijn melden.
+De bestandsroute moet het punt behouden en de overgeslagen lijn tellen.
 Samengestelde ringen, meerdere lijnsegmenten, lege `segments` en volledige
 4D/5D-tuples worden in vaste varianten van `features.gml` getest.
 
@@ -21,5 +21,12 @@ De toegestane lege `segments`-container en dimensies zonder bovengrens
 volgen uit de [GML 3.2.1 schema's](https://schemas.opengis.net/gml/3.2.1/):
 `CurveSegmentArrayPropertyType` heeft `minOccurs="0"`; `srsDimension` is een
 `positiveInteger`. De lezer projecteert dimensies vanaf twee naar XY.
-Niet ondersteunde curveonderdelen worden met een melding overgeslagen,
-zodat geen gedeeltelijke ring wordt getekend.
+Niet ondersteunde curveonderdelen worden overgeslagen, zodat geen
+gedeeltelijke ring wordt getekend. Tot Ethans besluit verschijnen geen
+nieuwe meldingen. `FileData.skipped` telt de overgeslagen objecten en de
+interne lijst bewaart hun leesdetails. De importpagina en de opdracht
+gebruiken de bestaande teksten van main.
+
+Aanvullende varianten controleren hogere dimensies in losse `pos`-elementen,
+witruimte rond de dimensie en alle tekstdelen rond XML-commentaar. Een
+getal na commentaar mag niet verdwijnen achter een geldig gelezen begin.

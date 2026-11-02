@@ -476,17 +476,23 @@ fn gml_dimension(node: roxmltree::Node, fallback: usize) -> Result<usize, String
     }
 }
 
+// XML comments can split a simple value into several text nodes. Joining
+// without added whitespace preserves the XML value, including split numbers.
+fn gml_text(node: roxmltree::Node) -> String {
+    node.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect()
+}
+
 fn gml_coords(node: roxmltree::Node, dim: usize) -> Result<Vec<XY>, String> {
     // GML 3: inherit the nearest dimension from the coordinate or geometry.
     if let Some(list) = node.descendants().find(|d| d.has_tag_name("posList")) {
         let d = gml_dimension(list, dim)?;
-        let v = gml_numbers(list.text().unwrap_or("").trim(), None)?;
+        let v = gml_numbers(gml_text(list).trim(), None)?;
         if v.len() % d != 0 { return Err("GML: onvolledige coördinaat in posList".into()); }
         return Ok(v.chunks_exact(d).map(|c| [c[0], c[1]]).collect());
     }
     let mut pos = Vec::new();
     for p in node.descendants().filter(|d| d.has_tag_name("pos")) {
-        let v = gml_numbers(p.text().unwrap_or("").trim(), None)?;
+        let v = gml_numbers(gml_text(p).trim(), None)?;
         let d = gml_dimension(p, v.len())?;
         if d < 2 || v.len() != d { return Err("GML: onvolledige coördinaat in pos".into()); }
         pos.push([v[0], v[1]]);
@@ -495,7 +501,7 @@ fn gml_coords(node: roxmltree::Node, dim: usize) -> Result<Vec<XY>, String> {
     // GML 2: x,y[,z] tuples, separated by whitespace.
     if let Some(c) = node.descendants().find(|d| d.has_tag_name("coordinates")) {
         let mut dimension = None;
-        return c.text().unwrap_or("").split_whitespace().map(|tuple| {
+        return gml_text(c).split_whitespace().map(|tuple| {
             let v = gml_numbers(tuple, Some(','))?;
             let d = *dimension.get_or_insert(gml_dimension(c, v.len())?);
             if d < 2 || v.len() != d { return Err("GML: onvolledige coordinates-tuple".into()); }
@@ -630,7 +636,8 @@ pub fn gml(text: &str) -> Result<FileData, String> {
             Err(error) => warnings.push(format!("GML: object {} overgeslagen: {error}", id.unwrap_or_else(|| (index + 1).to_string()))),
         }
     }
-    Ok(FileData { format: "GML", features, crs, layers: Vec::new(), warnings, skipped: 0 })
+    let skipped = warnings.len();
+    Ok(FileData { format: "GML", features, crs, layers: Vec::new(), warnings, skipped })
 }
 
 // ── CSV ─────────────────────────────────────────────────────────────────────
@@ -710,7 +717,7 @@ mod tests {
     }
 
     #[test]
-    fn gml_skips_invalid_or_incomplete_coordinate_tuples_with_a_warning() {
+    fn gml_skips_invalid_or_incomplete_coordinate_tuples_with_internal_details() {
         for (from, to) in [
             ("2600000 1200000 5 2600010 1200020 6", "2600000 bad 1200000 5 2600010 1200020 6"),
             ("2600000 1200000 5 2600010 1200020 6", "2600000 1200000 5 2600010 1200020"),
@@ -876,7 +883,7 @@ mod tests {
     }
 
     #[test]
-    fn gml_file_import_reports_a_skipped_feature_and_keeps_the_good_one() {
+    fn gml_file_import_counts_a_skipped_feature_and_keeps_the_good_one() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/gml/mixed.gml");
         let data = read(&path, None).unwrap();
         assert_eq!(data.features.len(), 1);
