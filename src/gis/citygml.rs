@@ -9,6 +9,7 @@
 //! with LoD1 and LoD2 does not give each building twice.
 
 use roxmltree::{Document, Node};
+use quick_xml::{events::Event, Reader};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Theme {
@@ -74,6 +75,7 @@ pub struct CityModel {
     pub objects: Vec<CityObject>,
     /// All objects with geometry in the file, kept or not.
     pub seen: usize,
+    /// Objects or sequence records skipped while preserving readable ones.
     pub warnings: Vec<String>,
 }
 
@@ -114,66 +116,87 @@ fn local<'a, 'i>(n: &Node<'a, 'i>) -> &'i str {
     n.tag_name().name()
 }
 
-fn numbers(text: &str) -> Vec<f64> {
-    text.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).filter_map(|s| s.parse().ok()).collect()
+// A comment or CDATA section can split one XML value. Never insert spaces:
+// even a single number may span several text nodes.
+fn xml_text(node: Node) -> String {
+    node.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect()
 }
 
-/// The dimension of coordinates at `n`: its own or an ancestor's srsDimension.
-fn dimension(n: Node, fallback: usize) -> usize {
-    n.ancestors().find_map(|a| a.attribute("srsDimension").and_then(|v| v.parse().ok())).unwrap_or(fallback)
+fn dimension(node: Node, fallback: usize) -> Result<usize, String> {
+    // Keep main's fallback for unusable optional dimension metadata. A valid
+    // local declaration still takes precedence over a global envelope.
+    let dim = node.ancestors().find_map(|a| a.attribute("srsDimension").and_then(|v| v.trim().parse::<usize>().ok())).unwrap_or(fallback);
+    if dim < 2 { return Err("CityGML: dimensie kleiner dan twee".into()); }
+    Ok(dim)
+}
+
+fn coordinate_number(token: &str, decimal: &str) -> Result<f64, String> {
+    let normalized = if decimal == "." { token.trim().to_string() } else { token.trim().replace(decimal, ".") };
+    let value = normalized.parse::<f64>().map_err(|_| format!("CityGML: ongeldig coördinaatgetal '{token}'"))?;
+    if !value.is_finite() { return Err(format!("CityGML: niet-eindig coördinaatgetal '{token}'")); }
+    Ok(value)
+}
+
+/// Decode and validate the same complete XML value, only for chosen geometry.
+fn coordinates(node: Node, fallback: usize) -> Result<Vec<[f64; 3]>, String> {
+    let text = xml_text(node);
+    let point = |v: &[f64]| [v[0], v[1], v.get(2).copied().unwrap_or(f64::NAN)];
+    if local(&node) != "coordinates" {
+        let values = text.split(|c: char| c.is_whitespace() || c == ',').filter(|v| !v.is_empty())
+            .map(|v| coordinate_number(v, ".")).collect::<Result<Vec<_>, _>>()?;
+        let dim = dimension(node, if local(&node) == "pos" { values.len() } else { fallback })?;
+        if values.len() % dim != 0 || (local(&node) == "pos" && values.len() != dim) {
+            return Err("CityGML: onvolledige coördinaattuple".into());
+        }
+        return Ok(values.chunks_exact(dim).map(point).collect());
+    }
+    let cs = node.attribute("cs").filter(|v| !v.is_empty()).unwrap_or(",");
+    let ts = node.attribute("ts").filter(|v| !v.is_empty()).unwrap_or(" ");
+    let decimal = node.attribute("decimal").filter(|v| !v.is_empty()).unwrap_or(".");
+    let tuples: Vec<_> = if ts.chars().all(char::is_whitespace) { text.split_whitespace().collect() } else { text.trim().split(ts).collect() };
+    let mut out = Vec::new();
+    let mut expected = None;
+    for tuple in tuples {
+        let values = tuple.split(cs).map(|v| coordinate_number(v, decimal)).collect::<Result<Vec<_>, _>>()?;
+        let dim = *expected.get_or_insert(dimension(node, values.len())?);
+        if values.len() != dim { return Err("CityGML: onvolledige coordinates-tuple".into()); }
+        out.push(point(&values));
+    }
+    Ok(out)
 }
 
 /// The points of one ring element (posList, a series of pos, or coordinates).
-fn ring(r: Node, fallback_dim: usize) -> Vec<[f64; 3]> {
+fn ring(r: Node, fallback_dim: usize) -> Result<Vec<[f64; 3]>, String> {
     if let Some(pl) = r.descendants().find(|d| local(d) == "posList") {
-        let v = numbers(pl.text().unwrap_or(""));
-        let dim = dimension(pl, fallback_dim).clamp(2, 3);
-        return v.chunks_exact(dim).map(|c| [c[0], c[1], if dim == 3 { c[2] } else { f64::NAN }]).collect();
+        return coordinates(pl, fallback_dim);
     }
-    let pos: Vec<Node> = r.descendants().filter(|d| local(d) == "pos").collect();
-    if !pos.is_empty() {
-        return pos
-            .iter()
-            .filter_map(|p| {
-                let v = numbers(p.text().unwrap_or(""));
-                (v.len() >= 2).then(|| [v[0], v[1], v.get(2).copied().unwrap_or(f64::NAN)])
-            })
-            .collect();
+    let positions: Vec<_> = r.descendants().filter(|d| local(d) == "pos").collect();
+    if !positions.is_empty() {
+        let mut out = Vec::new();
+        for position in positions { out.extend(coordinates(position, fallback_dim)?); }
+        return Ok(out);
     }
     if let Some(cs) = r.descendants().find(|d| local(d) == "coordinates") {
-        // x,y[,z] x,y[,z] …
-        return cs
-            .text()
-            .unwrap_or("")
-            .split_whitespace()
-            .filter_map(|t| {
-                let v: Vec<f64> = t.split(',').filter_map(|s| s.parse().ok()).collect();
-                (v.len() >= 2).then(|| [v[0], v[1], v.get(2).copied().unwrap_or(f64::NAN)])
-            })
-            .collect();
+        return coordinates(cs, fallback_dim);
     }
-    Vec::new()
+    Ok(Vec::new())
 }
 
 /// Rings of a gml:Polygon, PolygonPatch or Triangle, the closing point off.
-fn polygon(p: Node, dim: usize) -> Rings {
+fn polygon(p: Node, dim: usize) -> Result<Rings, String> {
     let mut out = Vec::new();
     for side in ["exterior", "outerBoundaryIs", "interior", "innerBoundaryIs"] {
         for b in p.children().filter(|c| local(c) == side) {
-            let mut r = ring(b, dim);
+            let mut r = ring(b, dim)?;
             if r.len() > 1 && r[0][0] == r[r.len() - 1][0] && r[0][1] == r[r.len() - 1][1] {
                 r.pop();
             }
             if r.len() >= 3 {
-                if side.starts_with("ext") || side.starts_with("outer") {
-                    out.insert(0, r);
-                } else {
-                    out.push(r);
-                }
+                if side.starts_with("ext") || side.starts_with("outer") { out.insert(0, r); } else { out.push(r); }
             }
         }
     }
-    out
+    Ok(out)
 }
 
 /// LoD of a polygon: the first ancestor named lod<n>…, 0 for IMGeo's 2D.
@@ -212,23 +235,23 @@ fn text_of(o: Node, name: &str) -> Option<String> {
 }
 
 /// One city object element (the child of a cityObjectMember).
-fn object(o: Node, fallback_dim: usize) -> Option<CityObject> {
+fn object(o: Node, fallback_dim: usize) -> Result<Option<CityObject>, String> {
     let class = local(&o).to_string();
     let polys: Vec<Node> = o.descendants().filter(|d| matches!(local(d), "Polygon" | "PolygonPatch" | "Triangle")).collect();
-    let top = polys.iter().map(|p| lod_of(*p, o)).max()?;
+    let Some(top) = polys.iter().map(|p| lod_of(*p, o)).max() else { return Ok(None) };
     let mut surfaces = Vec::new();
     for p in polys.iter().filter(|p| lod_of(**p, o) == top) {
-        let rings = polygon(*p, fallback_dim);
+        let rings = polygon(*p, fallback_dim)?;
         if !rings.is_empty() {
             surfaces.push((part_of(*p, o), rings));
         }
     }
     if surfaces.is_empty() {
-        return None;
+        return Ok(None);
     }
     let flat = surfaces.iter().all(|(_, r)| r.iter().flatten().all(|p| p[2].is_nan()));
     let id = o.attributes().find(|a| a.name() == "id").map(|a| a.value().to_string()).or_else(|| text_of(o, "lokaalID")).unwrap_or_default();
-    Some(CityObject {
+    Ok(Some(CityObject {
         id,
         theme: theme_of(&class),
         year: text_of(o, "yearOfConstruction").and_then(|y| y.get(..4).and_then(|s| s.parse().ok())),
@@ -243,51 +266,90 @@ fn object(o: Node, fallback_dim: usize) -> Option<CityObject> {
         class,
         surfaces,
         flat,
-    })
+    }))
 }
 
 /// The first value of an XML attribute anywhere in the text (`srsName`).
-fn first_attribute<'t>(xml: &'t str, name: &str) -> Option<&'t str> {
-    let pat = format!("{name}=\"");
-    let i = xml.find(&pat)? + pat.len();
-    xml[i..].find('"').map(|j| &xml[i..i + j])
+fn first_attribute(xml: &str, name: &str) -> Option<String> {
+    let mut reader = Reader::from_str(xml);
+    loop {
+        match reader.read_event().ok()? {
+            Event::Start(tag) | Event::Empty(tag) => {
+                for attr in tag.attributes() {
+                    let attr = attr.ok()?;
+                    if attr.key.as_ref() == name.as_bytes() {
+                        return attr.decode_and_unescape_value(reader.decoder()).ok().map(|value| value.into_owned());
+                    }
+                }
+            }
+            Event::Eof => return None,
+            _ => {}
+        }
+    }
 }
 
 /// The CRS of a CityGML text, without parsing it.
 pub fn crs_of(xml: &str) -> Option<String> {
-    first_attribute(xml, "srsName").and_then(epsg)
+    first_attribute(xml, "srsName").as_deref().and_then(epsg)
 }
 
 /// The members of a CityGML text one by one: (start, end) of every
 /// `<…cityObjectMember …>…</…cityObjectMember>` (or featureMember).
-fn members(xml: &str) -> Vec<(usize, usize)> {
-    let pat = if xml.contains("cityObjectMember") { "cityObjectMember" } else { "featureMember" };
+fn members(xml: &str) -> Result<(Vec<(usize, usize)>, &str, usize), String> {
+    let mut reader = Reader::from_str(xml);
     let mut out = Vec::new();
-    let mut pos = 0;
-    while let Some(i) = xml[pos..].find(pat).map(|i| i + pos) {
-        let after = xml[i + pat.len()..].chars().next();
-        // Walk back over a prefix to the '<' of an opening tag.
-        let head = &xml[..i];
-        let start = head.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == '-' || c == '.');
-        let start = start.strip_suffix(':').map(|s| s.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')).unwrap_or(start);
-        let opening = start.ends_with('<') && !start.ends_with("</") && matches!(after, Some('>') | Some(' ') | Some('\n') | Some('\r') | Some('\t') | Some('/'));
-        if !opening {
-            pos = i + pat.len();
-            continue;
-        }
-        let s = start.len() - 1;
-        let qname = &xml[s + 1..i + pat.len()];
-        let close = format!("</{qname}>");
-        match xml[i..].find(&close) {
-            Some(j) => {
-                let e = i + j + close.len();
-                out.push((s, e));
-                pos = e;
+    let (mut depth, mut deepest, mut root_seen) = (0usize, 0usize, false);
+    let mut member: Option<(usize, usize)> = None;
+    let mut attrs = "";
+    loop {
+        match reader.read_event().map_err(|e| format!("CityGML: ongeldige XML: {e}"))? {
+            Event::Start(tag) => {
+                let end = reader.buffer_position() as usize;
+                let start = end - tag.len() - 2;
+                if depth == 0 {
+                    if root_seen { return Err("CityGML: meerdere XML-hoofdelementen".into()); }
+                    root_seen = true;
+                    attrs = xml[start + 1..end - 1].split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or("");
+                }
+                depth += 1;
+                deepest = deepest.max(depth);
+                if member.is_none() && matches!(tag.local_name().as_ref(), b"cityObjectMember" | b"featureMember") {
+                    member = Some((depth, start));
+                }
             }
-            None => break,
+            Event::Empty(_) => {
+                if depth == 0 {
+                    if root_seen { return Err("CityGML: meerdere XML-hoofdelementen".into()); }
+                    root_seen = true;
+                }
+            }
+            Event::End(_) => {
+                if member.is_some_and(|(d, _)| d == depth) {
+                    let (_, start) = member.take().unwrap();
+                    out.push((start, reader.buffer_position() as usize));
+                }
+                depth = depth.checked_sub(1).ok_or("CityGML: onverwachte XML-eindtag")?;
+            }
+            Event::Text(text) if depth == 0 && !text.as_ref().iter().all(u8::is_ascii_whitespace) => return Err("CityGML: tekst buiten XML-hoofdelement".into()),
+            Event::CData(_) | Event::GeneralRef(_) if depth == 0 => return Err("CityGML: inhoud buiten XML-hoofdelement".into()),
+            Event::Eof => break,
+            _ => {}
         }
     }
-    out
+    if !root_seen || depth != 0 { return Err("CityGML: leeg of afgebroken XML-document".into()); }
+    Ok((out, attrs, deepest))
+}
+
+// roxmltree tokenizes nested elements recursively. A measured stack size
+// keeps valid deep XML safe without adding a fixed input-depth rejection.
+fn document(xml: &str, depth: usize) -> Result<Document<'_>, String> {
+    let parse = || Document::parse_with_options(xml, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }).map_err(|e| e.to_string());
+    if depth <= 64 { return parse(); }
+    let stack = depth.checked_mul(32 * 1024).and_then(|s| s.checked_add(2 * 1024 * 1024)).ok_or("XML stackgrootte niet beschikbaar")?;
+    std::thread::scope(|scope| {
+        let handle = std::thread::Builder::new().stack_size(stack).spawn_scoped(scope, parse).map_err(|e| e.to_string())?;
+        handle.join().map_err(|_| "XML-parser gestopt".to_string())?
+    })
 }
 
 /// Read a CityGML text member by member, so a file of a whole city does
@@ -295,30 +357,43 @@ fn members(xml: &str) -> Vec<(usize, usize)> {
 /// (e.g. only those in the project area).
 pub fn parse_with(xml: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn Fn(String)) -> Result<CityModel, String> {
     let mut model = CityModel { crs: crs_of(xml), ..Default::default() };
-    let fallback_dim = first_attribute(xml, "srsDimension").and_then(|v| v.parse().ok()).unwrap_or(3);
     // The namespace declarations of the root element, for every member.
-    let root_start = xml.match_indices('<').map(|(i, _)| i).find(|&i| !matches!(xml.as_bytes().get(i + 1), Some(b'?') | Some(b'!'))).ok_or("CityGML: geen XML")?;
-    let root_end = xml[root_start..].find('>').map(|j| root_start + j).ok_or("CityGML: geen XML")?;
-    let root_tag = xml[root_start + 1..root_end].trim_end_matches('/');
-    let attrs = root_tag.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or("");
-    let list = members(xml);
+    let unavailable = || "CityGML: geen stadsobjecten met geometrie gevonden".to_string();
+    let (list, attrs, depth) = members(xml).map_err(|_| unavailable())?;
+    // Validate the document around its members separately. Unknown entities
+    // or misplaced declarations here invalidate the document; XML errors in
+    // an individual member remain local to that member.
+    let mut envelope = String::new();
+    let mut previous = 0;
+    for &(start, end) in &list { envelope.push_str(&xml[previous..start]); previous = end; }
+    envelope.push_str(&xml[previous..]);
+    document(&envelope, depth).map_err(|_| unavailable())?;
+    // Only global attributes/bounds supply a fallback. A local dimension on
+    // one city object must not change how its neighbours are interpreted.
+    let global_end = list.first().map(|(s, _)| *s).unwrap_or(xml.len());
+    let fallback_dim = first_attribute(&xml[..global_end], "srsDimension")
+        .and_then(|v| v.trim().parse::<usize>().ok()).filter(|d| *d >= 2).unwrap_or(3);
     let mut seen = 0usize;
     for (k, (s, e)) in list.iter().enumerate() {
         if k % 2000 == 0 && k > 0 {
             progress(format!("CityGML: {k} van {} objecten gelezen…", list.len()));
         }
         let chunk = format!("<wrap {attrs}>{}</wrap>", &xml[*s..*e]);
-        let opts = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
-        let doc = match Document::parse_with_options(&chunk, opts) {
-            Ok(d) => d,
-            Err(_) => continue,
+        let doc = match document(&chunk, depth) {
+            Ok(doc) => doc,
+            Err(error) => { model.warnings.push(format!("CityGML: member {} overgeslagen: onleesbare XML: {error}", k + 1)); continue; }
         };
         for member in doc.root_element().children().filter(|c| c.is_element()) {
             for o in member.children().filter(|c| c.is_element()) {
-                if let Some(obj) = object(o, fallback_dim) {
-                    seen += 1;
-                    if keep(&obj) {
-                        model.objects.push(obj);
+                match object(o, fallback_dim) {
+                    Ok(Some(obj)) => {
+                        seen += 1;
+                        if keep(&obj) { model.objects.push(obj); }
+                    }
+                    result => {
+                        let id = o.attributes().find(|a| a.name() == "id").map(|a| a.value()).unwrap_or("zonder id");
+                        let error = result.err().unwrap_or_else(|| "geen leesbare geometrie".into());
+                        model.warnings.push(format!("CityGML: object {id} overgeslagen: {error}"));
                     }
                 }
             }
@@ -326,7 +401,7 @@ pub fn parse_with(xml: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn 
     }
     model.seen = seen;
     if seen == 0 {
-        return Err("CityGML: geen stadsobjecten met geometrie gevonden".into());
+        return Err(unavailable());
     }
     Ok(model)
 }

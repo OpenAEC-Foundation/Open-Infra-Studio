@@ -35,3 +35,27 @@ De XML-regels staan in de [W3C XML-specificatie](https://www.w3.org/TR/REC-xml/)
 Een variant met 300 buitenste containers bewaakt dat geen nieuwe vaste
 dieptelimiet invoer afwijst die main las. De recursieve XML-bibliotheek krijgt
 voor diepe documenten een werkstack op basis van de gemeten XML-diepte.
+
+De letterlijke reproducties voor Sols ronde 4 hebben eigen testnamen:
+
+- `sol_roof_comment_after_third_tuple_keeps_four_corners`: uitsluitend in
+  de dak-posList komt `<!--comment-->` na tuple drie; alle vier hoeken
+  moeten volledig behouden blijven.
+- `sol_bad_after_roof_comment_rejects_only_that_object`: `BAD` achter dat
+  commentaar maakt het object onleesbaar. Een geldig buurgebouw blijft
+  intact; een bestand met alleen het kapotte object geeft een fout.
+- `sol_lod0_semicolon_coordinates_preserve_lod2_roof`: een `lod0FootPrint`
+  met `2600000;1200000;0` en `cs=";"` verandert het LoD2-dak niet.
+- `sol_lod0_custom_decimal_and_tuple_separator_preserve_lod2_roof`:
+  dezelfde proef met `decimal=","`, `cs=";"` en `ts="|"`.
+- `sol_duplicate_gml_id_in_second_building_keeps_first`: twee `gml:id`-
+  attributen in gebouw 2 mogen gebouw 1 niet verwijderen.
+- `sol_missing_attribute_equals_in_second_building_keeps_first`: hetzelfde
+  met letterlijk `gml:id "neighbour"`, dus zonder `=`.
+
+De negatieve controle gebruikt exact de productiecode van de afgekeurde
+reviewhead `7619e46`. De positieve controle gebruikt de daarna gerepareerde
+decoder; de tests worden niet als nieuw gevonden fouten van die gerepareerde
+head gepresenteerd. De LoD- en attribuutgevallen worden bovendien met de
+lezer van main gecontroleerd. De bekende tekstverliesgevallen waren ook
+op main kapot en zijn daarom regressietests voor de reparatie.
