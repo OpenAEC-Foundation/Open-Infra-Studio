@@ -370,7 +370,7 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
         }
         features.push(f);
     }
-    Ok(FileData { format: "GeoPackage", features, crs, layers })
+    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings: Vec::new() })
 }
 
 // ── KML / KMZ / GPX ─────────────────────────────────────────────────────────
