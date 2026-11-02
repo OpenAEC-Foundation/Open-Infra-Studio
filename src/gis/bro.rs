@@ -10,6 +10,7 @@
 //! soil names (NEN-EN-ISO 14688 or NEN 5104), mapped by [`soil_of_name`].
 
 use roxmltree::{Document, Node};
+use crate::lang::tr;
 
 use super::crs::XY;
 
@@ -94,25 +95,25 @@ fn validate_numbers(root: Node) -> Result<(), String> {
     for n in root.descendants().filter(|n| n.is_element()) {
         let name = n.tag_name().name();
         if name == "pos" {
-            let values = n.text().unwrap_or("").split_whitespace().map(|t| t.parse::<f64>()).collect::<Result<Vec<_>, _>>().map_err(|_| "BRO: ongeldige locatiecoördinaten")?;
+            let values = n.text().unwrap_or("").split_whitespace().map(|t| t.parse::<f64>()).collect::<Result<Vec<_>, _>>().map_err(|_| tr("BRO: ongeldige locatiecoördinaten", "BRO: invalid location coordinates"))?;
             if !(2..=3).contains(&values.len()) || !values.iter().all(|v| v.is_finite()) {
-                return Err("BRO: onvolledige of niet-eindige locatiecoördinaten".into());
+                return Err(tr("BRO: onvolledige of niet-eindige locatiecoördinaten", "BRO: incomplete or non-finite location coordinates").into());
             }
         } else if matches!(name, "offset" | "finalDepth" | "finalDepthBoring" | "predrilledDepth" | "upperBoundary" | "lowerBoundary") {
             if let Some(nil) = n.attribute(("http://www.w3.org/2001/XMLSchema-instance", "nil")) {
                 match nil.trim() {
                     "true" | "1" => {
                         if !matches!(name, "offset" | "predrilledDepth") || n.children().any(|c| c.is_element() || c.is_text()) {
-                            return Err(format!("BRO: ongeldige ontbrekende waarde in {name}"));
+                            return Err(format!("BRO: {} {name}", tr("ongeldige ontbrekende waarde in", "invalid nil value in")));
                         }
                         continue;
                     }
                     "false" | "0" => {}
-                    _ => return Err(format!("BRO: ongeldige xsi:nil in {name}")),
+                    _ => return Err(format!("BRO: {} {name}", tr("ongeldige xsi:nil in", "invalid xsi:nil in"))),
                 }
             }
-            let value = n.text().unwrap_or("").trim().parse::<f64>().map_err(|_| format!("BRO: ongeldig getal in {name}"))?;
-            if !value.is_finite() { return Err(format!("BRO: niet-eindig getal in {name}")); }
+            let value = n.text().unwrap_or("").trim().parse::<f64>().map_err(|_| format!("BRO: {} {name}", tr("ongeldig getal in", "invalid number in")))?;
+            if !value.is_finite() { return Err(format!("BRO: {} {name}", tr("niet-eindig getal in", "non-finite number in"))); }
         }
     }
     Ok(())
@@ -169,8 +170,6 @@ pub fn parse_characteristics(xml: &str) -> Result<SearchResult, String> {
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
-    // Negative control for the review: reproduce validation at document scope.
-    validate_numbers(doc.root_element())?;
     let mut result = SearchResult::default();
     for object in doc.root_element()
         .children()
@@ -179,6 +178,10 @@ pub fn parse_characteristics(xml: &str) -> Result<SearchResult, String> {
     {
         let id = text_of(object, "broId").unwrap_or_default();
         if id.is_empty() || text_of(object, "deregistered").as_deref() == Some("ja") { continue; }
+        if let Err(error) = validate_numbers(object) {
+            result.warnings.push(format!("BRO: object {id} {}: {error}", tr("overgeslagen", "skipped")));
+            continue;
+        }
         result.points.push(point_of(object, object.tag_name().name().starts_with("CPT")));
     }
     Ok(result)
@@ -299,8 +302,8 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
     let mut rows: Vec<(f64, Sample)> = Vec::new();
     for (row, r) in values.split(block.as_str()).filter(|r| !r.trim().is_empty()).enumerate() {
         let v = r.split(tok.as_str()).map(|t| {
-            let value: f64 = if dec == "." { t.trim().parse() } else { t.trim().replace(dec.as_str(), ".").parse() }.map_err(|_| format!("BRO: ongeldige meetwaarde in regel {}", row + 1))?;
-            if !value.is_finite() { return Err(format!("BRO: niet-eindige meetwaarde in regel {}", row + 1)); }
+            let value: f64 = if dec == "." { t.trim().parse() } else { t.trim().replace(dec.as_str(), ".").parse() }.map_err(|_| format!("BRO: {} {}", tr("ongeldige meetwaarde in regel", "invalid measurement on row"), row + 1))?;
+            if !value.is_finite() { return Err(format!("BRO: {} {}", tr("niet-eindige meetwaarde in regel", "non-finite measurement on row"), row + 1)); }
             Ok(value)
         }).collect::<Result<Vec<_>, String>>()?;
         let get = |i: Option<usize>| i.and_then(|i| v.get(i).copied()).filter(|x| *x > VOID + 1.0);
@@ -311,7 +314,7 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         }
         let f = get(fs).filter(|f| *f >= 0.0);
         let ratio = get(rf).filter(|r| *r >= 0.0).or_else(|| f.map(|f| f / q * 100.0));
-        if ratio.is_some_and(|r| !r.is_finite()) { return Err(format!("BRO: niet-eindig wrijvingsgetal in regel {}", row + 1)); }
+        if ratio.is_some_and(|r| !r.is_finite()) { return Err(format!("BRO: {} {}", tr("niet-eindig wrijvingsgetal in regel", "non-finite friction ratio on row"), row + 1)); }
         rows.push((length, Sample { depth: get(dp).unwrap_or(length), qc: q, fs: f, rf: ratio }));
     }
     // The block may hold the rod changes twice and be out of order.
@@ -679,7 +682,8 @@ mod tests {
         let points = parse_characteristics(&bad).unwrap();
         assert_eq!(points.points.len(), 2);
         assert_eq!(points.warnings.len(), 1);
-        assert!(points.warnings[0].contains("CPT000000011051 overgeslagen"));
+        assert!(points.warnings[0].contains("CPT000000011051"));
+        assert!(points.warnings[0].contains(tr("overgeslagen", "skipped")));
     }
 
     #[test]
