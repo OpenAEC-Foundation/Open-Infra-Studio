@@ -112,7 +112,7 @@ pub fn read_asc(text: &str) -> Result<Grid, String> {
     while let Some(l) = lines.peek() {
         let mut parts = l.split_whitespace();
         match (parts.next(), parts.next()) {
-            (Some(k), Some(v)) if k.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) => {
+            (Some(k), Some(v)) if matches!(k.to_ascii_lowercase().as_str(), "ncols" | "nrows" | "xllcorner" | "yllcorner" | "xllcenter" | "yllcenter" | "cellsize" | "nodata_value") => {
                 head.insert(k.to_ascii_lowercase(), v.parse::<f64>().map_err(|_| format!("ASC: kopregel '{l}'"))?);
                 lines.next();
             }
@@ -128,7 +128,7 @@ pub fn read_asc(text: &str) -> Result<Grid, String> {
         Ok(value as usize)
     };
     let (w, h, cell) = (dimension("ncols")?, dimension("nrows")?, get("cellsize")?);
-    let count = w * h;
+    let count = w.checked_mul(h).filter(|n| *n <= isize::MAX as usize / std::mem::size_of::<f32>()).ok_or("ASC: rasterafmetingen zijn te groot")?;
     if !cell.is_finite() || cell <= 0.0 {
         return Err("ASC: cellsize moet positief en eindig zijn".into());
     }
