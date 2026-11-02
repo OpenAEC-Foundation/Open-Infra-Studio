@@ -209,6 +209,13 @@ pub fn shapefile(path: &Path) -> Result<FileData, String> {
 
 // ── WKB (GeoPackage) ────────────────────────────────────────────────────────
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GpkgGeometryError {
+    Corrupt,
+    Unsupported(u32),
+    UnsupportedEncoding,
+}
+
 struct Wkb<'a> {
     b: &'a [u8],
     i: usize,
@@ -233,76 +240,100 @@ impl Wkb<'_> {
 
     /// One geometry into `f`. ISO (1001, 2001, 3001) and EWKB-style flag
     /// dimensions are both read; Z and M are skipped.
-    fn geometry(&mut self, f: &mut Feature) -> Option<()> {
-        let le = self.u8()? == 1;
-        let raw = self.u32(le)?;
-        let (base, mut dims) = match raw {
-            r if r & 0x8000_0000 != 0 || r & 0x4000_0000 != 0 => (r & 0xFFFF, 2 + (r & 0x8000_0000 != 0) as usize + (r & 0x4000_0000 != 0) as usize),
-            r if r >= 3000 => (r - 3000, 4),
-            r if r >= 2000 => (r - 2000, 3),
-            r if r >= 1000 => (r - 1000, 3),
-            r => (r, 2),
-        };
-        if dims < 2 {
-            dims = 2;
+    fn geometry(&mut self, f: &mut Feature) -> Result<Option<u32>, GpkgGeometryError> {
+        use GpkgGeometryError::{Corrupt, Unsupported};
+        // WKB stores children immediately after each collection header. A
+        // count of pending geometries consumes that preorder stream without
+        // recursion or a fixed nesting limit.
+        let mut pending = 1usize;
+        let mut unsupported = None;
+        while pending > 0 {
+            pending -= 1;
+            let le = match self.u8().ok_or(Corrupt)? { 0 => false, 1 => true, _ => return Err(Corrupt) };
+            let raw = self.u32(le).ok_or(Corrupt)?;
+            let (base, dims) = match raw {
+                r if r & 0x8000_0000 != 0 || r & 0x4000_0000 != 0 => (r & 0xFFFF, 2 + (r & 0x8000_0000 != 0) as usize + (r & 0x4000_0000 != 0) as usize),
+                r if r >= 3000 => (r - 3000, 4),
+                r if r >= 2000 => (r - 2000, 3),
+                r if r >= 1000 => (r - 1000, 3),
+                r => (r, 2),
+            };
+            let point = |w: &mut Self| -> Option<XY> {
+                let x = w.f64(le)?;
+                let y = w.f64(le)?;
+                for _ in 2..dims { w.f64(le)?; }
+                Some([x, y])
+            };
+            let line = |w: &mut Self| -> Option<Vec<XY>> {
+                let n = w.u32(le)? as usize;
+                if n.checked_mul(dims * 8)? > w.b.len().saturating_sub(w.i) { return None; }
+                let points: Vec<XY> = (0..n).map(|_| point(w)).collect::<Option<_>>()?;
+                points.iter().flatten().all(|v| v.is_finite()).then_some(points)
+            };
+            match base {
+                1 => {
+                    let p = point(self).ok_or(Corrupt)?;
+                    if p[0].is_finite() && p[1].is_finite() { f.points.push(p); }
+                    else if !p.iter().all(|v| v.is_nan()) { return Err(Corrupt); }
+                }
+                2 => f.lines.push((line(self).ok_or(Corrupt)?, false)),
+                3 => {
+                    let rings = self.u32(le).ok_or(Corrupt)? as usize;
+                    if rings > self.b.len().saturating_sub(self.i) / 4 { return Err(Corrupt); }
+                    for _ in 0..rings { f.lines.push((line(self).ok_or(Corrupt)?, true)); }
+                }
+                4..=7 => {
+                    let count = self.u32(le).ok_or(Corrupt)? as usize;
+                    if count > self.b.len().saturating_sub(self.i) / 5 { return Err(Corrupt); }
+                    pending = pending.checked_add(count).ok_or(Corrupt)?;
+                }
+                8 => {
+                    // CircularString uses a point array. Validate its bytes
+                    // but do not turn a curve into straight segments. Empty
+                    // curves preserve their record and optional attributes.
+                    if !line(self).ok_or(Corrupt)?.is_empty() { unsupported.get_or_insert(base); }
+                }
+                _ => return Err(Unsupported(base)),
+            }
         }
-        let point = |w: &mut Self| -> Option<XY> {
-            let x = w.f64(le)?;
-            let y = w.f64(le)?;
-            for _ in 2..dims {
-                w.f64(le)?;
-            }
-            Some([x, y])
-        };
-        let line = |w: &mut Self| -> Option<Vec<XY>> {
-            let n = w.u32(le)? as usize;
-            (0..n).map(|_| point(w)).collect()
-        };
-        match base {
-            1 => {
-                let p = point(self)?;
-                if p[0].is_finite() && p[1].is_finite() {
-                    f.points.push(p);
-                }
-            }
-            2 => {
-                let l = line(self)?;
-                f.lines.push((l, false));
-            }
-            3 => {
-                let rings = self.u32(le)?;
-                for _ in 0..rings {
-                    let r = line(self)?;
-                    f.lines.push((r, true));
-                }
-            }
-            4..=7 => {
-                let n = self.u32(le)?;
-                for _ in 0..n {
-                    self.geometry(f)?;
-                }
-            }
-            _ => return None,
-        }
-        Some(())
+        Ok(unsupported)
     }
 }
 
 /// A GeoPackage geometry blob: the `GP` header (with an optional envelope),
 /// then standard WKB.
 pub fn gpkg_geometry(blob: &[u8], f: &mut Feature) -> bool {
-    if blob.len() < 8 || &blob[0..2] != b"GP" {
-        return Wkb { b: blob, i: 0 }.geometry(f).is_some();
-    }
-    let flags = blob[3];
-    let envelope = match (flags >> 1) & 0b111 {
-        1 => 32,
-        2 | 3 => 48,
-        4 => 64,
-        _ => 0,
+    gpkg_geometry_result(blob, f).is_ok()
+}
+
+fn gpkg_geometry_result(blob: &[u8], f: &mut Feature) -> Result<(), GpkgGeometryError> {
+    use GpkgGeometryError::{Corrupt, Unsupported, UnsupportedEncoding};
+    let mut extended = false;
+    let bytes = if blob.starts_with(b"GP") {
+        if blob.len() < 8 || blob[2] != 0 || blob[3] & 0b1100_0000 != 0 { return Err(Corrupt); }
+        extended = blob[3] & 0x20 != 0;
+        let envelope = match (blob[3] >> 1) & 0b111 {
+            0 => 0,
+            1 => 32,
+            2 | 3 => 48,
+            4 => 64,
+            _ => return Err(Corrupt),
+        };
+        blob.get(8 + envelope..).ok_or(Corrupt)?
+    } else { blob };
+    let mut parsed = Feature::default();
+    let mut wkb = Wkb { b: bytes, i: 0 };
+    let kind = match wkb.geometry(&mut parsed) {
+        Err(Corrupt) if extended => return Err(UnsupportedEncoding),
+        result => result?,
     };
-    let start = 8 + envelope;
-    blob.get(start..).is_some_and(|b| Wkb { b, i: 0 }.geometry(f).is_some())
+    // Legacy extended headers with fully readable WKB keep working. An
+    // unknown extended payload is unsupported; standard WKB must be complete.
+    if wkb.i != bytes.len() { return Err(if extended { UnsupportedEncoding } else { Corrupt }); }
+    if let Some(kind) = kind { return Err(Unsupported(kind)); }
+    f.points.extend(parsed.points);
+    f.lines.extend(parsed.lines);
+    Ok(())
 }
 
 pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> {
@@ -327,13 +358,27 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
     let gi = names.iter().position(|n| n.eq_ignore_ascii_case(&geom_col)).ok_or("GeoPackage: geometry column missing")?;
     let mut rows = st.query([]).map_err(err)?;
     let mut features = Vec::new();
-    while let Some(row) = rows.next().map_err(err)? {
+    let mut warnings = Vec::new();
+    let mut row_index = 0;
+    'rows: while let Some(row) = rows.next().map_err(err)? {
+        row_index += 1;
         let mut f = Feature::default();
         for (i, n) in names.iter().enumerate() {
             let v = row.get_ref(i).map_err(err)?;
             if i == gi {
                 if let ValueRef::Blob(b) = v {
-                    gpkg_geometry(b, &mut f);
+                    if let Err(error) = gpkg_geometry_result(b, &mut f) {
+                        let reason = match error {
+                            GpkgGeometryError::Corrupt => "onleesbare geometrie".to_string(),
+                            GpkgGeometryError::Unsupported(kind) => format!("niet ondersteunde geometriesoort {kind}"),
+                            GpkgGeometryError::UnsupportedEncoding => "niet ondersteunde uitgebreide geometrie".to_string(),
+                        };
+                        warnings.push(format!("GeoPackage: {reason} in laag {table}, rij {row_index}; object overgeslagen"));
+                        continue 'rows;
+                    }
+                } else if !matches!(v, ValueRef::Null) {
+                    warnings.push(format!("GeoPackage: geometrie is geen blob in laag {table}, rij {row_index}; object overgeslagen"));
+                    continue 'rows;
                 }
                 continue;
             }
@@ -348,7 +393,8 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
         }
         features.push(f);
     }
-    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings: Vec::new(), skipped: 0 })
+    let skipped = warnings.len();
+    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings, skipped })
 }
 
 // ── KML / KMZ / GPX ─────────────────────────────────────────────────────────
@@ -1011,14 +1057,7 @@ mod tests {
     }
 
     fn circular_string() -> Vec<u8> {
-        let mut wkb = vec![1];
-        wkb.extend(8u32.to_le_bytes());
-        wkb.extend(3u32.to_le_bytes());
-        for (x, y) in [(0.0f64, 0.0f64), (5.0, 5.0), (10.0, 0.0)] {
-            wkb.extend(x.to_le_bytes());
-            wkb.extend(y.to_le_bytes());
-        }
-        wkb
+        include_bytes!("../../tests/fixtures/geopackage/circular.wkb").to_vec()
     }
 
     fn broken_collection() -> Vec<u8> {
@@ -1124,6 +1163,45 @@ mod tests {
         assert_eq!(data.features.len(), 1);
         assert_eq!(data.features[0].points, vec![[2600000.25, 1200000.5]]);
         assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn gpkg_many_nested_collections_do_not_use_the_call_stack() {
+        let mut wkb = Vec::new();
+        for _ in 0..5000 {
+            wkb.push(1);
+            wkb.extend(7u32.to_le_bytes());
+            wkb.extend(1u32.to_le_bytes());
+        }
+        wkb.extend(WKB_POINT);
+        let mut feature = Feature::default();
+        assert!(gpkg_geometry(&wkb, &mut feature));
+        assert_eq!(feature.points, vec![[2600000.25, 1200000.5]]);
+    }
+
+    #[test]
+    fn gpkg_truncated_circular_string_is_corrupt_instead_of_unsupported() {
+        let curve = circular_string();
+        let path = mixed_layer_gpkg("truncated-curve", &curve[..curve.len() - 1]);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("onleesbare geometrie"));
+        assert!(!data.warnings[0].contains("niet ondersteunde"));
+    }
+
+    #[test]
+    fn gpkg_unsupported_collection_does_not_commit_a_readable_prefix() {
+        let mut wkb = vec![1];
+        wkb.extend(7u32.to_le_bytes());
+        wkb.extend(2u32.to_le_bytes());
+        wkb.extend(WKB_POINT);
+        wkb.extend(circular_string());
+        let mut feature = Feature { points: vec![[1.0, 2.0]], ..Default::default() };
+        assert!(!gpkg_geometry(&wkb, &mut feature));
+        assert_eq!(feature.points, vec![[1.0, 2.0]]);
+        assert!(feature.lines.is_empty());
     }
 
     #[test]
