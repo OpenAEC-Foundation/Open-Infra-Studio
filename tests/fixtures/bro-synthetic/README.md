@@ -10,3 +10,10 @@ Licentie: GPL-3.0-only, zoals [LICENSE](../../../LICENSE).
 plus RD en een breedte/lengtepositie in EPSG:4258. `borehole.xml` heeft één
 bodemlaag. De tests veranderen getallen, scheidingstekens en ontbrekende
 meetvelden gericht. Ze gebruiken uitsluitend de lokale parse-functies.
+
+De vaste zoekbestanden in `../bro/` controleren ook herstel per zoekobject:
+een kapotte offset in het middelste van drie objecten mag de twee geldige
+buren niet veranderen. De nieuwe regressietest vergelijkt hun volledige
+zoekmetadata en controleert een melding met het overgeslagen BRO-id.
+Aanvullende tests controleren de bestaande nilwaarden en de geselecteerde
+Nederlands/Engels-route voor nieuwe leesmeldingen.
