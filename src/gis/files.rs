@@ -454,50 +454,82 @@ pub fn gpx(text: &str) -> Result<FileData, String> {
 
 // ── GML (simple features, GML 2 and 3) ─────────────────────────────────────
 
-fn gml_coords(node: roxmltree::Node, dim: usize) -> Vec<XY> {
-    // GML 3: posList / pos (space separated); GML 2: coordinates ("x,y x,y").
-    if let Some(t) = node.descendants().find(|d| d.has_tag_name("posList")).and_then(|n| n.text()) {
-        let d = node.descendants().find(|d| d.has_tag_name("posList")).and_then(|n| n.attribute("srsDimension")).and_then(|v| v.parse().ok()).unwrap_or(dim);
-        let v: Vec<f64> = t.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-        return v.chunks(d.max(2)).filter(|c| c.len() >= 2).map(|c| [c[0], c[1]]).collect();
+fn gml_numbers(text: &str, separator: Option<char>) -> Result<Vec<f64>, String> {
+    text.split(|c: char| separator.map_or_else(|| c.is_whitespace(), |s| c == s)).filter(|t| separator.is_some() || !t.is_empty()).map(|t| {
+        let v = t.trim().parse::<f64>().map_err(|_| format!("GML: ongeldig coördinaatgetal '{t}'"))?;
+        if !v.is_finite() { return Err(format!("GML: niet-eindig coördinaatgetal '{t}'")); }
+        Ok(v)
+    }).collect()
+}
+
+fn gml_dimension(node: roxmltree::Node, fallback: usize) -> Result<usize, String> {
+    match node.ancestors().find_map(|n| n.attribute("srsDimension")) {
+        Some(text) => match text.parse::<usize>() {
+            Ok(d @ (2 | 3)) => Ok(d),
+            _ => Err(format!("GML: ongeldige srsDimension '{text}' (2 of 3 verwacht)")),
+        },
+        None => Ok(fallback),
     }
-    let pos: Vec<XY> = node
-        .descendants()
-        .filter(|d| d.has_tag_name("pos"))
-        .filter_map(|p| {
-            let v: Vec<f64> = p.text()?.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-            (v.len() >= 2).then(|| [v[0], v[1]])
-        })
-        .collect();
-    if !pos.is_empty() {
-        return pos;
+}
+
+fn gml_coords(node: roxmltree::Node, dim: usize) -> Result<Vec<XY>, String> {
+    // GML 3: inherit the nearest dimension from the coordinate or geometry.
+    if let Some(list) = node.descendants().find(|d| d.has_tag_name("posList")) {
+        let d = gml_dimension(list, dim)?;
+        let v = gml_numbers(list.text().unwrap_or("").trim(), None)?;
+        if v.len() % d != 0 { return Err("GML: onvolledige coördinaat in posList".into()); }
+        return Ok(v.chunks_exact(d).map(|c| [c[0], c[1]]).collect());
     }
-    node.descendants().find(|d| d.has_tag_name("coordinates")).and_then(|c| c.text()).map(kml_coords).unwrap_or_default()
+    let mut pos = Vec::new();
+    for p in node.descendants().filter(|d| d.has_tag_name("pos")) {
+        let v = gml_numbers(p.text().unwrap_or("").trim(), None)?;
+        let d = gml_dimension(p, v.len())?;
+        if !(2..=3).contains(&v.len()) || v.len() != d { return Err("GML: onvolledige coördinaat in pos".into()); }
+        pos.push([v[0], v[1]]);
+    }
+    if !pos.is_empty() { return Ok(pos); }
+    // GML 2: x,y[,z] tuples, separated by whitespace.
+    if let Some(c) = node.descendants().find(|d| d.has_tag_name("coordinates")) {
+        return c.text().unwrap_or("").split_whitespace().map(|tuple| {
+            let v = gml_numbers(tuple, Some(','))?;
+            if !(2..=3).contains(&v.len()) { return Err("GML: onvolledige coordinates-tuple".into()); }
+            Ok([v[0], v[1]])
+        }).collect();
+    }
+    Ok(Vec::new())
 }
 
 /// The geometry elements directly under a property, read into `f`.
-fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> bool {
+fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> Result<bool, String> {
     let name = node.tag_name().name();
     match name {
-        "Point" => f.points.extend(gml_coords(node, 2).into_iter().take(1)),
-        "LineString" | "Curve" | "LineStringSegment" => f.lines.push((gml_coords(node, 2), false)),
-        "LinearRing" | "Ring" => f.lines.push((gml_coords(node, 2), true)),
+        "Point" => {
+            let points = gml_coords(node, 2)?;
+            if points.len() != 1 { return Err("GML: Point verwacht één coördinaat".into()); }
+            f.points.extend(points);
+        }
+        "LineString" | "Curve" | "LineStringSegment" | "LinearRing" | "Ring" => {
+            let ring = matches!(name, "LinearRing" | "Ring");
+            let points = gml_coords(node, 2)?;
+            if points.len() < if ring { 3 } else { 2 } { return Err(format!("GML: te weinig coördinaten in {name}")); }
+            f.lines.push((points, ring));
+        }
         "Polygon" | "Surface" | "PolygonPatch" => {
             for r in node.descendants().filter(|d| d.has_tag_name("LinearRing") || d.has_tag_name("Ring")) {
-                f.lines.push((gml_coords(r, 2), true));
+                gml_geometry(r, f)?;
             }
         }
         "MultiPoint" | "MultiCurve" | "MultiLineString" | "MultiSurface" | "MultiPolygon" | "MultiGeometry" | "CompositeCurve" | "CompositeSurface" => {
             for m in node.children().filter(|c| c.is_element()) {
                 // pointMember / surfaceMembers: the geometries one level down.
                 for g in m.children().filter(|c| c.is_element()) {
-                    gml_geometry(g, f);
+                    gml_geometry(g, f)?;
                 }
             }
         }
-        _ => return false,
+        _ => return Ok(false),
     }
-    true
+    Ok(true)
 }
 
 /// Features from a GML file: every member of a feature collection (or of a
@@ -526,7 +558,10 @@ pub fn gml(text: &str) -> Result<FileData, String> {
     for fnode in members {
         let mut f = Feature::default();
         for prop in fnode.children().filter(|c| c.is_element()) {
-            let geom = prop.children().filter(|c| c.is_element()).any(|g| gml_geometry(g, &mut f));
+            let mut geom = false;
+            for g in prop.children().filter(|c| c.is_element()) {
+                if gml_geometry(g, &mut f)? { geom = true; break; }
+            }
             if !geom {
                 if let Some(t) = prop.text().map(str::trim).filter(|t| !t.is_empty()) {
                     if prop.children().all(|c| !c.is_element()) {
