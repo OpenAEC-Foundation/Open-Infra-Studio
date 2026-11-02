@@ -24,6 +24,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+      # Keyed by rustc, manifests, lockfile and compiler environment. Only
+      # dependencies are cached; workspace crates and test output are rebuilt.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: test
+          cache-bin: false
       # Validate the development profile across every offline Rust test target.
       # Network-dependent tests remain ignored by the normal test harness.
       - run: cargo test --lib --tests --locked -p open-infra
@@ -44,6 +50,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: test
+          cache-bin: false
       - run: cargo test --test locaties --locked -p open-infra -- --ignored --nocapture
       - uses: actions/upload-artifact@v4
         if: always()

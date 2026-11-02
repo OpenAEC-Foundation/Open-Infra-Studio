@@ -1,0 +1,40 @@
+name: kaartcatalogus
+
+# Live diensten worden uitsluitend wekelijks en op verzoek benaderd.
+on:
+  schedule:
+    - cron: "23 4 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kaartcatalogus-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  controle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Controleer openbare kaartdiensten
+        run: python3 tools/check_map_services.py
+      - name: Bewaar JSON en Markdown
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaartcatalogus-rapport
+          path: target/catalogue-health/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Toon rapport bij de uitvoering
+        if: always()
+        run: |
+          if test -f target/catalogue-health/rapport.md; then
+            cat target/catalogue-health/rapport.md >> "$GITHUB_STEP_SUMMARY"
+          fi
