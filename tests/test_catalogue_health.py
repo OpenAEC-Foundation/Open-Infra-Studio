@@ -43,6 +43,31 @@ class CatalogueHealthTest(unittest.TestCase):
         legacy = b'<!DOCTYPE WMT_MS_Capabilities SYSTEM "https://example.invalid/no-network.dtd"><WMT_MS_Capabilities><Capability><Layer><Name>sample</Name></Layer></Capability></WMT_MS_Capabilities>'
         self.assertEqual(health.capability_layers(legacy, "wms"), {"sample"})
 
+    def assert_missing_container(self, kind, body, container):
+        report = health.check_services([service(kind)], fetch=lambda url, timeout: health.Response(
+            body=body, status=200, elapsed=0.1))
+        self.assertEqual(report["counts"], {"werkt": 0, "traag": 0, "kapot": 1})
+        self.assertIn(container, report["services"][0]["reason"])
+
+    def test_wms_without_capability_is_broken_despite_layer_in_service(self):
+        self.assert_missing_container("wms", b'<WMS_Capabilities><Service><Layer><Name>sample</Name></Layer></Service></WMS_Capabilities>', "Capability")
+
+    def test_wfs_without_feature_type_list_is_broken_despite_type_in_service(self):
+        self.assert_missing_container("wfs", b'<WFS_Capabilities><Service><FeatureType><Name>sample</Name></FeatureType></Service></WFS_Capabilities>', "FeatureTypeList")
+
+    def test_wmts_without_contents_is_broken_despite_layer_in_service(self):
+        self.assert_missing_container("wmts", b'<Capabilities xmlns="http://www.opengis.net/wmts/1.0"><Service><Layer><Identifier>sample</Identifier></Layer></Service></Capabilities>', "Contents")
+
+    def test_layers_outside_protocol_container_are_ignored(self):
+        cases = {
+            "wms": b'<WMS_Capabilities><Service><Layer><Name>sample</Name></Layer></Service><Capability><Layer><Name>allowed</Name></Layer></Capability></WMS_Capabilities>',
+            "wfs": b'<WFS_Capabilities><Service><FeatureType><Name>sample</Name></FeatureType></Service><FeatureTypeList><FeatureType><Name>allowed</Name></FeatureType></FeatureTypeList></WFS_Capabilities>',
+            "wmts": b'<Capabilities xmlns="http://www.opengis.net/wmts/1.0"><Service><Layer><Identifier>sample</Identifier></Layer></Service><Contents><Layer><Identifier>allowed</Identifier></Layer></Contents></Capabilities>',
+        }
+        for kind, body in cases.items():
+            with self.subTest(kind=kind):
+                self.assertEqual(health.capability_layers(body, kind), {"allowed"})
+
     def test_http_200_is_not_sufficient(self):
         for body in (b"<html>Login</html>", b"", b"<broken", b"<WMS_Capabilities/>",
                      reply("wfs.xml").body):
