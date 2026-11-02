@@ -1217,6 +1217,7 @@ pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagSty
         progress,
     )?;
     let crs = model.crs.clone().unwrap_or_else(|| site.crs.clone());
+    for warning in &model.warnings { progress(warning.clone()); }
     let to = drawing(&crs)?;
     let outside = model.seen - model.objects.len();
     let p3 = |p: &[f64; 3]| to([p[0], p[1]]).map(|q| [q[0], q[1], p[2] * f]);
@@ -1345,10 +1346,10 @@ pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagSty
     }
     let done: usize = per_theme.values().sum();
     if done == 0 {
-        return Err(format!(
+        return Err(model.report(format!(
             "CityGML: geen van de {total} objecten ligt in het projectgebied ({crs}); verschuif de projectlocatie naar de data{}",
             if skipped > 0 { format!(" ({skipped} zonder bruikbare geometrie)") } else { String::new() }
-        ));
+        )));
     }
     progress("CityGML tekenen…".into());
     let json = path.to_string_lossy().to_ascii_lowercase().contains(".json");
@@ -1361,13 +1362,13 @@ pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagSty
     super::api::note("driehoeken", faces);
     super::api::note("crs", crs.clone());
     let themes: Vec<String> = per_theme.iter().map(|(k, v)| format!("{v} {k}")).collect();
-    Ok(format!(
+    Ok(model.report(format!(
         "{} ({crs}): {done} objecten ({}) met {faces} driehoeken{}{} — {n} elementen.",
         if json { "CityJSON" } else { "CityGML" },
         themes.join(", "),
         if outside > 0 { format!("; {outside} buiten het projectgebied") } else { String::new() },
         if skipped > 0 { format!("; {skipped} overgeslagen") } else { String::new() },
-    ))
+    )))
 }
 
 /// `CIV_DOORZICHT [PCT=70] [ALLES] [UIT]`: make the ground see-through, so
