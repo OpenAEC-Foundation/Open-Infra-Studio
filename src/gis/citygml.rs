@@ -495,6 +495,24 @@ mod tests {
         }
     }
 
+    #[test]
+    fn citygml_unknown_bounds_and_optional_geometry_preserve_the_building() {
+        let expected = parse(BUILDING).unwrap();
+        let doc = Document::parse(BUILDING).unwrap();
+        let bounds = doc.descendants().find(|n| n.is_element() && local(n) == "boundedBy" && n.tag_name().namespace() == Some("http://www.opengis.net/gml")).unwrap();
+        let mut unknown_bounds = BUILDING.to_string();
+        unknown_bounds.replace_range(bounds.range(), "<gml:boundedBy xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:nil=\"true\" nilReason=\"unknown\"/>");
+        assert_eq!(parse(&unknown_bounds).unwrap().crs, None);
+        let unknown_lod = BUILDING.replace("<bldg:boundedBy>", "<bldg:lod1Solid nilReason=\"unknown\"/><bldg:boundedBy>");
+        for text in [unknown_bounds, unknown_lod] {
+            let model = parse(&text).unwrap();
+            assert_eq!((model.seen, model.objects.len()), (1, 1));
+            assert_eq!(model.objects[0].id, expected.objects[0].id);
+            assert_eq!(model.objects[0].surfaces, expected.objects[0].surfaces);
+            assert_eq!((model.objects[0].height, model.objects[0].year), (None, None));
+        }
+    }
+
     const LOD2: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0" xmlns:bldg="http://www.opengis.net/citygml/building/2.0" xmlns:gml="http://www.opengis.net/gml">
  <gml:boundedBy><gml:Envelope srsName="urn:ogc:def:crs:EPSG::7415" srsDimension="3"><gml:lowerCorner>0 0 0</gml:lowerCorner><gml:upperCorner>10 10 9</gml:upperCorner></gml:Envelope></gml:boundedBy>
