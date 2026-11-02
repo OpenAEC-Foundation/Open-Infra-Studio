@@ -176,6 +176,48 @@ pub fn theme_label(thema: &str) -> &str {
 mod tests {
     use super::*;
 
+    const XML_NAME: &str = "GI_gebiedsinformatielevering_SYNTHETIC_1_V2.xml";
+    const XML: &str = include_str!("../../tests/fixtures/klic/GI_gebiedsinformatielevering_SYNTHETIC_1_V2.xml");
+
+    #[test]
+    fn fixed_klic_xml_and_zip_preserve_the_same_delivery_and_geometry() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/klic");
+        for path in [dir.join(XML_NAME), dir.join("delivery.zip")] {
+            let delivery = read(&path).unwrap();
+            assert_eq!(delivery.meldnummer, "SYNTHETIC", "{}", path.display());
+            assert_eq!(delivery.features.len(), 1);
+            assert_eq!(delivery.features[0].lines[0].0, vec![[100.0, 200.0], [110.0, 210.0]]);
+            assert_eq!(delivery.themes.get("water"), Some(&1));
+        }
+    }
+
+    #[test]
+    fn klic_returns_errors_for_empty_broken_and_missing_files() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-invalid-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for (index, text) in ["", "not xml", "<", "<Other/>"].iter().enumerate() {
+            let path = dir.join(format!("invalid-{index}.xml"));
+            std::fs::write(&path, text).unwrap();
+            assert!(read(&path).is_err(), "{text}");
+        }
+        let zip = dir.join("broken.zip");
+        std::fs::write(&zip, b"not a zip").unwrap();
+        assert!(read(&zip).is_err());
+        assert!(read(&dir.join("missing.xml")).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn klic_dependency_panics_become_errors_at_the_file_boundary() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-unicode-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        std::fs::write(&path, XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")).unwrap();
+        let result = read(&path);
+        assert!(result.is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     /// The Dordrecht sample delivery from GIS2BIM (Lange Geldersekade 2).
     #[test]
     #[ignore]
