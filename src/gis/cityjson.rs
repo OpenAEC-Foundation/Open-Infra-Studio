@@ -243,7 +243,7 @@ mod tests {
     #[test]
     fn sequence_rejects_broken_lines_instead_of_partial_success() {
         for line in ["{", "not-json", "null", r#"{"type":"Other"}"#] {
-            let error = parse_with(&format!("{SEQUENCE}\n{line}\n"), &|_| true, &|_| {}).unwrap_err();
+            let error = parse_with(&format!("{SEQUENCE}{line}\n"), &|_| true, &|_| {}).unwrap_err();
             assert!(error.starts_with("CityJSON:"), "{error}");
             assert!(error.contains('3'), "line number missing: {error}");
         }
@@ -289,6 +289,31 @@ mod tests {
         let large = BUILDING.replace("1000", "1e100");
         let model = parse_with(&large, &|_| true, &|_| {}).unwrap();
         assert!(model.objects[0].surfaces[0].1[0].iter().flatten().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn rejects_invalid_indices_without_shortening_or_replacing_rings() {
+        for boundaries in ["[[[0,1,2,999]]]", "[[[0,1,2,-1]]]", "[[[0,1,2,18446744073709551615]]]", "[[[0,1,2,\"bad\"]]]", "[[[0,1]]]", "[[[999,998,997],[0,1,2]]]"] {
+            for text in [BUILDING, SEQUENCE] {
+                let bad = if text == BUILDING {
+                    let mut doc: Value = serde_json::from_str(text).unwrap();
+                    doc["CityObjects"]["building"]["geometry"][0]["boundaries"] = serde_json::from_str(boundaries).unwrap();
+                    doc.to_string()
+                } else {
+                    let mut rows: Vec<Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+                    rows[1]["CityObjects"]["building"]["geometry"][0]["boundaries"] = serde_json::from_str(boundaries).unwrap();
+                    rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")
+                };
+                assert!(parse_with(&bad, &|_| true, &|_| {}).is_err(), "{boundaries}");
+            }
+        }
+    }
+
+    #[test]
+    fn sequence_error_reports_physical_line_including_blank_lines() {
+        let bad = format!("\n{SEQUENCE}\n{{");
+        let error = parse_with(&bad, &|_| true, &|_| {}).unwrap_err();
+        assert!(error.contains("regel 5"), "{error}");
     }
 
     #[test]
