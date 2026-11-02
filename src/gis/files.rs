@@ -816,6 +816,51 @@ mod tests {
     }
 
     #[test]
+    fn gml_bad_line_between_two_points_is_skipped_and_counted() {
+        let text = r#"<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml" xmlns:t="urn:test">
+          <gml:featureMember><t:point gml:id="p1"><t:geometry><gml:Point><gml:pos>0 0</gml:pos></gml:Point></t:geometry></t:point></gml:featureMember>
+          <gml:featureMember><t:line gml:id="broken"><t:geometry><gml:LineString><gml:posList>1 2 bad 3 4</gml:posList></gml:LineString></t:geometry></t:line></gml:featureMember>
+          <gml:featureMember><t:point gml:id="p2"><t:geometry><gml:Point><gml:pos>10 10</gml:pos></gml:Point></t:geometry></t:point></gml:featureMember>
+        </gml:FeatureCollection>"#;
+        let data = gml(text).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].points, vec![[0.0, 0.0]]);
+        assert_eq!(data.features[1].points, vec![[10.0, 10.0]]);
+        assert_eq!(data.skipped, 1);
+    }
+
+    #[test]
+    fn gml_projects_pos_in_any_complete_dimension_and_trims_the_attribute() {
+        for (dimension, values) in [("4", "1 2 3 4"), (" 2 ", "1 2"), ("5", "1 2 3 4 5")] {
+            let text = GML.replace("<gml:Point>", &format!("<gml:Point srsDimension=\"{dimension}\">"))
+                .replace("2600005 1200005", values);
+            assert_ne!(text, GML);
+            let data = gml(&text).unwrap();
+            assert_eq!(data.features.len(), 2);
+            assert_eq!(data.features[1].points, vec![[1.0, 2.0]]);
+            assert_eq!(data.skipped, 0);
+        }
+    }
+
+    #[test]
+    fn gml_coordinate_comments_preserve_every_text_part() {
+        let text = GML.replace("2600000 1200000 5 2600010 1200020 6", "2600000 1200000 5<!--comment--> 2600010 1200020 6");
+        let data = gml(&text).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].lines[0].0, vec![[2600000.0, 1200000.0], [2600010.0, 1200020.0]]);
+        assert_eq!(data.skipped, 0);
+    }
+
+    #[test]
+    fn gml_bad_number_after_a_comment_cannot_hide_behind_a_valid_prefix() {
+        let text = GML.replace("2600000 1200000 5 2600010 1200020 6", "2600000 1200000 5 2600010 1200020 6<!--comment--> BAD");
+        let data = gml(&text).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+        assert_eq!(data.skipped, 1);
+    }
+
+    #[test]
     fn gml_linear_segments_are_joined_and_unsupported_parts_are_reported() {
         let line = "<gml:LineString srsName=\"urn:ogc:def:crs:EPSG::2056\" srsDimension=\"3\">\n      <gml:posList>2600000 1200000 5 2600010 1200020 6</gml:posList>\n    </gml:LineString>";
         let curve = "<gml:Curve><gml:segments><gml:LineStringSegment><gml:posList>0 0 10 0</gml:posList></gml:LineStringSegment><gml:LineStringSegment><gml:posList>10 0 10 10</gml:posList></gml:LineStringSegment></gml:segments></gml:Curve>";
