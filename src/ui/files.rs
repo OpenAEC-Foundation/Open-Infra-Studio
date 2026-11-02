@@ -47,7 +47,7 @@ impl FilesPage {
                 Ok(d) => {
                     let site = bridge::site().unwrap_or_default();
                     self.opt = Some(FileOptions::for_file(&PathBuf::from(self.path.trim()), &d, &site));
-                    self.message = Some((true, format!("{}: {} {}", d.format, d.features.len(), tr("objecten gelezen", "features read"))));
+                    self.message = Some((true, d.report(format!("{}: {} {}", d.format, d.features.len(), tr("objecten gelezen", "features read")))));
                     self.data = Some(d);
                 }
                 Err(e) => self.message = Some((false, e)),
