@@ -169,6 +169,8 @@ pub fn parse_characteristics(xml: &str) -> Result<SearchResult, String> {
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
+    // Negative control for the review: reproduce validation at document scope.
+    validate_numbers(doc.root_element())?;
     let mut result = SearchResult::default();
     for object in doc.root_element()
         .children()
@@ -177,10 +179,6 @@ pub fn parse_characteristics(xml: &str) -> Result<SearchResult, String> {
     {
         let id = text_of(object, "broId").unwrap_or_default();
         if id.is_empty() || text_of(object, "deregistered").as_deref() == Some("ja") { continue; }
-        if let Err(error) = validate_numbers(object) {
-            result.warnings.push(format!("BRO: object {id} overgeslagen: {error}"));
-            continue;
-        }
         result.points.push(point_of(object, object.tag_name().name().starts_with("CPT")));
     }
     Ok(result)
@@ -682,6 +680,31 @@ mod tests {
         assert_eq!(points.points.len(), 2);
         assert_eq!(points.warnings.len(), 1);
         assert!(points.warnings[0].contains("CPT000000011051 overgeslagen"));
+    }
+
+    #[test]
+    fn a_broken_middle_search_object_preserves_both_valid_neighbours() {
+        let original = fixture("cpt-characteristics.xml");
+        let mut expected = parse_characteristics(&original).unwrap().points;
+        assert_eq!(expected.len(), 3);
+        let bad_id = expected.remove(1).id;
+        let broken = original.replacen("<offset uom=\"m\">2.470</offset>", "<offset uom=\"m\">broken</offset>", 1);
+        assert_ne!(broken, original);
+        let result = parse_characteristics(&broken).unwrap();
+        assert_eq!(result.points, expected);
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].contains(&bad_id));
+        assert!(result.warnings[0].contains(crate::lang::tr("overgeslagen", "skipped")));
+    }
+
+    #[test]
+    fn bro_read_errors_follow_the_selected_language() {
+        let xml = SYNTHETIC_CPT.replace("<pos>100 200</pos>", "<pos>100 broken 200</pos>");
+        let error = parse_cpt(&xml).unwrap_err();
+        assert!(error.contains(crate::lang::tr("ongeldige locatiecoördinaten", "invalid location coordinates")), "{error}");
+        let xml = SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,broken,0.01,0.5");
+        let error = parse_cpt(&xml).unwrap_err();
+        assert!(error.contains(crate::lang::tr("ongeldige meetwaarde in regel", "invalid measurement on row")), "{error}");
     }
 
     const SYNTHETIC_CPT: &str = include_str!("../../tests/fixtures/bro-synthetic/cpt.xml");
