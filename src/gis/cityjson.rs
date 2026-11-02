@@ -86,7 +86,8 @@ fn convert(id: &str, o: &Value, parent: Option<&Value>, verts: &[[f64; 3]]) -> R
     }
     let ring = |r: &Value| -> Result<Vec<[f64; 3]>, String> {
         let points = array(r)?.iter().map(|i| {
-            i.as_u64().and_then(|i| usize::try_from(i).ok()).and_then(|i| verts.get(i).copied()).ok_or_else(invalid)
+            i.as_u64().and_then(|i| usize::try_from(i).ok()).and_then(|i| verts.get(i).copied())
+                .filter(|p| p.iter().all(|v| v.is_finite())).ok_or_else(invalid)
         }).collect::<Result<Vec<_>, _>>()?;
         if points.len() < 3 { return Err(invalid()); }
         Ok(points)
@@ -150,18 +151,35 @@ fn convert(id: &str, o: &Value, parent: Option<&Value>, verts: &[[f64; 3]]) -> R
     }))
 }
 
-fn apply(t: &Option<Transform>, v: &mut [[f64; 3]]) -> Result<(), String> {
-    for (i, p) in v.iter_mut().enumerate() {
+fn apply(t: &Option<Transform>, v: &mut [[f64; 3]]) {
+    for p in v.iter_mut() {
         for k in 0..3 {
             if let Some(t) = t {
                 p[k] = p[k] * t.scale[k] + t.translate[k];
             }
-            if !p[k].is_finite() {
-                return Err(format!("CityJSON: vertex {i}: niet-eindige coördinaat na transformatie"));
-            }
         }
     }
-    Ok(())
+}
+
+fn read_objects(doc: &Doc, model: &mut CityModel, line: Option<usize>, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn Fn(String)) {
+    let at = line.map(|n| format!("regel {n}: ")).unwrap_or_default();
+    for (n, (id, raw)) in doc.objects.iter().enumerate() {
+        if n % 5000 == 0 && n > 0 { progress(format!("CityJSON: {n} van {} objecten…", doc.objects.len())); }
+        let parsed = (|| -> Result<Option<CityObject>, String> {
+            let o: Value = serde_json::from_str(raw.get()).map_err(|e| format!("onleesbaar object: {e}"))?;
+            if o["children"].as_array().is_some_and(|c| !c.is_empty()) { return Ok(None); }
+            let parent: Option<Value> = o["parents"].get(0).and_then(Value::as_str).and_then(|p| doc.objects.get(p)).and_then(|r| serde_json::from_str(r.get()).ok());
+            convert(id, &o, parent.as_ref(), &doc.vertices)
+        })();
+        match parsed {
+            Ok(Some(obj)) => {
+                model.seen += 1;
+                if keep(&obj) { model.objects.push(obj); }
+            }
+            Ok(None) => {}
+            Err(error) => model.warnings.push(format!("CityJSON: {at}object {id} overgeslagen: {error}")),
+        }
+    }
 }
 
 /// Read CityJSON or CityJSONSeq text; `keep` decides per object.
@@ -180,24 +198,16 @@ pub fn parse_with(text: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn
             if n % 5000 == 0 && n > 0 {
                 progress(format!("CityJSON: {n} objecten gelezen…"));
             }
-            let mut f: Doc = serde_json::from_str(line).map_err(|e| format!("CityJSON: regel {line_number}: {e}"))?;
+            let mut f: Doc = match serde_json::from_str(line) {
+                Ok(doc) => doc,
+                Err(error) => { model.warnings.push(format!("CityJSON: regel {line_number} overgeslagen: {error}")); continue; }
+            };
             if f.kind.as_deref() != Some("CityJSONFeature") {
-                return Err(format!("CityJSON: regel {line_number}: CityJSONFeature verwacht"));
+                model.warnings.push(format!("CityJSON: regel {line_number} overgeslagen: CityJSONFeature verwacht"));
+                continue;
             }
-            apply(&t, &mut f.vertices)?;
-            for (id, raw) in &f.objects {
-                let o: Value = serde_json::from_str(raw.get()).map_err(|e| format!("CityJSON: regel {line_number}: object {id}: {e}"))?;
-                if o["children"].as_array().is_some_and(|c| !c.is_empty()) {
-                    continue;
-                }
-                let parent: Option<Value> = o["parents"].get(0).and_then(Value::as_str).and_then(|p| f.objects.get(p)).and_then(|r| serde_json::from_str(r.get()).ok());
-                if let Some(obj) = convert(id, &o, parent.as_ref(), &f.vertices)? {
-                    model.seen += 1;
-                    if keep(&obj) {
-                        model.objects.push(obj);
-                    }
-                }
-            }
+            apply(&t, &mut f.vertices);
+            read_objects(&f, &mut model, Some(line_number), keep, progress);
         }
     } else {
         progress("CityJSON ontleden…".into());
@@ -211,27 +221,13 @@ pub fn parse_with(text: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn
             Some(t) => Some(t),
             None => serde_json::from_value(doc.metadata.as_ref().map(|m| m["transform"].clone()).unwrap_or(Value::Null)).map_err(|e| format!("CityJSON: transformatie: {e}"))?,
         };
-        apply(&t, &mut doc.vertices)?;
-        let total = doc.objects.len();
-        for (n, (id, raw)) in doc.objects.iter().enumerate() {
-            if n % 5000 == 0 && n > 0 {
-                progress(format!("CityJSON: {n} van {total} objecten…"));
-            }
-            let Ok(o) = serde_json::from_str::<Value>(raw.get()) else { continue };
-            if o["geometry"].as_array().is_none_or(|g| g.is_empty()) || o["children"].as_array().is_some_and(|c| !c.is_empty()) {
-                continue;
-            }
-            let parent: Option<Value> = o["parents"].get(0).and_then(Value::as_str).and_then(|p| doc.objects.get(p)).and_then(|r| serde_json::from_str(r.get()).ok());
-            if let Some(obj) = convert(id, &o, parent.as_ref(), &doc.vertices)? {
-                model.seen += 1;
-                if keep(&obj) {
-                    model.objects.push(obj);
-                }
-            }
-        }
+        // Overflow is checked when an object uses a vertex. One unusable
+        // vertex must not discard unrelated objects using finite vertices.
+        apply(&t, &mut doc.vertices);
+        read_objects(&doc, &mut model, None, keep, progress);
     }
     if model.seen == 0 {
-        return Err("CityJSON: geen stadsobjecten met geometrie gevonden".into());
+        return Err(model.report("CityJSON: geen stadsobjecten met geometrie gevonden".into()));
     }
     Ok(model)
 }
