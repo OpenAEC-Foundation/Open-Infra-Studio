@@ -441,6 +441,123 @@ mod tests {
 
     const BUILDING: &str = include_str!("../../tests/fixtures/citygml/building.gml");
 
+    fn with_coordinates(element: &str) -> String {
+        let doc = Document::parse(BUILDING).unwrap();
+        let list = doc.descendants().find(|n| n.is_element() && local(n) == "posList").unwrap();
+        let mut text = BUILDING.to_string();
+        text.replace_range(list.range(), element);
+        text
+    }
+
+    fn with_neighbour(member_source: &str) -> String {
+        let doc = Document::parse(member_source).unwrap();
+        let member = doc.descendants().find(|n| n.is_element() && local(n) == "cityObjectMember").unwrap();
+        let neighbour = member_source[member.range()].replace("synthetic-building", "neighbour");
+        BUILDING.replace("</core:CityModel>", &format!("{neighbour}</core:CityModel>"))
+    }
+
+    #[test]
+    fn citygml_ignored_lod_separators_do_not_block_the_chosen_roof() {
+        let expected = parse(BUILDING).unwrap();
+        for element in [
+            "<gml:coordinates cs=\";\">0;0;0 10;0;0 10;10;0 0;0;0</gml:coordinates>",
+            "<gml:coordinates decimal=\",\" cs=\";\" ts=\"|\">0,5;0,5;0|10,5;0,5;0|10,5;10,5;0|0,5;0,5;0</gml:coordinates>",
+        ] {
+            let footprint = format!("<bldg:lod0FootPrint><gml:MultiSurface><gml:surfaceMember><gml:Polygon><gml:exterior><gml:LinearRing>{element}</gml:LinearRing></gml:exterior></gml:Polygon></gml:surfaceMember></gml:MultiSurface></bldg:lod0FootPrint>");
+            let text = BUILDING.replace("<bldg:boundedBy>", &format!("{footprint}<bldg:boundedBy>"));
+            let model = parse(&text).unwrap();
+            assert_eq!(model.objects[0].surfaces, expected.objects[0].surfaces);
+            assert!(model.warnings.is_empty());
+        }
+    }
+
+    #[test]
+    fn citygml_selected_gml2_coordinates_use_the_declared_separators() {
+        let expected = parse(BUILDING).unwrap();
+        let values = ["2600000 1200000 5", "2600010 1200000 5", "2600010 1200010 5", "2600000 1200010 5", "2600000 1200000 5"];
+        for (attrs, cs, ts, decimal) in [("", ",", " ", "."), (" cs=\";\"", ";", " ", "."), (" decimal=\",\" cs=\";\" ts=\"|\"", ";", "|", ",")] {
+            let text = values.iter().map(|p| p.split_whitespace().map(|v| if decimal == "," { format!("{v},0") } else { v.to_string() }).collect::<Vec<_>>().join(cs)).collect::<Vec<_>>().join(ts);
+            let model = parse(&with_coordinates(&format!("<gml:coordinates{attrs}>{text}</gml:coordinates>"))).unwrap();
+            assert_eq!(model.objects[0].surfaces, expected.objects[0].surfaces, "{attrs}");
+        }
+    }
+
+    #[test]
+    fn citygml_reads_every_text_part_around_comments_and_cdata() {
+        let expected = parse(BUILDING).unwrap();
+        for (from, to) in [
+            ("2600010 1200010 5", "2600010 1200010 5<!--comment-->"),
+            ("2600010 1200010 5", "26000<!--number-->10 1200010 5"),
+            ("2600010 1200010 5", "<![CDATA[2600010 1200010 5]]>"),
+        ] {
+            let text = BUILDING.replace(from, to);
+            let model = parse(&text).unwrap();
+            assert_eq!(model.objects[0].surfaces, expected.objects[0].surfaces, "{to}");
+        }
+    }
+
+    #[test]
+    fn citygml_bad_token_after_comment_skips_only_that_object() {
+        let bad = BUILDING.replace("2600010 1200010 5", "2600010 1200010 5<!--comment--> BAD");
+        let model = parse(&with_neighbour(&bad)).unwrap();
+        assert_eq!((model.seen, model.objects.len(), model.warnings.len()), (1, 1, 1));
+        assert_eq!(model.objects[0].id, "synthetic-building");
+    }
+
+    #[test]
+    fn citygml_bad_xml_in_one_member_keeps_the_other_member() {
+        let bad = BUILDING.replace("2600010 1200010 5", "2600010 &unknown; 5");
+        // with_neighbour parses XML to find its boundaries, so insert the
+        // unknown reference only after copying the well-formed member.
+        let text = with_neighbour(BUILDING).replace("gml:id=\"neighbour\">", "gml:id=\"neighbour\"><bldg:name>&unknown;</bldg:name>");
+        let model = parse(&text).unwrap();
+        assert_eq!((model.objects.len(), model.warnings.len()), (1, 1));
+        assert_eq!(model.objects[0].id, "synthetic-building");
+        assert_eq!(parse(&bad).unwrap_err(), "CityGML: geen stadsobjecten met geometrie gevonden");
+    }
+
+    #[test]
+    fn citygml_document_errors_use_the_existing_empty_geometry_error() {
+        for text in [
+            BUILDING.replace("<core:cityObjectMember>", "&unknown;<core:cityObjectMember>"),
+            format!("{BUILDING}<?xml version=\"1.0\"?>"),
+        ] {
+            assert_eq!(parse(&text).unwrap_err(), "CityGML: geen stadsobjecten met geometrie gevonden");
+        }
+        let named = BUILDING.replace("<core:CityModel", "<!DOCTYPE core:CityModel [<!ENTITY outside \"metadata\">]><core:CityModel")
+            .replace("<core:cityObjectMember>", "<gml:name>&outside; &amp; &#65;</gml:name><core:cityObjectMember>");
+        assert_eq!(parse(&named).unwrap().objects.len(), 1);
+    }
+
+    #[test]
+    fn citygml_whitespace_and_irrelevant_dimension_metadata_keep_the_roof() {
+        let expected = parse(BUILDING).unwrap();
+        for dimension in [" 3 ", "unknown"] {
+            let model = parse(&BUILDING.replace("srsDimension=\"3\"", &format!("srsDimension=\"{dimension}\""))).unwrap();
+            assert_eq!(model.objects[0].surfaces, expected.objects[0].surfaces);
+        }
+    }
+
+    #[test]
+    fn citygml_outer_containers_do_not_impose_a_geometry_depth_limit() {
+        let text = BUILDING.replace("<core:cityObjectMember>", &format!("{}<core:cityObjectMember>", "<group>".repeat(300)))
+            .replace("</core:cityObjectMember>", &format!("</core:cityObjectMember>{}", "</group>".repeat(300)));
+        let model = parse(&text).unwrap();
+        assert_eq!(model.objects[0].id, "synthetic-building");
+    }
+
+    #[test]
+    fn citygml_reads_comments_in_pos_and_coordinates() {
+        let expected = parse(BUILDING).unwrap();
+        let values = ["2600000 1200000 5", "2600010 1200000 5", "2600010 1200010 5", "2600000 1200010 5", "2600000 1200000 5"];
+        let pos = values.iter().map(|v| format!("<gml:pos>{}</gml:pos>", v.replace("2600010", "26000<!--number-->10"))).collect::<String>();
+        let coords = format!("<gml:coordinates>{}</gml:coordinates>", values.join(" ").replace(' ', ",").split(',').collect::<Vec<_>>().chunks(3).map(|p| p.join(",")).collect::<Vec<_>>().join(" ").replace("2600010,1200010,5", "2600010,1200010,5<!--comment-->"));
+        for element in [pos, coords] {
+            let model = parse(&with_coordinates(&element)).unwrap();
+            assert_eq!(model.objects[0].surfaces, expected.objects[0].surfaces);
+        }
+    }
+
     #[test]
     fn citygml_bad_member_keeps_the_valid_adjacent_building() {
         let doc = Document::parse(BUILDING).unwrap();
