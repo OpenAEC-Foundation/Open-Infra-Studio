@@ -573,8 +573,8 @@ fn number(s: &str) -> Option<f64> {
 /// Points from a table with coordinate columns: x/y, easting/northing,
 /// lon/lat (also Dutch names). `;`, tab or `,` separated.
 pub fn csv(text: &str) -> Result<FileData, String> {
-    let mut lines = text.lines().filter(|l| !l.trim().is_empty());
-    let head = lines.next().ok_or("CSV: empty file")?;
+    let mut lines = text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty());
+    let (_, head) = lines.next().ok_or("CSV: empty file")?;
     let sep = [';', '\t', ','].into_iter().max_by_key(|s| head.matches(*s).count()).unwrap_or(',');
     let cols: Vec<String> = split_line(head, sep).into_iter().map(|c| c.trim_start_matches('\u{feff}').to_string()).collect();
     let find = |names: &[&str]| cols.iter().position(|c| names.iter().any(|n| c.eq_ignore_ascii_case(n)));
@@ -586,9 +586,12 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         return Err(format!("CSV: no coordinate columns (x/y, easting/northing or lon/lat) in {}", cols.join(", ")));
     };
     let mut features = Vec::new();
-    for line in lines {
+    for (line_index, line) in lines {
         let vals = split_line(line, sep);
-        let (Some(x), Some(y)) = (vals.get(ix).and_then(|v| number(v)), vals.get(iy).and_then(|v| number(v))) else { continue };
+        let coordinate = |index: usize| {
+            vals.get(index).and_then(|v| number(v)).filter(|v| v.is_finite()).ok_or_else(|| format!("CSV: regel {}: ontbrekende of ongeldige coördinaat in kolom {}", line_index + 1, cols[index]))
+        };
+        let (x, y) = (coordinate(ix)?, coordinate(iy)?);
         let mut f = Feature { points: vec![[x, y]], ..Default::default() };
         for (i, c) in cols.iter().enumerate() {
             if i != ix && i != iy {
