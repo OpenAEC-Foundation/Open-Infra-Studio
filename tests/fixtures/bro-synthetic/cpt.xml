@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<response><dispatchDocument><CPT_O>
+  <broId>CPT-SYNTHETIC</broId>
+  <deliveredLocation><Point srsName="EPSG:28992"><pos>100 200</pos></Point></deliveredLocation>
+  <standardizedLocation><Point srsName="EPSG:4258"><pos>52 5</pos></Point></standardizedLocation>
+  <offset>1</offset><finalDepth>2</finalDepth><predrilledDepth>0</predrilledDepth>
+  <parameters><penetrationLength>ja</penetrationLength><depth>ja</depth><coneResistance>ja</coneResistance><localFriction>ja</localFriction><frictionRatio>ja</frictionRatio></parameters>
+  <cptResult><TextEncoding decimalSeparator="." tokenSeparator="," blockSeparator=";"/><values>1,1,2,0.01,0.5;2,2,3,0.02,0.6;</values></cptResult>
+</CPT_O></dispatchDocument></response>

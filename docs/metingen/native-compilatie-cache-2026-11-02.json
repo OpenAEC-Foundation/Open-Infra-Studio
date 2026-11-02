@@ -1,0 +1,921 @@
+{
+  "run": "https://github.com/OpenAEC-Foundation/Open-Infra-Studio/actions/runs/41521579207",
+  "cold_attempt": 1,
+  "warm_attempt": 2,
+  "pr_head": "c5b144d17e76df9258ae2f2e673f144a8c2691fa",
+  "checkout_merge": "6566016ac75cffcf6ba22e6dde9b06ec9e00cf03",
+  "commands": [
+    "cargo test --lib --locked -p open-infra",
+    "cargo build --release --locked -p open-infra",
+    "cargo build --release --locked -p open-infra-civiel"
+  ],
+  "cache_action": "Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+  "shared_key": "release",
+  "empty_cache_preparation": [
+    {
+      "id": 9900527258,
+      "key": "v0-rust-release-Darwin-arm64-28ed8f4a-cce10b56",
+      "ref": "refs/pull/41/merge",
+      "size_in_bytes": 1314979528
+    },
+    {
+      "id": 9900499141,
+      "key": "v0-rust-release-Linux-x64-872dfffb-cce10b56",
+      "ref": "refs/pull/41/merge",
+      "size_in_bytes": 1482567067
+    }
+  ],
+  "job_timing": "jobs API: completed_at minus started_at, without queue, including setup and cache restore/save",
+  "no_signing_or_publication": true,
+  "results": {
+    "cold": {
+      "Windows": {
+        "head": "6566016ac75cffcf6ba22e6dde9b06ec9e00cf03",
+        "source_tree": "bad293aefc432aae8b1849525c61659c7e32ecbe",
+        "civiel_tree": "2466d705f2b39487b966046e8e13cbb5ae170541",
+        "lock": {
+          "bytes": 135450,
+          "sha256": "46002c12b20603874e59837cc5a739236b5494ac90f60e0e615356a3bb4fceb7"
+        },
+        "manifest": {
+          "bytes": 2836,
+          "sha256": "b8430b33085b22fdf8fa518b106e2f3ba79219c1f53b52a31f8479e6bb5ce0d7"
+        },
+        "civiel_manifest": {
+          "bytes": 892,
+          "sha256": "edd2869a96a31d5d4edb9356505018ed1f5d7481c679b48a39e85c2609475740"
+        },
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "machine": "Windows-2025Server-10.0.26100-SP0",
+        "processor": "AMD64 Family 25 Model 17 Stepping 1, AuthenticAMD",
+        "logical_cpus": 4,
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+        "cargo_incremental": "0",
+        "gis": {
+          "bytes": 22995456,
+          "sha256": "ad9169549004cea55daf08ef53ee901cb21583a312b111b10927d918c25476f2"
+        },
+        "civiel": {
+          "bytes": 23126528,
+          "sha256": "1a806588ca115c6e2e45b20594ee732d4688d7d6e89f2b640d545fdc6c62d740"
+        },
+        "job_seconds": 868.0,
+        "job_id": 125538665323,
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:11Z",
+            "completed_at": "2026-11-02T20:42:12Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:12Z",
+            "completed_at": "2026-11-02T20:42:21Z",
+            "seconds": 9.0
+          },
+          {
+            "name": "Run dtolnay/rust-toolchain@master",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:21Z",
+            "completed_at": "2026-11-02T20:42:34Z",
+            "seconds": 13.0
+          },
+          {
+            "name": "Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:34Z",
+            "completed_at": "2026-11-02T20:42:39Z",
+            "seconds": 5.0
+          },
+          {
+            "name": "Run cargo test --lib --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:39Z",
+            "completed_at": "2026-11-02T20:46:48Z",
+            "seconds": 249.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:46:48Z",
+            "completed_at": "2026-11-02T20:54:29Z",
+            "seconds": 461.0
+          },
+          {
+            "name": "Keep the GIS library before building Civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:54:29Z",
+            "completed_at": "2026-11-02T20:54:29Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra-civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:54:29Z",
+            "completed_at": "2026-11-02T20:55:45Z",
+            "seconds": 76.0
+          },
+          {
+            "name": "Record source, toolchain and library hashes",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:55:45Z",
+            "completed_at": "2026-11-02T20:55:46Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:55:46Z",
+            "completed_at": "2026-11-02T20:55:47Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Post Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:55:47Z",
+            "completed_at": "2026-11-02T20:56:29Z",
+            "seconds": 42.0
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:56:29Z",
+            "completed_at": "2026-11-02T20:56:31Z",
+            "seconds": 2.0
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:56:31Z",
+            "completed_at": "2026-11-02T20:56:31Z",
+            "seconds": 0.0
+          }
+        ],
+        "cache_empty": true,
+        "cache_restored": false,
+        "compilation_log_summary": {
+          "compilations": 542,
+          "workspace": [
+            "open-infra",
+            "open-infra",
+            "open-infra",
+            "open-infra-civiel"
+          ],
+          "sdk": [
+            "acadrust",
+            "ocs_plugin_api",
+            "acadrust",
+            "ocs_plugin_api"
+          ],
+          "raw_job_log_sha256": "be092cfb091efd20cd592042c8eab3a99b4ab259aae5574fc409115d42d6b7a3"
+        }
+      },
+      "macOS": {
+        "head": "6566016ac75cffcf6ba22e6dde9b06ec9e00cf03",
+        "source_tree": "bad293aefc432aae8b1849525c61659c7e32ecbe",
+        "civiel_tree": "2466d705f2b39487b966046e8e13cbb5ae170541",
+        "lock": {
+          "bytes": 130185,
+          "sha256": "1ef21ba025c176380573e65be944ad1277bf4fcda4068888075ff9198a669ffe"
+        },
+        "manifest": {
+          "bytes": 2769,
+          "sha256": "56e8af92a256322f27e283210ead3fed16323e17914c6c8faa5931702bc8dc77"
+        },
+        "civiel_manifest": {
+          "bytes": 870,
+          "sha256": "a5ceb42112595da3d68727b80355904c74dac5d31dd8cde04e1dec6e33a43fe8"
+        },
+        "runner_os": "macOS",
+        "runner_arch": "ARM64",
+        "machine": "macOS-14.8.9-arm64-arm-64bit-Mach-O",
+        "processor": "arm",
+        "logical_cpus": 3,
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+        "cargo_incremental": "0",
+        "gis": {
+          "bytes": 14645760,
+          "sha256": "dbcca3d76559dae25b1045041feddcbb2bb599ded1ff90234bc09bee04d71901"
+        },
+        "civiel": {
+          "bytes": 10490432,
+          "sha256": "ede5b9c3118d768bb655311faaf0f113e9d49dd08e6b2fa952e428f231740a4a"
+        },
+        "job_seconds": 767.0,
+        "job_id": 125538665801,
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:15Z",
+            "completed_at": "2026-11-02T20:42:16Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:16Z",
+            "completed_at": "2026-11-02T20:42:21Z",
+            "seconds": 5.0
+          },
+          {
+            "name": "Run dtolnay/rust-toolchain@master",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:21Z",
+            "completed_at": "2026-11-02T20:42:28Z",
+            "seconds": 7.0
+          },
+          {
+            "name": "Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:28Z",
+            "completed_at": "2026-11-02T20:42:29Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Run cargo test --lib --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:29Z",
+            "completed_at": "2026-11-02T20:46:56Z",
+            "seconds": 267.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:46:56Z",
+            "completed_at": "2026-11-02T20:52:59Z",
+            "seconds": 363.0
+          },
+          {
+            "name": "Keep the GIS library before building Civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:52:59Z",
+            "completed_at": "2026-11-02T20:52:59Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra-civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:52:59Z",
+            "completed_at": "2026-11-02T20:54:12Z",
+            "seconds": 73.0
+          },
+          {
+            "name": "Record source, toolchain and library hashes",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:54:12Z",
+            "completed_at": "2026-11-02T20:54:12Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:54:12Z",
+            "completed_at": "2026-11-02T20:54:14Z",
+            "seconds": 2.0
+          },
+          {
+            "name": "Post Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:54:14Z",
+            "completed_at": "2026-11-02T20:54:52Z",
+            "seconds": 38.0
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:54:52Z",
+            "completed_at": "2026-11-02T20:54:53Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:54:53Z",
+            "completed_at": "2026-11-02T20:54:54Z",
+            "seconds": 1.0
+          }
+        ],
+        "cache_empty": true,
+        "cache_restored": false,
+        "compilation_log_summary": {
+          "compilations": 562,
+          "workspace": [
+            "open-infra",
+            "open-infra",
+            "open-infra",
+            "open-infra-civiel"
+          ],
+          "sdk": [
+            "acadrust",
+            "ocs_plugin_api",
+            "acadrust",
+            "ocs_plugin_api"
+          ],
+          "raw_job_log_sha256": "abc750acd557ac414baa0fd1a60d41377d442c0e8ed08b5715d274c22bef6171"
+        }
+      },
+      "Linux": {
+        "head": "6566016ac75cffcf6ba22e6dde9b06ec9e00cf03",
+        "source_tree": "bad293aefc432aae8b1849525c61659c7e32ecbe",
+        "civiel_tree": "2466d705f2b39487b966046e8e13cbb5ae170541",
+        "lock": {
+          "bytes": 130185,
+          "sha256": "1ef21ba025c176380573e65be944ad1277bf4fcda4068888075ff9198a669ffe"
+        },
+        "manifest": {
+          "bytes": 2769,
+          "sha256": "56e8af92a256322f27e283210ead3fed16323e17914c6c8faa5931702bc8dc77"
+        },
+        "civiel_manifest": {
+          "bytes": 870,
+          "sha256": "a5ceb42112595da3d68727b80355904c74dac5d31dd8cde04e1dec6e33a43fe8"
+        },
+        "runner_os": "Linux",
+        "runner_arch": "X64",
+        "machine": "Linux-6.8.0-1070-azure-x86_64-with-glibc2.35",
+        "processor": "x86_64",
+        "logical_cpus": 4,
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+        "cargo_incremental": "0",
+        "gis": {
+          "bytes": 32834760,
+          "sha256": "0c91094ff32034b1dd2e4a9bb8d4342187903ad7fbeb648fd9367dd9b6eba9df"
+        },
+        "civiel": {
+          "bytes": 32998808,
+          "sha256": "ba9da30d1e51a3b329c4f26c2caa194238b089794f2c00f7b298dd0009392b90"
+        },
+        "job_seconds": 657.0,
+        "job_id": 125538666321,
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:11Z",
+            "completed_at": "2026-11-02T20:42:13Z",
+            "seconds": 2.0
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:13Z",
+            "completed_at": "2026-11-02T20:42:17Z",
+            "seconds": 4.0
+          },
+          {
+            "name": "Run dtolnay/rust-toolchain@master",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:17Z",
+            "completed_at": "2026-11-02T20:42:27Z",
+            "seconds": 10.0
+          },
+          {
+            "name": "Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:27Z",
+            "completed_at": "2026-11-02T20:42:28Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Run cargo test --lib --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:42:28Z",
+            "completed_at": "2026-11-02T20:45:47Z",
+            "seconds": 199.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:45:47Z",
+            "completed_at": "2026-11-02T20:51:52Z",
+            "seconds": 365.0
+          },
+          {
+            "name": "Keep the GIS library before building Civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:51:52Z",
+            "completed_at": "2026-11-02T20:51:52Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra-civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:51:52Z",
+            "completed_at": "2026-11-02T20:52:44Z",
+            "seconds": 52.0
+          },
+          {
+            "name": "Record source, toolchain and library hashes",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:52:44Z",
+            "completed_at": "2026-11-02T20:52:45Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:52:45Z",
+            "completed_at": "2026-11-02T20:52:46Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Post Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:52:46Z",
+            "completed_at": "2026-11-02T20:53:05Z",
+            "seconds": 19.0
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:53:05Z",
+            "completed_at": "2026-11-02T20:53:06Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:53:06Z",
+            "completed_at": "2026-11-02T20:53:06Z",
+            "seconds": 0.0
+          }
+        ],
+        "cache_empty": true,
+        "cache_restored": false,
+        "compilation_log_summary": {
+          "compilations": 604,
+          "workspace": [
+            "open-infra",
+            "open-infra",
+            "open-infra",
+            "open-infra-civiel"
+          ],
+          "sdk": [
+            "acadrust",
+            "ocs_plugin_api",
+            "acadrust",
+            "ocs_plugin_api"
+          ],
+          "raw_job_log_sha256": "ed75c4d167ffa3ae4ff44c6617679eda0a8119c34f469663c8ba4555d834ae7b"
+        }
+      }
+    },
+    "warm": {
+      "Linux": {
+        "head": "6566016ac75cffcf6ba22e6dde9b06ec9e00cf03",
+        "source_tree": "bad293aefc432aae8b1849525c61659c7e32ecbe",
+        "civiel_tree": "2466d705f2b39487b966046e8e13cbb5ae170541",
+        "lock": {
+          "bytes": 130185,
+          "sha256": "1ef21ba025c176380573e65be944ad1277bf4fcda4068888075ff9198a669ffe"
+        },
+        "manifest": {
+          "bytes": 2769,
+          "sha256": "56e8af92a256322f27e283210ead3fed16323e17914c6c8faa5931702bc8dc77"
+        },
+        "civiel_manifest": {
+          "bytes": 870,
+          "sha256": "a5ceb42112595da3d68727b80355904c74dac5d31dd8cde04e1dec6e33a43fe8"
+        },
+        "runner_os": "Linux",
+        "runner_arch": "X64",
+        "machine": "Linux-6.8.0-1070-azure-x86_64-with-glibc2.35",
+        "processor": "x86_64",
+        "logical_cpus": 4,
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+        "cargo_incremental": "0",
+        "gis": {
+          "bytes": 32834760,
+          "sha256": "0c91094ff32034b1dd2e4a9bb8d4342187903ad7fbeb648fd9367dd9b6eba9df"
+        },
+        "civiel": {
+          "bytes": 32998808,
+          "sha256": "ba9da30d1e51a3b329c4f26c2caa194238b089794f2c00f7b298dd0009392b90"
+        },
+        "job_seconds": 170.0,
+        "job_id": 125547258782,
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:58:47Z",
+            "completed_at": "2026-11-02T20:58:49Z",
+            "seconds": 2.0
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:58:49Z",
+            "completed_at": "2026-11-02T20:58:52Z",
+            "seconds": 3.0
+          },
+          {
+            "name": "Run dtolnay/rust-toolchain@master",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:58:52Z",
+            "completed_at": "2026-11-02T20:59:01Z",
+            "seconds": 9.0
+          },
+          {
+            "name": "Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:59:01Z",
+            "completed_at": "2026-11-02T20:59:24Z",
+            "seconds": 23.0
+          },
+          {
+            "name": "Run cargo test --lib --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:59:24Z",
+            "completed_at": "2026-11-02T20:59:44Z",
+            "seconds": 20.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:59:44Z",
+            "completed_at": "2026-11-02T21:00:33Z",
+            "seconds": 49.0
+          },
+          {
+            "name": "Keep the GIS library before building Civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:00:33Z",
+            "completed_at": "2026-11-02T21:00:33Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra-civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:00:33Z",
+            "completed_at": "2026-11-02T21:01:25Z",
+            "seconds": 52.0
+          },
+          {
+            "name": "Record source, toolchain and library hashes",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:25Z",
+            "completed_at": "2026-11-02T21:01:25Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:25Z",
+            "completed_at": "2026-11-02T21:01:26Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Post Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:26Z",
+            "completed_at": "2026-11-02T21:01:26Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:26Z",
+            "completed_at": "2026-11-02T21:01:27Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:27Z",
+            "completed_at": "2026-11-02T21:01:27Z",
+            "seconds": 0.0
+          }
+        ],
+        "cache_empty": false,
+        "cache_restored": true,
+        "compilation_log_summary": {
+          "compilations": 4,
+          "workspace": [
+            "open-infra",
+            "open-infra",
+            "open-infra",
+            "open-infra-civiel"
+          ],
+          "sdk": [],
+          "raw_job_log_sha256": "ab183d74c07aa29a370df2a201851ceaf2b106582c47b946bbd1fb157c6c52f2"
+        }
+      },
+      "Windows": {
+        "head": "6566016ac75cffcf6ba22e6dde9b06ec9e00cf03",
+        "source_tree": "bad293aefc432aae8b1849525c61659c7e32ecbe",
+        "civiel_tree": "2466d705f2b39487b966046e8e13cbb5ae170541",
+        "lock": {
+          "bytes": 135450,
+          "sha256": "46002c12b20603874e59837cc5a739236b5494ac90f60e0e615356a3bb4fceb7"
+        },
+        "manifest": {
+          "bytes": 2836,
+          "sha256": "b8430b33085b22fdf8fa518b106e2f3ba79219c1f53b52a31f8479e6bb5ce0d7"
+        },
+        "civiel_manifest": {
+          "bytes": 892,
+          "sha256": "edd2869a96a31d5d4edb9356505018ed1f5d7481c679b48a39e85c2609475740"
+        },
+        "runner_os": "Windows",
+        "runner_arch": "X64",
+        "machine": "Windows-2025Server-10.0.26100-SP0",
+        "processor": "AMD64 Family 25 Model 1 Stepping 1, AuthenticAMD",
+        "logical_cpus": 4,
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+        "cargo_incremental": "0",
+        "gis": {
+          "bytes": 22995456,
+          "sha256": "7fdd3a8c8a0f70b40a8a2b7a902465713766b75b1878db3196100922a899b8b0"
+        },
+        "civiel": {
+          "bytes": 23126528,
+          "sha256": "2b04b5a7a3c421a371e031c4db4d2257e9bb15df1e76661def968ea2786266b9"
+        },
+        "job_seconds": 305.0,
+        "job_id": 125547259434,
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:58:48Z",
+            "completed_at": "2026-11-02T20:58:50Z",
+            "seconds": 2.0
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:58:51Z",
+            "completed_at": "2026-11-02T20:59:00Z",
+            "seconds": 9.0
+          },
+          {
+            "name": "Run dtolnay/rust-toolchain@master",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:59:00Z",
+            "completed_at": "2026-11-02T20:59:12Z",
+            "seconds": 12.0
+          },
+          {
+            "name": "Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:59:12Z",
+            "completed_at": "2026-11-02T20:59:53Z",
+            "seconds": 41.0
+          },
+          {
+            "name": "Run cargo test --lib --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:59:53Z",
+            "completed_at": "2026-11-02T21:00:37Z",
+            "seconds": 44.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:00:37Z",
+            "completed_at": "2026-11-02T21:02:09Z",
+            "seconds": 92.0
+          },
+          {
+            "name": "Keep the GIS library before building Civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:02:09Z",
+            "completed_at": "2026-11-02T21:02:09Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra-civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:02:09Z",
+            "completed_at": "2026-11-02T21:03:41Z",
+            "seconds": 92.0
+          },
+          {
+            "name": "Record source, toolchain and library hashes",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:03:41Z",
+            "completed_at": "2026-11-02T21:03:48Z",
+            "seconds": 7.0
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:03:48Z",
+            "completed_at": "2026-11-02T21:03:49Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Post Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:03:49Z",
+            "completed_at": "2026-11-02T21:03:49Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:03:49Z",
+            "completed_at": "2026-11-02T21:03:51Z",
+            "seconds": 2.0
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:03:51Z",
+            "completed_at": "2026-11-02T21:03:51Z",
+            "seconds": 0.0
+          }
+        ],
+        "cache_empty": false,
+        "cache_restored": true,
+        "compilation_log_summary": {
+          "compilations": 4,
+          "workspace": [
+            "open-infra",
+            "open-infra",
+            "open-infra",
+            "open-infra-civiel"
+          ],
+          "sdk": [],
+          "raw_job_log_sha256": "4a85f3e3f898e3ab4e3a7e04c6b65975c7cc7792871b43869e3551cf7e42395d"
+        }
+      },
+      "macOS": {
+        "head": "6566016ac75cffcf6ba22e6dde9b06ec9e00cf03",
+        "source_tree": "bad293aefc432aae8b1849525c61659c7e32ecbe",
+        "civiel_tree": "2466d705f2b39487b966046e8e13cbb5ae170541",
+        "lock": {
+          "bytes": 130185,
+          "sha256": "1ef21ba025c176380573e65be944ad1277bf4fcda4068888075ff9198a669ffe"
+        },
+        "manifest": {
+          "bytes": 2769,
+          "sha256": "56e8af92a256322f27e283210ead3fed16323e17914c6c8faa5931702bc8dc77"
+        },
+        "civiel_manifest": {
+          "bytes": 870,
+          "sha256": "a5ceb42112595da3d68727b80355904c74dac5d31dd8cde04e1dec6e33a43fe8"
+        },
+        "runner_os": "macOS",
+        "runner_arch": "ARM64",
+        "machine": "macOS-14.8.9-arm64-arm-64bit-Mach-O",
+        "processor": "arm",
+        "logical_cpus": 3,
+        "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+        "cargo_incremental": "0",
+        "gis": {
+          "bytes": 14645760,
+          "sha256": "dbcca3d76559dae25b1045041feddcbb2bb599ded1ff90234bc09bee04d71901"
+        },
+        "civiel": {
+          "bytes": 10490432,
+          "sha256": "ede5b9c3118d768bb655311faaf0f113e9d49dd08e6b2fa952e428f231740a4a"
+        },
+        "job_seconds": 193.0,
+        "job_id": 125547259560,
+        "steps": [
+          {
+            "name": "Set up job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:58:46Z",
+            "completed_at": "2026-11-02T20:58:49Z",
+            "seconds": 3.0
+          },
+          {
+            "name": "Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:58:49Z",
+            "completed_at": "2026-11-02T20:58:58Z",
+            "seconds": 9.0
+          },
+          {
+            "name": "Run dtolnay/rust-toolchain@master",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:58:58Z",
+            "completed_at": "2026-11-02T20:59:07Z",
+            "seconds": 9.0
+          },
+          {
+            "name": "Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:59:07Z",
+            "completed_at": "2026-11-02T20:59:28Z",
+            "seconds": 21.0
+          },
+          {
+            "name": "Run cargo test --lib --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:59:28Z",
+            "completed_at": "2026-11-02T20:59:59Z",
+            "seconds": 31.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra",
+            "conclusion": "success",
+            "started_at": "2026-11-02T20:59:59Z",
+            "completed_at": "2026-11-02T21:00:53Z",
+            "seconds": 54.0
+          },
+          {
+            "name": "Keep the GIS library before building Civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:00:53Z",
+            "completed_at": "2026-11-02T21:00:53Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Run cargo build --release --locked -p open-infra-civiel",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:00:53Z",
+            "completed_at": "2026-11-02T21:01:48Z",
+            "seconds": 55.0
+          },
+          {
+            "name": "Record source, toolchain and library hashes",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:48Z",
+            "completed_at": "2026-11-02T21:01:48Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Run actions/upload-artifact@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:48Z",
+            "completed_at": "2026-11-02T21:01:49Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Post Run Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:49Z",
+            "completed_at": "2026-11-02T21:01:50Z",
+            "seconds": 1.0
+          },
+          {
+            "name": "Post Run actions/checkout@v4",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:50Z",
+            "completed_at": "2026-11-02T21:01:50Z",
+            "seconds": 0.0
+          },
+          {
+            "name": "Complete job",
+            "conclusion": "success",
+            "started_at": "2026-11-02T21:01:50Z",
+            "completed_at": "2026-11-02T21:01:51Z",
+            "seconds": 1.0
+          }
+        ],
+        "cache_empty": false,
+        "cache_restored": true,
+        "compilation_log_summary": {
+          "compilations": 4,
+          "workspace": [
+            "open-infra",
+            "open-infra",
+            "open-infra",
+            "open-infra-civiel"
+          ],
+          "sdk": [],
+          "raw_job_log_sha256": "5361f02b1eaf74f71508113e8bb96f1f0e442f0d4de6db3d25fc140603791811"
+        }
+      }
+    }
+  },
+  "guard_mutations": [
+    {
+      "workflow": ".github/workflows/release.yml",
+      "mutation": "uitgeschakelde stap",
+      "exit": 1
+    },
+    {
+      "workflow": ".github/workflows/release.yml",
+      "mutation": "geen gecompileerde dependencies",
+      "exit": 1
+    },
+    {
+      "workflow": ".github/workflows/release.yml",
+      "restored_sha256": "4408daab3da91a4d01218975f0b68365619a39eb7564fdeeec833bb59eda5956"
+    },
+    {
+      "workflow": ".github/workflows/native-cache.yml",
+      "mutation": "uitgeschakelde stap",
+      "exit": 1
+    },
+    {
+      "workflow": ".github/workflows/native-cache.yml",
+      "mutation": "geen gecompileerde dependencies",
+      "exit": 1
+    },
+    {
+      "workflow": ".github/workflows/native-cache.yml",
+      "restored_sha256": "519f1e0a04163abe93c727fe59507e252b12947c4147f85cf1e673ac5e193154"
+    }
+  ]
+}
