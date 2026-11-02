@@ -1,0 +1,71 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ids xmlns="http://standards.buildingsmart.org/IDS" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://standards.buildingsmart.org/IDS http://standards.buildingsmart.org/IDS/1.0/ids.xsd">
+  <info>
+    <title>Open Infra IFC 4.3 exportcontract</title>
+    <description>Eigen informatie-eisen; geen buildingSMART-certificering.</description>
+  </info>
+  <specifications>
+    <specification name="Project" ifcVersion="IFC4X3_ADD2">
+      <applicability minOccurs="1" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <simpleValue>IFCPROJECT</simpleValue>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <attribute cardinality="required">
+          <name>
+            <simpleValue>Name</simpleValue>
+          </name>
+        </attribute>
+      </requirements>
+    </specification>
+    <specification name="NLCS-laag per geëxporteerd object" ifcVersion="IFC4X3_ADD2">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <entity>
+          <name>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="IFCANNOTATION" />
+              <xs:enumeration value="IFCALIGNMENT" />
+              <xs:enumeration value="IFCBUILDING" />
+              <xs:enumeration value="IFCPAVEMENT" />
+              <xs:enumeration value="IFCPIPESEGMENT" />
+              <xs:enumeration value="IFCCABLESEGMENT" />
+              <xs:enumeration value="IFCBUILDINGELEMENTPROXY" />
+              <xs:enumeration value="IFCGEOGRAPHICELEMENT" />
+              <xs:enumeration value="IFCCIVILELEMENT" />
+              <xs:enumeration value="IFCKERB" />
+              <xs:enumeration value="IFCSURFACEFEATURE" />
+              <xs:enumeration value="IFCEARTHWORKSCUT" />
+              <xs:enumeration value="IFCGEOTECHNICALSTRATUM" />
+              <xs:enumeration value="IFCCABLECARRIERSEGMENT" />
+              <xs:enumeration value="IFCCABLEFITTING" />
+              <xs:enumeration value="IFCPIPEFITTING" />
+              <xs:enumeration value="IFCDISTRIBUTIONCHAMBERELEMENT" />
+              <xs:enumeration value="IFCEARTHWORKSFILL" />
+              <xs:enumeration value="IFCRAILING" />
+              <xs:enumeration value="IFCWALL" />
+              <xs:enumeration value="IFCSIGN" />
+            </xs:restriction>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <attribute cardinality="required">
+          <name>
+            <simpleValue>Name</simpleValue>
+          </name>
+        </attribute>
+        <property dataType="IFCLABEL" cardinality="required">
+          <propertySet>
+            <simpleValue>OpenInfra_NLCS</simpleValue>
+          </propertySet>
+          <baseName>
+            <simpleValue>Laag</simpleValue>
+          </baseName>
+        </property>
+      </requirements>
+    </specification>
+  </specifications>
+</ids>
