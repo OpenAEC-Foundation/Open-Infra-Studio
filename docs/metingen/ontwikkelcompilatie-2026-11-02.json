@@ -1,0 +1,223 @@
+{
+  "baseline": {
+    "label": "baseline-repeat",
+    "head": "ca6272623a35b6caf404d7bfcc4e014256df08b3",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--offline",
+      "-p",
+      "open-infra",
+      "--timings"
+    ],
+    "env": {
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_TARGET_DIR": "/tmp/ois-compile-evidence/baseline-repeat/target"
+    },
+    "machine": "Linux aia09-MP50 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64 x86_64 x86_64 GNU/Linux",
+    "manifest_sha256": "56e8af92a256322f27e283210ead3fed16323e17914c6c8faa5931702bc8dc77",
+    "lock_sha256": "1ef21ba025c176380573e65be944ad1277bf4fcda4068888075ff9198a669ffe",
+    "source_tree": "ac0afe30c3e213d6a1a03a8e6e9cbcbc7ef49b2a",
+    "started_at": "2026-11-02T20:30:52+0100",
+    "samples": [
+      {
+        "name": "clean",
+        "wall_s": 374.4,
+        "exit": 0,
+        "load_start": [
+          1.7734375,
+          2.919921875,
+          3.28271484375
+        ],
+        "load_end": [
+          4.1044921875,
+          3.8544921875,
+          3.59765625
+        ],
+        "time": "elapsed_s=374.40\nuser_s=620.81\nsystem_s=86.33\nmax_rss_kib=2634568\nexit=0\n"
+      },
+      {
+        "name": "noop",
+        "wall_s": 2.83,
+        "exit": 0,
+        "load_start": [
+          4.1044921875,
+          3.8544921875,
+          3.59765625
+        ],
+        "load_end": [
+          3.85546875,
+          3.806640625,
+          3.58349609375
+        ],
+        "time": "elapsed_s=2.83\nuser_s=0.22\nsystem_s=0.29\nmax_rss_kib=91392\nexit=0\n"
+      },
+      {
+        "name": "incremental-1",
+        "wall_s": 5.35,
+        "exit": 0,
+        "load_start": [
+          3.85546875,
+          3.806640625,
+          3.58349609375
+        ],
+        "load_end": [
+          3.62646484375,
+          3.759765625,
+          3.5693359375
+        ],
+        "time": "elapsed_s=5.35\nuser_s=7.02\nsystem_s=3.55\nmax_rss_kib=2169816\nexit=0\n"
+      },
+      {
+        "name": "incremental-2",
+        "wall_s": 7.17,
+        "exit": 0,
+        "load_start": [
+          3.62646484375,
+          3.759765625,
+          3.5693359375
+        ],
+        "load_end": [
+          3.49609375,
+          3.73046875,
+          3.560546875
+        ],
+        "time": "elapsed_s=7.17\nuser_s=7.19\nsystem_s=3.21\nmax_rss_kib=2169624\nexit=0\n"
+      },
+      {
+        "name": "incremental-3",
+        "wall_s": 6.41,
+        "exit": 0,
+        "load_start": [
+          3.49609375,
+          3.73046875,
+          3.560546875
+        ],
+        "load_end": [
+          3.265625,
+          3.67333984375,
+          3.54296875
+        ],
+        "time": "elapsed_s=6.41\nuser_s=7.11\nsystem_s=3.12\nmax_rss_kib=2169528\nexit=0\n"
+      }
+    ],
+    "source_sha256": "8c246c67ded0ef662c48ed82f396fc05f5241b8f25acc73598dd5af4d8eb3bfd",
+    "source_restored": true,
+    "target_kib": 3966204,
+    "clean_library_bytes": 503980552,
+    "incremental_median_s": 6.41
+  },
+  "line_tables": {
+    "label": "line-tables-repeat",
+    "head": "ca6272623a35b6caf404d7bfcc4e014256df08b3",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--offline",
+      "-p",
+      "open-infra",
+      "--timings"
+    ],
+    "env": {
+      "CARGO_PROFILE_DEV_DEBUG": "line-tables-only",
+      "CARGO_BUILD_JOBS": "2",
+      "CARGO_TARGET_DIR": "/tmp/ois-compile-evidence/line-tables-repeat/target"
+    },
+    "machine": "Linux aia09-MP50 7.0.0-38-generic #38~24.04.4-Ubuntu SMP PREEMPT_DYNAMIC Mon Sep 14 16:37:11 UTC 2 x86_64 x86_64 x86_64 GNU/Linux",
+    "manifest_sha256": "56e8af92a256322f27e283210ead3fed16323e17914c6c8faa5931702bc8dc77",
+    "lock_sha256": "1ef21ba025c176380573e65be944ad1277bf4fcda4068888075ff9198a669ffe",
+    "source_tree": "ac0afe30c3e213d6a1a03a8e6e9cbcbc7ef49b2a",
+    "started_at": "2026-11-02T20:38:35+0100",
+    "samples": [
+      {
+        "name": "clean",
+        "wall_s": 282.76,
+        "exit": 0,
+        "load_start": [
+          1.27490234375,
+          3.0,
+          3.31640625
+        ],
+        "load_end": [
+          2.1923828125,
+          2.73974609375,
+          3.12353515625
+        ],
+        "time": "elapsed_s=282.76\nuser_s=464.87\nsystem_s=69.55\nmax_rss_kib=2499480\nexit=0\n"
+      },
+      {
+        "name": "noop",
+        "wall_s": 1.91,
+        "exit": 0,
+        "load_start": [
+          2.1923828125,
+          2.73974609375,
+          3.12353515625
+        ],
+        "load_end": [
+          2.1767578125,
+          2.72705078125,
+          3.1171875
+        ],
+        "time": "elapsed_s=1.91\nuser_s=0.31\nsystem_s=0.27\nmax_rss_kib=91892\nexit=0\n"
+      },
+      {
+        "name": "incremental-1",
+        "wall_s": 4.23,
+        "exit": 0,
+        "load_start": [
+          2.1767578125,
+          2.72705078125,
+          3.1171875
+        ],
+        "load_end": [
+          2.08251953125,
+          2.6982421875,
+          3.10546875
+        ],
+        "time": "elapsed_s=4.23\nuser_s=4.38\nsystem_s=1.88\nmax_rss_kib=1112004\nexit=0\n"
+      },
+      {
+        "name": "incremental-2",
+        "wall_s": 4.98,
+        "exit": 0,
+        "load_start": [
+          2.08251953125,
+          2.6982421875,
+          3.10546875
+        ],
+        "load_end": [
+          2.236328125,
+          2.72021484375,
+          3.1103515625
+        ],
+        "time": "elapsed_s=4.98\nuser_s=4.85\nsystem_s=1.92\nmax_rss_kib=1109028\nexit=0\n"
+      },
+      {
+        "name": "incremental-3",
+        "wall_s": 4.31,
+        "exit": 0,
+        "load_start": [
+          2.236328125,
+          2.72021484375,
+          3.1103515625
+        ],
+        "load_end": [
+          2.13720703125,
+          2.69140625,
+          3.0986328125
+        ],
+        "time": "elapsed_s=4.31\nuser_s=4.47\nsystem_s=1.91\nmax_rss_kib=1110960\nexit=0\n"
+      }
+    ],
+    "source_sha256": "8c246c67ded0ef662c48ed82f396fc05f5241b8f25acc73598dd5af4d8eb3bfd",
+    "source_restored": true,
+    "target_kib": 2688508,
+    "clean_library_bytes": 190887256,
+    "incremental_median_s": 4.31
+  }
+}
