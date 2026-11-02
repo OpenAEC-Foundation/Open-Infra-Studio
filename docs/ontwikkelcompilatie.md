@@ -100,8 +100,9 @@ De CI voert nu `cargo test --lib --tests --locked -p open-infra` uit zodat het
 gewijzigde ontwikkelprofiel voor alle offline Rust-testtargets wordt gevalideerd,
 inclusief eerder niet geselecteerde integratietests. Genegeerde netwerktests
 blijven genegeerd. IFC-validatie en de afzonderlijke Civiel-check blijven staan.
-De definitieve groene CI-run moet nog op deze wijziging volgen; de lokale
-volledige Rust-testsuite is niet uitgevoerd.
+De CI-uitslag op de uiteindelijke PR-head is het bewijs voor de volledige
+Rust-testsuite; de lokale volledige Rust-testsuite is niet uitgevoerd. De PR
+vermeldt de concrete run, head en uitslag naast deze lokale compilatiemetingen.
 
 ## Niet gewijzigd
 
