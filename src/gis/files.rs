@@ -606,6 +606,58 @@ pub fn csv(text: &str) -> Result<FileData, String> {
 mod tests {
     use super::*;
 
+    const GML: &str = include_str!("../../tests/fixtures/gml/features.gml");
+
+    #[test]
+    fn gml_fixture_inherits_dimensions_and_preserves_crs_and_ids() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/gml/features.gml");
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.crs.as_deref(), Some("EPSG:2056"));
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].props["gml_id"], "line-1");
+        assert_eq!(data.features[0].lines[0].0, vec![[2600000.0, 1200000.0], [2600010.0, 1200020.0]]);
+        assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+    }
+
+    #[test]
+    fn gml_rejects_invalid_or_incomplete_coordinate_tuples() {
+        for (from, to) in [
+            ("2600000 1200000 5 2600010 1200020 6", "2600000 bad 1200000 5 2600010 1200020 6"),
+            ("2600000 1200000 5 2600010 1200020 6", "2600000 1200000 5 2600010 1200020"),
+            ("2600000 1200000 5 2600010 1200020 6", ""),
+            ("2600005 1200005", "2600005 bad 1200005"),
+            ("2600005 1200005", "2600005"),
+            ("2600005 1200005", "NaN 1200005"),
+            ("2600005 1200005", "inf 1200005"),
+            ("srsDimension=\"3\"", "srsDimension=\"0\""),
+            ("srsDimension=\"3\"", "srsDimension=\"bad\""),
+        ] {
+            let bad = GML.replace(from, to);
+            assert_ne!(bad, GML);
+            assert!(gml(&bad).unwrap_err().starts_with("GML:"), "{from} -> {to}");
+        }
+    }
+
+    #[test]
+    fn gml2_coordinates_reject_invalid_numbers_without_shifting_tuples() {
+        let text = GML.replace("<gml:pos>2600005 1200005</gml:pos>", "<gml:coordinates>2600005,1200005,7</gml:coordinates>");
+        assert_eq!(gml(&text).unwrap().features[1].points[0], [2600005.0, 1200005.0]);
+        for tuple in ["2600005,bad,1200005", "2600005,NaN,7", "2600005,1200005,inf", "2600005"] {
+            assert!(gml(&text.replace("2600005,1200005,7", tuple)).is_err(), "{tuple}");
+        }
+    }
+
+    #[test]
+    fn gml_handles_empty_missing_optional_fields_large_numbers_and_broken_xml() {
+        let empty = r#"<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml"/>"#;
+        assert!(gml(empty).unwrap().features.is_empty());
+        let huge = gml(&GML.replace("2600005 1200005", "1e100 -1e100")).unwrap();
+        assert_eq!(huge.features[1].points[0], [1e100, -1e100]);
+        for text in ["", "<", &GML[..GML.len() / 2]] {
+            assert!(gml(text).is_err());
+        }
+    }
+
     #[test]
     fn wkt_codes() {
         assert_eq!(epsg_from_wkt(r#"PROJCS["Amersfoort / RD New",GEOGCS["Amersfoort",AUTHORITY["EPSG","4289"]],AUTHORITY["EPSG","28992"]]"#).as_deref(), Some("EPSG:28992"));
