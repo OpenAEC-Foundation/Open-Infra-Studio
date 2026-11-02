@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<WMS_Capabilities xmlns="http://www.opengis.net/wms" version="1.3.0">
+  <Capability><Layer><Title>Proef</Title><Layer><Name>sample</Name><Title>Proeflaag</Title></Layer></Layer></Capability>
+</WMS_Capabilities>
