@@ -128,15 +128,15 @@ fn numbers(text: &str) -> Vec<f64> {
 
 /// The dimension of coordinates at `n`: its own or an ancestor's srsDimension.
 fn dimension(n: Node, fallback: usize) -> usize {
-    n.ancestors().find_map(|a| a.attribute("srsDimension").and_then(|v| v.parse().ok())).unwrap_or(fallback)
+    n.ancestors().find_map(|a| a.attribute("srsDimension").and_then(|v| v.trim().parse().ok())).unwrap_or(fallback)
 }
 
 /// The points of one ring element (posList, a series of pos, or coordinates).
 fn ring(r: Node, fallback_dim: usize) -> Vec<[f64; 3]> {
     if let Some(pl) = r.descendants().find(|d| local(d) == "posList") {
         let v = numbers(pl.text().unwrap_or(""));
-        let dim = dimension(pl, fallback_dim).clamp(2, 3);
-        return v.chunks_exact(dim).map(|c| [c[0], c[1], if dim == 3 { c[2] } else { f64::NAN }]).collect();
+        let dim = dimension(pl, fallback_dim);
+        return v.chunks_exact(dim).map(|c| [c[0], c[1], if dim >= 3 { c[2] } else { f64::NAN }]).collect();
     }
     let pos: Vec<Node> = r.descendants().filter(|d| local(d) == "pos").collect();
     if !pos.is_empty() {
@@ -338,7 +338,7 @@ fn validate_coordinates(root: Node, fallback_dim: usize) -> Result<(), String> {
     };
     for n in root.descendants().filter(|n| n.is_element()) {
         if let Some(dim) = n.attribute("srsDimension") {
-            if !matches!(dim.parse::<usize>(), Ok(2 | 3)) { return Err(format!("CityGML: ongeldige srsDimension '{dim}'")); }
+            if !dim.trim().parse::<usize>().is_ok_and(|d| d >= 2) { return Err(format!("CityGML: srsDimension '{dim}' kan niet naar XYZ worden gelezen")); }
         }
         match local(&n) {
             "posList" => {
@@ -349,12 +349,14 @@ fn validate_coordinates(root: Node, fallback_dim: usize) -> Result<(), String> {
             "pos" => {
                 let values = numbers(n.text().unwrap_or(""))?;
                 let dim = n.ancestors().find_map(|a| a.attribute("srsDimension"));
-                if !(2..=3).contains(&values.len()) || dim.is_some_and(|d| d.parse::<usize>().ok() != Some(values.len())) { return Err("CityGML: onvolledige pos-coördinaat".into()); }
+                if values.len() < 2 || dim.is_some_and(|d| d.trim().parse::<usize>().ok() != Some(values.len())) { return Err("CityGML: onvolledige pos-coördinaat".into()); }
             }
             "coordinates" => {
+                let mut dim = None;
                 for tuple in n.text().unwrap_or("").split_whitespace() {
                     let values = numbers(&tuple.replace(',', " "))?;
-                    if !(2..=3).contains(&values.len()) || tuple.split(',').any(str::is_empty) { return Err("CityGML: onvolledige coordinates-tuple".into()); }
+                    let expected = *dim.get_or_insert(dimension(n, values.len()));
+                    if expected < 2 || values.len() != expected || tuple.split(',').any(str::is_empty) { return Err("CityGML: onvolledige coordinates-tuple".into()); }
                 }
             }
             _ => {}
@@ -368,15 +370,16 @@ fn validate_coordinates(root: Node, fallback_dim: usize) -> Result<(), String> {
 /// (e.g. only those in the project area).
 pub fn parse_with(xml: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn Fn(String)) -> Result<CityModel, String> {
     let mut model = CityModel { crs: crs_of(xml), ..Default::default() };
-    let fallback_dim = match first_attribute(xml, "srsDimension") {
-        Some(v) => match v.parse::<usize>() {
-            Ok(d @ (2 | 3)) => d,
-            _ => return Err(format!("CityGML: ongeldige srsDimension '{v}'")),
-        },
-        None => 3,
-    };
     // The namespace declarations of the root element, for every member.
     let (list, attrs) = members(xml)?;
+    // Only global attributes/bounds supply a fallback. A local dimension on
+    // one city object must not change how its neighbours are interpreted.
+    let global_end = list.first().map(|(s, _)| *s).unwrap_or(xml.len());
+    let fallback_dim = match first_attribute(&xml[..global_end], "srsDimension") {
+        Some(v) => v.trim().parse::<usize>().ok().filter(|d| *d >= 2)
+            .ok_or_else(|| format!("CityGML: globale srsDimension '{v}' kan niet naar XYZ worden gelezen"))?,
+        None => 3,
+    };
     let mut seen = 0usize;
     for (k, (s, e)) in list.iter().enumerate() {
         if k % 2000 == 0 && k > 0 {
@@ -384,10 +387,17 @@ pub fn parse_with(xml: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn 
         }
         let chunk = format!("<wrap {attrs}>{}</wrap>", &xml[*s..*e]);
         let opts = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
-        let doc = Document::parse_with_options(&chunk, opts).map_err(|e| format!("CityGML: object {}: ongeldige XML: {e}", k + 1))?;
-        validate_coordinates(doc.root_element(), fallback_dim)?;
+        let doc = match Document::parse_with_options(&chunk, opts) {
+            Ok(doc) => doc,
+            Err(error) => { model.warnings.push(format!("CityGML: member {} overgeslagen: onleesbare XML: {error}", k + 1)); continue; }
+        };
         for member in doc.root_element().children().filter(|c| c.is_element()) {
             for o in member.children().filter(|c| c.is_element()) {
+                if let Err(error) = validate_coordinates(o, fallback_dim) {
+                    let id = o.attributes().find(|a| a.name() == "id").map(|a| a.value()).unwrap_or("zonder id");
+                    model.warnings.push(format!("CityGML: object {id} overgeslagen: {error}"));
+                    continue;
+                }
                 if let Some(obj) = object(o, fallback_dim) {
                     seen += 1;
                     if keep(&obj) {
@@ -399,7 +409,7 @@ pub fn parse_with(xml: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn 
     }
     model.seen = seen;
     if seen == 0 {
-        return Err("CityGML: geen stadsobjecten met geometrie gevonden".into());
+        return Err(model.report("CityGML: geen stadsobjecten met geometrie gevonden".into()));
     }
     Ok(model)
 }
@@ -440,6 +450,8 @@ mod tests {
         let data = parse(&text).unwrap();
         assert_eq!((data.seen, data.objects.len()), (1, 1));
         assert_eq!(data.objects[0].id, "synthetic-building");
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.report("CityGML gelezen".into()).contains("broken-building overgeslagen"));
     }
 
     #[test]
@@ -447,7 +459,9 @@ mod tests {
         let doc = Document::parse(BUILDING).unwrap();
         let list = doc.descendants().find(|n| n.is_element() && local(n) == "posList").unwrap();
         let values = numbers(list.text().unwrap()).chunks_exact(3).map(|p| format!("{} {} {} 42", p[0], p[1], p[2])).collect::<Vec<_>>().join(" ");
-        let text = BUILDING.replace("srsDimension=\"3\"", "srsDimension=\"4\"").replace(list.text().unwrap(), &values);
+        let text = BUILDING.replace("srsDimension=\"3\"", "srsDimension=\"4\"").replace(list.text().unwrap(), &values)
+            .replace("<gml:lowerCorner>2600000 1200000 0</gml:lowerCorner>", "<gml:lowerCorner>2600000 1200000 0 42</gml:lowerCorner>")
+            .replace("<gml:upperCorner>2600010 1200010 5</gml:upperCorner>", "<gml:upperCorner>2600010 1200010 5 42</gml:upperCorner>");
         let data = parse(&text).unwrap();
         assert_eq!(data.objects[0].surfaces[0].1[0][2], [2600010.0, 1200010.0, 5.0]);
     }
