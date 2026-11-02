@@ -575,7 +575,7 @@ mod tests {
     #[test]
     fn citygml_whitespace_and_irrelevant_dimension_metadata_keep_the_roof() {
         let expected = parse(BUILDING).unwrap();
-        for dimension in [" 3 ", "unknown", "bad"] {
+        for dimension in [" 3 ", "unknown", "bad", "0"] {
             let model = parse(&BUILDING.replace("srsDimension=\"3\"", &format!("srsDimension=\"{dimension}\""))).unwrap();
             assert_eq!(model.objects[0].surfaces, expected.objects[0].surfaces);
         }
@@ -682,9 +682,12 @@ mod tests {
             ("2600010 1200010 5", "2600010 1200010"),
             ("2600010 1200010 5", "2600010 NaN 5"),
             ("2600010 1200010 5", "2600010 inf 5"),
-            ("srsDimension=\"3\"", "srsDimension=\"0\""),
         ] {
             assert!(parse(&BUILDING.replace(from, to)).is_err(), "{from} -> {to}");
+        }
+        for dimension in [0, 1] {
+            let text = BUILDING.replace("<gml:posList>", &format!("<gml:posList srsDimension=\"{dimension}\">"));
+            assert_eq!(parse(&text).unwrap_err(), "CityGML: geen stadsobjecten met geometrie gevonden");
         }
         let huge = parse(&BUILDING.replace("2600010", "1e100")).unwrap();
         assert_eq!(huge.objects[0].surfaces[0].1[0][2][0], 1e100);
