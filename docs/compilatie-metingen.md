@@ -22,7 +22,8 @@ releaseprofiel, plug-incontract of productcode.
 - Noteer naast de verstreken tijd ook de exitcode, maximale proces-RSS en
   doelmapgrootte. Een afgebroken of mislukte build telt niet als versnelling.
 
-De lokale nulmeting volgt zodra de al actieve Rust-build op aia klaar is.
+De lokale nulmeting wordt afzonderlijk uitgevoerd; de cachewijziging hieronder
+verandert de lokale compilerinstellingen niet.
 
 ## Bestaande CI
 
@@ -40,6 +41,45 @@ maar zonder de wachtrij vóór de job. De testjobs hebben geen Cargo-cache.
 | [40974256968](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/actions/runs/40974256968), oudere release `5786534` | Linux | 413 s |
 | dezelfde run | Windows | 643 s |
 | dezelfde run | macOS | 720 s |
+
+## Cache in de testworkflow
+
+De cache staat na de toolchainkeuze en vóór de Cargo-stappen, vastgepind op
+`Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0` (v2).
+`shared-key: test` laat de offline en geplande online job dezelfde dependencies
+hergebruiken. Rustc, manifesten, lockfile en compileromgeving bepalen de sleutel.
+Workspacecrates, incrementele compilerdata en testuitvoer worden niet bewaard.
+De actie zet voor CI `CARGO_INCREMENTAL=0`, omdat incrementele data niet worden
+gecachet. Lokaal verandert niets.
+
+| Run / poging | Commit | Offline job | Unittests incl. compilatie | Civiel-check |
+| --- | --- | ---: | ---: | ---: |
+| [41506907478](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/actions/runs/41506907478), zonder cache | `3c6a2f0` | 259 s | 145 s | 60 s |
+| [41507494134/attempts/1](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/actions/runs/41507494134/attempts/1), cache nog leeg | `6dafdd6` | 364 s | 202 s | 87 s |
+| [41507494134/attempts/2](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/actions/runs/41507494134/attempts/2), cache gevuld | dezelfde commit | 87 s | 15 s | 5 s |
+
+Alle drie runs zijn geslaagd op Ubuntu 22.04 met Rust 1.99.1. De warme run kostte
+24 s voor het herstellen van de cache; de koude run 18 s voor het opslaan. Het
+gecomprimeerde cachebestand was 1.215.661.658 bytes. De totale warme job was
+66% korter dan de recentere nulmeting van 259 s. De runnerprestaties variëren:
+de eerdere main-nulmeting was 345 s. Dit zijn waargenomen jobtijden, geen garantie
+voor iedere runner of wijziging. Een eerste run en gewijzigde dependencies
+blijven compilatiewerk vragen. Cacheopslag uit een PR is bovendien beperkt tot
+de PR-ref; main krijgt zijn cache pas na integratie en een geslaagde run.
+
+De nieuwe controle is zonder extra Python-dependencies uitvoerbaar:
+
+```sh
+python3 -m unittest discover -s tests -p test_ci_cache.py -v
+actionlint .github/workflows/test.yml
+```
+
+Vóór de wijziging: exit 1, voor beide jobs ontbreekt de cache. Na de wijziging:
+exit 0. Ook een tijdelijke proef met de cache ná de eerste compilatie wordt
+afgewezen. Alle zes Python-tests slagen. De Rust-unittests, locatietests,
+planningtests, IFC-validatie en Civiel-check slagen in beide cacheruns. De
+geplande online job is niet handmatig gestart; daarvoor is geen versnelling
+gemeten. De releaseworkflow is niet aangepast.
 
 De online job bevat aanvragen aan openbare diensten; zijn totale duur is geen
 zuivere compilatiemeting. De releasejobs zijn historische meetgegevens. Voor dit
