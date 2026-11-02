@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<Capabilities xmlns="http://www.opengis.net/wmts/1.0" xmlns:ows="http://www.opengis.net/ows/1.1" version="1.0.0">
+  <Contents><Layer><ows:Identifier>sample</ows:Identifier></Layer></Contents>
+</Capabilities>

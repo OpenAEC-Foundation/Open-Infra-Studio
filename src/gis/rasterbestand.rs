@@ -112,7 +112,7 @@ pub fn read_asc(text: &str) -> Result<Grid, String> {
     while let Some(l) = lines.peek() {
         let mut parts = l.split_whitespace();
         match (parts.next(), parts.next()) {
-            (Some(k), Some(v)) if k.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) => {
+            (Some(k), Some(v)) if matches!(k.to_ascii_lowercase().as_str(), "ncols" | "nrows" | "xllcorner" | "yllcorner" | "xllcenter" | "yllcenter" | "cellsize" | "nodata_value") => {
                 head.insert(k.to_ascii_lowercase(), v.parse::<f64>().map_err(|_| format!("ASC: kopregel '{l}'"))?);
                 lines.next();
             }
@@ -120,19 +120,44 @@ pub fn read_asc(text: &str) -> Result<Grid, String> {
         }
     }
     let get = |k: &str| head.get(k).copied().ok_or_else(|| format!("ASC: '{k}' ontbreekt"));
-    let (w, h, cell) = (get("ncols")? as usize, get("nrows")? as usize, get("cellsize")?);
+    let dimension = |key: &str| -> Result<usize, String> {
+        let value = get(key)?;
+        if !value.is_finite() || value <= 0.0 || value.fract() != 0.0 || value >= usize::MAX as f64 {
+            return Err(format!("ASC: '{key}' moet een positief geheel getal zijn"));
+        }
+        Ok(value as usize)
+    };
+    let (w, h, cell) = (dimension("ncols")?, dimension("nrows")?, get("cellsize")?);
+    let count = w.checked_mul(h).filter(|n| *n <= isize::MAX as usize / std::mem::size_of::<f32>()).ok_or("ASC: rasterafmetingen zijn te groot")?;
+    if !cell.is_finite() || cell <= 0.0 {
+        return Err("ASC: cellsize moet positief en eindig zijn".into());
+    }
     let x0 = head.get("xllcorner").copied().or_else(|| head.get("xllcenter").map(|c| c - cell / 2.0)).ok_or("ASC: xllcorner ontbreekt")?;
     let y0 = head.get("yllcorner").copied().or_else(|| head.get("yllcenter").map(|c| c - cell / 2.0)).ok_or("ASC: yllcorner ontbreekt")?;
-    let nodata = head.get("nodata_value").copied();
-    let z: Vec<f32> = lines
-        .flat_map(|l| l.split_whitespace())
-        .map(|t| t.parse::<f64>().map(|v| if nodata == Some(v) { f32::NAN } else { v as f32 }).unwrap_or(f32::NAN))
-        .take(w * h)
-        .collect();
-    if z.len() < w * h {
-        return Err(format!("ASC: {} waarden, {} verwacht", z.len(), w * h));
+    let y1 = y0 + h as f64 * cell;
+    if ![x0, y0, x0 + w as f64 * cell, y1].iter().all(|v| v.is_finite()) {
+        return Err("ASC: niet-eindige rasterbegrenzing".into());
     }
-    Ok(Grid { x0, y1: y0 + h as f64 * cell, cell, w, h, z })
+    let nodata = head.get("nodata_value").copied();
+    // Grow with the actual input, never reserve from untrusted dimensions.
+    let mut z = Vec::new();
+    for (i, token) in lines.flat_map(|l| l.split_whitespace()).enumerate() {
+        if i >= count {
+            return Err(format!("ASC: meer dan {count} rasterwaarden"));
+        }
+        let value = token.parse::<f64>().map_err(|_| format!("ASC: ongeldige rasterwaarde {}: '{token}'", i + 1))?;
+        if nodata.is_some_and(|n| n == value || (n.is_nan() && value.is_nan())) {
+            z.push(f32::NAN);
+        } else if !value.is_finite() || !(value as f32).is_finite() {
+            return Err(format!("ASC: rasterwaarde {} is niet eindig of te groot", i + 1));
+        } else {
+            z.push(value as f32);
+        }
+    }
+    if z.len() != count {
+        return Err(format!("ASC: {} waarden, {count} verwacht", z.len()));
+    }
+    Ok(Grid { x0, y1, cell, w, h, z })
 }
 
 /// The world file beside an image: .tfw/.jgw/.pgw (first and last letter of
@@ -367,6 +392,94 @@ fn point_cloud(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Result<St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const ASC: &str = include_str!("../../tests/fixtures/asc/terrain.asc");
+
+    fn asc_error(text: &str) {
+        match read_asc(text) {
+            Err(error) => assert!(error.starts_with("ASC:"), "{error}"),
+            Ok(_) => panic!("ongeldige ASC-invoer geaccepteerd: {text}"),
+        }
+    }
+
+    #[test]
+    fn asc_fixture_preserves_heights_nodata_and_cell_centres() {
+        let grid = read_asc(ASC).unwrap();
+        assert_eq!((grid.w, grid.h, grid.x0, grid.y1, grid.cell), (3, 2, 100.0, 210.0, 5.0));
+        assert_eq!(grid.z.len(), 6);
+        assert_eq!(grid.at(0, 0), Some(1.0));
+        assert_eq!(grid.at(1, 1), None);
+        let centres = ASC.replace("xllcorner 100", "xllcenter 102.5").replace("yllcorner 200", "yllcenter 202.5");
+        let centred = read_asc(&centres).unwrap();
+        assert_eq!((centred.x0, centred.y1), (grid.x0, grid.y1));
+    }
+
+    #[test]
+    fn asc_rejects_invalid_dimensions_without_panicking() {
+        for key in ["ncols 3", "nrows 2"] {
+            for value in ["0", "-1", "0.5", "NaN", "inf", "1e300", "18446744073709551616"] {
+                asc_error(&ASC.replace(key, &format!("{} {value}", key.split_whitespace().next().unwrap())));
+            }
+        }
+    }
+
+    #[test]
+    fn asc_rejects_dimension_product_overflow_before_reading_cells() {
+        // 4294967296 × 4294967296 on the 64-bit CI runner; 65536² on 32-bit.
+        let side = 1u64 << (usize::BITS / 2);
+        let text = ASC.replace("ncols 3", &format!("ncols {side}")).replace("nrows 2", &format!("nrows {side}"));
+        let error = read_asc(&text).unwrap_err();
+        assert!(error.contains("rasterafmetingen zijn te groot"), "{error}");
+    }
+
+    #[test]
+    fn asc_rejects_dimensions_above_vector_capacity_before_reading_cells() {
+        let cells = isize::MAX as u64 / std::mem::size_of::<f32>() as u64 + 1;
+        let text = ASC.replace("ncols 3", &format!("ncols {cells}")).replace("nrows 2", "nrows 1");
+        let error = read_asc(&text).unwrap_err();
+        assert!(error.contains("rasterafmetingen zijn te groot"), "{error}");
+    }
+
+    #[test]
+    fn asc_nan_first_cell_is_data_when_nan_is_the_nodata_value() {
+        let text = include_str!("../../tests/fixtures/asc/nan-first-cell.asc");
+        let grid = read_asc(text).unwrap();
+        assert_eq!((grid.w, grid.h, grid.x0, grid.y1), (2, 2, 100.0, 202.0));
+        assert_eq!(grid.z.len(), 4);
+        assert_eq!(grid.at(0, 0), None);
+        assert_eq!(grid.at(1, 0), Some(1.0));
+        assert_eq!(grid.at(0, 1), Some(2.0));
+        assert_eq!(grid.at(1, 1), Some(3.0));
+    }
+
+    #[test]
+    fn asc_rejects_invalid_georeference_and_overflow() {
+        for cell in ["0", "-1", "NaN", "inf", "1e308"] {
+            asc_error(&ASC.replace("cellsize 5", &format!("cellsize {cell}")));
+        }
+        for key in ["xllcorner 100", "yllcorner 200"] {
+            for value in ["NaN", "inf"] {
+                asc_error(&ASC.replace(key, &format!("{} {value}", key.split_whitespace().next().unwrap())));
+            }
+        }
+    }
+
+    #[test]
+    fn asc_rejects_bad_or_extra_samples_and_float32_overflow() {
+        for row in ["4 bad 6", "4 NaN 6", "4 inf 6", "4 1e100 6", "4 -9999 6 7"] {
+            asc_error(&ASC.replace("4 -9999 6", row));
+        }
+        let large_finite = ASC.replace("4 -9999 6", "4 1e30 6");
+        assert!(read_asc(&large_finite).unwrap().at(1, 1).unwrap().is_finite());
+    }
+
+    #[test]
+    fn asc_rejects_empty_missing_and_truncated_input() {
+        asc_error("");
+        for line in ["ncols 3\n", "nrows 2\n", "cellsize 5\n", "xllcorner 100\n", "yllcorner 200\n", "4 -9999 6\n"] {
+            asc_error(&ASC.replace(line, ""));
+        }
+    }
 
     #[test]
     fn ascii_grids_and_world_files() {

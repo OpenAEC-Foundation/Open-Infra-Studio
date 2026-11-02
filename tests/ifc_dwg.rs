@@ -11,24 +11,14 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use ocs_plugin_api::host::codec::objects::{ObjectType, XRecordValue};
-use ocs_plugin_api::host::codec::{CadDocument, DwgReader};
+use ocs_plugin_api::host::codec::DwgReader;
 
-use open_infra::gis::site::{unit_factor_for_insunits, Site};
+use open_infra::gis::site::unit_factor_for_insunits;
 use open_infra::ifc;
 
-/// The site JSON Open Infra keeps in the drawing (NOD OPENINFRA/SITE).
-fn site_of(doc: &CadDocument) -> Option<Site> {
-    doc.objects.values().find_map(|o| match o {
-        ObjectType::XRecord(x) if x.name.eq_ignore_ascii_case("SITE") || x.entries.iter().any(|e| matches!(&e.value, XRecordValue::String(s) if s.contains("crs_proj4"))) => {
-            x.entries.iter().find_map(|e| match &e.value {
-                XRecordValue::String(s) if s.trim_start().starts_with('{') => serde_json::from_str(s).ok(),
-                _ => None,
-            })
-        }
-        _ => None,
-    })
-}
+#[path = "support/ifc_drawing.rs"]
+mod ifc_drawing;
+use ifc_drawing::site_of;
 
 #[test]
 #[ignore = "reads a DWG from disk; run with --ignored"]

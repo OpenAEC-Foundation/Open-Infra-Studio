@@ -24,17 +24,39 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+      # Keyed by rustc, manifests, lockfile and compiler environment. Only
+      # dependencies are cached; workspace crates and test output are rebuilt.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: test
+          cache-bin: false
       - run: cargo test --lib --locked -p open-infra
-      # The IFC 4.3 export of the sample drawing (written by the unit tests),
-      # checked by IfcOpenShell: schema, EXPRESS rules, alignment geometry.
-      - run: pip install "ifcopenshell==0.8.4.post1" pytest
-      - run: python3 tests/ifc_validate.py target/ifc-test/voorbeeld.ifc
+      # Fixed local DWGs and boundary cases use the same writer as GIS_IFC /
+      # CIV_IFC. No map service or hosted validation service is involved.
+      - run: cargo test --test ifc_examples --locked -p open-infra
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install -r tests/requirements-ifc.txt
+      - name: IFC 4.3 schema, EXPRESS, alignment geometry and IDS
+        run: python3 tests/ifc_suite.py target/ifc-test --report target/ifc-test/validatie.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ifc43-validatie-${{ github.sha }}
+          path: |
+            target/ifc-test/*.ifc
+            target/ifc-test/validatie.json
       - run: cargo test --test locaties --locked -p open-infra
       - run: cargo test --test planning --test planning_render --locked -p open-infra
       - run: python3 -m unittest discover -s tests -p 'test*.py'
       # The Civiel plugin builds on the same engine.
       - run: cargo check --locked -p open-infra-civiel
       - run: python3 -m py_compile mcp/open_infra_mcp.py
+      - name: Validate excavation regression exports
+        run: |
+          python3 tests/ifc_validate.py target/ifc-test/ontgraving-ingeklapt-terrein.ifc
+          python3 tests/ifc_validate.py target/ifc-test/ontgraving-terreinomtrek.ifc
 
   online:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -44,6 +66,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: test
+          cache-bin: false
       - run: cargo test --test locaties --locked -p open-infra -- --ignored --nocapture
       - uses: actions/upload-artifact@v4
         if: always()
