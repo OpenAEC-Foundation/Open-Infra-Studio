@@ -84,6 +84,8 @@ const I_PARCEL_INFO: IconKind = icon!("perceel-info.svg");
 const I_DROP: IconKind = icon!("waterdruppel.svg");
 const I_CATCHMENT: IconKind = icon!("stroomgebied.svg");
 const I_PONDS: IconKind = icon!("plassen.svg");
+// Exchange (stream uitwisseling).
+const I_LANDXML_EXPORT: IconKind = icon!("landxml-export.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -160,6 +162,7 @@ impl CadModule for CivielModule {
                         small("CIV_PUNT", tr("Punt plaatsen", "Place point"), I_PLACE),
                         small("CIV_PUNTEN_EXPORT", tr("Punten exporteren", "Export points"), I_EXPORT),
                         file_tool("CIV_LANDXML", "LandXML", I_LANDXML, tr("LandXML openen", "Open LandXML"), "LandXML", &["xml", "landxml"], false),
+                        small("CIV_LANDXML_EXPORT", tr("LandXML export", "LandXML export"), I_LANDXML_EXPORT),
                     ],
                 },
                 // Surfaces.
@@ -1398,6 +1401,15 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             }
             job(host, open_infra::lang::tr("3D-mesh", "3D mesh"), id, move |p| civiel::mesh::create(&o, &v, p));
         }
+        // Exchange: LandXML 1.2 out (stream uitwisseling).
+        "CIV_LANDXML_EXPORT" => {
+            let o = opt(&["BESTAND", "PAD", "ALLES"])?;
+            let file = args.str("BESTAND").or(args.str("PAD")).map(str::to_string).or_else(|| args.words.iter().find(|w| !w.eq_ignore_ascii_case("ALLES") && !w.eq_ignore_ascii_case("ALL")).cloned());
+            let all = args.words.iter().any(|w| w.eq_ignore_ascii_case("ALLES") || w.eq_ignore_ascii_case("ALL"))
+                || args.str("ALLES").is_some_and(|v| !matches!(v.to_ascii_lowercase().as_str(), "nee" | "no" | "0" | "false"));
+            let path = file.map(std::path::PathBuf::from);
+            job(host, "LandXML export", id, move |p| landxml::export(&o, path, all, p));
+        }
         "CIV_SONDERINGEN3D" | "CIV_ONDERGROND3D" => {
             // LABELS= is the shared point-label setting: plan symbols too.
             let o = opt(&["BRON", "MAX", "STRAAL", "QC", "MINLAAG"])?;
@@ -1507,7 +1519,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs] [RAMEN=nee], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>, CIV_CITYGML <pad> [STIJL=], CIV_KLIC3D [<levering>] [VERGROOT=], CIV_DOORZICHT [PCT=70] [ALLES] [UIT], CIV_SONDERINGEN3D [BRON=sonderingen|boringen|alles] [MAX=100] [STRAAL=0.4] [MINLAAG=0.2] [QC=nee] [LABELS=nee] (BRO: kolommen met grondsoorten); \
              CIV_CORRIDOR AS= [PROFIELTYPE=<naam>|<pad.json>] [NIVEAU=|BOVEN=] [VAN=] [TOT=] [DOELEN=naam:handle;…] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y] [KLEUR=nlcs]; \
              CIV_PROFIELTYPEN, CIV_PROFIELTYPE NAAM= [KOPIE=] [PLAATS=x,y]; CIV_KRUISPUNT HOOFD= ZIJ= [R=8;…] [PROFIELTYPE=] [NIVEAU=]; \
-             CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_INFO; \
+             CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_LANDXML_EXPORT [BESTAND=<pad>] [ALLES]; CIV_INFO; \
              codes: CIV_PUNTEN_IMPORT <pad> CODES=JA [CODETABEL=], CIV_CODES_TOEPASSEN [CODETABEL=]; percelen: CIV_PERCELEN KAVEL= [STRAAT=|RICHTING=graden] N=|OPP=|FRONT= [REST=laatste|apart|verdelen] [PREFIX=P] [START=1], CIV_PERCEEL_INFO [PERCEEL=h;h] [STRAAT=]; \
              water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=].",
             );

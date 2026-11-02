@@ -12,6 +12,8 @@
 //! IfcPresentationLayerAssignment, colours as styles.
 
 pub mod alignment;
+// A corridor's surface as road parts and earthworks (stream uitwisseling).
+pub mod corridor;
 pub mod step;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -1093,11 +1095,13 @@ impl<'a, W: Write> Exporter<'a, W> {
 
         // Axes, each with its design profile.
         let mut alignments = Vec::new();
+        let mut alignment_ids: HashMap<String, Id> = HashMap::new();
         for (e, data) in &axes {
             let Some(al) = Alignment::from_entity(e) else { continue };
             let pvis = if al.name.is_empty() { None } else { crate::civiel::corridor::profile_of(doc, &al.name) };
             if let Some(id) = self.alignment(e, &al, data, pvis.as_deref())? {
                 alignments.push(id);
+                alignment_ids.insert(al.name.clone(), id);
             }
         }
         report.alignments = alignments.len();
@@ -1143,7 +1147,41 @@ impl<'a, W: Write> Exporter<'a, W> {
         let mut buildings: Vec<Id> = Vec::new();
         let mut strata: BTreeMap<String, (Vec<Id>, String)> = BTreeMap::new();
         let mut roads: BTreeMap<String, Vec<Id>> = BTreeMap::new();
+        // A corridor's design surface split into road parts and earthworks.
+        // Feature lines that run through a corridor's design surface belong
+        // to its road (the corridor gives only its axis line object data).
+        let mut joins: Vec<(usize, String)> = Vec::new();
+        for (gi, g) in groups.iter().enumerate() {
+            if g.road.is_some() || g.handles.len() != 1 {
+                continue;
+            }
+            let Some(EntityType::Polyline3D(p)) = doc.get_entity(g.handles[0]) else { continue };
+            let Some(v) = p.vertices.first() else { continue };
+            let q = fr.p(v.position.x, v.position.y, v.position.z);
+            let key = ((q[0] * 1000.0).round() as i64, (q[1] * 1000.0).round() as i64, (q[2] * 1000.0).round() as i64);
+            let on = groups.iter().find(|s| s.class.role == Role::Terrain && s.road.is_some() && s.merged.as_ref().is_some_and(|m| m.index.contains_key(&key)));
+            if let Some(r) = on.and_then(|s| s.road.clone()) {
+                joins.push((gi, r));
+            }
+        }
+        for (gi, r) in joins {
+            groups[gi].road = Some(r);
+        }
+        // The cut voids the existing ground: only with a ground surface in the file.
+        let ground_tin = groups
+            .iter()
+            .any(|g| g.class.role == Role::Terrain && g.class.predefined == Some("TERRAIN") && g.road.is_none())
+            .then(|| crate::civiel::terrein::Tin::of_status(doc, 'B'))
+            .flatten();
+        let mut road_parts: BTreeMap<String, RoadParts> = BTreeMap::new();
         for (gi, gr) in groups.iter_mut().enumerate() {
+            if let (Role::Terrain, Some(road), Some(m)) = (gr.class.role, gr.road.clone(), gr.merged.as_ref()) {
+                if let Some(rp) = self.corridor_parts(gr, m, ground_tin.as_ref(), report)? {
+                    cuts.extend(rp.cut);
+                    road_parts.insert(road, rp);
+                    continue;
+                }
+            }
             if let Some(m) = gr.merged.take() {
                 if m.tris.is_empty() {
                     continue;
@@ -1225,11 +1263,21 @@ impl<'a, W: Write> Exporter<'a, W> {
             *report.classes.entry("IfcBorehole".into()).or_insert(0) += 1;
         }
         let mut facilities = buildings.clone();
-        for (name, members) in &roads {
+        let mut names: Vec<&String> = roads.keys().chain(road_parts.keys()).collect();
+        names.sort();
+        names.dedup();
+        for name in names {
             let g = self.guid(&format!("road:{name}"));
             let road = self.step.add("IFCROAD", &format!("{g},$,{},$,$,{},$,$,.ELEMENT.,$", text(name), self.c.placement))?;
-            let g = self.guid(&format!("rel:road:{name}"));
-            self.contain(&g, members, road)?;
+            let mut members = roads.get(name).cloned().unwrap_or_default();
+            if let Some(rp) = road_parts.get(name) {
+                members.extend(&rp.members);
+                self.road_parts(name, road, rp, &alignment_ids, report)?;
+            }
+            if !members.is_empty() {
+                let g = self.guid(&format!("rel:road:{name}"));
+                self.contain(&g, &members, road)?;
+            }
             facilities.push(road);
             *report.classes.entry("IfcRoad".into()).or_insert(0) += 1;
         }
@@ -1301,6 +1349,8 @@ impl<'a, W: Write> Exporter<'a, W> {
                 HSeg { start: p, dir: d, radius: 0.0, length: 0.0 }
             });
             let place = self.placement2(s.start, s.dir)?;
+            // CLOTHOID (Seg::Spiral): parent IFCCLOTHOID(identity2, A) with
+            // SegmentStart from `alignment::clothoid`; see `alignment::horizontal`.
             let (parent, length) = if s.is_line() {
                 (self.c.line2, s.length)
             } else {
@@ -1407,6 +1457,183 @@ impl<'a, W: Write> Exporter<'a, W> {
         self.psets(&key, alignment, &layer, ln.as_ref(), data)?;
         self.layer_items.entry(layer).or_default().push(composite);
         Ok(Some(alignment))
+    }
+}
+
+// ── Corridors: road parts and earthworks (stream uitwisseling) ───────────────
+
+/// What a corridor's design surface became.
+struct RoadParts {
+    /// Road parts: name, IfcRoadPartTypeEnum, the elements they contain.
+    parts: Vec<(String, &'static str, Vec<Id>)>,
+    /// Elements of the road itself (the fill body; for a dike everything).
+    members: Vec<Id>,
+    /// The cut body: it voids the existing ground.
+    cut: Option<Id>,
+    /// The corridor's axis, which positions the road.
+    axis: String,
+}
+
+impl<W: Write> Exporter<'_, W> {
+    /// The corridor's design surface as road parts and earthworks: each
+    /// triangle by the offset of its centre from the axis (pavement up to the
+    /// asphalt edge, then the shoulder or crest, then the slopes), and the
+    /// fill and cut bodies against the existing ground (`ground`, drawing
+    /// units). `None` when the corridor's axis is not in the drawing.
+    fn corridor_parts(&mut self, gr: &Group, m: &Merged, ground: Option<&crate::civiel::terrein::Tin>, report: &mut Report) -> io::Result<Option<RoadParts>> {
+        use corridor::{Edges, Part};
+        let tr = crate::lang::tr;
+        let (doc, fr) = (self.src.doc, self.fr);
+        let Some(axis_name) = get(&gr.data, "as").map(str::to_string) else { return Ok(None) };
+        let road = gr.road.clone().unwrap_or_default();
+        let al = doc
+            .model_space_entities()
+            .filter(|e| matches!(e, EntityType::LwPolyline(_)) && e.common().layer.contains("-AM-AS-"))
+            .filter(|e| {
+                let d = data_of(e);
+                get(&d, "as") == Some(axis_name.as_str()) && ["verschuiving_m", "corridor", "ontwerpprofiel", "lengteprofiel"].iter().all(|k| get(&d, k).is_none())
+            })
+            .find_map(Alignment::from_entity);
+        let Some(al) = al else { return Ok(None) };
+        let to_drawing = |p: &[f64; 3]| [(p[0] - fr.dx) * fr.f, (p[1] - fr.dy) * fr.f];
+        // The parts' edges: the feature lines that run through this surface.
+        let mut edges = Edges::default();
+        for e in doc.model_space_entities() {
+            let EntityType::Polyline3D(p) = e else { continue };
+            let Some(v) = p.vertices.first() else { continue };
+            let q = fr.p(v.position.x, v.position.y, v.position.z);
+            let key = ((q[0] * 1000.0).round() as i64, (q[1] * 1000.0).round() as i64, (q[2] * 1000.0).round() as i64);
+            if m.index.contains_key(&key) {
+                edges.add(&e.common().layer, al.station_offset([v.position.x, v.position.y]).1 / fr.f);
+            }
+        }
+        let mut tris = m.tris.clone();
+        corridor::upward(&m.verts, &mut tris);
+        let parts: Vec<Part> = tris
+            .iter()
+            .map(|t| {
+                let c = t.iter().fold([0.0; 3], |s, i| [s[0] + m.verts[*i][0] / 3.0, s[1] + m.verts[*i][1] / 3.0, 0.0]);
+                edges.part(al.station_offset(to_drawing(&c)).1 / fr.f)
+            })
+            .collect();
+        let is_road = edges.pavement.is_some();
+        let key = format!("corridor:{road}");
+        let layer = gr.layer.clone();
+        let mut out = RoadParts { parts: Vec::new(), members: Vec::new(), cut: None, axis: axis_name };
+        // A triangulated body as a product shape, styled and on the corridor's layer.
+        let body = |x: &mut Self, pts: &[[f64; 3]], tris: &[[usize; 3]], closed: Option<bool>, rgb: (u8, u8, u8), transparency: u8| -> io::Result<String> {
+            let list = x.step.add("IFCCARTESIANPOINTLIST3D", &format!("{},$", coord_list(pts)))?;
+            let closed = closed.map(|c| if c { ".T." } else { ".F." }).unwrap_or("$");
+            let item = x.step.add("IFCTRIANGULATEDFACESET", &format!("{list},$,{closed},{},$", index_list(tris)))?;
+            let s = x.surface_style(rgb, transparency)?;
+            x.style(item, s)?;
+            x.layer_items.entry(layer.clone()).or_default().push(item);
+            let mut reps = BTreeMap::new();
+            reps.insert(("Body", "Tessellation"), vec![item]);
+            x.shape(&reps)
+        };
+        // The surface parts as courses: parts, key, name, course type, colour, road part.
+        struct Course {
+            want: &'static [Part],
+            id: &'static str,
+            name: &'static str,
+            kind: &'static str,
+            rgb: (u8, u8, u8),
+            part_kind: &'static str,
+        }
+        let courses = [
+            Course { want: &[Part::Pavement], id: "deklaag", name: tr("Verharding bovenvlak", "Pavement surface"), kind: "PAVEMENT", rgb: (72, 72, 78), part_kind: "CARRIAGEWAY" },
+            Course {
+                want: &[Part::Shoulder, Part::Crest],
+                id: "berm",
+                name: if is_road { tr("Berm", "Shoulder") } else { tr("Kruin", "Crest") },
+                kind: "PROTECTION",
+                rgb: (112, 158, 82),
+                part_kind: "SOFTSHOULDER",
+            },
+            Course { want: &[Part::Slope], id: "talud", name: tr("Talud", "Slope"), kind: "PROTECTION", rgb: (136, 176, 96), part_kind: "ROADSIDE" },
+        ];
+        for Course { want, id, name, kind, rgb, part_kind } in courses {
+            let (pts, t) = corridor::part_mesh(&m.verts, &tris, &parts, want);
+            if t.is_empty() {
+                continue;
+            }
+            let shape = body(self, &pts, &t, Some(false), rgb, 0)?;
+            let course = self.element(&format!("{key}:{id}"), &class("IfcCourse", Some(kind), None), name, &road, None, &shape)?;
+            *report.classes.entry("IfcCourse".into()).or_insert(0) += 1;
+            let element = if kind == "PAVEMENT" {
+                // The course is the pavement's top: the assembly has no build-up.
+                let desc = tr("rijstroken (alleen het bovenvlak; het sjabloon heeft geen opbouw)", "lanes (top surface only; the assembly has no layer build-up)");
+                let pavement = self.element(&format!("{key}:verharding"), &class("IfcPavement", Some("FLEXIBLE"), None), tr("Verharding", "Pavement"), desc, None, "$")?;
+                let g = self.guid(&format!("rel:{key}:verharding"));
+                self.step.add("IFCRELAGGREGATES", &format!("{g},$,$,$,{pavement},({course})"))?;
+                *report.classes.entry("IfcPavement".into()).or_insert(0) += 1;
+                self.psets(&format!("{key}:verharding"), pavement, &gr.layer, gr.ln.as_ref(), &gr.data)?;
+                pavement
+            } else {
+                course
+            };
+            if is_road {
+                let part_name = match part_kind {
+                    "CARRIAGEWAY" => tr("Rijbaan", "Carriageway"),
+                    "SOFTSHOULDER" => tr("Berm", "Shoulder"),
+                    _ => tr("Talud", "Slope"),
+                };
+                out.parts.push((part_name.to_string(), part_kind, vec![element]));
+            } else {
+                out.members.push(element);
+            }
+        }
+        // Earthworks between the design and the existing ground.
+        if let Some(tin) = ground {
+            let under: Vec<Option<f64>> = m.verts.iter().map(|p| tin.height(to_drawing(p)).map(|z| z / fr.f)).collect();
+            for fill in [true, false] {
+                let b = corridor::earth_body(&m.verts, &under, &tris, fill);
+                if b.triangles.is_empty() {
+                    continue;
+                }
+                let (id, name, ifc, kind, rgb) = if fill {
+                    ("ophoging", if is_road { tr("Ophoging", "Fill") } else { tr("Dijklichaam", "Dike body") }, "IfcEarthworksFill", "EMBANKMENT", (170, 128, 86))
+                } else {
+                    ("ontgraving", tr("Ontgraving", "Cut"), "IfcEarthworksCut", "CUT", (204, 120, 64))
+                };
+                let shape = body(self, &b.points, &b.triangles, Some(b.closed), rgb, 100)?;
+                let desc = tr("tussen het ontwerp en het bestaande maaiveld", "between the design and the existing ground");
+                let e = self.element(&format!("{key}:{id}"), &class(ifc, Some(kind), None), name, desc, None, &shape)?;
+                let props: Data = vec![("Volume".into(), format!("{:.3}", b.volume)), ("Closed".into(), if b.closed { "true".into() } else { "false".into() })];
+                self.pset(&format!("{key}:{id}:earthworks"), "OpenInfra_Earthworks", &props, e)?;
+                *report.classes.entry(ifc.into()).or_insert(0) += 1;
+                if fill {
+                    out.members.push(e);
+                } else {
+                    out.cut = Some(e);
+                }
+            }
+        }
+        Ok(Some(out))
+    }
+
+    /// The road's parts, each containing its element, and the alignment
+    /// that positions the road.
+    fn road_parts(&mut self, name: &str, road: Id, rp: &RoadParts, alignments: &HashMap<String, Id>, report: &mut Report) -> io::Result<()> {
+        let mut parts = Vec::new();
+        for (part_name, kind, members) in &rp.parts {
+            let g = self.guid(&format!("roadpart:{name}:{kind}"));
+            let part = self.step.add("IFCROADPART", &format!("{g},$,{},$,$,{},$,$,$,.LONGITUDINAL.,.{kind}.", text(part_name), self.c.placement))?;
+            let g = self.guid(&format!("rel:roadpart:{name}:{kind}"));
+            self.contain(&g, members, part)?;
+            parts.push(part);
+            *report.classes.entry("IfcRoadPart".into()).or_insert(0) += 1;
+        }
+        if !parts.is_empty() {
+            let g = self.guid(&format!("rel:road-parts:{name}"));
+            self.step.add("IFCRELAGGREGATES", &format!("{g},$,$,$,{road},{}", refs(&parts)))?;
+        }
+        if let Some(al) = alignments.get(&rp.axis) {
+            let g = self.guid(&format!("rel:positions:{name}"));
+            self.step.add("IFCRELPOSITIONS", &format!("{g},$,$,$,{al},({road})"))?;
+        }
+        Ok(())
     }
 }
 
@@ -1808,6 +2035,86 @@ pub mod tests {
         assert_eq!(r.skipped.get("tekst"), Some(&4), "{:?}", r.skipped);
         assert_eq!(r.skipped.get("tekenblad en profielkader"), Some(&1), "{:?}", r.skipped);
         assert_eq!(r.classes.get("IfcAnnotation"), None, "{:?}", r.classes);
+    }
+
+    /// A road corridor over flat ground: the alignment, the existing TIN,
+    /// the corridor's design surface and its feature lines.
+    pub fn corridor_sample() -> CadDocument {
+        let mut doc = CadDocument::new();
+        let mut add = |e: EntityType| {
+            doc.add_entity(e).unwrap();
+        };
+        let al = Alignment::from_pis(&[[0.0, 0.0], [100.0, 0.0]], &[]).unwrap();
+        add(on(EntityType::LwPolyline(al.to_polyline()), &nl("AM", "AS", Element::G, Status::N), &[("as", "A2"), ("beginstation", "0.000")]));
+        add(on(mesh(&[[-10.0, -20.0, 1.0], [110.0, -20.0, 1.0], [110.0, 20.0, 1.0], [-10.0, 20.0, 1.0]], &[&[0, 1, 2], &[0, 2, 3]], None), &nl("OG", "TRIANGULATIE", Element::G, Status::B), &[("terrein", "Terrein 1"), ("bron", "AHN")]));
+        // The "weg" assembly 1 m above the ground, right of the axis is -y:
+        // toe, shoulder, lane, axis, lane, shoulder, toe.
+        let profile = [(-8.0, 1.0), (-4.75, 1.86), (-3.25, 1.92), (0.0, 2.0), (3.25, 1.92), (4.75, 1.86), (8.0, 1.0)];
+        let mut verts = Vec::new();
+        for x in [0.0, 50.0, 100.0] {
+            for (o, z) in profile {
+                verts.push([x, -o, z]);
+            }
+        }
+        let n = profile.len();
+        let mut faces: Vec<Vec<usize>> = Vec::new();
+        for s in 0..2 {
+            for j in 0..n - 1 {
+                let (a, b) = (s * n + j, (s + 1) * n + j);
+                faces.push(vec![a, a + 1, b + 1]);
+                faces.push(vec![a, b + 1, b]);
+            }
+        }
+        let faces: Vec<&[usize]> = faces.iter().map(|f| f.as_slice()).collect();
+        let data = [("corridor", "Corridor A2"), ("as", "A2"), ("sjabloon", "weg")];
+        add(on(mesh(&verts, &faces, None), &nl("OG", "TRIANGULATIE", Element::G, Status::N), &data));
+        for (j, (o, z)) in profile.iter().enumerate() {
+            let (group, object) = match j {
+                0 | 6 => ("GW", "TALUD_TEEN"),
+                1 | 5 => ("GR", "GRAS_BERM"),
+                2 | 4 => ("VH", "GESLOTENVERHARDING_ASFALT"),
+                _ => ("AM", "AS"),
+            };
+            let line = line3(&[[0.0, -o, *z], [50.0, -o, *z], [100.0, -o, *z]]);
+            add(on(line, &nl(group, object, Element::G, Status::N), if j == 3 { &data[..] } else { &[] }));
+        }
+        doc
+    }
+
+    #[test]
+    fn a_corridor_becomes_road_parts_and_earthworks() {
+        let doc = corridor_sample();
+        let site = sample_site();
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/ifc-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = Source { doc: &doc, f: 1.0, site: Some(&site), name: "corridor.dwg".into() };
+        let r = write(&src, &Options::default(), &dir.join("corridor.ifc")).unwrap();
+        let n = |k: &str| r.classes.get(k).copied().unwrap_or(0);
+        assert_eq!(n("IfcRoad"), 1, "{:?}", r.classes);
+        assert_eq!(n("IfcRoadPart"), 3, "carriageway, shoulder, slope");
+        assert_eq!(n("IfcCourse"), 3);
+        assert_eq!(n("IfcEarthworksFill"), 1);
+        assert_eq!(n("IfcEarthworksCut"), 0, "the road lies above the ground everywhere");
+        let ifc = std::fs::read_to_string(dir.join("corridor.ifc")).unwrap();
+        assert_eq!(ifc.matches(".TERRAIN.").count(), 1, "only the existing ground; the design surface became the road");
+        // The road holds its parts and the feature lines that run through it.
+        let road_rel = ifc.lines().find(|l| l.contains("=IFCRELCONTAINEDINSPATIALSTRUCTURE(") && l.contains(&format!(",{});", ifc.lines().find(|l| l.contains("=IFCROAD(")).unwrap().split('=').next().unwrap()))).unwrap();
+        assert!(road_rel.matches('#').count() >= 7, "fill and six edge lines in the road: {road_rel}");
+        for needle in [".CARRIAGEWAY.", ".SOFTSHOULDER.", ".ROADSIDE.", ".PAVEMENT.", ".EMBANKMENT.", "IFCRELPOSITIONS(", "'OpenInfra_Earthworks'"] {
+            assert!(ifc.contains(needle), "missing {needle}");
+        }
+        // The fill: the cross section's area (trapezoids from the axis out)
+        // over 100 m, as a closed body.
+        let half = (1.0 + 0.92) / 2.0 * 3.25 + (0.92 + 0.86) / 2.0 * 1.5 + 0.86 / 2.0 * 3.25;
+        let volume: f64 = ifc
+            .lines()
+            .find(|l| l.contains("'Volume'"))
+            .and_then(|l| l.split("IFCREAL(").nth(1))
+            .and_then(|v| v.split(')').next())
+            .and_then(|v| v.parse().ok())
+            .unwrap();
+        assert!((volume - 2.0 * half * 100.0).abs() < 0.01, "{volume} vs {}", 2.0 * half * 100.0);
+        assert!(ifc.contains("IFCREAL(1.)") || ifc.contains("IFCLABEL('true')"), "closed");
     }
 
     /// Writes target/ifc-test/voorbeeld.ifc for tests/ifc_validate.py.

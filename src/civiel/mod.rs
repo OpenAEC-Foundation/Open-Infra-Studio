@@ -23,6 +23,8 @@ pub mod percelen;
 // Point clouds: TIN, profiles, ground filter (puntenwolk) and 3D meshes (mesh).
 pub mod mesh;
 pub mod puntenwolk;
+// Exchange: LandXML export (stream uitwisseling).
+pub mod uitwisseling;
 
 use std::sync::{Mutex, OnceLock};
 
