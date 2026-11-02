@@ -2707,6 +2707,7 @@ dependencies = [
  "las-crs",
  "ocs_plugin_api",
  "proj4rs",
+ "quick-xml 0.41.0",
  "roxmltree 0.21.1",
  "rusqlite",
  "serde",

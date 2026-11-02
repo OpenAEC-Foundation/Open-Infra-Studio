@@ -1,0 +1,273 @@
+{
+  "source_commit": "e0192d71de944f6ffdd18ac0500d0fa715e33d3e",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "sccache": "0.19.0",
+  "manifest_sha256": "3f771920817cf25ffd18469405d51ac0dc56425184d7298f1a472f2aaa064257",
+  "lock_sha256": "1ef21ba025c176380573e65be944ad1277bf4fcda4068888075ff9198a669ffe",
+  "samples": [
+    {
+      "name": "without-cache",
+      "exit": 0,
+      "time": "elapsed_s=279.10\nuser_s=456.25\nsystem_s=69.90\nmax_rss_kib=2505624\nexit=0\n",
+      "load_start": [
+        0.46875,
+        0.537109375,
+        1.068359375
+      ],
+      "load_end": [
+        2.38037109375,
+        1.7060546875,
+        1.44384765625
+      ],
+      "wall_s": 279.1,
+      "library_sha256": "17ff9188efc8674e7cc2a65a85690fe257b8901595ea2a46c7b6e607707b37e5",
+      "library_bytes": 190888632
+    },
+    {
+      "name": "empty-cache",
+      "exit": 0,
+      "time": "elapsed_s=317.45\nuser_s=614.92\nsystem_s=156.49\nmax_rss_kib=2634568\nexit=0\n",
+      "load_start": [
+        2.38037109375,
+        1.7060546875,
+        1.44384765625
+      ],
+      "load_end": [
+        2.91943359375,
+        2.529296875,
+        1.9033203125
+      ],
+      "wall_s": 317.45,
+      "library_sha256": "17ff9188efc8674e7cc2a65a85690fe257b8901595ea2a46c7b6e607707b37e5",
+      "library_bytes": 190888632,
+      "stats_exit": 0,
+      "stats": {
+        "stats": {
+          "compile_requests": 0,
+          "requests_unsupported_compiler": 0,
+          "requests_not_compile": 4,
+          "requests_not_cacheable": 84,
+          "requests_executed": 334,
+          "cache_errors": {
+            "counts": {},
+            "adv_counts": {}
+          },
+          "cache_hits": {
+            "counts": {},
+            "adv_counts": {}
+          },
+          "cache_misses": {
+            "counts": {
+              "Assembler": 14,
+              "Rust": 298,
+              "C/C++": 18
+            },
+            "adv_counts": {
+              "assemblerToPreprocess [gcc]": 14,
+              "c [gcc]": 18,
+              "rust": 298
+            }
+          },
+          "cache_timeouts": 0,
+          "cache_read_errors": 0,
+          "non_cacheable_compilations": 0,
+          "forced_recaches": 0,
+          "cache_write_errors": 0,
+          "cache_writes": 330,
+          "cache_write_duration": {
+            "secs": 3,
+            "nanos": 436273953
+          },
+          "cache_read_hit_duration": {
+            "secs": 0,
+            "nanos": 0
+          },
+          "compilations": 330,
+          "compiler_write_duration": {
+            "secs": 221,
+            "nanos": 349970896
+          },
+          "compile_fails": 4,
+          "not_cached": {
+            "crate-type (cdylib)": 2,
+            "-": 3,
+            "-o": 3,
+            "crate-type (proc-macro)": 18,
+            "missing input": 3,
+            "crate-type (bin)": 55
+          },
+          "dist_compiles": {},
+          "dist_errors": 0,
+          "multi_level": null
+        },
+        "cache_location": "Local disk: \"/tmp/ois-sccache-cache\"",
+        "cache_size": 258546247,
+        "max_cache_size": 10737418240,
+        "use_preprocessor_cache_mode": true,
+        "version": "0.19.0",
+        "basedirs": [],
+        "effective_cache_mode": "ReadWrite"
+      }
+    },
+    {
+      "name": "filled-cache",
+      "exit": 0,
+      "time": "elapsed_s=198.59\nuser_s=360.12\nsystem_s=117.97\nmax_rss_kib=2625856\nexit=0\n",
+      "load_start": [
+        2.91943359375,
+        2.529296875,
+        1.9033203125
+      ],
+      "load_end": [
+        2.91162109375,
+        2.7275390625,
+        2.10693359375
+      ],
+      "wall_s": 198.59,
+      "library_sha256": "17ff9188efc8674e7cc2a65a85690fe257b8901595ea2a46c7b6e607707b37e5",
+      "library_bytes": 190888632,
+      "stats_exit": 0,
+      "stats": {
+        "stats": {
+          "compile_requests": 0,
+          "requests_unsupported_compiler": 0,
+          "requests_not_compile": 4,
+          "requests_not_cacheable": 84,
+          "requests_executed": 334,
+          "cache_errors": {
+            "counts": {},
+            "adv_counts": {}
+          },
+          "cache_hits": {
+            "counts": {
+              "C/C++": 18,
+              "Assembler": 14,
+              "Rust": 298
+            },
+            "adv_counts": {
+              "c [gcc]": 18,
+              "rust": 298,
+              "assemblerToPreprocess [gcc]": 14
+            }
+          },
+          "cache_misses": {
+            "counts": {},
+            "adv_counts": {}
+          },
+          "cache_timeouts": 0,
+          "cache_read_errors": 0,
+          "non_cacheable_compilations": 0,
+          "forced_recaches": 0,
+          "cache_write_errors": 0,
+          "cache_writes": 0,
+          "cache_write_duration": {
+            "secs": 0,
+            "nanos": 0
+          },
+          "cache_read_hit_duration": {
+            "secs": 0,
+            "nanos": 307716851
+          },
+          "compilations": 0,
+          "compiler_write_duration": {
+            "secs": 0,
+            "nanos": 0
+          },
+          "compile_fails": 4,
+          "not_cached": {
+            "-": 3,
+            "crate-type (cdylib)": 2,
+            "missing input": 3,
+            "crate-type (proc-macro)": 18,
+            "-o": 3,
+            "crate-type (bin)": 55
+          },
+          "dist_compiles": {},
+          "dist_errors": 0,
+          "multi_level": null
+        },
+        "cache_location": "Local disk: \"/tmp/ois-sccache-cache\"",
+        "cache_size": 258546247,
+        "max_cache_size": 10737418240,
+        "use_preprocessor_cache_mode": true,
+        "version": "0.19.0",
+        "basedirs": [],
+        "effective_cache_mode": "ReadWrite"
+      }
+    }
+  ],
+  "script_validation": {
+    "head": "d16802095ab49c71162c29e78bd8d6fb0c371ca3",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "jobs": 2,
+    "exit": 0,
+    "time": "elapsed_s=20.59\nmax_rss_kib=1386840\nexit=0\n",
+    "library_bytes": 190947392,
+    "library_sha256": "4975a462cad0a7a4d383e57296744fbe9ebf4bd774e6b5c6e015aa36f340c739",
+    "plugin_symbols": [
+      "ocs_plugin_api_version",
+      "ocs_plugin_register"
+    ],
+    "stats": {
+      "stats": {
+        "compile_requests": 0,
+        "requests_unsupported_compiler": 0,
+        "requests_not_compile": 0,
+        "requests_not_cacheable": 3,
+        "requests_executed": 0,
+        "cache_errors": {
+          "counts": {},
+          "adv_counts": {}
+        },
+        "cache_hits": {
+          "counts": {},
+          "adv_counts": {}
+        },
+        "cache_misses": {
+          "counts": {},
+          "adv_counts": {}
+        },
+        "cache_timeouts": 0,
+        "cache_read_errors": 0,
+        "non_cacheable_compilations": 0,
+        "forced_recaches": 0,
+        "cache_write_errors": 0,
+        "cache_writes": 0,
+        "cache_write_duration": {
+          "secs": 0,
+          "nanos": 0
+        },
+        "cache_read_hit_duration": {
+          "secs": 0,
+          "nanos": 0
+        },
+        "compilations": 0,
+        "compiler_write_duration": {
+          "secs": 0,
+          "nanos": 0
+        },
+        "compile_fails": 0,
+        "not_cached": {
+          "-": 1,
+          "missing input": 1,
+          "crate-type (cdylib)": 1
+        },
+        "dist_compiles": {},
+        "dist_errors": 0,
+        "multi_level": null
+      },
+      "cache_location": "Local disk: \"/tmp/ois-sccache-cache\"",
+      "cache_size": null,
+      "max_cache_size": 10737418240,
+      "use_preprocessor_cache_mode": true,
+      "version": "0.19.0",
+      "basedirs": [],
+      "effective_cache_mode": "ReadWrite"
+    },
+    "loaded_api_version": 13,
+    "source_tree": "185fe30de18d8a7d28f0ff3a5ce1c5571cb4923d",
+    "command": "CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/ois-compile-evidence/line-tables-repeat/target ./scripts/build.sh --locked --offline -p open-infra --timings",
+    "cache_wrapper_selected_from_path": true,
+    "helper_sha256": "d53e56af71dcac0fa0cb0984b6ada38add017d91e6f5b71035b5c2e6b33adfc2"
+  }
+}

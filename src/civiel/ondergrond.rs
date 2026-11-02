@@ -65,7 +65,7 @@ fn find(ctx: &Ctx, kind: Kind, max: usize, progress: &dyn Fn(String)) -> Result<
     let found = bro::search(kind, ll)?;
     let to = crate::gis::vector::data_to_site(&site, "EPSG:28992", &[])?;
     let rect = site.drawing_rect(ctx.f);
-    let mut pts: Vec<(Point, XY)> = found
+    let mut pts: Vec<(Point, XY)> = found.points
         .into_iter()
         .filter_map(|p| {
             let at_rd = p.rd.or_else(|| p.lonlat.and_then(|l| crate::gis::crs::transform("EPSG:4326", "EPSG:28992", l).ok()))?;
