@@ -9,6 +9,7 @@
 //! with LoD1 and LoD2 does not give each building twice.
 
 use roxmltree::{Document, Node};
+use quick_xml::{events::Event, Reader};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Theme {
@@ -247,9 +248,23 @@ fn object(o: Node, fallback_dim: usize) -> Option<CityObject> {
 
 /// The first value of an XML attribute anywhere in the text (`srsName`).
 fn first_attribute<'t>(xml: &'t str, name: &str) -> Option<&'t str> {
-    let pat = format!("{name}=\"");
-    let i = xml.find(&pat)? + pat.len();
-    xml[i..].find('"').map(|j| &xml[i..i + j])
+    let mut reader = Reader::from_str(xml);
+    loop {
+        match reader.read_event().ok()? {
+            Event::Start(tag) | Event::Empty(tag) => {
+                for attr in tag.attributes() {
+                    let attr = attr.ok()?;
+                    if attr.key.as_ref() == name.as_bytes() {
+                        if let std::borrow::Cow::Borrowed(value) = attr.value {
+                            return std::str::from_utf8(value).ok();
+                        }
+                    }
+                }
+            }
+            Event::Eof => return None,
+            _ => {}
+        }
+    }
 }
 
 /// The CRS of a CityGML text, without parsing it.
@@ -259,34 +274,87 @@ pub fn crs_of(xml: &str) -> Option<String> {
 
 /// The members of a CityGML text one by one: (start, end) of every
 /// `<…cityObjectMember …>…</…cityObjectMember>` (or featureMember).
-fn members(xml: &str) -> Vec<(usize, usize)> {
-    let pat = if xml.contains("cityObjectMember") { "cityObjectMember" } else { "featureMember" };
+fn members(xml: &str) -> Result<(Vec<(usize, usize)>, &str), String> {
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().check_comments = true;
     let mut out = Vec::new();
-    let mut pos = 0;
-    while let Some(i) = xml[pos..].find(pat).map(|i| i + pos) {
-        let after = xml[i + pat.len()..].chars().next();
-        // Walk back over a prefix to the '<' of an opening tag.
-        let head = &xml[..i];
-        let start = head.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == '-' || c == '.');
-        let start = start.strip_suffix(':').map(|s| s.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')).unwrap_or(start);
-        let opening = start.ends_with('<') && !start.ends_with("</") && matches!(after, Some('>') | Some(' ') | Some('\n') | Some('\r') | Some('\t') | Some('/'));
-        if !opening {
-            pos = i + pat.len();
-            continue;
-        }
-        let s = start.len() - 1;
-        let qname = &xml[s + 1..i + pat.len()];
-        let close = format!("</{qname}>");
-        match xml[i..].find(&close) {
-            Some(j) => {
-                let e = i + j + close.len();
-                out.push((s, e));
-                pos = e;
+    let (mut depth, mut root_seen) = (0usize, false);
+    let mut member: Option<(usize, usize)> = None;
+    let mut attrs = "";
+    loop {
+        match reader.read_event().map_err(|e| format!("CityGML: ongeldige XML: {e}"))? {
+            Event::Start(tag) => {
+                let end = reader.buffer_position() as usize;
+                let start = end - tag.len() - 2;
+                for attr in tag.attributes() { attr.map_err(|e| format!("CityGML: ongeldig XML-attribuut: {e}"))?; }
+                if depth == 0 {
+                    if root_seen { return Err("CityGML: meerdere XML-hoofdelementen".into()); }
+                    root_seen = true;
+                    attrs = xml[start + 1..end - 1].split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or("");
+                }
+                depth += 1;
+                if depth > 256 { return Err("CityGML: XML te diep genest".into()); }
+                if member.is_none() && matches!(tag.local_name().as_ref(), b"cityObjectMember" | b"featureMember") {
+                    member = Some((depth, start));
+                }
             }
-            None => break,
+            Event::Empty(tag) => {
+                for attr in tag.attributes() { attr.map_err(|e| format!("CityGML: ongeldig XML-attribuut: {e}"))?; }
+                if depth == 0 {
+                    if root_seen { return Err("CityGML: meerdere XML-hoofdelementen".into()); }
+                    root_seen = true;
+                }
+            }
+            Event::End(_) => {
+                if member.is_some_and(|(d, _)| d == depth) {
+                    let (_, start) = member.take().unwrap();
+                    out.push((start, reader.buffer_position() as usize));
+                }
+                depth = depth.checked_sub(1).ok_or("CityGML: onverwachte XML-eindtag")?;
+            }
+            Event::Text(text) if depth == 0 && !text.as_ref().iter().all(u8::is_ascii_whitespace) => return Err("CityGML: tekst buiten XML-hoofdelement".into()),
+            Event::CData(_) | Event::GeneralRef(_) if depth == 0 => return Err("CityGML: inhoud buiten XML-hoofdelement".into()),
+            Event::Eof => break,
+            _ => {}
         }
     }
-    out
+    if !root_seen || depth != 0 { return Err("CityGML: leeg of afgebroken XML-document".into()); }
+    Ok((out, attrs))
+}
+
+fn validate_coordinates(root: Node, fallback_dim: usize) -> Result<(), String> {
+    let numbers = |text: &str| -> Result<Vec<f64>, String> {
+        text.split_whitespace().map(|t| {
+            let v = t.parse::<f64>().map_err(|_| format!("CityGML: ongeldig coördinaatgetal '{t}'"))?;
+            if !v.is_finite() { return Err(format!("CityGML: niet-eindig coördinaatgetal '{t}'")); }
+            Ok(v)
+        }).collect()
+    };
+    for n in root.descendants().filter(|n| n.is_element()) {
+        if let Some(dim) = n.attribute("srsDimension") {
+            if !matches!(dim.parse::<usize>(), Ok(2 | 3)) { return Err(format!("CityGML: ongeldige srsDimension '{dim}'")); }
+        }
+        match local(&n) {
+            "posList" => {
+                let values = numbers(n.text().unwrap_or(""))?;
+                let dim = dimension(n, fallback_dim);
+                if values.is_empty() || values.len() % dim != 0 { return Err("CityGML: onvolledige posList".into()); }
+            }
+            "pos" => {
+                let values = numbers(n.text().unwrap_or(""))?;
+                let dim = n.ancestors().find_map(|a| a.attribute("srsDimension"));
+                if !(2..=3).contains(&values.len()) || dim.is_some_and(|d| d.parse::<usize>().ok() != Some(values.len())) { return Err("CityGML: onvolledige pos-coördinaat".into()); }
+            }
+            "coordinates" => {
+                for tuple in n.text().unwrap_or("").split_whitespace() {
+                    let values = numbers(&tuple.replace(',', " "))?;
+                    if !(2..=3).contains(&values.len()) || tuple.split(',').any(str::is_empty) { return Err("CityGML: onvolledige coordinates-tuple".into()); }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// Read a CityGML text member by member, so a file of a whole city does
@@ -294,13 +362,15 @@ fn members(xml: &str) -> Vec<(usize, usize)> {
 /// (e.g. only those in the project area).
 pub fn parse_with(xml: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn Fn(String)) -> Result<CityModel, String> {
     let mut model = CityModel { crs: crs_of(xml), ..Default::default() };
-    let fallback_dim = first_attribute(xml, "srsDimension").and_then(|v| v.parse().ok()).unwrap_or(3);
+    let fallback_dim = match first_attribute(xml, "srsDimension") {
+        Some(v) => match v.parse::<usize>() {
+            Ok(d @ (2 | 3)) => d,
+            _ => return Err(format!("CityGML: ongeldige srsDimension '{v}'")),
+        },
+        None => 3,
+    };
     // The namespace declarations of the root element, for every member.
-    let root_start = xml.match_indices('<').map(|(i, _)| i).find(|&i| !matches!(xml.as_bytes().get(i + 1), Some(b'?') | Some(b'!'))).ok_or("CityGML: geen XML")?;
-    let root_end = xml[root_start..].find('>').map(|j| root_start + j).ok_or("CityGML: geen XML")?;
-    let root_tag = xml[root_start + 1..root_end].trim_end_matches('/');
-    let attrs = root_tag.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or("");
-    let list = members(xml);
+    let (list, attrs) = members(xml)?;
     let mut seen = 0usize;
     for (k, (s, e)) in list.iter().enumerate() {
         if k % 2000 == 0 && k > 0 {
@@ -308,10 +378,8 @@ pub fn parse_with(xml: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn 
         }
         let chunk = format!("<wrap {attrs}>{}</wrap>", &xml[*s..*e]);
         let opts = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
-        let doc = match Document::parse_with_options(&chunk, opts) {
-            Ok(d) => d,
-            Err(_) => continue,
-        };
+        let doc = Document::parse_with_options(&chunk, opts).map_err(|e| format!("CityGML: object {}: ongeldige XML: {e}", k + 1))?;
+        validate_coordinates(doc.root_element(), fallback_dim)?;
         for member in doc.root_element().children().filter(|c| c.is_element()) {
             for o in member.children().filter(|c| c.is_element()) {
                 if let Some(obj) = object(o, fallback_dim) {
