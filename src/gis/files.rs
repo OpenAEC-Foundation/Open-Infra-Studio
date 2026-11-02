@@ -850,6 +850,24 @@ mod tests {
     }
 
     #[test]
+    fn gml_deep_curves_and_collections_keep_the_geometry_read_by_main() {
+        let from = "<gml:LineString srsName=\"urn:ogc:def:crs:EPSG::2056\" srsDimension=\"3\">\n      <gml:posList>2600000 1200000 5 2600010 1200020 6</gml:posList>\n    </gml:LineString>";
+        assert!(GML.contains(from));
+        for depth in [65, 256] {
+            for (container, member) in [("CompositeCurve", "curveMember"), ("MultiGeometry", "geometryMember")] {
+                let mut geometry = "<gml:LineString><gml:posList>0 0 10 0</gml:posList></gml:LineString>".to_string();
+                for _ in 0..depth {
+                    geometry = format!("<gml:{container}><gml:{member}>{geometry}</gml:{member}></gml:{container}>");
+                }
+                let data = gml(&GML.replace(from, &geometry)).unwrap();
+                assert_eq!(data.features.len(), 2, "{container}, depth {depth}");
+                assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0]], false));
+                assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+            }
+        }
+    }
+
+    #[test]
     fn gml_coordinate_comments_preserve_every_text_part() {
         let text = GML.replace("2600000 1200000 5 2600010 1200020 6", "2600000 1200000 5<!--comment--> 2600010 1200020 6");
         let data = gml(&text).unwrap();
