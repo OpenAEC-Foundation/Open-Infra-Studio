@@ -355,6 +355,12 @@ mod tests {
     const SITE: &str = include_str!("../../tests/fixtures/landxml/site.xml");
 
     #[test]
+    fn sol_unreadable_landxml_returns_the_complete_original_error() {
+        let text = "<LandXML><CgPoints><CgPoint name=\"bad\">bad</CgPoint></CgPoints></LandXML>";
+        assert_eq!(parse(text).unwrap_err(), "geen punten, oppervlakken of assen in dit LandXML-bestand");
+    }
+
+    #[test]
     fn sol_start_coordinate_text_overrides_pntref() {
         let text = SITE.replace("<Start>200 100</Start>", "<Start pntRef=\"1\">205 105</Start>");
         assert_ne!(text, SITE);
