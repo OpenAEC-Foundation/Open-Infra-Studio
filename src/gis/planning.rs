@@ -102,6 +102,7 @@ impl Data {
             crs: Some(self.crs.clone()),
             layers: vec![],
             warnings: self.warnings.clone(),
+            skipped: 0,
         }
     }
     pub fn from_file_data(data: &FileData) -> Result<Self, String> {

@@ -19,15 +19,13 @@ pub struct FileData {
     pub crs: Option<String>,
     /// Layers in a GeoPackage (the one read is the first, or the asked one).
     pub layers: Vec<String>,
-    /// Recoverable reader errors; these are import diagnostics, never attributes.
+    /// Internal read diagnostics; never attributes or automatic UI messages.
     pub warnings: Vec<String>,
+    /// Source objects omitted while keeping the rest of the file readable.
+    pub skipped: usize,
 }
 
 impl FileData {
-    pub fn report(&self, message: impl Into<String>) -> String {
-        let message = message.into();
-        if self.warnings.is_empty() { message } else { format!("{message} {}", self.warnings.join(" ")) }
-    }
     /// Coordinate bounds of all features (file CRS).
     pub fn bounds(&self) -> Option<[f64; 4]> {
         let mut b = [f64::MAX, f64::MAX, f64::MIN, f64::MIN];
@@ -156,7 +154,7 @@ pub fn geojson(bytes: &[u8]) -> Result<FileData, String> {
     let v: Value = serde_json::from_slice(bytes).map_err(|e| format!("GeoJSON: {e}"))?;
     let v = if v["type"] == "Feature" { serde_json::json!({"type": "FeatureCollection", "features": [v]}) } else { v };
     let crs = v["crs"]["properties"]["name"].as_str().and_then(epsg_from_name).or(Some("EPSG:4326".into()));
-    Ok(FileData { format: "GeoJSON", features: vector::parse_geojson(&v), crs, layers: Vec::new(), warnings: Vec::new() })
+    Ok(FileData { format: "GeoJSON", features: vector::parse_geojson(&v), crs, layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 // ── Shapefile ───────────────────────────────────────────────────────────────
@@ -206,7 +204,7 @@ pub fn shapefile(path: &Path) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "Shapefile", features, crs, layers: Vec::new(), warnings: Vec::new() })
+    Ok(FileData { format: "Shapefile", features, crs, layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 // ── WKB (GeoPackage) ────────────────────────────────────────────────────────
@@ -350,7 +348,7 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
         }
         features.push(f);
     }
-    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings: Vec::new() })
+    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings: Vec::new(), skipped: 0 })
 }
 
 // ── KML / KMZ / GPX ─────────────────────────────────────────────────────────
@@ -410,7 +408,7 @@ pub fn kml(text: &str) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "KML", features, crs: Some("EPSG:4326".into()), layers: Vec::new(), warnings: Vec::new() })
+    Ok(FileData { format: "KML", features, crs: Some("EPSG:4326".into()), layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 pub fn kmz(path: &Path) -> Result<FileData, String> {
@@ -455,7 +453,7 @@ pub fn gpx(text: &str) -> Result<FileData, String> {
         f.props.insert("gpx_type".into(), Value::String(n.tag_name().name().into()));
         features.push(f);
     }
-    Ok(FileData { format: "GPX", features, crs: Some("EPSG:4326".into()), layers: Vec::new(), warnings: Vec::new() })
+    Ok(FileData { format: "GPX", features, crs: Some("EPSG:4326".into()), layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 // ── GML (simple features, GML 2 and 3) ─────────────────────────────────────
@@ -546,7 +544,7 @@ pub fn gml(text: &str) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "GML", features, crs, layers: Vec::new(), warnings: Vec::new() })
+    Ok(FileData { format: "GML", features, crs, layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 // ── CSV ─────────────────────────────────────────────────────────────────────
@@ -605,7 +603,7 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings: Vec::new() })
+    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 #[cfg(test)]
