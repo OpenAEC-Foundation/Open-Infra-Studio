@@ -512,7 +512,7 @@ cargo test --test locaties -- --ignored --nocapture # fetch real data at 16 loca
 python3 tests/e2e/ocs_e2e.py                        # end-to-end in Open CAD Studio: import, edit, save, reopen
 ```
 
-For repeated clean development builds, `./scripts/build.sh --locked -p open-infra` uses `sccache` when it is available on `PATH`. An explicit `RUSTC_WRAPPER` value, including an empty value, takes precedence. See the [local compiler-cache measurements](docs/lokale-compiler-cache.md) for the measured benefit, first-fill cost and scope.
+For repeated clean builds, `./scripts/build.sh --locked -p open-infra` uses `sccache` when it is available on `PATH`. This also applies to `--release`; opt out with `RUSTC_WRAPPER= ./scripts/build.sh --release`. An explicit `RUSTC_WRAPPER` value, including an empty value, takes precedence. See the [local compiler-cache measurements](docs/lokale-compiler-cache.md) for the measured benefit, first-fill cost and scope.
 
 The test set ([`tests/`](tests/README.md)) covers 16 locations: Dutch cities, a polder, the Vaalserberg, the Wadden, and cities across the border and worldwide. It also covers 30 places around the Dutch border, real BGT attributes and a KLIC delivery. It found and fixed several problems:
 - the coordinate system for Antwerp and Aachen;

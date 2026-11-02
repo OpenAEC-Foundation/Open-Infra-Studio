@@ -7,8 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleaseDependencyCacheTest(unittest.TestCase):
-    def test_restore_follows_the_pinned_toolchain_and_precedes_all_cargo_steps(self):
-        workflow = (ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8')
+    def assert_release_workflow(self, workflow):
         steps = re.split(r'^      - ', workflow, flags=re.MULTILINE)[1:]
         toolchains = [i for i, step in enumerate(steps) if 'uses: dtolnay/rust-toolchain@' in step]
         caches = [i for i, step in enumerate(steps) if 'uses: Swatinem/rust-cache@' in step]
@@ -25,6 +24,30 @@ class ReleaseDependencyCacheTest(unittest.TestCase):
         self.assertEqual(len(cargo_steps), 3, 'behoud tests en de twee afzonderlijke pluginbuilds')
         for i in cargo_steps:
             self.assertLess(cache, i)
+            self.assertNotRegex(steps[i], r'(?m)^[ \t]*if:',
+                                'release-tests en beide pluginbuilds moeten onvoorwaardelijk draaien')
+
+    def test_restore_follows_the_pinned_toolchain_and_precedes_all_cargo_steps(self):
+        workflow = (ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8')
+        self.assert_release_workflow(workflow)
+
+    def test_cargo_conditions_are_rejected_regardless_of_key_order(self):
+        workflow = (ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8')
+        self.assert_release_workflow(workflow)
+        parts = re.split(r'^      - ', workflow, flags=re.MULTILINE)
+        cargo_steps = [i for i, part in enumerate(parts[1:], start=1)
+                       if re.search(r'\bcargo (test|build)\b', part)]
+        self.assertEqual(len(cargo_steps), 3)
+        for i in cargo_steps:
+            for condition_first in [True, False]:
+                with self.subTest(step=i, condition_first=condition_first):
+                    disabled = parts.copy()
+                    if condition_first:
+                        disabled[i] = 'if: false\n        ' + parts[i]
+                    else:
+                        disabled[i] = parts[i] + '        if: false\n'
+                    with self.assertRaises(AssertionError):
+                        self.assert_release_workflow('      - '.join(disabled))
 
 
     def test_default_branch_prepares_the_cache_for_future_tags(self):

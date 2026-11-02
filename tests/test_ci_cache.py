@@ -51,14 +51,22 @@ class CiDependencyCacheTest(unittest.TestCase):
 
     def test_disabled_cache_steps_are_rejected(self):
         for name, job in self.rust_jobs().items():
-            for condition in ['false', '${{ false }}']:
-                with self.subTest(job=name, condition=condition):
-                    disabled, count = re.subn(
-                        r'(      - uses: Swatinem/rust-cache@[^\n]+\n)',
-                        lambda match: match[1] + f'        if: {condition}\n', job)
-                    self.assertEqual(count, 1)
-                    with self.assertRaises(AssertionError):
-                        self.assert_job_restores_dependencies(name, disabled)
+            variants = {
+                'bestaande stap': job,
+                'naam voor uses': job.replace('      - uses: Swatinem/rust-cache@',
+                                              '      - name: Restore Rust dependencies\n'
+                                              '        uses: Swatinem/rust-cache@', 1),
+            }
+            for layout, variant in variants.items():
+                for condition in ['false', '${{ false }}']:
+                    with self.subTest(job=name, layout=layout, condition=condition):
+                        self.assert_job_restores_dependencies(name, variant)
+                        disabled, count = re.subn(
+                            r'(?m)^([ \t]+(?:- )?uses: Swatinem/rust-cache@[^\n]+\n)',
+                            lambda match: match[1] + f'        if: {condition}\n', variant)
+                        self.assertEqual(count, 1)
+                        with self.assertRaises(AssertionError):
+                            self.assert_job_restores_dependencies(name, disabled)
 
     def test_caches_without_compiled_targets_are_rejected(self):
         for name, job in self.rust_jobs().items():
