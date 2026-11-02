@@ -1,0 +1,117 @@
+{
+  "voorbeeld.ifc": {
+    "min_producten": 31,
+    "klassen": {
+      "IfcProject": 1,
+      "IfcAlignment": 1,
+      "IfcAnnotation": 6,
+      "IfcPavement": 1,
+      "IfcPipeSegment": 1
+    },
+    "crs": [
+      "EPSG:28992"
+    ]
+  },
+  "leeg.ifc": {
+    "min_producten": 1,
+    "klassen": {
+      "IfcProject": 1,
+      "IfcAlignment": 0,
+      "IfcAnnotation": 0,
+      "IfcPavement": 0,
+      "IfcPipeSegment": 0
+    },
+    "crs": []
+  },
+  "catalogus.ifc": {
+    "min_producten": 299,
+    "klassen": {
+      "IfcProject": 1,
+      "IfcAlignment": 0,
+      "IfcAnnotation": 123,
+      "IfcPavement": 19,
+      "IfcPipeSegment": 46
+    },
+    "crs": []
+  },
+  "aansluitvoorbeeld.ifc": {
+    "min_producten": 13,
+    "klassen": {
+      "IfcProject": 1,
+      "IfcAlignment": 0,
+      "IfcAnnotation": 0,
+      "IfcPavement": 1,
+      "IfcPipeSegment": 8
+    },
+    "crs": []
+  },
+  "dordrecht-nlcs.ifc": {
+    "min_producten": 3288,
+    "klassen": {
+      "IfcProject": 1,
+      "IfcAlignment": 0,
+      "IfcAnnotation": 1793,
+      "IfcPavement": 342,
+      "IfcPipeSegment": 68
+    },
+    "crs": [
+      "EPSG:28992"
+    ]
+  },
+  "assen.ifc": {
+    "min_producten": 15,
+    "klassen": {
+      "IfcProject": 1,
+      "IfcAlignment": 2,
+      "IfcAnnotation": 0,
+      "IfcPavement": 0,
+      "IfcPipeSegment": 0
+    },
+    "crs": []
+  },
+  "losse-objecten.ifc": {
+    "min_producten": 3,
+    "klassen": {
+      "IfcProject": 1,
+      "IfcAlignment": 0,
+      "IfcAnnotation": 0,
+      "IfcPavement": 0,
+      "IfcPipeSegment": 0
+    },
+    "crs": []
+  },
+  "millimeters.ifc": {
+    "min_producten": 2,
+    "klassen": {
+      "IfcProject": 1,
+      "IfcAlignment": 0,
+      "IfcAnnotation": 0,
+      "IfcPavement": 0,
+      "IfcPipeSegment": 1
+    },
+    "crs": [],
+    "lijnpunten": [
+      [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          10.0,
+          0.0
+        ]
+      ]
+    ]
+  },
+  "lege-selectie.ifc": {
+    "min_producten": 1,
+    "klassen": {
+      "IfcProject": 1,
+      "IfcAlignment": 0,
+      "IfcAnnotation": 0,
+      "IfcPavement": 0,
+      "IfcPipeSegment": 0
+    },
+    "crs": []
+  }
+}
