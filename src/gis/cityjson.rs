@@ -219,6 +219,78 @@ mod tests {
     use super::*;
     use crate::gis::citygml::Theme;
 
+    const BUILDING: &str = include_str!("../../tests/fixtures/cityjson/building.city.json");
+    const SEQUENCE: &str = include_str!("../../tests/fixtures/cityjson/building.city.jsonl");
+
+    #[test]
+    fn fixture_and_file_route_preserve_crs_transform_and_filter() {
+        for text in [BUILDING, SEQUENCE] {
+            let model = parse_with(text, &|_| true, &|_| {}).unwrap();
+            assert_eq!(model.crs.as_deref(), Some("EPSG:2056"));
+            assert_eq!((model.seen, model.objects.len()), (1, 1));
+            assert_eq!(model.objects[0].surfaces[0].1[0][2], [2600010.0, 1200010.0, 5.0]);
+            let filtered = parse_with(text, &|_| false, &|_| {}).unwrap();
+            assert_eq!((filtered.seen, filtered.objects.len()), (1, 0));
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cityjson/building.city.jsonl");
+        let model = super::super::citygml::read_file(&path, &|crs| {
+            assert_eq!(crs, Some("EPSG:2056"));
+            Ok(Box::new(|_| true))
+        }, &|_| {}).unwrap();
+        assert_eq!(model.objects.len(), 1);
+    }
+
+    #[test]
+    fn sequence_rejects_broken_lines_instead_of_partial_success() {
+        for line in ["{", "not-json", "null", r#"{"type":"Other"}"#] {
+            let error = parse_with(&format!("{SEQUENCE}\n{line}\n"), &|_| true, &|_| {}).unwrap_err();
+            assert!(error.starts_with("CityJSON:"), "{error}");
+            assert!(error.contains('3'), "line number missing: {error}");
+        }
+    }
+
+    #[test]
+    fn sequence_rejects_missing_or_invalid_vertex_arrays() {
+        for vertices in ["null", "[]", "[[0,0]]", "[[0,0,0],[1,0,0],[1,1,0],[0,1,\"bad\"]]"] {
+            let mut rows: Vec<Value> = SEQUENCE.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+            rows[1]["vertices"] = serde_json::from_str(vertices).unwrap();
+            let text = rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n");
+            assert!(parse_with(&text, &|_| true, &|_| {}).is_err(), "{vertices}");
+        }
+        let mut rows: Vec<Value> = SEQUENCE.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        rows[1].as_object_mut().unwrap().remove("vertices");
+        let text = rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n");
+        assert!(parse_with(&text, &|_| true, &|_| {}).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_transforms_and_overflow_in_documents_and_sequences() {
+        for text in [BUILDING, SEQUENCE] {
+            for scale in ["null", "[1,1]", "[1,1,\"bad\"]", "[1e308,1,1]"] {
+                let bad = if text == BUILDING {
+                    let mut doc: Value = serde_json::from_str(text).unwrap();
+                    doc["transform"]["scale"] = serde_json::from_str(scale).unwrap();
+                    doc.to_string()
+                } else {
+                    let mut rows: Vec<Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+                    rows[0]["transform"]["scale"] = serde_json::from_str(scale).unwrap();
+                    rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")
+                };
+                assert!(parse_with(&bad, &|_| true, &|_| {}).is_err(), "{scale}");
+            }
+        }
+    }
+
+    #[test]
+    fn empty_missing_and_truncated_input_return_errors() {
+        for text in ["", "  \n", "{}", r#"{"type":"CityJSON","CityObjects":{},"vertices":[]}"#, "{\"vertices\":"] {
+            assert!(parse_with(text, &|_| true, &|_| {}).unwrap_err().starts_with("CityJSON:"));
+        }
+        let large = BUILDING.replace("1000", "1e100");
+        let model = parse_with(&large, &|_| true, &|_| {}).unwrap();
+        assert!(model.objects[0].surfaces[0].1[0].iter().flatten().all(|v| v.is_finite()));
+    }
+
     #[test]
     fn building_with_part_and_semantics() {
         let doc = r#"{"type":"CityJSON","version":"2.0","transform":{"scale":[0.001,0.001,0.001],"translate":[100000,400000,0]},
