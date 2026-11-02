@@ -717,6 +717,55 @@ mod tests {
     }
 
     #[test]
+    fn gpkg_preserves_big_endian_iso_dimensions_and_empty_points() {
+        let mut big_endian = vec![0];
+        big_endian.extend(1u32.to_be_bytes());
+        big_endian.extend(12.0f64.to_be_bytes());
+        big_endian.extend(34.0f64.to_be_bytes());
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&big_endian, &mut f));
+        assert_eq!(f.points, vec![[12.0, 34.0]]);
+        for kind in [1001u32, 2001, 3001, 0x8000_0001, 0x4000_0001] {
+            let mut point = vec![1];
+            point.extend(kind.to_le_bytes());
+            point.extend(12.0f64.to_le_bytes());
+            point.extend(34.0f64.to_le_bytes());
+            point.extend(5.0f64.to_le_bytes());
+            if kind == 3001 { point.extend(6.0f64.to_le_bytes()); }
+            let mut f = Feature::default();
+            assert!(gpkg_geometry(&point, &mut f), "{kind}");
+            assert_eq!(f.points, vec![[12.0, 34.0]]);
+        }
+        let mut empty = WKB_POINT.to_vec();
+        empty[5..13].copy_from_slice(&f64::NAN.to_le_bytes());
+        empty[13..21].copy_from_slice(&f64::NAN.to_le_bytes());
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&empty, &mut f));
+        assert!(f.points.is_empty());
+    }
+
+    #[test]
+    fn gpkg_preserves_envelopes_and_valid_geometry_collections() {
+        let mut envelope = vec![b'G', b'P', 0, 3];
+        envelope.extend(2056i32.to_le_bytes());
+        for bound in [2600000.0f64, 2600010.0, 1200000.0, 1200020.0] {
+            envelope.extend(bound.to_le_bytes());
+        }
+        envelope.extend(WKB_POINT);
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&envelope, &mut f));
+        assert_eq!(f.points.len(), 1);
+        let mut collection = vec![1];
+        collection.extend(7u32.to_le_bytes());
+        collection.extend(2u32.to_le_bytes());
+        collection.extend(WKB_POINT);
+        collection.extend(WKB_LINE);
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&collection, &mut f));
+        assert_eq!((f.points.len(), f.lines.len()), (1, 1));
+    }
+
+    #[test]
     fn gpkg_rejects_bad_headers_byte_order_and_trailing_data() {
         let mut version = gpkg_blob(WKB_POINT);
         version[2] = 1;
