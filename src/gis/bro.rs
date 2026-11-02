@@ -171,6 +171,8 @@ pub fn parse_characteristics(xml: &str) -> Result<SearchResult, String> {
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
+    // Negative control: restore the former whole-answer validation.
+    validate_numbers(doc.root_element())?;
     let mut result = SearchResult::default();
     for object in doc.root_element()
         .children()
