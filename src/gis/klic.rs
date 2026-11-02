@@ -21,6 +21,7 @@ pub struct Levering {
 
 /// Read a delivery: the Kadaster zip, or an extracted `GI_gebiedsinformatielevering_*.xml`.
 pub fn read(path: &Path) -> Result<Levering, String> {
+    let unreadable = || crate::lang::tr("geen tekenbare objecten in het bestand", "no drawable features in the file").to_string();
     // A panic in the shared converter must not take down the plugin process.
     let lev = std::panic::catch_unwind(|| match path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref() {
         Some("xml") | Some("gml") => {
@@ -33,14 +34,16 @@ pub fn read(path: &Path) -> Result<Levering, String> {
             klic2geo::parse_gi_xml(&xml, meld)
         }
         _ => klic2geo::convert_zip(path),
-    }).map_err(|_| "de levering kon niet veilig worden gelezen door de onderliggende lezer".to_string())??;
+    }).map_err(|_| unreadable())??;
     let fc = serde_json::json!({ "type": "FeatureCollection", "features": lev.features });
-    let features = parse_geojson(&fc);
-    // A line container may remain after unusable coordinates were omitted.
-    // Only fail when no feature can be drawn; keep valid neighbours intact.
-    if features.iter().all(|f| f.lines.iter().all(|(line, _)| line.len() < 2) && f.points.is_empty()) {
-        return Err("geen geometrie gevonden in deze levering".into());
-    }
+    let mut features = parse_geojson(&fc);
+    // Keep readable neighbours and remove only geometry that cannot be drawn.
+    // A valid point needs no line; empty optional geometry is not a file error.
+    for feature in &mut features { feature.lines.retain(|(line, _)| line.len() >= 2); }
+    let seen = features.len();
+    features.retain(|feature| !feature.lines.is_empty() || !feature.points.is_empty());
+    let skipped = seen - features.len();
+    if features.is_empty() { return Err(unreadable()); }
     let mut themes = BTreeMap::new();
     let mut operators: Vec<String> = Vec::new();
     for f in &features {
@@ -52,7 +55,7 @@ pub fn read(path: &Path) -> Result<Levering, String> {
         }
     }
     operators.sort();
-    Ok(Levering { meldnummer: lev.meldnummer, features, themes, operators, skipped: 0 })
+    Ok(Levering { meldnummer: lev.meldnummer, features, themes, operators, skipped })
 }
 
 pub fn thema(f: &Feature) -> &str {
