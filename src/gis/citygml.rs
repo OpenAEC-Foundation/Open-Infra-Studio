@@ -424,6 +424,27 @@ mod tests {
     const BUILDING: &str = include_str!("../../tests/fixtures/citygml/building.gml");
 
     #[test]
+    fn citygml_bad_member_keeps_the_valid_adjacent_building() {
+        let doc = Document::parse(BUILDING).unwrap();
+        let member = doc.descendants().find(|n| n.is_element() && local(n) == "cityObjectMember").unwrap();
+        let broken = BUILDING[member.range()].replace("synthetic-building", "broken-building").replace("2600010 1200010 5", "2600010 bad 5");
+        let text = BUILDING.replace("</core:CityModel>", &format!("{broken}</core:CityModel>"));
+        let data = parse(&text).unwrap();
+        assert_eq!((data.seen, data.objects.len()), (1, 1));
+        assert_eq!(data.objects[0].id, "synthetic-building");
+    }
+
+    #[test]
+    fn citygml_projects_complete_four_dimensional_tuples_to_xyz() {
+        let doc = Document::parse(BUILDING).unwrap();
+        let list = doc.descendants().find(|n| n.is_element() && local(n) == "posList").unwrap();
+        let values = numbers(list.text().unwrap()).chunks_exact(3).map(|p| format!("{} {} {} 42", p[0], p[1], p[2])).collect::<Vec<_>>().join(" ");
+        let text = BUILDING.replace("srsDimension=\"3\"", "srsDimension=\"4\"").replace(list.text().unwrap(), &values);
+        let data = parse(&text).unwrap();
+        assert_eq!(data.objects[0].surfaces[0].1[0][2], [2600010.0, 1200010.0, 5.0]);
+    }
+
+    #[test]
     fn fixture_preserves_versions_crs_geometry_and_filtering() {
         for version in ["1.0", "2.0", "3.0"] {
             let text = BUILDING.replace("/2.0", &format!("/{version}"));
