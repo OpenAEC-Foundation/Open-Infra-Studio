@@ -702,6 +702,14 @@ mod tests {
 
     const GML: &str = include_str!("../../tests/fixtures/gml/features.gml");
 
+    fn with_first_gml_line(geometry: &str) -> String {
+        let doc = roxmltree::Document::parse(GML).unwrap();
+        let line = doc.descendants().find(|n| n.has_tag_name("LineString")).unwrap();
+        let mut text = GML.to_string();
+        text.replace_range(line.range(), geometry);
+        text
+    }
+
     #[test]
     fn gml_fixture_inherits_dimensions_and_preserves_crs_and_ids() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/gml/features.gml");
@@ -779,9 +787,7 @@ mod tests {
     #[test]
     fn gml_composite_ring_keeps_every_part_and_the_adjacent_point() {
         let ring = "<gml:Polygon><gml:exterior><gml:Ring><gml:curveMember><gml:LineString><gml:posList>0 0 10 0</gml:posList></gml:LineString></gml:curveMember><gml:curveMember><gml:LineString><gml:posList>10 0 10 10</gml:posList></gml:LineString></gml:curveMember><gml:curveMember><gml:LineString><gml:posList>10 10 0 0</gml:posList></gml:LineString></gml:curveMember></gml:Ring></gml:exterior></gml:Polygon>";
-        let from = "<gml:LineString srsName=\"urn:ogc:def:crs:EPSG::2056\" srsDimension=\"3\">\n      <gml:posList>2600000 1200000 5 2600010 1200020 6</gml:posList>\n    </gml:LineString>";
-        assert!(GML.contains(from));
-        let data = gml(&GML.replace(from, ring)).unwrap();
+        let data = gml(&with_first_gml_line(ring)).unwrap();
         assert_eq!(data.features.len(), 2);
         assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]], true));
         assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
@@ -790,7 +796,7 @@ mod tests {
 
     #[test]
     fn gml_empty_curve_container_does_not_hide_the_adjacent_point() {
-        let text = GML.replace("<gml:LineString srsName=\"urn:ogc:def:crs:EPSG::2056\" srsDimension=\"3\">\n      <gml:posList>2600000 1200000 5 2600010 1200020 6</gml:posList>\n    </gml:LineString>", "<gml:Curve><gml:segments/></gml:Curve>");
+        let text = with_first_gml_line("<gml:Curve><gml:segments/></gml:Curve>");
         assert_ne!(text, GML);
         let data = gml(&text).unwrap();
         assert_eq!(data.features.len(), 2);
@@ -848,15 +854,13 @@ mod tests {
 
     #[test]
     fn gml_deep_curves_and_collections_keep_the_geometry_read_by_main() {
-        let from = "<gml:LineString srsName=\"urn:ogc:def:crs:EPSG::2056\" srsDimension=\"3\">\n      <gml:posList>2600000 1200000 5 2600010 1200020 6</gml:posList>\n    </gml:LineString>";
-        assert!(GML.contains(from));
         for depth in [65, 256] {
             for (container, member) in [("CompositeCurve", "curveMember"), ("MultiGeometry", "geometryMember")] {
                 let mut geometry = "<gml:LineString><gml:posList>0 0 10 0</gml:posList></gml:LineString>".to_string();
                 for _ in 0..depth {
                     geometry = format!("<gml:{container}><gml:{member}>{geometry}</gml:{member}></gml:{container}>");
                 }
-                let data = gml(&GML.replace(from, &geometry)).unwrap();
+                let data = gml(&with_first_gml_line(&geometry)).unwrap();
                 assert_eq!(data.features.len(), 2, "{container}, depth {depth}");
                 assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0]], false));
                 assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
@@ -885,13 +889,12 @@ mod tests {
 
     #[test]
     fn gml_linear_segments_are_joined_and_unsupported_parts_are_reported() {
-        let line = "<gml:LineString srsName=\"urn:ogc:def:crs:EPSG::2056\" srsDimension=\"3\">\n      <gml:posList>2600000 1200000 5 2600010 1200020 6</gml:posList>\n    </gml:LineString>";
         let curve = "<gml:Curve><gml:segments><gml:LineStringSegment><gml:posList>0 0 10 0</gml:posList></gml:LineStringSegment><gml:LineStringSegment><gml:posList>10 0 10 10</gml:posList></gml:LineStringSegment></gml:segments></gml:Curve>";
-        let data = gml(&GML.replace(line, curve)).unwrap();
+        let data = gml(&with_first_gml_line(curve)).unwrap();
         assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]], false));
         assert!(data.warnings.is_empty());
         for curve in [curve.replace("LineStringSegment", "Arc"), curve.replace("10 0 10 10", "20 0 10 10")] {
-            let data = gml(&GML.replace(line, &curve)).unwrap();
+            let data = gml(&with_first_gml_line(&curve)).unwrap();
             assert_eq!(data.features.len(), 1);
             assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
             assert_eq!(data.warnings.len(), 1);
