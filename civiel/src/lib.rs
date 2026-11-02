@@ -129,28 +129,45 @@ fn file_tool(id: &'static str, label: &'static str, icon: IconKind, title: &str,
 
 /// Point clouds: a TIN from ground points (AHN in the Netherlands, or a
 /// file) and a 3D mesh of an object.
-fn point_cloud_group() -> RibbonGroup {
+/// The terrain group: TIN, point clouds (files; the AHN points sit in the
+/// Dutch menu), analysis and water.
+fn terrain_tools() -> Vec<RibbonItem> {
     use open_infra::lang::{dutch, tr};
-    let mut tools = Vec::new();
-    if dutch() {
-        tools.push(large("CIV_PUNTENWOLK_TIN", tr("TIN uit AHN-punten", "TIN from AHN points"), I_CLOUD_TIN));
-    }
-    tools.push(file_tool(
-        "CIV_PUNTENWOLK_BESTAND",
-        tr("TIN uit puntenwolk", "TIN from point cloud"),
-        I_CLOUD_TIN,
-        tr("Puntenwolk openen", "Open a point cloud"),
-        tr("Puntenwolk (LAS, LAZ, E57, PLY, PTS, XYZ)", "Point cloud (LAS, LAZ, E57, PLY, PTS, XYZ)"),
-        &["las", "laz", "e57", "ply", "pts", "xyz", "txt"],
-        !dutch(),
-    ));
+    let cloud = tr("Puntenwolk (LAS, LAZ, E57, PLY, PTS, XYZ)", "Point cloud (LAS, LAZ, E57, PLY, PTS, XYZ)");
+    let exts = &["las", "laz", "e57", "ply", "pts", "xyz", "txt"];
+    let mut tools = vec![
+        large("CIV_TIN", tr("TIN maken", "Create TIN"), I_TIN),
+        file_tool("CIV_PUNTENWOLK_BESTAND", tr("TIN uit puntenwolk", "TIN from point cloud"), I_CLOUD_TIN, tr("Puntenwolk openen", "Open a point cloud"), cloud, exts, false),
+    ];
     // The mesh of the AHN points, or (without the Dutch modules) of a file.
     if dutch() {
         tools.push(small("CIV_MESH", tr("3D-mesh", "3D mesh"), I_MESH));
     } else {
-        tools.push(file_tool("CIV_MESH", tr("3D-mesh", "3D mesh"), I_MESH, tr("Puntenwolk openen", "Open a point cloud"), tr("Puntenwolk (LAS, LAZ, E57, PLY, PTS, XYZ)", "Point cloud (LAS, LAZ, E57, PLY, PTS, XYZ)"), &["las", "laz", "e57", "ply", "pts", "xyz", "txt"], false));
+        tools.push(file_tool("CIV_MESH", tr("3D-mesh", "3D mesh"), I_MESH, tr("Puntenwolk openen", "Open a point cloud"), cloud, exts, false));
     }
-    RibbonGroup { title: tr("Puntenwolk", "Point cloud"), tools }
+    tools.push(RibbonItem::LabeledDropdown {
+        id: "CIV_MENU_ANALYSE",
+        label: tr("Analyse", "Analysis"),
+        icon: I_ANALYSIS,
+        items: vec![
+            ("CIV_HOOGTELIJNEN", tr("Hoogtelijnen", "Contours"), I_CONTOURS),
+            ("CIV_ANALYSE", tr("Hoogteanalyse", "Elevation analysis"), I_ANALYSIS),
+            ("CIV_VOLUME", tr("Grondverzet", "Earthworks"), I_VOLUME),
+        ],
+        default: "CIV_HOOGTELIJNEN",
+    });
+    tools.push(RibbonItem::LabeledDropdown {
+        id: "CIV_MENU_WATER",
+        label: tr("Water", "Water"),
+        icon: I_CATCHMENT,
+        items: vec![
+            ("CIV_STROOMGEBIED", tr("Stroomgebied", "Catchment"), I_CATCHMENT),
+            ("CIV_WATERDRUPPEL", tr("Waterdruppel", "Water drop"), I_DROP),
+            ("CIV_PLASSEN", tr("Plassen", "Ponds"), I_PONDS),
+        ],
+        default: "CIV_STROOMGEBIED",
+    });
+    tools
 }
 
 struct CivielModule;
@@ -166,55 +183,61 @@ impl CadModule for CivielModule {
         static GROUPS: OnceLock<Vec<RibbonGroup>> = OnceLock::new();
         GROUPS.get_or_init(|| {
             use open_infra::lang::dutch;
+            // Eight groups at most (the ninth is the regional one); related
+            // tools share a menu, file dialogs stay buttons (a menu item can
+            // only run a command).
+            let menu = |id: &'static str, label: &'static str, icon: IconKind, items: Vec<(&'static str, &'static str, IconKind)>, default: &'static str| RibbonItem::LabeledDropdown { id, label, icon, items, default };
             let mut groups = vec![
-                // Points (Road "GeoPoints" and "Input-Output").
+                // Points: import and export, survey codes, parcels.
                 RibbonGroup {
                     title: tr("Punten", "Points"),
                     tools: vec![
                         file_tool("CIV_PUNTEN_IMPORT", tr("Punten importeren", "Import points"), I_POINTS, tr("Puntenbestand openen", "Open a point file"), tr("Puntenbestand (PNEZD, PENZD, CSV)", "Point file (PNEZD, PENZD, CSV)"), &["csv", "txt", "xyz", "pnt", "asc"], true),
-                        small("CIV_PUNT", tr("Punt plaatsen", "Place point"), I_PLACE),
-                        small("CIV_PUNTEN_EXPORT", tr("Punten exporteren", "Export points"), I_EXPORT),
                         file_tool("CIV_LANDXML", "LandXML", I_LANDXML, tr("LandXML openen", "Open LandXML"), "LandXML", &["xml", "landxml"], false),
-                        small("CIV_LANDXML_EXPORT", tr("LandXML export", "LandXML export"), I_LANDXML_EXPORT),
+                        menu("CIV_MENU_PUNTEN", tr("Punten", "Points"), I_PLACE, vec![
+                            ("CIV_PUNT", tr("Punt plaatsen", "Place point"), I_PLACE),
+                            ("CIV_PUNTEN_EXPORT", tr("Punten exporteren", "Export points"), I_EXPORT),
+                            ("CIV_CODES_TOEPASSEN", tr("Codes toepassen", "Apply codes"), I_CODES),
+                        ], "CIV_PUNT"),
+                        menu("CIV_MENU_PERCELEN", tr("Percelen", "Parcels"), I_PARCELS, vec![
+                            ("CIV_PERCELEN", tr("Percelen verdelen", "Divide parcels"), I_PARCELS),
+                            ("CIV_PERCEEL_INFO", tr("Perceelinfo", "Parcel info"), I_PARCEL_INFO),
+                        ], "CIV_PERCELEN"),
                     ],
                 },
-                // Surfaces.
+                // Terrain: TIN, point clouds, analysis, water.
+                RibbonGroup { title: tr("Terrein", "Terrain"), tools: terrain_tools() },
+                // Alignment and profiles, design checks, rail.
                 RibbonGroup {
-                    title: tr("Oppervlak", "Surface"),
-                    tools: vec![
-                        large("CIV_TIN", tr("TIN maken", "Create TIN"), I_TIN),
-                        small("CIV_HOOGTELIJNEN", tr("Hoogtelijnen", "Contours"), I_CONTOURS),
-                        small("CIV_ANALYSE", tr("Hoogteanalyse", "Elevation analysis"), I_ANALYSIS),
-                        small("CIV_VOLUME", tr("Grondverzet", "Earthworks"), I_VOLUME),
-                    ],
-                },
-                point_cloud_group(),
-                // Alignments.
-                RibbonGroup {
-                    title: tr("As", "Alignment"),
+                    title: tr("As en profiel", "Alignment and profile"),
                     tools: vec![
                         large("CIV_AS", tr("As maken", "Create alignment"), I_AXIS),
-                        small("CIV_AS_OFFSET", tr("As verschuiven", "Offset alignment"), I_OFFSET),
-                        small("CIV_STATION", tr("Station / offset", "Station / offset"), I_STATION),
-                    ],
-                },
-                // Profiles and sections.
-                RibbonGroup {
-                    title: tr("Profielen", "Profiles"),
-                    tools: vec![
-                        large("CIV_LENGTEPROFIEL", tr("Lengteprofiel", "Length profile"), I_PROFILE),
+                        menu("CIV_MENU_AS", tr("As", "Alignment"), I_OFFSET, vec![
+                            ("CIV_AS_OFFSET", tr("As verschuiven", "Offset alignment"), I_OFFSET),
+                            ("CIV_STATION", tr("Station / offset", "Station / offset"), I_STATION),
+                            ("CIV_AS_TOETS", tr("As toetsen", "Check alignment"), I_CHECK),
+                            ("CIV_ONTWERPCRITERIA", tr("Ontwerpcriteria", "Design criteria"), I_CRITERIA),
+                            ("CIV_ZICHT", tr("Zichtafstand", "Sight distance"), I_SIGHT),
+                        ], "CIV_AS_OFFSET"),
+                        small("CIV_LENGTEPROFIEL", tr("Lengteprofiel", "Length profile"), I_PROFILE),
                         small("CIV_ONTWERPPROFIEL", tr("Ontwerpprofiel", "Design profile"), I_DESIGN),
                         small("CIV_DWARSPROFIELEN", tr("Dwarsprofielen", "Cross sections"), I_SECTIONS),
+                        menu("CIV_MENU_SPOOR", tr("Spoor", "Rail"), I_RAIL, vec![
+                            ("CIV_SPOOR", tr("Spooras", "Track"), I_RAIL),
+                            ("CIV_WISSEL", tr("Wissel", "Turnout"), I_TURNOUT),
+                        ], "CIV_SPOOR"),
                     ],
                 },
-                // Corridors: assembly along axis and design profile; assemblies, junctions, roundabouts.
+                // Corridors: assembly along axis and design profile; junctions.
                 RibbonGroup {
                     title: "Corridor",
                     tools: vec![
                         large("CIV_CORRIDOR", "Corridor", I_CORRIDOR),
                         small("CIV_PROFIELTYPEN", tr("Profieltypen", "Assemblies"), I_ASSEMBLY),
-                        small("CIV_KRUISPUNT", tr("Kruispunt", "Junction"), I_JUNCTION),
-                        small("CIV_ROTONDE", tr("Rotonde", "Roundabout"), I_ROUNDABOUT),
+                        menu("CIV_MENU_KRUISPUNT", tr("Kruispunten", "Junctions"), I_JUNCTION, vec![
+                            ("CIV_KRUISPUNT", tr("Kruispunt", "Junction"), I_JUNCTION),
+                            ("CIV_ROTONDE", tr("Rotonde", "Roundabout"), I_ROUNDABOUT),
+                        ], "CIV_KRUISPUNT"),
                     ],
                 },
                 // Grading: feature lines, plateaus and slopes, exact earthwork, mass haul.
@@ -222,89 +245,66 @@ impl CadModule for CivielModule {
                     title: tr("Grondwerk", "Grading"),
                     tools: vec![
                         large("CIV_KANTLIJN", tr("Kantlijn", "Feature line"), I_FEATURE),
-                        small("CIV_PLATEAU", tr("Plateau", "Plateau"), I_PLATEAU),
-                        small("CIV_TALUD", tr("Talud", "Slope"), I_SLOPE),
-                        small("CIV_KANTLIJN_PUNT", tr("Hoogtepunt", "Height point"), I_PLACE),
-                        small("CIV_VOLUME_TIN", tr("Grondverzet TIN", "Volume TIN"), I_VOLUME_TIN),
-                        small("CIV_GRONDBALANS", tr("Grondbalans", "Mass haul"), I_MASS_HAUL),
+                        menu("CIV_MENU_VORM", tr("Vormgeven", "Shape"), I_PLATEAU, vec![
+                            ("CIV_PLATEAU", tr("Plateau", "Plateau"), I_PLATEAU),
+                            ("CIV_TALUD", tr("Talud", "Slope"), I_SLOPE),
+                            ("CIV_KANTLIJN_PUNT", tr("Hoogtepunt", "Height point"), I_PLACE),
+                        ], "CIV_PLATEAU"),
+                        menu("CIV_MENU_VOLUME", tr("Volumes", "Volumes"), I_VOLUME_TIN, vec![
+                            ("CIV_VOLUME_TIN", tr("Grondverzet TIN", "Volume TIN"), I_VOLUME_TIN),
+                            ("CIV_GRONDBALANS", tr("Grondbalans", "Mass haul"), I_MASS_HAUL),
+                        ], "CIV_VOLUME_TIN"),
                     ],
                 },
-                // Pipe networks, for Dutch sewer practice (GWSW, NLCS RI).
+                // Pipe networks (sewers).
                 RibbonGroup { title: tr("Riolering", "Sewers"), tools: riool_tools() },
-                // Design criteria, sight distance and rail (as-spoor).
+                // Output and 3D: sheets, labels, the 3D model, exchange, settings.
                 RibbonGroup {
-                    title: tr("Ontwerptoets", "Design check"),
+                    title: tr("Uitvoer en 3D", "Output and 3D"),
                     tools: vec![
-                        large("CIV_AS_TOETS", tr("As toetsen", "Check alignment"), I_CHECK),
-                        small("CIV_ONTWERPCRITERIA", tr("Ontwerpcriteria", "Design criteria"), I_CRITERIA),
-                        small("CIV_ZICHT", tr("Zichtafstand", "Sight distance"), I_SIGHT),
+                        large("CIV_BLADEN", tr("Bladen maken", "Create sheets"), I_SHEETS),
+                        menu("CIV_MENU_BLADEN", tr("Bladen", "Sheets"), I_SHEETS_PDF, vec![
+                            ("CIV_BLADEN_PDF", tr("Bladen naar PDF", "Sheets to PDF"), I_SHEETS_PDF),
+                            ("CIV_LABELS", "Labels", I_LABELS),
+                            ("CIV_LABELS_BIJWERKEN", tr("Labels bijwerken", "Update labels"), I_LABELS_UPDATE),
+                        ], "CIV_BLADEN_PDF"),
+                        file_tool("CIV_CITYGML", "CityGML/JSON", I_CITYGML, tr("CityGML of CityJSON openen", "Open CityGML or CityJSON"), "CityGML / CityJSON", &["gml", "xml", "citygml", "json", "jsonl"], false),
+                        menu("CIV_MENU_WEERGAVE", tr("Weergave", "View"), I_SEE, vec![
+                            ("CIV_DOORZICHT", tr("Maaiveld doorzichtig", "See-through ground"), I_SEE),
+                            ("CIV_WATERPEIL", tr("Waterpeil", "Water level"), I_WATER),
+                        ], "CIV_DOORZICHT"),
+                        menu("CIV_MENU_EXPORT", tr("Exporteren", "Export"), I_IFC, vec![
+                            ("CIV_IFC", "IFC 4x3", I_IFC),
+                            ("CIV_LANDXML_EXPORT", "LandXML", I_LANDXML_EXPORT),
+                        ], "CIV_IFC"),
+                        menu("CIV_MENU_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS, vec![
+                            ("CIV_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS),
+                            ("CIV_INFO", tr("Modelinfo", "Model info"), I_INFO),
+                        ], "CIV_INSTELLINGEN"),
                     ],
                 },
-                RibbonGroup {
-                    title: tr("Spoor", "Rail"),
-                    tools: vec![large("CIV_SPOOR", tr("Spooras", "Track"), I_RAIL), small("CIV_WISSEL", tr("Wissel", "Turnout"), I_TURNOUT)],
-                },
             ];
-            // Survey codes to linework, and parcels.
-            groups.push(RibbonGroup {
-                title: tr("Landmeten", "Survey"),
-                tools: vec![
-                    large("CIV_PERCELEN", tr("Percelen", "Parcels"), I_PARCELS),
-                    small("CIV_PERCEEL_INFO", tr("Perceelinfo", "Parcel info"), I_PARCEL_INFO),
-                    small("CIV_CODES_TOEPASSEN", tr("Codes toepassen", "Apply codes"), I_CODES),
-                ],
-            });
-            // Water: drop paths, catchments, ponds.
-            groups.push(RibbonGroup {
-                title: tr("Water", "Water"),
-                tools: vec![
-                    large("CIV_STROOMGEBIED", tr("Stroomgebied", "Catchment"), I_CATCHMENT),
-                    small("CIV_WATERDRUPPEL", tr("Waterdruppel", "Water drop"), I_DROP),
-                    small("CIV_PLASSEN", tr("Plassen", "Ponds"), I_PONDS),
-                ],
-            });
-            // The 3D city and landscape model: open formats for everyone, the
-            // Dutch registers (3D BAG, AHN, BGT, KLIC, BRO) in one menu.
-            let model = vec![
-                file_tool("CIV_CITYGML", "CityGML/JSON", I_CITYGML, tr("CityGML of CityJSON openen", "Open CityGML or CityJSON"), "CityGML / CityJSON", &["gml", "xml", "citygml", "json", "jsonl"], true),
-                small("CIV_DOORZICHT", tr("Maaiveld doorzichtig", "See-through ground"), I_SEE),
-                small("CIV_WATERPEIL", tr("Waterpeil", "Water level"), I_WATER),
-                small("CIV_IFC", "IFC 4x3", I_IFC),
-            ];
-            groups.push(RibbonGroup { title: tr("3D-model", "3D model"), tools: model });
+            // The Netherlands, always on the far right.
             if dutch() {
                 groups.push(RibbonGroup {
                     title: tr("Nederland", "Netherlands"),
                     tools: vec![RibbonItem::LabeledDropdown {
-                    id: "CIV_NL_3D",
-                    label: tr("3D-basisdata", "3D base data"),
-                    icon: I_BAG3D,
-                    items: vec![
-                        ("CIV_3DMODEL", tr("3D-model (alles)", "3D model (all)"), I_BAG3D),
-                        ("CIV_BAG3D", "3D BAG", I_BAG3D),
-                        ("CIV_FOTOTERREIN", tr("Terrein + luchtfoto", "Terrain + aerial photo"), I_PHOTO),
-                        ("CIV_BGT3D", tr("BGT naar 3D", "BGT to 3D"), I_BGT3D),
-                        ("CIV_KLIC3D", tr("KLIC in 3D", "KLIC in 3D"), I_KLIC3D),
-                        ("CIV_SONDERINGEN3D", tr("Sonderingen 3D (BRO)", "CPTs in 3D (BRO)"), I_CPT),
-                    ],
-                    default: "CIV_BAG3D",
+                        id: "CIV_NL_3D",
+                        label: tr("3D-basisdata", "3D base data"),
+                        icon: I_BAG3D,
+                        items: vec![
+                            ("CIV_3DMODEL", tr("3D-model (alles)", "3D model (all)"), I_BAG3D),
+                            ("CIV_BAG3D", "3D BAG", I_BAG3D),
+                            ("CIV_FOTOTERREIN", tr("Terrein + luchtfoto", "Terrain + aerial photo"), I_PHOTO),
+                            ("CIV_BGT3D", tr("BGT naar 3D", "BGT to 3D"), I_BGT3D),
+                            ("CIV_KLIC3D", tr("KLIC in 3D", "KLIC in 3D"), I_KLIC3D),
+                            ("CIV_SONDERINGEN3D", tr("Sonderingen 3D (BRO)", "CPTs in 3D (BRO)"), I_CPT),
+                            ("CIV_PUNTENWOLK_TIN", tr("TIN uit AHN-punten", "TIN from AHN points"), I_CLOUD_TIN),
+                        ],
+                        default: "CIV_BAG3D",
                     }],
                 });
             }
-            // Plan production: sheet sets along an alignment, labels that follow their source.
-            groups.push(RibbonGroup {
-                title: tr("Bladen", "Sheets"),
-                tools: vec![
-                    large("CIV_BLADEN", tr("Bladen maken", "Create sheets"), I_SHEETS),
-                    small("CIV_BLADEN_PDF", tr("Bladen naar PDF", "Sheets to PDF"), I_SHEETS_PDF),
-                    small("CIV_LABELS", "Labels", I_LABELS),
-                    small("CIV_LABELS_BIJWERKEN", tr("Labels bijwerken", "Update labels"), I_LABELS_UPDATE),
-                ],
-            });
-            groups.push(RibbonGroup {
-                title: tr("Instellingen", "Settings"),
-                tools: vec![large("CIV_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS), small("CIV_INFO", tr("Modelinfo", "Model info"), I_INFO)],
-            });
             groups
         })
     }
@@ -863,15 +863,20 @@ fn catchment_request(args: &Args, ponds_only: bool) -> Result<civiel::hydrologie
 /// with the Dutch modules switched on.
 fn riool_tools() -> Vec<RibbonItem> {
     use open_infra::lang::tr;
-    let mut tools = vec![
-        large("CIV_RIOOL", tr("Riool ontwerpen", "Design sewer"), I_RIOOL),
-        small("CIV_RIOOL_PROFIEL", tr("Lengteprofiel", "Length profile"), I_RIOOL_PROFIEL),
-        small("CIV_RIOOL_TOETS", tr("Toetsen", "Check"), I_RIOOL_TOETS),
-        small("CIV_RIOOL_BIJWERKEN", tr("Bijwerken", "Update"), I_RIOOL_BIJWERKEN),
-        small("CIV_RIOOL_EXPORT", tr("Exporteren", "Export"), I_RIOOL_EXPORT),
+    let mut items = vec![
+        ("CIV_RIOOL_PROFIEL", tr("Lengteprofiel", "Length profile"), I_RIOOL_PROFIEL),
+        ("CIV_RIOOL_TOETS", tr("Toetsen", "Check"), I_RIOOL_TOETS),
+        ("CIV_RIOOL_BIJWERKEN", tr("Bijwerken", "Update"), I_RIOOL_BIJWERKEN),
+        ("CIV_RIOOL_EXPORT", tr("Exporteren", "Export"), I_RIOOL_EXPORT),
     ];
     if open_infra::lang::dutch() {
-        tools.push(small("CIV_RIOOL_GWSW", tr("GWSW overnemen", "Take over GWSW"), I_RIOOL_GWSW));
+        items.push(("CIV_RIOOL_GWSW", tr("GWSW overnemen", "Take over GWSW"), I_RIOOL_GWSW));
+    }
+    let mut tools = vec![
+        large("CIV_RIOOL", tr("Riool ontwerpen", "Design sewer"), I_RIOOL),
+        RibbonItem::LabeledDropdown { id: "CIV_MENU_RIOOL", label: tr("Riool", "Sewer"), icon: I_RIOOL_TOETS, items, default: "CIV_RIOOL_TOETS" },
+    ];
+    if open_infra::lang::dutch() {
         tools.push(file_tool("CIV_RIOOL_IMPORT", tr("GWSW-bestand", "GWSW file"), I_RIOOL_GWSW, tr("GWSW-OroX openen", "Open GWSW-OroX"), "GWSW-OroX (Turtle)", &["ttl"], false));
     }
     tools
