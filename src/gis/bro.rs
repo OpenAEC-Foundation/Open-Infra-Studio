@@ -156,44 +156,59 @@ fn point_of(n: Node, cpt: bool) -> Point {
     p
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct SearchResult {
+    pub points: Vec<Point>,
+    pub warnings: Vec<String>,
+}
+
 /// The objects of a characteristics search (deregistered ones left out).
-pub fn parse_characteristics(xml: &str) -> Result<Vec<Point>, String> {
+/// A damaged object is reported without hiding the other search hits.
+pub fn parse_characteristics(xml: &str) -> Result<SearchResult, String> {
     let doc = Document::parse(xml).map_err(|e| format!("BRO: onleesbaar antwoord ({e})"))?;
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
-    validate_numbers(doc.root_element())?;
-    Ok(doc
-        .root_element()
+    let mut result = SearchResult::default();
+    for object in doc.root_element()
         .children()
         .filter(|c| c.is_element() && c.tag_name().name() == "dispatchDocument")
         .filter_map(|d| d.children().find(|c| c.is_element()))
-        .map(|o| point_of(o, o.tag_name().name().starts_with("CPT")))
-        .filter(|p| !p.id.is_empty() && !p.deregistered)
-        .collect())
+    {
+        let id = text_of(object, "broId").unwrap_or_default();
+        if id.is_empty() || text_of(object, "deregistered").as_deref() == Some("ja") { continue; }
+        if let Err(error) = validate_numbers(object) {
+            result.warnings.push(format!("BRO: object {id} overgeslagen: {error}"));
+            continue;
+        }
+        result.points.push(point_of(object, object.tag_name().name().starts_with("CPT")));
+    }
+    Ok(result)
 }
 
 // ── Search ──────────────────────────────────────────────────────────────────
 
 /// All objects of `kind` in a WGS 84 box [w, s, e, n]. A box with more than
 /// the services' limit is split in four, up to four levels deep.
-pub fn search(kind: Kind, lonlat: [f64; 4]) -> Result<Vec<Point>, String> {
+pub fn search(kind: Kind, lonlat: [f64; 4]) -> Result<SearchResult, String> {
     let mut out = search_box(kind, lonlat, 0)?;
     let mut seen = std::collections::HashSet::new();
-    out.retain(|p| seen.insert(p.id.clone()));
+    out.points.retain(|p| seen.insert(p.id.clone()));
     Ok(out)
 }
 
-fn search_box(kind: Kind, b: [f64; 4], depth: u32) -> Result<Vec<Point>, String> {
+fn search_box(kind: Kind, b: [f64; 4], depth: u32) -> Result<SearchResult, String> {
     let body = serde_json::json!({"area": {"boundingBox": {"lowerCorner": {"lat": b[1], "lon": b[0]}, "upperCorner": {"lat": b[3], "lon": b[2]}}}});
     let url = format!("{}/characteristics/searches", kind.api());
     let r = super::http::post_json(&url, &body, 120).and_then(|f| String::from_utf8(f.body).map_err(|_| "BRO: geen UTF-8".to_string())).and_then(|t| parse_characteristics(&t));
     match r {
         Err(e) if e.contains(&SEARCH_LIMIT.to_string()) && depth < 4 => {
             let (mx, my) = ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0);
-            let mut all = Vec::new();
+            let mut all = SearchResult::default();
             for q in [[b[0], b[1], mx, my], [mx, b[1], b[2], my], [b[0], my, mx, b[3]], [mx, my, b[2], b[3]]] {
-                all.extend(search_box(kind, q, depth + 1)?);
+                let found = search_box(kind, q, depth + 1)?;
+                all.points.extend(found.points);
+                all.warnings.extend(found.warnings);
             }
             Ok(all)
         }
@@ -664,7 +679,9 @@ mod tests {
         let bad = xml.replacen("<offset uom=\"m\">2.860</offset>", "<offset uom=\"m\">bad</offset>", 1);
         assert_ne!(bad, xml);
         let points = parse_characteristics(&bad).unwrap();
-        assert_eq!(points.len(), 2);
+        assert_eq!(points.points.len(), 2);
+        assert_eq!(points.warnings.len(), 1);
+        assert!(points.warnings[0].contains("CPT000000011051 overgeslagen"));
     }
 
     const SYNTHETIC_CPT: &str = include_str!("../../tests/fixtures/bro-synthetic/cpt.xml");
@@ -709,10 +726,10 @@ mod tests {
         let original = fixture("cpt-characteristics.xml");
         let text = original.replacen("<offset uom=\"m\">2.860</offset>", "<offset xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:nil=\"true\"/>", 1);
         assert_ne!(text, original);
-        let mut expected = parse_characteristics(&original).unwrap();
+        let mut expected = parse_characteristics(&original).unwrap().points;
         assert_eq!(expected.len(), 3);
         expected[0].surface = None;
-        assert_eq!(parse_characteristics(&text).unwrap(), expected);
+        assert_eq!(parse_characteristics(&text).unwrap().points, expected);
     }
 
     #[test]
@@ -757,7 +774,6 @@ mod tests {
                 let bad = text.replace("<pos>100 200</pos>", &format!("<pos>{position}</pos>"));
                 let result = if text == SYNTHETIC_CPT { parse_cpt(&bad).map(|_| ()) } else { parse_bhr(&bad).map(|_| ()) };
                 assert!(result.is_err(), "{position}");
-                assert!(parse_characteristics(&bad).is_err(), "characteristics: {position}");
             }
             for value in ["NaN", "inf", "broken", "1e999"] {
                 let bad = text.replace("<offset>1</offset>", &format!("<offset>{value}</offset>"));
@@ -792,7 +808,7 @@ mod tests {
             assert!(parse_cpt(text).is_err());
             assert!(parse_bhr(text).is_err());
         }
-        assert!(parse_characteristics("<response/>").unwrap().is_empty());
+        assert!(parse_characteristics("<response/>").unwrap().points.is_empty());
     }
 
     const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bro/");
@@ -803,7 +819,7 @@ mod tests {
 
     #[test]
     fn characteristics_of_a_search() {
-        let pts = parse_characteristics(&fixture("cpt-characteristics.xml")).unwrap();
+        let pts = parse_characteristics(&fixture("cpt-characteristics.xml")).unwrap().points;
         assert_eq!(pts.len(), 3);
         let p = &pts[0];
         assert_eq!(p.id, "CPT000000011051");
@@ -813,7 +829,7 @@ mod tests {
         assert!((ll[0] - 4.656393150).abs() < 1e-9 && (ll[1] - 51.810978890).abs() < 1e-9, "{ll:?}");
         assert_eq!((p.surface, p.end_depth), (Some(2.86), Some(26.18)));
         assert_eq!((p.datum.as_str(), p.reference.as_str(), p.date.as_str(), p.regime.as_str()), ("NAP", "maaiveld", "1997-04-24", "IMBRO/A"));
-        let b = parse_characteristics(&fixture("bhrgt-characteristics.xml")).unwrap();
+        let b = parse_characteristics(&fixture("bhrgt-characteristics.xml")).unwrap().points;
         assert_eq!(b.len(), 2);
         assert_eq!((b[0].id.as_str(), b[0].cpt, b[0].rd, b[0].surface, b[0].end_depth), ("BHR000000360509", false, Some([104080.16, 424379.25]), Some(0.27), Some(11.6)));
         assert_eq!(b[0].date, "2020-11-05");
@@ -922,14 +938,14 @@ mod tests {
     #[ignore]
     fn live_dordrecht() {
         let b = [4.656, 51.811, 4.665, 51.817];
-        let cpts = search(Kind::Cpt, b).unwrap();
+        let cpts = search(Kind::Cpt, b).unwrap().points;
         assert!(cpts.len() > 10, "{}", cpts.len());
         let c = fetch_cpt(&cpts[0].id).unwrap();
         assert!(!c.samples.is_empty());
         for l in cpt_intervals(&c.samples, 0.2) {
             eprintln!("{} {:6.2}–{:6.2} m NAP {:<28} qc {:5.2} Rf {:4.1}", c.point.id, c.point.surface.unwrap_or(0.0) - l.top, c.point.surface.unwrap_or(0.0) - l.bottom, l.name, l.qc.unwrap_or(0.0), l.rf.unwrap_or(0.0));
         }
-        let bhrs = search(Kind::Bhr, b).unwrap();
+        let bhrs = search(Kind::Bhr, b).unwrap().points;
         assert!(!bhrs.is_empty());
         let h = fetch_bhr(&bhrs[0].id).unwrap();
         assert!(!h.layers.is_empty());
