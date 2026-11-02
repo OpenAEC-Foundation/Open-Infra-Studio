@@ -19,17 +19,22 @@ pub struct FileData {
     pub crs: Option<String>,
     /// Layers in a GeoPackage (the one read is the first, or the asked one).
     pub layers: Vec<String>,
-    /// Internal read diagnostics; never attributes or automatic UI messages.
+    /// Read diagnostics, kept separate from object attributes.
     pub warnings: Vec<String>,
     /// Source objects omitted while keeping the rest of the file readable.
     pub skipped: usize,
 }
 
 impl FileData {
-    pub fn import_warnings(&self) -> &[String] { &self.warnings }
+    /// Existing CSV/IMRO notices may be displayed while their wording awaits
+    /// approval. Other readers retain their diagnostics only in the result.
+    pub fn import_warnings(&self) -> &[String] {
+        if matches!(self.format, "CSV" | "IMRO") { &self.warnings } else { &[] }
+    }
     pub fn report(&self, message: impl Into<String>) -> String {
         let message = message.into();
-        if self.warnings.is_empty() { message } else { format!("{message} {}", self.warnings.join(" ")) }
+        let warnings = self.import_warnings();
+        if warnings.is_empty() { message } else { format!("{message} {}", warnings.join(" ")) }
     }
     /// Coordinate bounds of all features (file CRS).
     pub fn bounds(&self) -> Option<[f64; 4]> {
@@ -762,6 +767,7 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         return Err(format!("CSV: no coordinate columns (x/y, easting/northing or lon/lat) in {}", cols.join(", ")));
     };
     let mut features = Vec::new();
+    let mut skipped = 0;
     for (line_number, line) in records {
         let vals = split_line(line, sep);
         let coordinate = |index: usize| {
@@ -769,7 +775,7 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         };
         let (x, y) = match coordinate(ix).and_then(|x| coordinate(iy).map(|y| (x, y))) {
             Ok(xy) => xy,
-            Err(error) => { warnings.push(error); continue; }
+            Err(error) => { skipped += 1; warnings.push(error); continue; }
         };
         let mut f = Feature { points: vec![[x, y]], ..Default::default() };
         for (i, c) in cols.iter().enumerate() {
@@ -781,7 +787,7 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), skipped: warnings.len(), warnings })
+    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings, skipped })
 }
 
 #[cfg(test)]
