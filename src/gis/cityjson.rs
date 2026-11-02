@@ -19,13 +19,14 @@ struct Transform {
 
 #[derive(Deserialize)]
 struct Doc<'a> {
+    #[serde(rename = "type", default)]
+    kind: Option<String>,
     #[serde(default)]
     transform: Option<Transform>,
     #[serde(default)]
     metadata: Option<Value>,
-    #[serde(rename = "CityObjects", borrow, default)]
+    #[serde(rename = "CityObjects", borrow)]
     objects: HashMap<String, &'a RawValue>,
-    #[serde(default)]
     vertices: Vec<[f64; 3]>,
 }
 
@@ -72,50 +73,61 @@ fn height(a: &Value) -> Option<f64> {
 }
 
 /// One city object: its highest LoD geometry with semantics.
-fn convert(id: &str, o: &Value, parent: Option<&Value>, verts: &[[f64; 3]]) -> Option<CityObject> {
+fn convert(id: &str, o: &Value, parent: Option<&Value>, verts: &[[f64; 3]]) -> Result<Option<CityObject>, String> {
     let class = o["type"].as_str().unwrap_or("").trim_start_matches('+').to_string();
-    let geoms: Vec<&Value> = o["geometry"].as_array()?.iter().filter(|g| matches!(g["type"].as_str(), Some("MultiSurface" | "CompositeSurface" | "Solid" | "MultiSolid" | "CompositeSolid"))).collect();
+    let Some(geometry) = o["geometry"].as_array() else { return Ok(None) };
+    let geoms: Vec<&Value> = geometry.iter().filter(|g| matches!(g["type"].as_str(), Some("MultiSurface" | "CompositeSurface" | "Solid" | "MultiSolid" | "CompositeSolid"))).collect();
     let top = geoms.iter().map(|g| lod_rank(g)).fold(f64::MIN, f64::max);
-    let g = *geoms.iter().find(|g| lod_rank(g) == top)?;
+    let Some(&g) = geoms.iter().find(|g| lod_rank(g) == top) else { return Ok(None) };
     let sem: Vec<Part> = g["semantics"]["surfaces"].as_array().into_iter().flatten().map(|s| part_of(s["type"].as_str().unwrap_or(""))).collect();
-    let ring = |r: &Value| -> Vec<[f64; 3]> { r.as_array().into_iter().flatten().filter_map(|i| verts.get(i.as_u64()? as usize).copied()).collect() };
+    let invalid = || format!("CityJSON: object {id}: ongeldige geometrie of vertexindex");
+    fn array(v: &Value) -> Result<&Vec<Value>, String> {
+        v.as_array().ok_or_else(|| "CityJSON: geometrie-array verwacht".into())
+    }
+    let ring = |r: &Value| -> Result<Vec<[f64; 3]>, String> {
+        let points = array(r)?.iter().map(|i| {
+            i.as_u64().and_then(|i| usize::try_from(i).ok()).and_then(|i| verts.get(i).copied()).ok_or_else(invalid)
+        }).collect::<Result<Vec<_>, _>>()?;
+        if points.len() < 3 { return Err(invalid()); }
+        Ok(points)
+    };
     let mut surfaces = Vec::new();
-    let mut push = |s: &Value, v: &Value| {
-        let rings: Vec<Vec<[f64; 3]>> = s.as_array().into_iter().flatten().map(ring).filter(|r| r.len() >= 3).collect();
-        if !rings.is_empty() {
-            surfaces.push((v.as_u64().and_then(|i| sem.get(i as usize).copied()).unwrap_or(Part::Any), rings));
-        }
+    let mut push = |s: &Value, v: &Value| -> Result<(), String> {
+        let rings = array(s)?.iter().map(ring).collect::<Result<Vec<_>, _>>()?;
+        if rings.is_empty() { return Err(invalid()); }
+        surfaces.push((v.as_u64().and_then(|i| sem.get(i as usize).copied()).unwrap_or(Part::Any), rings));
+        Ok(())
     };
     let b = &g["boundaries"];
     let vals = &g["semantics"]["values"];
-    match g["type"].as_str()? {
+    match g["type"].as_str().unwrap_or("") {
         // [surface][ring][vertex]; values [surface].
         "MultiSurface" | "CompositeSurface" => {
-            for (i, s) in b.as_array()?.iter().enumerate() {
-                push(s, &vals[i]);
+            for (i, s) in array(b)?.iter().enumerate() {
+                push(s, &vals[i])?;
             }
         }
         // [shell][surface][ring][vertex]; values [shell][surface].
         "Solid" => {
-            for (h, shell) in b.as_array()?.iter().enumerate() {
-                for (i, s) in shell.as_array().into_iter().flatten().enumerate() {
-                    push(s, &vals[h][i]);
+            for (h, shell) in array(b)?.iter().enumerate() {
+                for (i, s) in array(shell)?.iter().enumerate() {
+                    push(s, &vals[h][i])?;
                 }
             }
         }
         // [solid][shell][surface][ring][vertex].
         _ => {
-            for (k, solid) in b.as_array()?.iter().enumerate() {
-                for (h, shell) in solid.as_array().into_iter().flatten().enumerate() {
-                    for (i, s) in shell.as_array().into_iter().flatten().enumerate() {
-                        push(s, &vals[k][h][i]);
+            for (k, solid) in array(b)?.iter().enumerate() {
+                for (h, shell) in array(solid)?.iter().enumerate() {
+                    for (i, s) in array(shell)?.iter().enumerate() {
+                        push(s, &vals[k][h][i])?;
                     }
                 }
             }
         }
     }
     if surfaces.is_empty() {
-        return None;
+        return Ok(None);
     }
     let own = &o["attributes"];
     let pick = |f: &dyn Fn(&Value) -> Option<i64>| f(own).or_else(|| parent.and_then(|p| f(&p["attributes"])));
@@ -126,7 +138,7 @@ fn convert(id: &str, o: &Value, parent: Option<&Value>, verts: &[[f64; 3]]) -> O
         .map(str::to_lowercase)
         .collect::<Vec<_>>()
         .join(" ");
-    Some(CityObject {
+    Ok(Some(CityObject {
         theme: theme_of(&class),
         year: pick(&year),
         height: height(own).or_else(|| parent.and_then(|p| height(&p["attributes"]))),
@@ -135,44 +147,51 @@ fn convert(id: &str, o: &Value, parent: Option<&Value>, verts: &[[f64; 3]]) -> O
         class,
         surfaces,
         flat: false,
-    })
+    }))
 }
 
-fn apply(t: &Option<Transform>, v: &mut [[f64; 3]]) {
-    if let Some(t) = t {
-        for p in v {
-            for k in 0..3 {
+fn apply(t: &Option<Transform>, v: &mut [[f64; 3]]) -> Result<(), String> {
+    for (i, p) in v.iter_mut().enumerate() {
+        for k in 0..3 {
+            if let Some(t) = t {
                 p[k] = p[k] * t.scale[k] + t.translate[k];
+            }
+            if !p[k].is_finite() {
+                return Err(format!("CityJSON: vertex {i}: niet-eindige coördinaat na transformatie"));
             }
         }
     }
+    Ok(())
 }
 
 /// Read CityJSON or CityJSONSeq text; `keep` decides per object.
 pub fn parse_with(text: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn Fn(String)) -> Result<CityModel, String> {
     let mut model = CityModel { crs: crs_of(text), ..Default::default() };
-    let mut lines = text.lines().filter(|l| !l.trim().is_empty());
-    let first = lines.next().ok_or("CityJSON: leeg bestand")?;
-    let seq = serde_json::from_str::<Value>(first).is_ok_and(|v| v["type"] == "CityJSON") && text.contains("\"CityJSONFeature\"");
+    let mut lines = text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty());
+    let (header_line, first) = lines.next().ok_or("CityJSON: leeg bestand")?;
+    let seq = serde_json::from_str::<Value>(first).is_ok_and(|v| v["type"] == "CityJSON") && lines.clone().next().is_some();
     if seq {
         // CityJSONSeq: a header line, then one feature (with its own
         // vertices) per line.
         let header: Value = serde_json::from_str(first).map_err(|e| format!("CityJSON: {e}"))?;
-        let t: Option<Transform> = serde_json::from_value(header["transform"].clone()).ok();
-        for (n, line) in lines.enumerate() {
+        let t: Option<Transform> = serde_json::from_value(header["transform"].clone()).map_err(|e| format!("CityJSON: regel {}: transformatie: {e}", header_line + 1))?;
+        for (n, (line_index, line)) in lines.enumerate() {
+            let line_number = line_index + 1;
             if n % 5000 == 0 && n > 0 {
                 progress(format!("CityJSON: {n} objecten gelezen…"));
             }
-            let Ok(f) = serde_json::from_str::<Value>(line) else { continue };
-            let mut verts: Vec<[f64; 3]> = serde_json::from_value(f["vertices"].clone()).unwrap_or_default();
-            apply(&t, &mut verts);
-            let Some(objects) = f["CityObjects"].as_object() else { continue };
-            for (id, o) in objects {
+            let mut f: Doc = serde_json::from_str(line).map_err(|e| format!("CityJSON: regel {line_number}: {e}"))?;
+            if f.kind.as_deref() != Some("CityJSONFeature") {
+                return Err(format!("CityJSON: regel {line_number}: CityJSONFeature verwacht"));
+            }
+            apply(&t, &mut f.vertices)?;
+            for (id, raw) in &f.objects {
+                let o: Value = serde_json::from_str(raw.get()).map_err(|e| format!("CityJSON: regel {line_number}: object {id}: {e}"))?;
                 if o["children"].as_array().is_some_and(|c| !c.is_empty()) {
                     continue;
                 }
-                let parent = o["parents"].get(0).and_then(Value::as_str).and_then(|p| objects.get(p));
-                if let Some(obj) = convert(id, o, parent, &verts) {
+                let parent: Option<Value> = o["parents"].get(0).and_then(Value::as_str).and_then(|p| f.objects.get(p)).and_then(|r| serde_json::from_str(r.get()).ok());
+                if let Some(obj) = convert(id, &o, parent.as_ref(), &f.vertices)? {
                     model.seen += 1;
                     if keep(&obj) {
                         model.objects.push(obj);
@@ -188,8 +207,11 @@ pub fn parse_with(text: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn
             eprintln!("doc {:.2} s", t0.elapsed().as_secs_f64());
         }
         // 3D BAG API pages keep the transform in the metadata.
-        let t = doc.transform.take().or_else(|| doc.metadata.as_ref().and_then(|m| serde_json::from_value(m["transform"].clone()).ok()));
-        apply(&t, &mut doc.vertices);
+        let t = match doc.transform.take() {
+            Some(t) => Some(t),
+            None => serde_json::from_value(doc.metadata.as_ref().map(|m| m["transform"].clone()).unwrap_or(Value::Null)).map_err(|e| format!("CityJSON: transformatie: {e}"))?,
+        };
+        apply(&t, &mut doc.vertices)?;
         let total = doc.objects.len();
         for (n, (id, raw)) in doc.objects.iter().enumerate() {
             if n % 5000 == 0 && n > 0 {
@@ -200,7 +222,7 @@ pub fn parse_with(text: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn
                 continue;
             }
             let parent: Option<Value> = o["parents"].get(0).and_then(Value::as_str).and_then(|p| doc.objects.get(p)).and_then(|r| serde_json::from_str(r.get()).ok());
-            if let Some(obj) = convert(id, &o, parent.as_ref(), &doc.vertices) {
+            if let Some(obj) = convert(id, &o, parent.as_ref(), &doc.vertices)? {
                 model.seen += 1;
                 if keep(&obj) {
                     model.objects.push(obj);
@@ -218,6 +240,133 @@ pub fn parse_with(text: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn
 mod tests {
     use super::*;
     use crate::gis::citygml::Theme;
+
+    const BUILDING: &str = include_str!("../../tests/fixtures/cityjson/building.city.json");
+    const SEQUENCE: &str = include_str!("../../tests/fixtures/cityjson/building.city.jsonl");
+
+    #[test]
+    fn fixture_and_file_route_preserve_crs_transform_and_filter() {
+        for text in [BUILDING, SEQUENCE] {
+            let model = parse_with(text, &|_| true, &|_| {}).unwrap();
+            assert_eq!(model.crs.as_deref(), Some("EPSG:2056"));
+            assert_eq!((model.seen, model.objects.len()), (1, 1));
+            assert_eq!(model.objects[0].surfaces[0].1[0][2], [2600010.0, 1200010.0, 5.0]);
+            let filtered = parse_with(text, &|_| false, &|_| {}).unwrap();
+            assert_eq!((filtered.seen, filtered.objects.len()), (1, 0));
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cityjson/building.city.jsonl");
+        let model = super::super::citygml::read_file(&path, &|crs| {
+            assert_eq!(crs, Some("EPSG:2056"));
+            Ok(Box::new(|_| true))
+        }, &|_| {}).unwrap();
+        assert_eq!(model.objects.len(), 1);
+    }
+
+    #[test]
+    fn sequence_rejects_broken_lines_instead_of_partial_success() {
+        for line in ["{", "not-json", "null", r#"{"type":"Other"}"#] {
+            let error = parse_with(&format!("{SEQUENCE}{line}\n"), &|_| true, &|_| {}).unwrap_err();
+            assert!(error.starts_with("CityJSON:"), "{error}");
+            assert!(error.contains('3'), "line number missing: {error}");
+        }
+    }
+
+    #[test]
+    fn sequence_rejects_missing_or_invalid_vertex_arrays() {
+        let rows: Vec<Value> = SEQUENCE.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        let valid = parse_with(SEQUENCE, &|_| true, &|_| {}).unwrap();
+        assert_eq!((valid.seen, valid.objects.len()), (1, 1));
+        for vertices in [None, Some("null"), Some("[]"), Some("[[0,0]]"), Some("[[0,0,0],[1,0,0],[1,1,0],[0,1,\"bad\"]]")] {
+            let mut bad = rows[1].clone();
+            bad["id"] = Value::String("broken".into());
+            let objects = bad["CityObjects"].as_object_mut().unwrap();
+            let object = objects.remove("building").unwrap();
+            objects.insert("broken".into(), object);
+            match vertices {
+                Some(vertices) => bad["vertices"] = serde_json::from_str(vertices).unwrap(),
+                None => { bad.as_object_mut().unwrap().remove("vertices"); }
+            }
+            // Preserve the valid feature and append a broken second one.
+            // Dropping the broken feature must not become a successful import.
+            let text = format!("{}\n{}\n{bad}\n", rows[0], rows[1]);
+            let error = parse_with(&text, &|_| true, &|_| {}).unwrap_err();
+            assert!(error.starts_with("CityJSON:"), "{vertices:?}: {error}");
+        }
+    }
+
+    #[test]
+    fn null_optional_attributes_and_semantic_values_preserve_geometry() {
+        let unknown = |doc: &mut Value| {
+            let object = &mut doc["CityObjects"]["building"];
+            object["attributes"] = serde_json::json!({"measuredHeight": null, "yearOfConstruction": null});
+            object["geometry"][0]["semantics"] = serde_json::json!({"surfaces": [{"type":"RoofSurface"}], "values": [null]});
+        };
+        let mut doc: Value = serde_json::from_str(BUILDING).unwrap();
+        unknown(&mut doc);
+        let mut rows: Vec<Value> = SEQUENCE.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        unknown(&mut rows[1]);
+        for text in [doc.to_string(), rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")] {
+            let model = parse_with(&text, &|_| true, &|_| {}).unwrap();
+            assert_eq!((model.seen, model.objects.len()), (1, 1));
+            let object = &model.objects[0];
+            assert_eq!((object.height, object.year), (None, None));
+            assert_eq!(object.surfaces[0].0, Part::Any);
+            assert_eq!(object.surfaces[0].1[0][2], [2600010.0, 1200010.0, 5.0]);
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_transforms_and_overflow_in_documents_and_sequences() {
+        for text in [BUILDING, SEQUENCE] {
+            for scale in ["null", "[1,1]", "[1,1,\"bad\"]", "[1e308,1,1]"] {
+                let bad = if text == BUILDING {
+                    let mut doc: Value = serde_json::from_str(text).unwrap();
+                    doc["transform"]["scale"] = serde_json::from_str(scale).unwrap();
+                    doc.to_string()
+                } else {
+                    let mut rows: Vec<Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+                    rows[0]["transform"]["scale"] = serde_json::from_str(scale).unwrap();
+                    rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")
+                };
+                assert!(parse_with(&bad, &|_| true, &|_| {}).is_err(), "{scale}");
+            }
+        }
+    }
+
+    #[test]
+    fn empty_missing_and_truncated_input_return_errors() {
+        for text in ["", "  \n", "{}", r#"{"type":"CityJSON","CityObjects":{},"vertices":[]}"#, "{\"vertices\":"] {
+            assert!(parse_with(text, &|_| true, &|_| {}).unwrap_err().starts_with("CityJSON:"));
+        }
+        let large = BUILDING.replace("1000", "1e100");
+        let model = parse_with(&large, &|_| true, &|_| {}).unwrap();
+        assert!(model.objects[0].surfaces[0].1[0].iter().flatten().all(|v| v.is_finite()));
+    }
+
+    #[test]
+    fn rejects_invalid_indices_without_shortening_or_replacing_rings() {
+        for boundaries in ["[[[0,1,2,999]]]", "[[[0,1,2,-1]]]", "[[[0,1,2,18446744073709551615]]]", "[[[0,1,2,\"bad\"]]]", "[[[0,1]]]", "[[[999,998,997],[0,1,2]]]"] {
+            for text in [BUILDING, SEQUENCE] {
+                let bad = if text == BUILDING {
+                    let mut doc: Value = serde_json::from_str(text).unwrap();
+                    doc["CityObjects"]["building"]["geometry"][0]["boundaries"] = serde_json::from_str(boundaries).unwrap();
+                    doc.to_string()
+                } else {
+                    let mut rows: Vec<Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+                    rows[1]["CityObjects"]["building"]["geometry"][0]["boundaries"] = serde_json::from_str(boundaries).unwrap();
+                    rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")
+                };
+                assert!(parse_with(&bad, &|_| true, &|_| {}).is_err(), "{boundaries}");
+            }
+        }
+    }
+
+    #[test]
+    fn sequence_error_reports_physical_line_including_blank_lines() {
+        let bad = format!("\n{SEQUENCE}\n{{");
+        let error = parse_with(&bad, &|_| true, &|_| {}).unwrap_err();
+        assert!(error.contains("regel 5"), "{error}");
+    }
 
     #[test]
     fn building_with_part_and_semantics() {

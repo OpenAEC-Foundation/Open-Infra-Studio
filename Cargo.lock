@@ -2762,6 +2762,7 @@ dependencies = [
  "ocs_plugin_api",
  "pointcloud-core",
  "proj4rs",
+ "quick-xml 0.41.0",
  "roxmltree 0.21.1",
  "rusqlite",
  "serde",

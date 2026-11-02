@@ -68,6 +68,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+      # Keep compiled dependencies separate from the offline test cache. The
+      # workspace plugins are rebuilt before staging and signing as before.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: release
+          cache-bin: false
       - run: cargo test --lib --locked -p open-infra
       # Two plugins from one engine: separate builds, so the Civiel plugin
       # links the engine without the GIS plugin's entry points. That second

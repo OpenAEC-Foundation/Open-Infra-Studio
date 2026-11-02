@@ -1,0 +1,8 @@
+{
+  "fullExtent": {"xmin": 1000, "ymin": 1000, "xmax": 1400, "ymax": 1400},
+  "tileInfo": {
+    "origin": {"x": 0, "y": 3000}, "cols": 64, "rows": 64,
+    "spatialReference": {"wkid": 28992},
+    "lods": [{"level": 1, "resolution": 20}, {"level": 2, "resolution": 8}]
+  }
+}

@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">
+  <ows:Exception exceptionCode="LayerNotDefined"><ows:ExceptionText>De proeflaag bestaat niet.</ows:ExceptionText></ows:Exception>
+</ows:ExceptionReport>

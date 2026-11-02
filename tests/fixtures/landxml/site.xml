@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">
+  <Units><Metric linearUnit="meter"/></Units>
+  <CgPoints><CgPoint name="1">200 100 5</CgPoint></CgPoints>
+  <Surfaces><Surface name="terrain"><Definition surfType="TIN">
+    <Pnts><P id="1">200 100 5</P><P id="2">200 110 6</P><P id="3">210 110 7</P></Pnts>
+    <Faces><F>1 2 3</F></Faces>
+  </Definition></Surface></Surfaces>
+  <Alignments><Alignment name="axis" staStart="10"><CoordGeom>
+    <Line><Start>200 100</Start><End>200 110</End></Line>
+  </CoordGeom></Alignment></Alignments>
+</LandXML>
