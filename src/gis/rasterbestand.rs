@@ -476,8 +476,14 @@ mod tests {
     #[test]
     fn asc_rejects_empty_missing_and_truncated_input() {
         asc_error("");
-        for line in ["ncols 3\n", "nrows 2\n", "cellsize 5\n", "xllcorner 100\n", "yllcorner 200\n", "4 -9999 6\n"] {
-            asc_error(&ASC.replace(line, ""));
+        for ending in ["\n", "\r\n"] {
+            let source = ASC.lines().collect::<Vec<_>>().join(ending) + ending;
+            assert!(read_asc(&source).is_ok(), "geldige fixture met {ending:?}");
+            for line in ["ncols 3", "nrows 2", "cellsize 5", "xllcorner 100", "yllcorner 200", "4 -9999 6"] {
+                let incomplete = source.replace(&format!("{line}\n"), "");
+                assert_ne!(incomplete, source, "de test moet {line:?} met {ending:?} werkelijk verwijderen");
+                asc_error(&incomplete);
+            }
         }
     }
 
