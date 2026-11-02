@@ -1058,7 +1058,12 @@ impl<'a, W: Write> Exporter<'a, W> {
         // An excavation (IfcEarthworksCut) is an opening: it cuts the existing
         // ground and is not itself in the spatial structure. Without a ground
         // surface it stays a geographic element.
-        let has_ground = groups.iter().any(|g| g.class.role == Role::Terrain && g.class.predefined == Some("TERRAIN"));
+        // Empty terrain groups are skipped below. An outline, or a mesh whose
+        // faces collapse during vertex merging, cannot host an excavation.
+        let has_ground = groups.iter().any(|g| {
+            g.class.role == Role::Terrain && g.class.predefined == Some("TERRAIN")
+                && g.merged.as_ref().is_some_and(|m| !m.tris.is_empty())
+        });
         if !has_ground {
             for g in groups.iter_mut().filter(|g| g.class.ifc == "IfcEarthworksCut") {
                 g.class = class("IfcGeographicElement", Some("USERDEFINED"), g.class.object_type.clone());
@@ -1663,6 +1668,40 @@ pub mod tests {
         let (b, _) = export_sample();
         assert_eq!(ids(&a), ids(&b));
         assert_eq!(ids(&a).len(), 2);
+    }
+
+    fn check_excavation_without_exported_ground(terrain: EntityType, name: &str) {
+        let mut doc = CadDocument::new();
+        doc.add_entity(on(terrain, &nl("OG", "TRIANGULATIE", Element::G, Status::B), &[])).unwrap();
+        doc.add_entity(on(
+            lw(&[[0.0, 10.0], [5.0, 10.0], [5.0, 15.0], [0.0, 15.0]], true, 0.0),
+            &nl("GW", "ONTGRAVINGSVAK-WERK", Element::G, Status::N), &[],
+        )).unwrap();
+        let src = Source { doc: &doc, f: 1.0, site: None, name: format!("{name}.dwg") };
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/ifc-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("{name}.ifc"));
+        let report = write(&src, &Options::default(), &path).unwrap();
+        let data = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(report.classes.get("IfcEarthworksCut"), None, "an opening requires an exported ground host");
+        assert_eq!(report.classes.get("IfcGeographicElement"), Some(&1), "preserve the excavation geometry as a geographic element");
+        assert!(data.contains("IFCRELCONTAINEDINSPATIALSTRUCTURE("));
+        assert!(!data.contains("IFCRELVOIDSELEMENT("));
+    }
+
+    #[test]
+    fn excavation_with_collapsed_terrain_stays_geographic() {
+        // Merged terrain vertices are deduplicated to millimetres. All three
+        // vertices collapse, so this otherwise non-empty mesh is not emitted.
+        let terrain = mesh(&[[0.0, 0.0, 0.0], [0.0001, 0.0, 0.0], [0.0, 0.0001, 0.0]], &[&[0, 1, 2]], None);
+        check_excavation_without_exported_ground(terrain, "ontgraving-ingeklapt-terrein");
+    }
+
+    #[test]
+    fn excavation_with_only_a_terrain_outline_stays_geographic() {
+        // A terrain outline also creates a terrain group without mesh faces.
+        let terrain = lw(&[[0.0, 0.0], [5.0, 0.0], [5.0, 5.0], [0.0, 5.0]], true, 0.0);
+        check_excavation_without_exported_ground(terrain, "ontgraving-terreinomtrek");
     }
 
     #[test]
