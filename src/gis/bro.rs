@@ -89,7 +89,7 @@ fn num_of(n: Node, local: &str) -> Option<f64> {
 }
 
 /// Validate fields used by the geometry before optional-value extraction.
-/// An absent optional field is allowed; a present but broken value is not.
+/// Absent optional metadata and explicitly voidable nil values are allowed.
 fn validate_numbers(root: Node) -> Result<(), String> {
     for n in root.descendants().filter(|n| n.is_element()) {
         let name = n.tag_name().name();
@@ -99,6 +99,18 @@ fn validate_numbers(root: Node) -> Result<(), String> {
                 return Err("BRO: onvolledige of niet-eindige locatiecoördinaten".into());
             }
         } else if matches!(name, "offset" | "finalDepth" | "finalDepthBoring" | "predrilledDepth" | "upperBoundary" | "lowerBoundary") {
+            if let Some(nil) = n.attribute(("http://www.w3.org/2001/XMLSchema-instance", "nil")) {
+                match nil.trim() {
+                    "true" | "1" => {
+                        if !matches!(name, "offset" | "predrilledDepth") || n.children().any(|c| c.is_element() || c.is_text()) {
+                            return Err(format!("BRO: ongeldige ontbrekende waarde in {name}"));
+                        }
+                        continue;
+                    }
+                    "false" | "0" => {}
+                    _ => return Err(format!("BRO: ongeldige xsi:nil in {name}")),
+                }
+            }
             let value = n.text().unwrap_or("").trim().parse::<f64>().map_err(|_| format!("BRO: ongeldig getal in {name}"))?;
             if !value.is_finite() { return Err(format!("BRO: niet-eindig getal in {name}")); }
         }
@@ -666,6 +678,7 @@ mod tests {
             assert_eq!(cpt.point.surface, None);
             assert_eq!((cpt.point.rd, cpt.point.lonlat), (expected.point.rd, expected.point.lonlat));
         }
+        assert_eq!(parse_cpt(&cpt_field("offset", "")).unwrap().point.surface, None);
     }
 
     #[test]
@@ -697,8 +710,10 @@ mod tests {
     fn nil_markers_do_not_hide_broken_text_or_nonfinite_metadata() {
         for field in ["offset", "predrilledDepth"] {
             for value in ["broken", "NaN", "inf", "1e999", "<unexpected/>"] {
-                let text = cpt_field(field, &format!("<{field} xsi:nil=\"true\">{value}</{field}>"));
-                assert!(parse_cpt(&text).is_err(), "{field}: {value}");
+                for marker in ["", " xsi:nil=\"true\"", " xsi:nil=\"false\""] {
+                    let text = cpt_field(field, &format!("<{field}{marker}>{value}</{field}>"));
+                    assert!(parse_cpt(&text).is_err(), "{field}{marker}: {value}");
+                }
             }
             for marker in ["false", "0", "invalid"] {
                 let text = cpt_field(field, &format!("<{field} xsi:nil=\"{marker}\"/>"));
