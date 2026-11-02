@@ -129,7 +129,7 @@ Ze schrijven `target/ifc-test/voorbeeld.ifc`. `tests/ifc_validate.py` toetst dat
 - aan het schema IFC4X3_ADD2 en de EXPRESS-regels;
 - de as-geometrie: de geometriekernel rekent de horizontale en verticale curve uit, en de punten moeten op de segmenten liggen.
 
-In CI gebeurt dat bij elke push.
+In CI worden bij iedere pull request en push naar `main` negen vaste exports gecontroleerd: dit gemengde model, drie opgeslagen DWG-voorbeelden en vijf synthetische grensgevallen. De controle toetst ook een eigen IDS-contract, aantallen, klassen, georeferentie en de millimeterconversie. De IFC-bestanden en het JSON-rapport worden als artifact bewaard. Er is geen live validatiedienst nodig. Zie [IFC 4.3-validatie](../docs/ifc43-validatie.md) voor de voorbeelden, reproduceerbare commando's en de grenzen van de claim.
 
 `tests/ifc_dwg.rs` exporteert een echte tekening rechtstreeks uit de DWG, zonder Open CAD Studio. De projectlocatie komt uit de tekening.
 

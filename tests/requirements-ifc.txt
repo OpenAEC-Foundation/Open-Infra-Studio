@@ -1,0 +1,4 @@
+ifcopenshell==0.8.4.post1
+ifctester==0.8.4
+pytest==8.4.1
+xmlschema==4.3.2
