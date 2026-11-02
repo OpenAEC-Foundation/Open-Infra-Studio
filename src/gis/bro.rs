@@ -649,6 +649,68 @@ mod tests {
     const SYNTHETIC_CPT: &str = include_str!("../../tests/fixtures/bro-synthetic/cpt.xml");
     const SYNTHETIC_BHR: &str = include_str!("../../tests/fixtures/bro-synthetic/borehole.xml");
 
+    fn cpt_field(field: &str, replacement: &str) -> String {
+        let value = match field { "offset" => "1", "predrilledDepth" => "0", _ => panic!("unknown fixture field") };
+        let original = format!("<{field}>{value}</{field}>");
+        assert!(SYNTHETIC_CPT.contains(&original));
+        SYNTHETIC_CPT.replace("<response>", "<response xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">").replace(&original, replacement)
+    }
+
+    #[test]
+    fn cpt_nil_offset_preserves_samples_and_missing_surface_metadata() {
+        let expected = parse_cpt(SYNTHETIC_CPT).unwrap();
+        for nil in ["true", "1"] {
+            let text = cpt_field("offset", &format!("<offset xsi:nil=\"{nil}\"/>"));
+            let cpt = parse_cpt(&text).unwrap();
+            assert_eq!(cpt.samples, expected.samples);
+            assert_eq!(cpt.point.surface, None);
+            assert_eq!((cpt.point.rd, cpt.point.lonlat), (expected.point.rd, expected.point.lonlat));
+        }
+    }
+
+    #[test]
+    fn cpt_nil_predrilled_depth_preserves_samples_and_existing_default() {
+        let expected = parse_cpt(SYNTHETIC_CPT).unwrap();
+        for nil in ["true", "1"] {
+            let text = cpt_field("predrilledDepth", &format!("<predrilledDepth xsi:nil=\"{nil}\"/>"))
+                .replace("xmlns:xsi", "xmlns:missing").replace("xsi:nil", "missing:nil");
+            let cpt = parse_cpt(&text).unwrap();
+            assert_eq!(cpt.samples, expected.samples);
+            assert_eq!(cpt.point, expected.point);
+            assert_eq!(cpt.predrilled, 0.0);
+        }
+        assert_eq!(parse_cpt(&cpt_field("predrilledDepth", "")).unwrap().predrilled, 0.0);
+    }
+
+    #[test]
+    fn characteristics_nil_offset_preserves_all_three_objects() {
+        let original = fixture("cpt-characteristics.xml");
+        let text = original.replacen("<offset uom=\"m\">2.860</offset>", "<offset xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:nil=\"true\"/>", 1);
+        assert_ne!(text, original);
+        let mut expected = parse_characteristics(&original).unwrap();
+        assert_eq!(expected.len(), 3);
+        expected[0].surface = None;
+        assert_eq!(parse_characteristics(&text).unwrap(), expected);
+    }
+
+    #[test]
+    fn nil_markers_do_not_hide_broken_text_or_nonfinite_metadata() {
+        for field in ["offset", "predrilledDepth"] {
+            for value in ["broken", "NaN", "inf", "1e999", "<unexpected/>"] {
+                let text = cpt_field(field, &format!("<{field} xsi:nil=\"true\">{value}</{field}>"));
+                assert!(parse_cpt(&text).is_err(), "{field}: {value}");
+            }
+            for marker in ["false", "0", "invalid"] {
+                let text = cpt_field(field, &format!("<{field} xsi:nil=\"{marker}\"/>"));
+                assert!(parse_cpt(&text).is_err(), "{field}: {marker}");
+            }
+            let wrong_namespace = cpt_field(field, &format!("<{field} xsi:nil=\"true\"/>"))
+                .replace("http://www.w3.org/2001/XMLSchema-instance", "urn:not-xml-schema-instance");
+            assert!(parse_cpt(&wrong_namespace).is_err());
+            assert!(parse_cpt(&cpt_field(field, &format!("<{field}/>"))).is_err());
+        }
+    }
+
     #[test]
     fn synthetic_bro_fixtures_preserve_positions_and_measurements() {
         let cpt = parse_cpt(SYNTHETIC_CPT).unwrap();
