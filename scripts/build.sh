@@ -2,7 +2,7 @@
 # Build from this checkout; use an available compiler cache unless the caller
 # explicitly selected a wrapper (an empty RUSTC_WRAPPER also opts out).
 set -euo pipefail
-cd "$(dirname "$0")/.."
+CDPATH='' cd "$(dirname "$0")/.."
 
 if [[ -z "${RUSTC_WRAPPER+x}" ]] && command -v sccache >/dev/null 2>&1; then
   export RUSTC_WRAPPER=sccache
