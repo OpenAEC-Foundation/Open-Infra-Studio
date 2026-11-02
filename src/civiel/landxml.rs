@@ -372,6 +372,53 @@ mod tests {
         }
     }
 
+    #[test]
+    fn point_group_reference_preserves_the_existing_point_without_duplicates() {
+        for group in [
+            "<CgPoints name=\"groep\"><CgPoint pntRef=\"1\"/></CgPoints>",
+            "<CgPoints name=\"groep\"><CgPoint pntRef=\" 1 \"/></CgPoints>",
+        ] {
+            // Put the group first as well: references do not depend on order.
+            let text = SITE.replace("<CgPoints>", &format!("{group}<CgPoints>"));
+            let model = parse(&text).unwrap();
+            assert_eq!((model.points.len(), model.surfaces.len(), model.alignments.len()), (1, 1, 1));
+            assert_eq!((model.points[0].e, model.points[0].n, model.points[0].z), (100.0, 200.0, Some(5.0)));
+        }
+    }
+
+    #[test]
+    fn mixed_axis_geometry_resolves_point_references_before_unit_conversion() {
+        let definitions = "<CgPoint name=\"axis-start\">0 0</CgPoint><CgPoint name=\"axis-center\">50 100</CgPoint><CgPoint name=\"axis-pi\">60 150</CgPoint><CgPoint name=\"axis-end\">79.9 149.2</CgPoint>";
+        for unit in ["meter", "millimeter"] {
+            let inline = SAMPLE.replace("linearUnit=\"meter\"", &format!("linearUnit=\"{unit}\""));
+            let referenced = inline
+                .replace("</CgPoints>", &format!("{definitions}</CgPoints>"))
+                .replace("<Start>0 0</Start>", "<Start pntRef=\"axis-start\"/>")
+                .replace("<Center>50 100</Center>", "<Center pntRef=\"axis-center\"/>")
+                .replace("<PI>60 150</PI>", "<PI pntRef=\"axis-pi\"/>")
+                .replace("<End>79.9 149.2</End>", "<End pntRef=\"axis-end\"/>");
+            let expected = parse(&inline).unwrap();
+            let model = parse(&referenced).unwrap();
+            assert_eq!(model.alignments[0].segs, expected.alignments[0].segs, "{unit}");
+            assert_eq!(model.alignments[0].spirals, 1);
+            assert_eq!(model.alignments[0].start, expected.alignments[0].start);
+        }
+    }
+
+    #[test]
+    fn spiral_radius_allows_surrounding_whitespace() {
+        let text = SAMPLE.replace("radiusEnd=\"200\"", "radiusEnd=\" 200 \"");
+        assert_eq!(parse(&text).unwrap().alignments[0].segs, parse(SAMPLE).unwrap().alignments[0].segs);
+    }
+
+    #[test]
+    fn missing_and_cyclic_point_references_return_errors() {
+        let missing = SITE.replace("<Start>200 100</Start>", "<Start pntRef=\"missing\"/>");
+        assert!(parse(&missing).is_err());
+        let cycle = SITE.replace("<CgPoint name=\"1\">200 100 5</CgPoint>", "<CgPoint name=\"1\" pntRef=\"2\"/><CgPoint name=\"2\" pntRef=\"1\"/>");
+        assert!(parse(&cycle).is_err());
+    }
+
     const SAMPLE: &str = r#"<?xml version="1.0"?>
 <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">
   <Units><Metric linearUnit="meter" areaUnit="squareMeter" volumeUnit="cubicMeter"/></Units>
