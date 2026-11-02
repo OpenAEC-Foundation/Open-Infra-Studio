@@ -273,16 +273,25 @@ mod tests {
 
     #[test]
     fn sequence_rejects_missing_or_invalid_vertex_arrays() {
-        for vertices in ["null", "[]", "[[0,0]]", "[[0,0,0],[1,0,0],[1,1,0],[0,1,\"bad\"]]"] {
-            let mut rows: Vec<Value> = SEQUENCE.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
-            rows[1]["vertices"] = serde_json::from_str(vertices).unwrap();
-            let text = rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n");
-            assert!(parse_with(&text, &|_| true, &|_| {}).is_err(), "{vertices}");
+        let rows: Vec<Value> = SEQUENCE.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        let valid = parse_with(SEQUENCE, &|_| true, &|_| {}).unwrap();
+        assert_eq!((valid.seen, valid.objects.len()), (1, 1));
+        for vertices in [None, Some("null"), Some("[]"), Some("[[0,0]]"), Some("[[0,0,0],[1,0,0],[1,1,0],[0,1,\"bad\"]]")] {
+            let mut bad = rows[1].clone();
+            bad["id"] = Value::String("broken".into());
+            let objects = bad["CityObjects"].as_object_mut().unwrap();
+            let object = objects.remove("building").unwrap();
+            objects.insert("broken".into(), object);
+            match vertices {
+                Some(vertices) => bad["vertices"] = serde_json::from_str(vertices).unwrap(),
+                None => { bad.as_object_mut().unwrap().remove("vertices"); }
+            }
+            // Preserve the valid feature and append a broken second one.
+            // Dropping the broken feature must not become a successful import.
+            let text = format!("{}\n{}\n{bad}\n", rows[0], rows[1]);
+            let error = parse_with(&text, &|_| true, &|_| {}).unwrap_err();
+            assert!(error.starts_with("CityJSON:"), "{vertices:?}: {error}");
         }
-        let mut rows: Vec<Value> = SEQUENCE.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
-        rows[1].as_object_mut().unwrap().remove("vertices");
-        let text = rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n");
-        assert!(parse_with(&text, &|_| true, &|_| {}).is_err());
     }
 
     #[test]

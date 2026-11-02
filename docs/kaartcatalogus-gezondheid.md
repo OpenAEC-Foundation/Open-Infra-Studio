@@ -28,7 +28,7 @@ python3 tools/check_map_services.py --catalogue /tmp/diensten.json --no-builtins
 
 ## Wat wordt gemeten
 
-- **WMS, WFS en WMTS:** één GetCapabilities, zonder een versie af te dwingen. Bestaande endpointparameters zoals `map=` blijven behouden. Het antwoord moet geldige capabilities van het juiste protocol bevatten, met benoemde lagen of objecttypen. Een ingestelde standaardlaag moet aanwezig zijn. HTTP 200 met een HTML-foutpagina of OGC-exception telt als mislukt.
+- **WMS, WFS en WMTS:** één GetCapabilities, zonder een versie af te dwingen. Bestaande endpointparameters zoals `map=` blijven behouden. Het antwoord moet geldige capabilities van het juiste protocol bevatten, met benoemde lagen of objecttypen binnen de verplichte container: `Capability` voor WMS, `FeatureTypeList` voor WFS en `Contents` voor WMTS. Een ingestelde standaardlaag moet aanwezig zijn. HTTP 200 met een HTML-foutpagina of OGC-exception telt als mislukt.
 - **XYZ en WMTS-tegeltemplates:** één tegel op zoom 14, of een lager aangegeven maximum, op het midden van de WGS84-dekking. De volgorde van `{x}` en `{y}` blijft zoals de template die beschrijft.
 - **ArcGIS-tegelcaches:** cachemetadata, gevolgd door één tegel bij het midden van de native dekking. Dit ondersteunt ook de Topotijdreis-caches in RD zonder externe coördinatentransformatie.
 
@@ -48,7 +48,7 @@ Een onleesbare catalogus, onbekende ingebouwde declaratie, ontbrekende afhankeli
 
 De afzonderlijke workflow **kaartcatalogus** draait elke woensdag om 04:23 UTC en is handmatig te starten vanuit Actions. Hij bewaart JSON en Markdown 90 dagen als `kaartcatalogus-rapport` en toont het Markdown-rapport bij de uitvoering. Deze workflow reageert niet op pushes of pull requests. De wekelijkse planning gaat pas werken nadat de workflow op de standaardbranch is samengevoegd.
 
-De workflow **kaartcatalogus-tests** voert bij relevante PR-wijzigingen uitsluitend de vaste tests uit. Ook de bestaande offline testontdekking vindt die tests. Er worden geen openbare diensten benaderd:
+De bestaande workflow **test** vindt de vaste catalogustests via de Python-testontdekking in de job **offline**. Daarvoor is geen afzonderlijke workflow nodig. De catalogustests benaderen geen openbare diensten en zijn ook gericht uit te voeren:
 
 ```bash
 python3 -m unittest discover -s tests -p 'test_catalogue_health.py' -v
