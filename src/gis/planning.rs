@@ -101,6 +101,7 @@ impl Data {
             features,
             crs: Some(self.crs.clone()),
             layers: vec![],
+            warnings: self.warnings.clone(),
         }
     }
     pub fn from_file_data(data: &FileData) -> Result<Self, String> {
