@@ -34,6 +34,7 @@ ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = 
 proj4rs = "0.2"
 ureq = "3"
 roxmltree = "0.21"
+quick-xml = "0.41"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 # Large drawings: entities of the host's shared-memory view are bincode-encoded
