@@ -295,6 +295,27 @@ mod tests {
     }
 
     #[test]
+    fn null_optional_attributes_and_semantic_values_preserve_geometry() {
+        let unknown = |doc: &mut Value| {
+            let object = &mut doc["CityObjects"]["building"];
+            object["attributes"] = serde_json::json!({"measuredHeight": null, "yearOfConstruction": null});
+            object["geometry"][0]["semantics"] = serde_json::json!({"surfaces": [{"type":"RoofSurface"}], "values": [null]});
+        };
+        let mut doc: Value = serde_json::from_str(BUILDING).unwrap();
+        unknown(&mut doc);
+        let mut rows: Vec<Value> = SEQUENCE.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
+        unknown(&mut rows[1]);
+        for text in [doc.to_string(), rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")] {
+            let model = parse_with(&text, &|_| true, &|_| {}).unwrap();
+            assert_eq!((model.seen, model.objects.len()), (1, 1));
+            let object = &model.objects[0];
+            assert_eq!((object.height, object.year), (None, None));
+            assert_eq!(object.surfaces[0].0, Part::Any);
+            assert_eq!(object.surfaces[0].1[0][2], [2600010.0, 1200010.0, 5.0]);
+        }
+    }
+
+    #[test]
     fn rejects_invalid_transforms_and_overflow_in_documents_and_sequences() {
         for text in [BUILDING, SEQUENCE] {
             for scale in ["null", "[1,1]", "[1,1,\"bad\"]", "[1e308,1,1]"] {
