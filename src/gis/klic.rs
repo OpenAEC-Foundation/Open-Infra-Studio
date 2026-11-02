@@ -15,7 +15,8 @@ pub struct Levering {
     pub themes: BTreeMap<String, usize>,
     /// Network operators (netbeheerders) in the delivery.
     pub operators: Vec<String>,
-    /// Source features omitted because they have no drawable geometry.
+    /// Converted features omitted here because they have no drawable geometry.
+    /// Empty source elements already omitted by klic2geo are not included.
     pub skipped: usize,
 }
 
@@ -38,7 +39,7 @@ pub fn read(path: &Path) -> Result<Levering, String> {
     let fc = serde_json::json!({ "type": "FeatureCollection", "features": lev.features });
     let mut features = parse_geojson(&fc);
     // Keep readable neighbours and remove only geometry that cannot be drawn.
-    // A valid point needs no line; empty optional geometry is not a file error.
+    // A valid point needs no line; empty geometry does not invalidate neighbours.
     for feature in &mut features { feature.lines.retain(|(line, _)| line.len() >= 2); }
     let seen = features.len();
     features.retain(|feature| !feature.lines.is_empty() || !feature.points.is_empty());
@@ -201,13 +202,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("oi-klic-skipped-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(XML_NAME);
-        for coordinates in ["NaN NaN NaN NaN", "100 200", ""] {
+        // klic2geo omits empty/one-position source lines before returning GeoJSON.
+        // Nonfinite pairs reach the adapter as null coordinates and are counted here.
+        for (coordinates, skipped) in [("NaN NaN NaN NaN", 1), ("100 200 NaN NaN", 1), ("100 200", 0), ("", 0)] {
             let broken = XML[member.range()].replace("nl.imkl-KL9999.synthetic", "nl.imkl-KL9999.broken").replace("100 200 110 210", coordinates);
             let text = XML.replace("</gml:FeatureCollection>", &format!("{broken}</gml:FeatureCollection>"));
             std::fs::write(&path, text).unwrap();
             let delivery = read(&path).unwrap();
             assert_eq!(delivery.features.len(), 1, "{coordinates}");
-            assert_eq!(delivery.skipped, 1);
+            assert_eq!(delivery.skipped, skipped, "{coordinates}");
             assert_eq!(delivery.themes.get("water"), Some(&1));
             assert_eq!(delivery.features[0].lines[0].0, vec![[100.0, 200.0], [110.0, 210.0]]);
         }
