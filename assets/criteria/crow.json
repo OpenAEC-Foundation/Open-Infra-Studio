@@ -1,0 +1,149 @@
+{
+ "id": "crow",
+ "naam": "Wegen buiten de bebouwde kom — naar CROW Handboek wegontwerp (secundaire bronnen)",
+ "land": "NL",
+ "ooghoogte": {
+  "v": 1.1,
+  "bron": "tud17",
+  "schatting": true,
+  "opmerking": "secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+ },
+ "objecthoogte": {
+  "v": 0.5,
+  "bron": "tud17",
+  "schatting": true,
+  "opmerking": "stopzicht; secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+ },
+ "categorieen": [
+  {
+   "id": "stroomweg",
+   "naam": "Regionale stroomweg",
+   "snelheden": [
+    {
+     "v": 100,
+     "helling_max": {
+      "v": 4,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "4-5 %; secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "r_top_min": {
+      "v": 8300,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "wegverloopzicht (stopzicht 4700 m); secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "r_voet_min": {
+      "v": 850,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "comfort (wegbeeld 16600 m); secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "stopzicht": {
+      "v": 170,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     }
+    }
+   ]
+  },
+  {
+   "id": "gow",
+   "naam": "Gebiedsontsluitingsweg",
+   "snelheden": [
+    {
+     "v": 80,
+     "helling_max": {
+      "v": 5,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "5-6 %; secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "r_top_min": {
+      "v": 5000,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "wegverloopzicht (stopzicht 1800 m); secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "r_voet_min": {
+      "v": 500,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "comfort (wegbeeld 10000 m); secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "stopzicht": {
+      "v": 105,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     }
+    }
+   ]
+  },
+  {
+   "id": "weg50",
+   "naam": "Weg met ontwerpsnelheid 50 km/h",
+   "snelheden": [
+    {
+     "v": 50,
+     "helling_max": {
+      "v": 7,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "; secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "r_top_min": {
+      "v": 900,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "wegverloopzicht (stopzicht 300 m); secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "r_voet_min": {
+      "v": 200,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "comfort (wegbeeld 2200 m); secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "stopzicht": {
+      "v": 40,
+      "bron": "tud17",
+      "schatting": true,
+      "opmerking": "secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     }
+    }
+   ]
+  },
+  {
+   "id": "etw",
+   "naam": "Erftoegangsweg buiten de bebouwde kom",
+   "snelheden": [
+    {
+     "v": 60,
+     "r_top_min": {
+      "v": 900,
+      "bron": "htb",
+      "schatting": true,
+      "opmerking": "zichtafstand 64 m; secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "r_voet_min": {
+      "v": 550,
+      "bron": "htb",
+      "schatting": true,
+      "opmerking": "comfort (wegbeeld 8000 m); secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     },
+     "stopzicht": {
+      "v": 64,
+      "bron": "htb",
+      "schatting": true,
+      "opmerking": "zichtafstand waarmee de topboog is berekend; secundaire bron; controleer tegen het CROW Handboek wegontwerp (2013)"
+     }
+    }
+   ]
+  }
+ ],
+ "bronnen": {
+  "tud17": "TU Delft CTB1420-14, Tabellenblad Wegontwerp (mei 2017), tabellen 3, 5, 6 en 7 — secundaire bron naar CROW Handboek wegontwerp (2013) en NOA; niet tegen het Handboek gecontroleerd",
+  "htb": "COB, Handboek Tunnelbouw, art. 20 Verticaal alignement niet-autosnelwegen (versie 2015.1), tabellen 20.1 en 20.2 — secundaire bron; niet tegen het CROW Handboek gecontroleerd"
+ }
+}

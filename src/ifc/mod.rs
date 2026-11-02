@@ -551,6 +551,8 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
         },
         "MO" if o.starts_with("ONDERZOEK_") && is_mesh => Class { role: Role::Stratum, ..class("IfcGeotechnicalStratum", Some("SOLID"), ot) },
         "MO" => annotation(if ln.element == "S" { "SYMBOL" } else { "USERDEFINED" }, ot),
+        // Sight lines of the sight distance check: drawing aids, not structures.
+        "KW" if o == "ZICHTRUIMTE" => annotation("USERDEFINED", ot),
         "KW" => class("IfcCivilElement", None, ot),
         "GW" => match o {
             _ if o.starts_with("ONTGRAVING") => class("IfcEarthworksCut", Some("EXCAVATION"), ot),
@@ -1435,11 +1437,18 @@ impl<'a, W: Write> Exporter<'a, W> {
         for (i, s) in h.iter().enumerate() {
             let next = h.get(i + 1).cloned().unwrap_or_else(|| {
                 let (p, d) = s.end();
-                HSeg { start: p, dir: d, radius: 0.0, length: 0.0 }
+                HSeg::new(p, d, 0.0, 0.0)
             });
             let place = self.placement2(s.start, s.dir)?;
-            // CLOTHOID (Seg::Spiral): parent IFCCLOTHOID(identity2, A) with
-            // SegmentStart from `alignment::clothoid`; see `alignment::horizontal`.
+            if let Some((a, t0)) = s.clothoid() {
+                // A clothoid: the part of an IfcClothoid from parameter t0 on.
+                let parent = self.step.add("IFCCLOTHOID", &format!("{},{}", self.c.identity2, real(a)))?;
+                segs.push(self.step.add(
+                    "IFCCURVESEGMENT",
+                    &format!(".{}.,{place},IFCLENGTHMEASURE({}),IFCLENGTHMEASURE({}),{parent}", alignment::transition(s, &next), real(t0), real(s.length)),
+                )?);
+                continue;
+            }
             let (parent, length) = if s.is_line() {
                 (self.c.line2, s.length)
             } else {
@@ -1489,11 +1498,11 @@ impl<'a, W: Write> Exporter<'a, W> {
         let horizontal = self.step.add("IFCALIGNMENTHORIZONTAL", &format!("{g},$,$,$,$,$,$"))?;
         let mut layouts = vec![horizontal];
         let mut hs = Vec::new();
-        for (i, s) in h.iter().chain(std::iter::once(&HSeg { start: end, dir: end_dir, radius: 0.0, length: 0.0 })).enumerate() {
+        for (i, s) in h.iter().chain(std::iter::once(&HSeg::new(end, end_dir, 0.0, 0.0))).enumerate() {
             let p = self.point2(s.start)?;
             let dp = self.step.add(
                 "IFCALIGNMENTHORIZONTALSEGMENT",
-                &format!("$,$,{p},{},{},{},{},$,.{}.", real(s.dir.rem_euclid(std::f64::consts::TAU)), real(s.radius), real(s.radius), real(s.length), s.kind()),
+                &format!("$,$,{p},{},{},{},{},$,.{}.", real(s.dir.rem_euclid(std::f64::consts::TAU)), real(s.radius), real(s.end_radius), real(s.length), s.kind()),
             )?;
             let g = self.guid(&format!("{key}:h{i}"));
             hs.push(self.step.add("IFCALIGNMENTSEGMENT", &format!("{g},$,$,$,$,$,$,{dp}"))?);
@@ -1518,6 +1527,31 @@ impl<'a, W: Write> Exporter<'a, W> {
             }
             let g = self.guid(&format!("{key}:vnest"));
             self.step.add("IFCRELNESTS", &format!("{g},$,$,$,{vertical},{}", refs(&vs)))?;
+        }
+        // The cant of a rail track (IfcAlignmentCant), from its object data:
+        // the outer rail raised, constant in curves, linear along clothoids.
+        let cant = get(data, "verkanting_mm").map(|c| crate::civiel::spoor::cant_segments(al, self.fr.f, c)).unwrap_or_default();
+        if let Some(last) = cant.last().cloned() {
+            let g = self.guid(&format!("{key}:cant"));
+            let layout = self.step.add("IFCALIGNMENTCANT", &format!("{g},$,$,$,$,$,$,{}", real(crate::civiel::spoor::RAIL_HEAD_DISTANCE)))?;
+            layouts.push(layout);
+            let end_seg = crate::civiel::spoor::CantSeg { s0: last.s0 + last.len, len: 0.0, d0: last.d1, d1: last.d1, side: last.side };
+            let mut cs = Vec::new();
+            for (i, c) in cant.iter().chain(std::iter::once(&end_seg)).enumerate() {
+                // Left and right rail (m): the rail on the outside of the curve goes up.
+                let rails = |d: f64| if c.side > 0.0 { (0.0, d / 1000.0) } else if c.side < 0.0 { (d / 1000.0, 0.0) } else { (0.0, 0.0) };
+                let ((l0, r0), (l1, r1)) = (rails(c.d0), rails(c.d1));
+                let linear = (c.d1 - c.d0).abs() > 1e-9;
+                let ends = if linear { (real(l1), real(r1)) } else { ("$".to_string(), "$".to_string()) };
+                let dp = self.step.add(
+                    "IFCALIGNMENTCANTSEGMENT",
+                    &format!("$,$,{},{},{},{},{},{},.{}.", real(c.s0), real(c.len), real(l0), ends.0, real(r0), ends.1, if linear { "LINEARTRANSITION" } else { "CONSTANTCANT" }),
+                )?;
+                let g = self.guid(&format!("{key}:c{i}"));
+                cs.push(self.step.add("IFCALIGNMENTSEGMENT", &format!("{g},$,$,$,$,$,$,{dp}"))?);
+            }
+            let g = self.guid(&format!("{key}:cnest"));
+            self.step.add("IFCRELNESTS", &format!("{g},$,$,$,{layout},{}", refs(&cs)))?;
         }
         let g = self.guid(&format!("{key}:layouts"));
         self.step.add("IFCRELNESTS", &format!("{g},$,$,$,{alignment},{}", refs(&layouts)))?;
@@ -1854,6 +1888,7 @@ pub fn command(path: Option<PathBuf>, selection: bool, texts: bool, progress: &d
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::civiel::as_profiel::Transition;
     use crate::nlcs::{Element, Status};
     use ocs_plugin_api::host::codec::entities::{Mesh, MeshFace, Polyline3D, RasterImage};
     use ocs_plugin_api::host::codec::{LwPolyline, Point, Text, Vector2, Vector3};
@@ -1905,8 +1940,18 @@ pub mod tests {
         let mut add = |e: EntityType| {
             doc.add_entity(e).unwrap();
         };
-        let al = Alignment::from_pis(&[[0.0, 0.0], [100.0, 0.0], [180.0, 80.0]], &[60.0]).unwrap();
-        add(on(EntityType::LwPolyline(al.to_polyline()), &nl("AM", "AS", Element::G, Status::N), &[("as", "A1"), ("beginstation", "0.000")]));
+        // Clothoids into and out of the curve; their records restore them exactly.
+        let al = Alignment::from_layout(&[[0.0, 0.0], [100.0, 0.0], [180.0, 80.0]], &[60.0], &[Transition::Length(20.0)]).unwrap();
+        let (poly, spirals) = al.to_polyline_data(0.001);
+        let mut d: Vec<(&str, &str)> = vec![("as", "A1"), ("beginstation", "0.000")];
+        d.extend(spirals.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        add(on(EntityType::LwPolyline(poly), &nl("AM", "AS", Element::G, Status::N), &d));
+        // A rail track with cant (IfcAlignmentCant).
+        let rail = Alignment::from_layout(&[[0.0, -200.0], [200.0, -200.0], [350.0, -120.0]], &[500.0], &[Transition::Length(40.0)]).unwrap();
+        let (poly, spirals) = rail.to_polyline_data(0.001);
+        let mut d: Vec<(&str, &str)> = vec![("as", "S1"), ("spoor", "S1"), ("snelheid_kmh", "80"), ("verkanting_mm", "100")];
+        d.extend(spirals.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        add(on(EntityType::LwPolyline(poly), &nl("AM", "AS_SPOOR_TREIN", Element::G, Status::N), &d));
         // The length profile: a frame with the design profile and the ground inside.
         add(on(lw(&[[900.0, 990.0], [1200.0, 990.0], [1200.0, 1050.0], [900.0, 1050.0]], true, 0.0), &nl("AL", "PROFIELBALK", Element::G, Status::N), &[("lengteprofiel", "Lengteprofiel A1")]));
         add(on(
@@ -2043,7 +2088,7 @@ pub mod tests {
     fn every_part_gets_its_ifc_class() {
         let (ifc, r) = export_sample();
         let n = |k: &str| r.classes.get(k).copied().unwrap_or(0);
-        assert_eq!(n("IfcAlignment"), 1, "{:?}", r.classes);
+        assert_eq!(n("IfcAlignment"), 2, "road and rail: {:?}", r.classes);
         assert_eq!(n("IfcBuilding"), 1, "two meshes of one BAG building");
         assert_eq!(n("IfcBorehole"), 1);
         assert_eq!(n("IfcGeotechnicalStratum"), 2);
@@ -2066,6 +2111,10 @@ pub mod tests {
             "IFCPROJECTEDCRS('EPSG:28992'",
             ".PARABOLICARC.",
             ".CIRCULARARC.",
+            ".CLOTHOID.",
+            "IFCCLOTHOID(",
+            "IFCALIGNMENTCANT(",
+            ".LINEARTRANSITION.",
             "IFCGRADIENTCURVE(",
             "IFCINDEXEDCOLOURMAP(",
             "IFCPAVEMENT(",
@@ -2116,7 +2165,7 @@ pub mod tests {
         let (a, _) = export_sample();
         let (b, _) = export_sample();
         assert_eq!(ids(&a), ids(&b));
-        assert_eq!(ids(&a).len(), 2);
+        assert_eq!(ids(&a).len(), 3);
     }
 
     #[test]

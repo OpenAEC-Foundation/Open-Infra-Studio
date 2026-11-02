@@ -12,10 +12,10 @@ use ocs_plugin_api::ribbon::{CadModule, IconKind, ModuleEvent, RibbonGroup, Ribb
 
 use open_infra::civiel::api::{self, Args};
 use open_infra::civiel::{self, as_profiel, corridor, landmeten, landxml, riool, terrein};
+use open_infra::lang::tr;
 use open_infra::{bridge, ui};
 // Grading: feature lines, plateaus, slopes, TIN volumes, mass haul.
 use open_infra::civiel::{grading, massa};
-use open_infra::lang::tr;
 
 static MANIFEST: PluginManifest = PluginManifest {
     id: "openaec.open-infra-civiel",
@@ -93,6 +93,12 @@ const I_RIOOL_TOETS: IconKind = icon!("riool-toets.svg");
 const I_RIOOL_BIJWERKEN: IconKind = icon!("riool-bijwerken.svg");
 const I_RIOOL_EXPORT: IconKind = icon!("riool-export.svg");
 const I_RIOOL_GWSW: IconKind = icon!("riool-gwsw.svg");
+// Design check, sight distance and rail (as-spoor).
+const I_CRITERIA: IconKind = icon!("ontwerpcriteria.svg");
+const I_CHECK: IconKind = icon!("as-toets.svg");
+const I_SIGHT: IconKind = icon!("zicht.svg");
+const I_RAIL: IconKind = icon!("spoor.svg");
+const I_TURNOUT: IconKind = icon!("wissel.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -159,7 +165,7 @@ impl CadModule for CivielModule {
     fn ribbon_groups(&self) -> &[RibbonGroup] {
         static GROUPS: OnceLock<Vec<RibbonGroup>> = OnceLock::new();
         GROUPS.get_or_init(|| {
-            use open_infra::lang::{dutch, tr};
+            use open_infra::lang::dutch;
             let mut groups = vec![
                 // Points (Road "GeoPoints" and "Input-Output").
                 RibbonGroup {
@@ -225,6 +231,19 @@ impl CadModule for CivielModule {
                 },
                 // Pipe networks, for Dutch sewer practice (GWSW, NLCS RI).
                 RibbonGroup { title: tr("Riolering", "Sewers"), tools: riool_tools() },
+                // Design criteria, sight distance and rail (as-spoor).
+                RibbonGroup {
+                    title: tr("Ontwerptoets", "Design check"),
+                    tools: vec![
+                        large("CIV_AS_TOETS", tr("As toetsen", "Check alignment"), I_CHECK),
+                        small("CIV_ONTWERPCRITERIA", tr("Ontwerpcriteria", "Design criteria"), I_CRITERIA),
+                        small("CIV_ZICHT", tr("Zichtafstand", "Sight distance"), I_SIGHT),
+                    ],
+                },
+                RibbonGroup {
+                    title: tr("Spoor", "Rail"),
+                    tools: vec![large("CIV_SPOOR", tr("Spooras", "Track"), I_RAIL), small("CIV_WISSEL", tr("Wissel", "Turnout"), I_TURNOUT)],
+                },
             ];
             // Survey codes to linework, and parcels.
             groups.push(RibbonGroup {
@@ -899,6 +918,58 @@ impl InteractiveCommand for RioolCmd {
     }
 }
 
+/// Design criteria from RICHTLIJN=, CATEGORIE= and V= (all three, or none).
+fn criteria_choice(args: &Args) -> Result<Option<civiel::ontwerpcriteria::Choice>, String> {
+    match (args.str("RICHTLIJN"), args.str("CATEGORIE"), args.f64("V")?) {
+        (None, None, None) => Ok(None),
+        (Some(g), Some(c), Some(v)) => Ok(Some(civiel::ontwerpcriteria::Choice { guideline: g.to_ascii_lowercase(), category: c.to_ascii_lowercase(), v })),
+        _ => Err(tr("geef RICHTLIJN=, CATEGORIE= en V= samen (CIV_ONTWERPCRITERIA toont ze)", "give RICHTLIJN=, CATEGORIE= and V= together (CIV_ONTWERPCRITERIA lists them)").into()),
+    }
+}
+
+/// An axis from AS= (or the selection) or from PI= R= with LS= or A= per curve.
+fn layout_input(args: &Args, unit: f64) -> Result<as_profiel::AxisInput, String> {
+    let Some(pis) = args.points("PI")? else {
+        return Ok(as_profiel::AxisInput::Line(args.handle("AS")?));
+    };
+    let pis: Vec<[f64; 2]> = pis.into_iter().map(to_drawing).collect::<Result<_, _>>()?;
+    let radii: Vec<f64> = args.list("R")?.unwrap_or_default().into_iter().map(|r| r * unit).collect();
+    Ok(match (args.list("LS")?, args.list("A")?) {
+        (None, None) => as_profiel::AxisInput::Pis(pis, radii),
+        (Some(_), Some(_)) => return Err(tr("geef per boog LS= (lengte overgangsboog) óf A= (clothoïdeparameter), niet beide", "give LS= (transition length) or A= (clothoid parameter) per curve, not both").into()),
+        (Some(ls), None) => as_profiel::AxisInput::Layout(pis, radii, ls.into_iter().map(|l| as_profiel::Transition::Length(l * unit)).collect()),
+        (None, Some(a)) => as_profiel::AxisInput::Layout(pis, radii, a.into_iter().map(|a| as_profiel::Transition::Parameter(a * unit)).collect()),
+    })
+}
+
+/// `CIV_WISSEL` from the ribbon: click the turnout start on the selected
+/// track, on the side the diverging track goes.
+struct TurnoutCmd {
+    axis: as_profiel::Alignment,
+    handle: ocs_plugin_api::host::codec::Handle,
+    f: f64,
+}
+
+impl InteractiveCommand for TurnoutCmd {
+    fn prompt(&self) -> String {
+        tr("Civiel: klik het wisselbegin, aan de kant van het afbuigende spoor (wissel 1:9)", "Civil: click the turnout start, on the side of the diverging track (turnout 1:9)").into()
+    }
+    fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
+        let (s, off) = self.axis.station_offset([pt[0], pt[1]]);
+        let (h, st) = (self.handle, self.axis.start + s / self.f);
+        std::thread::spawn(move || match civiel::spoor::turnout(&civiel::settings(), Some(h), st, "1:9", off < 0.0, true, 50.0, None) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&e),
+        });
+        CommandStep::Done
+    }
+    fn on_cursor_move(&mut self, pt: [f64; 3]) -> Vec<PreviewWire> {
+        let (s, _) = self.axis.station_offset([pt[0], pt[1]]);
+        let (foot, _) = self.axis.at(s);
+        vec![PreviewWire::with_color(vec![[foot[0], foot[1], 0.0], pt], [0.95, 0.6, 0.15, 1.0])]
+    }
+}
+
 fn open_settings(host: &mut dyn HostApi) {
     if let Err(e) = ui::open(ui::Tab::Civiel) {
         host.push_error(&format!("[Open Infra] {e}"));
@@ -1090,15 +1161,8 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             job(host, "Grondverzet", id, move |p| terrein::volume(&o, design, p));
         }
         "CIV_AS" => {
-            let o = opt(&["AS", "PI", "R", "NAAM", "BEGIN"])?;
-            let input = match args.points("PI")? {
-                Some(pis) => {
-                    let pis: Vec<[f64; 2]> = pis.into_iter().map(to_drawing).collect::<Result<_, _>>()?;
-                    let radii: Vec<f64> = args.list("R")?.unwrap_or_default().into_iter().map(|r| r * unit).collect();
-                    as_profiel::AxisInput::Pis(pis, radii)
-                }
-                None => as_profiel::AxisInput::Line(args.handle("AS")?),
-            };
+            let o = opt(&["AS", "PI", "R", "NAAM", "BEGIN", "LS", "A"])?;
+            let input = layout_input(args, unit)?;
             let (name, start) = (args.str("NAAM").map(str::to_string), args.f64("BEGIN")?);
             job(host, "As maken", id, move |_| as_profiel::create(&o, input, name, start));
         }
@@ -1634,6 +1698,81 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_RIOOL_PROFIEL [RIOOL=] [VAN=] [NAAR=] [PLAATS=x,y]; CIV_RIOOL_TOETS [RIOOL=] [Q=l/s | OPPERVLAK=m² of ha [REGEN=l/s/ha] | INWONERS=] [PUTAFSTAND=] [VRIJ=] [RUWHEID=mm]; \
              CIV_RIOOL_EXPORT [RIOOL=] [FORMAAT=GWSW|CSV] [PAD=]; CIV_RIOOL_IMPORT <pad.orox.ttl>; CIV_RIOOL_GWSW [NAAM=].",
         ),
+        // Design criteria, sight distance and rail (as-spoor).
+        "CIV_ONTWERPCRITERIA" => {
+            let o = opt(&["RICHTLIJN", "CATEGORIE", "V", "AS"])?;
+            let _ = o;
+            let (choice, h) = (criteria_choice(args)?, args.handle("AS")?);
+            job(host, tr("Ontwerpcriteria", "Design criteria"), id, move |_| civiel::ontwerpcriteria::criteria(choice, h));
+        }
+        "CIV_AS_TOETS" => {
+            let o = opt(&["AS", "RICHTLIJN", "CATEGORIE", "V", "VERKANTING"])?;
+            let (choice, h, e) = (criteria_choice(args)?, args.handle("AS")?, args.f64("VERKANTING")?);
+            job(host, tr("As toetsen", "Check alignment"), id, move |_| civiel::ontwerpcriteria::check(&o, h, choice, e));
+        }
+        "CIV_ZICHT" => {
+            let o = opt(&["AS", "RICHTLIJN", "CATEGORIE", "V", "NODIG", "OOG", "OBJECT", "RIJLIJN", "VRIJ", "MAX", "RICHTING", "LAGEN", "PLAATS"])?;
+            let (fw, bw) = match args.str("RICHTING").map(|s| s.to_ascii_lowercase()) {
+                None => (true, false),
+                Some(r) if r == "heen" || r == "op" || r == "forward" => (true, false),
+                Some(r) if r == "terug" || r == "af" || r == "back" => (false, true),
+                Some(r) if r == "beide" || r == "both" => (true, true),
+                Some(_) => return Err(tr("RICHTING: heen, terug of beide", "RICHTING: heen (along), terug (against) or beide (both)").into()),
+            };
+            let layers: Vec<String> = match args.str("LAGEN") {
+                Some(l) => l.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+                None => vec!["-OG-BEBOUWING".to_string()],
+            };
+            let req = civiel::zicht::SightRequest {
+                axis: args.handle("AS")?,
+                choice: criteria_choice(args)?,
+                need: args.f64("NODIG")?,
+                eye: args.f64("OOG")?,
+                object: args.f64("OBJECT")?,
+                every: args.f64("OM")?.unwrap_or(10.0),
+                lane: args.f64("RIJLIJN")?.unwrap_or(1.75),
+                clear: args.f64("VRIJ")?.unwrap_or(5.0),
+                max: args.f64("MAX")?,
+                forward: fw,
+                backward: bw,
+                layers,
+                at: place_arg(args)?,
+            };
+            job(host, tr("Zichtafstand", "Sight distance"), id, move |p| civiel::zicht::sight(&o, req, p));
+        }
+        "CIV_SPOOR" => {
+            let o = opt(&["AS", "PI", "R", "LS", "A", "NAAM", "BEGIN", "V", "VMIN", "VERKANTING", "SPOREN", "SPOORAFSTAND", "PLAATS"])?;
+            let input = layout_input(args, unit)?;
+            let v = args.f64("V")?.unwrap_or(100.0);
+            let req = civiel::spoor::RailRequest {
+                input,
+                name: args.str("NAAM").map(str::to_string),
+                start: args.f64("BEGIN")?,
+                v,
+                vmin: args.f64("VMIN")?,
+                cant: args.list("VERKANTING")?.unwrap_or_default(),
+                tracks: args.f64("SPOREN")?.map(|n| n.clamp(1.0, 8.0) as usize).unwrap_or(1),
+                distance: args.f64("SPOORAFSTAND")?,
+                diagram: place_arg(args)?,
+            };
+            job(host, tr("Spooras", "Track"), id, move |_| civiel::spoor::track(&o, req));
+        }
+        "CIV_WISSEL" if scripted => {
+            let o = opt(&["AS", "STATION", "TYPE", "ZIJDE", "RICHTING", "LENGTE", "NAAM"])?;
+            let st = args.f64("STATION")?.ok_or_else(|| tr("geef STATION=<m> van het wisselbegin", "give STATION=<m> of the turnout start").to_string())?;
+            let kind = args.str("TYPE").unwrap_or("1:9").to_string();
+            let left = !matches!(args.str("ZIJDE").map(|s| s.to_ascii_lowercase()).as_deref(), Some("rechts" | "right" | "r"));
+            let forward = !matches!(args.str("RICHTING").map(|s| s.to_ascii_lowercase()).as_deref(), Some("af" | "terug" | "back"));
+            let (h, extra, name) = (args.handle("AS")?, args.f64("LENGTE")?.unwrap_or(50.0), args.str("NAAM").map(str::to_string));
+            job(host, tr("Wissel", "Turnout"), id, move |_| civiel::spoor::turnout(&o, h, st, &kind, left, forward, extra, name));
+        }
+        "CIV_WISSEL" => {
+            let sel = host.selection();
+            let Some(axis) = selected_axis(host) else {
+                return Err(tr("selecteer eerst één spooras en kies dan Wissel, of geef AS= STATION= TYPE= ZIJDE=", "select one track first, then Turnout, or give AS= STATION= TYPE= ZIJDE=").into());
+            };
+            host.start_interactive(Box::new(TurnoutCmd { axis, handle: sel[0], f: unit }));
+        }
         "CIV_INFO" => {
             opt(&[])?;
             job(host, "Modelinfo", id, |_| civiel::info());
@@ -1652,14 +1791,17 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             "[Open Infra — Civiel] Lint: selectie en klikken; scripts: argumenten SLEUTEL=waarde, coördinaten x,y in het projectstelsel, ID=<naam> schrijft <config>/api/<naam>.json. \
              CIV_PUNTEN_IMPORT <pad> [FORMAAT=], CIV_PUNT x,y[,z] [NR=] [CODE=], CIV_PUNTEN_EXPORT [PAD=], CIV_LANDXML <pad>; \
              CIV_TIN [BRON=AHN|PUNTEN|SELECTIE] [LAAG=] [STATUS=B|N] [AFSTAND=] [MAXRIBBE=]; CIV_HOOGTELIJNEN / CIV_ANALYSE [OPPERVLAK=B|N]; CIV_VOLUME [ONTWERP=PEIL] [PEIL=] [CEL=]; \
-             CIV_AS AS=<handle> | PI=x,y;x,y;… R=r;… [NAAM=] [BEGIN=]; CIV_AS_OFFSET AS= VERSCHUIVING=-3.5;3.5; CIV_STATION AS= x,y; \
+             CIV_AS AS=<handle> | PI=x,y;x,y;… R=r;… [LS=l;…|A=a;…] [NAAM=] [BEGIN=]; CIV_AS_OFFSET AS= VERSCHUIVING=-3.5;3.5; CIV_STATION AS= x,y; \
              CIV_LENGTEPROFIEL AS= [PLAATS=x,y]; CIV_ONTWERPPROFIEL AS= PVI=station:hoogte;… [BOOG=]; CIV_DWARSPROFIELEN AS= [PLAATS=] [OM=] [LINKS=] [RECHTS=]; \
              3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs] [RAMEN=nee], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>, CIV_CITYGML <pad> [STIJL=], CIV_KLIC3D [<levering>] [VERGROOT=], CIV_DOORZICHT [PCT=70] [ALLES] [UIT], CIV_SONDERINGEN3D [BRON=sonderingen|boringen|alles] [MAX=100] [STRAAL=0.4] [MINLAAG=0.2] [QC=nee] [LABELS=nee] (BRO: kolommen met grondsoorten); \
              CIV_CORRIDOR AS= [PROFIELTYPE=<naam>|<pad.json>] [NIVEAU=|BOVEN=] [VAN=] [TOT=] [DOELEN=naam:handle;…] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y] [KLEUR=nlcs]; \
              CIV_PROFIELTYPEN, CIV_PROFIELTYPE NAAM= [KOPIE=] [PLAATS=x,y]; CIV_KRUISPUNT HOOFD= ZIJ= [R=8;…] [PROFIELTYPE=] [NIVEAU=]; \
              CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_LANDXML_EXPORT [BESTAND=<pad>] [ALLES]; CIV_INFO; \
              codes: CIV_PUNTEN_IMPORT <pad> CODES=JA [CODETABEL=], CIV_CODES_TOEPASSEN [CODETABEL=]; percelen: CIV_PERCELEN KAVEL= [STRAAT=|RICHTING=graden] N=|OPP=|FRONT= [REST=laatste|apart|verdelen] [PREFIX=P] [START=1], CIV_PERCEEL_INFO [PERCEEL=h;h] [STRAAT=]; \
-             water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=].",
+             water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=]; \
+             CIV_ONTWERPCRITERIA [RICHTLIJN=roa|noa|crow|aashto CATEGORIE= V=] [AS=]; CIV_AS_TOETS AS= [RICHTLIJN= CATEGORIE= V=] [VERKANTING=%]; \
+             CIV_ZICHT AS= [RICHTLIJN= CATEGORIE= V=|NODIG=] [OOG=] [OBJECT=] [OM=10] [RIJLIJN=1.75] [VRIJ=5] [MAX=] [RICHTING=heen|terug|beide] [LAGEN=-OG-BEBOUWING;…] [PLAATS=]; \
+             CIV_SPOOR AS=|PI= R= [LS=|A=] V= [VMIN=] [VERKANTING=mm;…] [SPOREN=] [SPOORAFSTAND=] [NAAM=] [PLAATS=]; CIV_WISSEL AS= STATION= [TYPE=1:9|1:12|1:15|…] [ZIJDE=links|rechts] [RICHTING=op|af] [LENGTE=].",
             );
         }
         _ => return Err(format!("onbekend commando {verb}; zie CIV_HELP")),

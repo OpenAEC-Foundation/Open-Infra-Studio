@@ -472,6 +472,18 @@ impl Painter<'_> {
             let l = seg.length();
             match seg {
                 Seg::Line { .. } => {}
+                // A clothoid: its parameter A and length, on the turning side.
+                Seg::Spiral { k0, k1, .. } => {
+                    let (p, dir) = al.at(run + l / 2.0);
+                    let nrm = [-dir.sin(), dir.cos()];
+                    let side = if k1.abs() >= k0.abs() { k1.signum() } else { k0.signum() };
+                    let rot = crate::emit::readable(dir);
+                    let aa = seg.spiral_a().unwrap_or(0.0);
+                    for (i, text) in [format!("A {}", num(aa / f, dec.straal)), format!("{}{}", cs.voorvoegsel_lengte, num(l / f, dec.lengte))].iter().enumerate() {
+                        let off = (3.0 + 3.2 * i as f64) * k * side;
+                        out.push((tt.clone(), self.text([p[0] + nrm[0] * off, p[1] + nrm[1] * off], text, rot, &tt, d, TextHorizontalAlignment::Center)));
+                    }
+                }
                 Seg::Arc { r, sweep, .. } => {
                     let (p, dir) = al.at(run + l / 2.0);
                     let nrm = [-dir.sin(), dir.cos()];

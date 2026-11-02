@@ -1,0 +1,204 @@
+{
+ "id": "noa",
+ "naam": "NOA 2007 — Nieuwe Ontwerprichtlijn Autosnelwegen (RWS AVV, met errata)",
+ "land": "NL",
+ "ooghoogte": {
+  "v": 1.1,
+  "bron": "noa07-p73"
+ },
+ "objecthoogte": {
+  "v": 0.2,
+  "bron": "noa07-p73"
+ },
+ "a_r_deler": {
+  "v": 3,
+  "bron": "noa07-t34",
+  "opmerking": "R/3 ≤ A ≤ R"
+ },
+ "categorieen": [
+  {
+   "id": "autosnelweg",
+   "naam": "Autosnelweg (hoofdrijbaan, parallelbaan, verbindingsweg)",
+   "snelheden": [
+    {
+     "v": 120,
+     "r_min": {
+      "v": 750,
+      "bron": "noa07-t33",
+      "opmerking": "bij 5 % verkanting; 1500 m bij 2,5 %; 4000 m met tegenverkanting"
+     },
+     "a_min": {
+      "v": 270,
+      "bron": "noa07-t34"
+     },
+     "r_overgang": {
+      "v": 4000,
+      "bron": "noa07-t34"
+     },
+     "helling_max": {
+      "v": 3,
+      "bron": "noa07-t317",
+      "opmerking": "5 % bij grote kunstwerken"
+     },
+     "r_top_min": {
+      "v": 12400,
+      "bron": "noa07-t313",
+      "schatting": true,
+      "opmerking": "berekend uit de formule van tabel 3-13 met het rijzicht van tabel 7-1"
+     },
+     "r_voet_min": {
+      "v": 24800,
+      "bron": "noa07-t314",
+      "schatting": true,
+      "opmerking": "2 × Rtop (wegbeeld); comfortminimum tabel 3-16"
+     },
+     "verkanting_max": {
+      "v": 5,
+      "bron": "noa07-t52",
+      "opmerking": "nieuwbouw; bij reconstructie hoger"
+     },
+     "stopzicht": {
+      "v": 260,
+      "bron": "noa07-t73"
+     }
+    },
+    {
+     "v": 100,
+     "r_min": {
+      "v": 480,
+      "bron": "noa07-t33",
+      "opmerking": "bij 5 % verkanting; 960 m bij 2,5 %; 2500 m met tegenverkanting"
+     },
+     "a_min": {
+      "v": 205,
+      "bron": "noa07-t34"
+     },
+     "r_overgang": {
+      "v": 2500,
+      "bron": "noa07-t34"
+     },
+     "helling_max": {
+      "v": 3,
+      "bron": "noa07-t317",
+      "opmerking": "5 % bij grote kunstwerken"
+     },
+     "r_top_min": {
+      "v": 8300,
+      "bron": "noa07-t313",
+      "schatting": true,
+      "opmerking": "berekend uit de formule van tabel 3-13 met het rijzicht van tabel 7-1"
+     },
+     "r_voet_min": {
+      "v": 16600,
+      "bron": "noa07-t314",
+      "schatting": true,
+      "opmerking": "2 × Rtop (wegbeeld); comfortminimum tabel 3-16"
+     },
+     "verkanting_max": {
+      "v": 5,
+      "bron": "noa07-t52",
+      "opmerking": "nieuwbouw; bij reconstructie hoger"
+     },
+     "stopzicht": {
+      "v": 170,
+      "bron": "noa07-t73"
+     }
+    },
+    {
+     "v": 80,
+     "r_min": {
+      "v": 270,
+      "bron": "noa07-t33",
+      "opmerking": "bij 5 % verkanting; 540 m bij 2,5 %; 1250 m met tegenverkanting"
+     },
+     "a_min": {
+      "v": 115,
+      "bron": "noa07-t34"
+     },
+     "r_overgang": {
+      "v": 1250,
+      "bron": "noa07-t34"
+     },
+     "helling_max": {
+      "v": 4,
+      "bron": "noa07-t317",
+      "opmerking": "6 % uitzonderlijk"
+     },
+     "r_top_min": {
+      "v": 5000,
+      "bron": "noa07-t313",
+      "schatting": true,
+      "opmerking": "berekend uit de formule van tabel 3-13 met het rijzicht van tabel 7-1"
+     },
+     "r_voet_min": {
+      "v": 10000,
+      "bron": "noa07-t314",
+      "schatting": true,
+      "opmerking": "2 × Rtop (wegbeeld); comfortminimum tabel 3-16"
+     },
+     "verkanting_max": {
+      "v": 5,
+      "bron": "noa07-t52",
+      "opmerking": "nieuwbouw; bij reconstructie hoger"
+     },
+     "stopzicht": {
+      "v": 103,
+      "bron": "noa07-t73"
+     }
+    },
+    {
+     "v": 50,
+     "r_min": {
+      "v": 85,
+      "bron": "noa07-t33",
+      "opmerking": "bij 5 % verkanting; 170 m bij 2,5 %; 300 m met tegenverkanting"
+     },
+     "a_min": {
+      "v": 60,
+      "bron": "noa07-t34"
+     },
+     "r_overgang": {
+      "v": 300,
+      "bron": "noa07-t34"
+     },
+     "helling_max": {
+      "v": 4,
+      "bron": "noa07-t317",
+      "opmerking": "7 % uitzonderlijk"
+     },
+     "r_top_min": {
+      "v": 920,
+      "bron": "noa07-t313",
+      "schatting": true,
+      "opmerking": "berekend uit de formule van tabel 3-13 met het rijzicht van tabel 7-1"
+     },
+     "r_voet_min": {
+      "v": 1840,
+      "bron": "noa07-t314",
+      "schatting": true,
+      "opmerking": "2 × Rtop (wegbeeld); comfortminimum tabel 3-16"
+     },
+     "verkanting_max": {
+      "v": 5,
+      "bron": "noa07-t52",
+      "opmerking": "nieuwbouw; bij reconstructie hoger"
+     },
+     "stopzicht": {
+      "v": 41,
+      "bron": "noa07-t73"
+     }
+    }
+   ]
+  }
+ ],
+ "bronnen": {
+  "noa07-t33": "RWS AVV, NOA — Nieuwe Ontwerprichtlijn Autosnelwegen (1-1-2007) met Errata nr. 1 (1-12-2007), tabel 3-3 en tabel 6-1: boogstralen",
+  "noa07-t34": "RWS AVV, NOA 2007 met errata, tabel 3-4 en §3.4: clothoïden (Amin, R/3 ≤ A ≤ R, overgangsboog nodig onder R)",
+  "noa07-t317": "RWS AVV, NOA 2007 met errata, tabellen 3-17 tot 3-19: maximale hellingen",
+  "noa07-t313": "RWS AVV, NOA 2007, tabel 3-13: topboog Rmin = Lz² / (2(√ho + √hh)²) met het rijzicht van tabel 7-1 (waarde berekend)",
+  "noa07-t314": "RWS AVV, NOA 2007, tabel 3-14: voetboog (wegbeeld) Rvoet = 2 × Rtop (waarde berekend)",
+  "noa07-t52": "RWS AVV, NOA 2007, tabel 5-2: verkanting (nieuwbouw)",
+  "noa07-t73": "RWS AVV, NOA 2007 Errata nr. 1, tabel 7-3: stopzicht",
+  "noa07-p73": "RWS AVV, NOA 2007, §3.6.2 en §7.3: ooghoogte 1,10 m, objecthoogte 0,20 m (obstakel)"
+ }
+}

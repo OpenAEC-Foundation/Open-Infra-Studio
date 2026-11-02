@@ -892,6 +892,17 @@ fn draw_profile(ctx: &Ctx, al: &Alignment, samples: &Samples, design: Option<&[P
         if b > a {
             match seg {
                 Seg::Line { .. } => out.put(&frame, pl(vec![[gx(a), mid], [gx(b), mid]], &frame)),
+                // A clothoid: a slope from straight to curve level, with A.
+                Seg::Spiral { k0, k1, .. } => {
+                    let level = |k: f64| if k.abs() < 1e-12 { mid } else { mid + k.signum() * 0.28 * (al_b - al_a) };
+                    let (y0, y1) = (level(*k0), level(*k1));
+                    let at = |s: f64| y0 + (y1 - y0) * ((s - run) / l).clamp(0.0, 1.0);
+                    out.put(&frame, pl(vec![[gx(a), at(a)], [gx(b), at(b)]], &frame));
+                    if let Some(aa) = seg.spiral_a().filter(|_| b - a > 16.0 * k) {
+                        let ty = (at(a) + at(b)) / 2.0 - (y1 - y0).signum() * 0.22 * (al_b - al_a);
+                        out.put(&frame_t, [ctx.text([gx((a + b) / 2.0), ty], &format!("A {:.0}", aa / f), 1.8, 0.0, &frame_t, None)]);
+                    }
+                }
                 Seg::Arc { r, sweep, .. } => {
                     let y = mid + sweep.signum() * 0.28 * (al_b - al_a);
                     out.put(&frame, pl(vec![[gx(a), mid], [gx(a), y], [gx(b), y], [gx(b), mid]], &frame));

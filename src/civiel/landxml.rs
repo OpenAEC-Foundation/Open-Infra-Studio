@@ -67,24 +67,6 @@ fn unit_of(name: &str) -> f64 {
     }
 }
 
-/// Points of a clothoid from `a` heading `dir`, curvature changing linearly
-/// from `k0` to `k1` (1/m, left > 0) over `len`: every metre or so.
-fn spiral_points(a: XY, dir: f64, len: f64, k0: f64, k1: f64) -> Vec<XY> {
-    let n = (len.ceil() as usize).clamp(16, 2000);
-    let h = len / n as f64;
-    let mut pts = vec![a];
-    let (mut p, mut s) = (a, 0.0);
-    for _ in 0..n {
-        // Midpoint rule on the heading; fine for chords of about a metre.
-        let sm = s + h / 2.0;
-        let th = dir + k0 * sm + (k1 - k0) * sm * sm / (2.0 * len);
-        p = [p[0] + h * th.cos(), p[1] + h * th.sin()];
-        s += h;
-        pts.push(p);
-    }
-    pts
-}
-
 pub fn parse(text: &str) -> Result<LandXml, String> {
     let doc = roxmltree::Document::parse(text).map_err(|e| format!("geen geldige XML: {e}"))?;
     let root = doc.root_element();
@@ -172,10 +154,8 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
                 }
                 ("Spiral", Some(a), Some(b)) => {
                     // From the start towards the PI; curvature from radiusStart
-                    // to radiusEnd ("INF" is straight).
+                    // to radiusEnd ("INF" is straight), signed by the rotation.
                     let len: f64 = g.attribute("length").and_then(|v| v.parse().ok()).map(|l: f64| l * unit).unwrap_or_else(|| (b[0] - a[0]).hypot(b[1] - a[1]));
-                    let pi = en(child(g, "PI"), unit).unwrap_or(b);
-                    let dir = (pi[1] - a[1]).atan2(pi[0] - a[0]);
                     let left = if g.attribute("rot") == Some("cw") { -1.0 } else { 1.0 };
                     let k = |attr: &str| -> f64 {
                         match g.attribute(attr).map(str::trim) {
@@ -184,13 +164,19 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
                             Some(v) => v.parse::<f64>().map(|r| if r.abs() > 1e-9 { left / (r * unit) } else { 0.0 }).unwrap_or(0.0),
                         }
                     };
-                    let pts = spiral_points(a, dir, len, k("radiusStart"), k("radiusEnd"));
-                    // Close the small integration gap on the given end point.
-                    let gap = [b[0] - pts[pts.len() - 1][0], b[1] - pts[pts.len() - 1][1]];
-                    let n = pts.len() - 1;
-                    let pts: Vec<XY> = pts.iter().enumerate().map(|(i, p)| [p[0] + gap[0] * i as f64 / n as f64, p[1] + gap[1] * i as f64 / n as f64]).collect();
-                    segs.extend(pts.windows(2).map(|w| Seg::Line { a: w[0], b: w[1] }));
-                    spirals += 1;
+                    let (k0, k1) = (k("radiusStart"), k("radiusEnd"));
+                    let dir = match en(child(g, "PI"), unit) {
+                        Some(pi) if (pi[0] - a[0]).hypot(pi[1] - a[1]) > 1e-9 => (pi[1] - a[1]).atan2(pi[0] - a[0]),
+                        // Without a PI: the direction that makes the chord fit.
+                        _ => {
+                            let l = super::as_profiel::clothoid_local(k0, (k1 - k0) / len.max(1e-9), len);
+                            (b[1] - a[1]).atan2(b[0] - a[0]) - l[1].atan2(l[0])
+                        }
+                    };
+                    if len > 1e-9 {
+                        segs.push(Seg::Spiral { a, dir, len, k0, k1 });
+                        spirals += 1;
+                    }
                 }
                 _ => {}
             }
@@ -215,6 +201,7 @@ fn seg_to_drawing(ctx: &Ctx, s: &Seg) -> Seg {
     match s {
         Seg::Line { a, b } => Seg::Line { a: ctx.to_drawing(*a), b: ctx.to_drawing(*b) },
         Seg::Arc { c, r, a0, sweep } => Seg::Arc { c: ctx.to_drawing(*c), r: r * ctx.f, a0: *a0, sweep: *sweep },
+        Seg::Spiral { a, dir, len, k0, k1 } => Seg::Spiral { a: ctx.to_drawing(*a), dir: *dir, len: len * ctx.f, k0: k0 / ctx.f, k1: k1 / ctx.f },
     }
 }
 
@@ -247,8 +234,12 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
     let axis = ctx.layer("AM", "AS", Element::G)?;
     for a in &x.alignments {
         let al = Alignment { name: a.name.clone(), start: a.start, segs: a.segs.iter().map(|s| seg_to_drawing(&ctx, s)).collect() };
-        let d = record(&[("as", a.name.clone()), ("beginstation", format!("{:.3}", a.start)), ("lengte_m", format!("{:.3}", al.length() / ctx.f)), ("bron", file.clone())]);
-        let mut e = EntityType::LwPolyline(al.to_polyline());
+        // The clothoids as arcs, restored exactly from the object data.
+        let (poly, spiral_data) = al.to_polyline_data(0.001 * ctx.f);
+        let mut pairs = vec![("as", a.name.clone()), ("beginstation", format!("{:.3}", a.start)), ("lengte_m", format!("{:.3}", al.length() / ctx.f)), ("bron", file.clone())];
+        pairs.extend(spiral_data.iter().map(|(k, v)| (k.as_str(), v.clone())));
+        let d = record(&pairs);
+        let mut e = EntityType::LwPolyline(poly);
         let c = e.common_mut();
         c.layer = axis.name.clone();
         c.color = ocs_plugin_api::host::codec::Color::ByLayer;
@@ -259,7 +250,7 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
             "as {} ({:.0} m{})",
             a.name,
             al.length() / ctx.f,
-            if a.spirals > 0 { format!(", {} overgangsbogen als koorden", a.spirals) } else { String::new() }
+            if a.spirals > 0 { format!(", {} overgangsbogen", a.spirals) } else { String::new() }
         ));
     }
     let handles = out.write_handles(&format!("LandXML {file}"))?;
@@ -362,6 +353,31 @@ fn coord_geom_segment(out: &mut String, seg: &Seg, station: f64) {
                 n4(seg.length()),
                 ne(*a),
                 ne(*b)
+            ));
+        }
+        Seg::Spiral { len, k0, k1, .. } => {
+            let (start, end) = (seg.at(0.0), seg.at(*len));
+            let radius = |k: f64| if k.abs() < 1e-12 { "INF".to_string() } else { n4(1.0 / k.abs()) };
+            // The turning side: the curved end decides.
+            let k = if k1.abs() >= k0.abs() { *k1 } else { *k0 };
+            // Where the tangents at both ends meet.
+            let (d0, d1) = ([start.1.cos(), start.1.sin()], [end.1.cos(), end.1.sin()]);
+            let det = d0[0] * d1[1] - d0[1] * d1[0];
+            let pi = (det.abs() > 1e-9).then(|| {
+                let (dx, dy) = (end.0[0] - start.0[0], end.0[1] - start.0[1]);
+                let t = (dx * d1[1] - dy * d1[0]) / det;
+                [start.0[0] + t * d0[0], start.0[1] + t * d0[1]]
+            });
+            out.push_str(&format!(
+                "        <Spiral length=\"{}\" radiusStart=\"{}\" radiusEnd=\"{}\" rot=\"{}\" spiType=\"clothoid\" staStart=\"{}\"><Start>{}</Start>{}<End>{}</End></Spiral>\n",
+                n4(*len),
+                radius(*k0),
+                radius(*k1),
+                if k > 0.0 { "ccw" } else { "cw" },
+                n4(station),
+                ne(start.0),
+                pi.map(|p| format!("<PI>{}</PI>", ne(p))).unwrap_or_default(),
+                ne(end.0)
             ));
         }
         Seg::Arc { c, r, sweep, .. } => {
@@ -603,7 +619,7 @@ mod tests {
     <CoordGeom>
       <Line><Start>0 0</Start><End>0 100</End></Line>
       <Curve rot="ccw" radius="50"><Start>0 100</Start><Center>50 100</Center><End>50 150</End></Curve>
-      <Spiral length="30" radiusStart="INF" radiusEnd="200" rot="cw"><Start>50 150</Start><PI>60 150</PI><End>79.9 149.2</End></Spiral>
+      <Spiral length="30" radiusStart="INF" radiusEnd="200" rot="cw"><Start>50 150</Start><PI>60 150</PI><End>79.98313 150.74970</End></Spiral>
     </CoordGeom>
   </Alignment></Alignments>
 </LandXML>"#;
@@ -629,23 +645,17 @@ mod tests {
             }
             s => panic!("{s:?}"),
         }
-        // The spiral ends exactly on its End.
+        // The spiral is a real clothoid: north from (150, 50), turning right
+        // (cw) to R 200 over 30 m, ending on its End to well under a millimetre.
         match a.segs.last().unwrap() {
-            Seg::Line { b, .. } => assert!((b[0] - 149.2).abs() < 1e-9 && (b[1] - 79.9).abs() < 1e-9),
+            g @ Seg::Spiral { len, k0, k1, .. } => {
+                assert!((len - 30.0).abs() < 1e-12 && *k0 == 0.0 && (k1 + 1.0 / 200.0).abs() < 1e-12);
+                let (end, dir) = g.at(30.0);
+                assert!((end[0] - 150.7497).abs() < 1e-4 && (end[1] - 79.98313).abs() < 1e-4, "{end:?}");
+                assert!((dir - (PI / 2.0 - 0.075)).abs() < 1e-12);
+            }
             s => panic!("{s:?}"),
         }
-    }
-
-    #[test]
-    fn a_clothoid_bends_gradually() {
-        // 100 m from straight to R 100 to the left: the end heading turns
-        // L / (2 R) = 0.5 rad.
-        let p = spiral_points([0.0, 0.0], 0.0, 100.0, 0.0, 0.01);
-        let n = p.len();
-        let dir = (p[n - 1][1] - p[n - 2][1]).atan2(p[n - 1][0] - p[n - 2][0]);
-        assert!((dir - 0.5).abs() < 0.01, "{dir}");
-        // The series with θ = 0.5: x = L(1 − θ²/10 + θ⁴/216), y = L(θ/3 − θ³/42 + θ⁵/1320).
-        assert!((p[n - 1][0] - 97.529).abs() < 0.01 && (p[n - 1][1] - 16.371).abs() < 0.01, "{:?}", p[n - 1]);
     }
 
     #[test]

@@ -193,6 +193,8 @@ pub fn seg_to_project(ctx: &Ctx, s: &Seg) -> Seg {
     match s {
         Seg::Line { a, b } => Seg::Line { a: ctx.from_drawing(*a), b: ctx.from_drawing(*b) },
         Seg::Arc { c, r, a0, sweep } => Seg::Arc { c: ctx.from_drawing(*c), r: r / ctx.f, a0: *a0, sweep: *sweep },
+        // Curvature is per length unit: drawing units to metres.
+        Seg::Spiral { a, dir, len, k0, k1 } => Seg::Spiral { a: ctx.from_drawing(*a), dir: *dir, len: len / ctx.f, k0: k0 * ctx.f, k1: k1 * ctx.f },
     }
 }
 

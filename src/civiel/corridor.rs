@@ -626,6 +626,17 @@ fn curve_share(al: &Alignment, s_m: f64, f: f64, runoff: f64) -> Option<f64> {
     let mut best: Option<f64> = None;
     for seg in &al.segs {
         let l = seg.length() / f;
+        // Along a clothoid the tilt follows the curvature, to full at the curve.
+        if let Seg::Spiral { k0, k1, .. } = seg {
+            let full = k0.abs().max(k1.abs());
+            if s_m >= run && s_m <= run + l && full > 0.0 {
+                let kappa = seg.curvature((s_m - run) * f);
+                let share = kappa / full;
+                if best.is_none_or(|v| share.abs() > v.abs()) {
+                    best = Some(share);
+                }
+            }
+        }
         if let Seg::Arc { sweep, .. } = seg {
             let sign = sweep.signum();
             let (a, b) = (run, run + l);

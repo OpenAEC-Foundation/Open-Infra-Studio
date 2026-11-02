@@ -26,6 +26,10 @@ pub mod mesh;
 pub mod puntenwolk;
 // Exchange: LandXML export (stream uitwisseling).
 pub mod uitwisseling;
+// Clothoids, design criteria, rail and sight distance (as-spoor).
+pub mod ontwerpcriteria;
+pub mod spoor;
+pub mod zicht;
 
 use std::sync::{Mutex, OnceLock};
 
