@@ -355,6 +355,80 @@ pub fn read_file(path: &std::path::Path, keep: &dyn Fn(Option<&str>) -> Result<B
 mod tests {
     use super::*;
 
+    const BUILDING: &str = include_str!("../../tests/fixtures/citygml/building.gml");
+
+    #[test]
+    fn fixture_preserves_versions_crs_geometry_and_filtering() {
+        for version in ["1.0", "2.0", "3.0"] {
+            let text = BUILDING.replace("/2.0", &format!("/{version}"));
+            let model = parse(&text).unwrap();
+            assert_eq!(model.crs.as_deref(), Some("EPSG:2056"));
+            assert_eq!((model.seen, model.objects.len()), (1, 1));
+            assert_eq!(model.objects[0].surfaces[0].0, Part::Roof);
+            assert_eq!(model.objects[0].surfaces[0].1[0].len(), 4);
+            assert_eq!(model.objects[0].surfaces[0].1[0][2], [2600010.0, 1200010.0, 5.0]);
+            let filtered = parse_with(&text, &|_| false, &|_| {}).unwrap();
+            assert_eq!((filtered.seen, filtered.objects.len()), (1, 0));
+        }
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/citygml/building.gml");
+        let model = read_file(&path, &|crs| {
+            assert_eq!(crs, Some("EPSG:2056"));
+            Ok(Box::new(|_| true))
+        }, &|_| {}).unwrap();
+        assert_eq!(model.objects[0].id, "synthetic-building");
+    }
+
+    #[test]
+    fn citygml_rejects_broken_xml_instead_of_partial_success() {
+        for text in [
+            BUILDING.replace("</core:CityModel>", ""),
+            BUILDING.replace("</core:CityModel>", "<core:cityObjectMember>"),
+            BUILDING.replace("</core:CityModel>", "<core:cityObjectMember><bldg:Building></core:cityObjectMember></core:CityModel>"),
+            format!("{BUILDING}<extra/>"),
+            format!("{BUILDING}trailing text"),
+        ] {
+            assert!(parse(&text).unwrap_err().starts_with("CityGML:"));
+        }
+    }
+
+    #[test]
+    fn citygml_ignores_member_names_in_comments_and_cdata() {
+        let commented = BUILDING.replace("cityObjectMember", "featureMember").replace("<gml:boundedBy>", "<!-- cityObjectMember -->\n<gml:boundedBy>");
+        assert_eq!(parse(&commented).unwrap().objects.len(), 1);
+        let cdata = BUILDING.replace("<bldg:boundedBy>", "<bldg:name><![CDATA[</core:cityObjectMember>]]></bldg:name><bldg:boundedBy>");
+        assert_eq!(parse(&cdata).unwrap().objects.len(), 1);
+    }
+
+    #[test]
+    fn citygml_accepts_single_quotes_and_whitespace_around_crs_attributes() {
+        let text = BUILDING.replace("srsName=\"urn:ogc:def:crs:EPSG::2056\"", "srsName = 'urn:ogc:def:crs:EPSG::2056'");
+        assert_eq!(crs_of(&text).as_deref(), Some("EPSG:2056"));
+        assert_eq!(parse(&text).unwrap().crs.as_deref(), Some("EPSG:2056"));
+    }
+
+    #[test]
+    fn citygml_rejects_invalid_numbers_and_coordinate_dimensions() {
+        for (from, to) in [
+            ("2600010 1200010 5", "2600010 bad 1200010 5"),
+            ("2600010 1200010 5", "2600010 1200010"),
+            ("2600010 1200010 5", "2600010 NaN 5"),
+            ("2600010 1200010 5", "2600010 inf 5"),
+            ("srsDimension=\"3\"", "srsDimension=\"0\""),
+            ("srsDimension=\"3\"", "srsDimension=\"bad\""),
+        ] {
+            assert!(parse(&BUILDING.replace(from, to)).is_err(), "{from} -> {to}");
+        }
+        let huge = parse(&BUILDING.replace("2600010", "1e100")).unwrap();
+        assert_eq!(huge.objects[0].surfaces[0].1[0][2][0], 1e100);
+    }
+
+    #[test]
+    fn citygml_reports_empty_and_truncated_input() {
+        for text in ["", "<CityModel/>", "<", &BUILDING[..BUILDING.len() / 2]] {
+            assert!(parse(text).is_err());
+        }
+    }
+
     const LOD2: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <core:CityModel xmlns:core="http://www.opengis.net/citygml/2.0" xmlns:bldg="http://www.opengis.net/citygml/building/2.0" xmlns:gml="http://www.opengis.net/gml">
  <gml:boundedBy><gml:Envelope srsName="urn:ogc:def:crs:EPSG::7415" srsDimension="3"><gml:lowerCorner>0 0 0</gml:lowerCorner><gml:upperCorner>10 10 9</gml:upperCorner></gml:Envelope></gml:boundedBy>
