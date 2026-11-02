@@ -198,6 +198,7 @@ mod tests {
             std::fs::write(&path, XML).unwrap();
             let delivery = read(&path).unwrap();
             assert_eq!(delivery.meldnummer, "SYNTHETIC", "{name}");
+            assert_eq!(delivery.features[0].props["melding"], "SYNTHETIC", "{name}");
             assert_eq!(delivery.features[0].lines[0].0, vec![[100.0, 200.0], [110.0, 210.0]]);
         }
         std::fs::remove_dir_all(dir).unwrap();
@@ -247,6 +248,21 @@ mod tests {
             assert!(delivery.features.iter().flat_map(|f| &f.lines).any(|(line, _)| line == &vec![[100.0, 200.0], [110.0, 210.0]]));
             std::fs::remove_dir_all(dir).unwrap();
         }
+    }
+
+    #[test]
+    fn klic_accepts_a_single_drawable_point_without_a_line() {
+        let text = XML.replace("Waterleiding", "Appurtenance").replace("LineString", "Point")
+            .replace("posList", "pos").replace("100 200 110 210", "100 200");
+        let dir = std::env::temp_dir().join(format!("oi-klic-point-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        std::fs::write(&path, text).unwrap();
+        let delivery = read(&path).unwrap();
+        assert_eq!(delivery.features.len(), 1);
+        assert_eq!(delivery.features[0].points, vec![[100.0, 200.0]]);
+        assert!(delivery.features[0].lines.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
