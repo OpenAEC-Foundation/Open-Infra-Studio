@@ -1,0 +1,83 @@
+name: Native compilation measurement
+
+# Temporary comparison on the PR: only compilation and hashes, without signing
+# or publishing. Removed from the final change after cold/warm evidence exists.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: "1.99.1"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            lib: libopen_infra.so
+            civiel: libopen_infra_civiel.so
+          - os: windows-latest
+            lib: open_infra.dll
+            civiel: open_infra_civiel.dll
+          - os: macos-14
+            lib: libopen_infra.dylib
+            civiel: libopen_infra_civiel.dylib
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: release
+          cache-bin: false
+      - run: cargo test --lib --locked -p open-infra
+      - run: cargo build --release --locked -p open-infra
+      - name: Keep the GIS library before building Civiel
+        shell: bash
+        run: |
+          mkdir -p measurements
+          cp "target/release/${{ matrix.lib }}" measurements/gis.bin
+      - run: cargo build --release --locked -p open-infra-civiel
+      - name: Record source, toolchain and library hashes
+        shell: bash
+        env:
+          CIVIEL_LIBRARY: ${{ matrix.civiel }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, pathlib, platform, subprocess
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          def digest(path):
+              p = pathlib.Path(path)
+              return {'bytes': p.stat().st_size, 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()}
+          result = {
+              'head': git('rev-parse', 'HEAD'),
+              'source_tree': git('rev-parse', 'HEAD:src'),
+              'civiel_tree': git('rev-parse', 'HEAD:civiel/src'),
+              'lock': digest('Cargo.lock'),
+              'manifest': digest('Cargo.toml'),
+              'civiel_manifest': digest('civiel/Cargo.toml'),
+              'runner_os': os.environ['RUNNER_OS'],
+              'runner_arch': os.environ['RUNNER_ARCH'],
+              'machine': platform.platform(),
+              'processor': platform.processor(),
+              'logical_cpus': os.cpu_count(),
+              'rustc': subprocess.check_output(['rustc', '-Vv'], text=True),
+              'cargo_incremental': os.environ.get('CARGO_INCREMENTAL'),
+              'gis': digest('measurements/gis.bin'),
+              'civiel': digest(pathlib.Path('target/release') / os.environ['CIVIEL_LIBRARY']),
+          }
+          pathlib.Path('measurements/result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+          print('COMPILATION_RESULT=' + json.dumps(result))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compilation-${{ matrix.os }}-${{ github.run_attempt }}
+          path: measurements/result.json
