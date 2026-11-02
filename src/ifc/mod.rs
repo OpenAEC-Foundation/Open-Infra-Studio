@@ -450,9 +450,11 @@ fn sewer_props(d: &Data) -> Data {
 }
 
 /// KLIC cables and pipes, after the NLCS objects of `nlcs::klic_object`.
-fn klic(o: &str, ot: Option<String>) -> Class {
+/// `symbol`: the NLCS symbol element (S), e.g. the hydrant itself rather
+/// than the fire main that leads to it.
+fn klic(o: &str, ot: Option<String>, symbol: bool) -> Class {
     let electric = o.starts_with("ET_") || o.starts_with("DATA_");
-    if o.contains("BRANDHYDRANT") {
+    if o.contains("BRANDHYDRANT") && symbol {
         return class("IfcFireSuppressionTerminal", Some("FIREHYDRANT"), ot);
     }
     if o.contains("STRAATPOT") {
@@ -529,7 +531,8 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
         }
         // A corridor's formation and subgrade surfaces.
         "VH" | "GW" if is_mesh && get(data, "oppervlak").is_some() => Class { role: Role::Terrain, ..class("IfcGeographicElement", Some("USERDEFINED"), get(data, "oppervlak").map(str::to_string)) },
-        "GW" if o.starts_with("WATERGANG") => class("IfcGeographicElement", Some("USERDEFINED"), ot),
+        // A ditch or watercourse body; its lines (water line, toe) stay annotation.
+        "GW" if o.starts_with("WATERGANG") && is_mesh => class("IfcGeographicElement", Some("USERDEFINED"), ot),
         "VH" => match o {
             _ if o.starts_with("ONVERHARD") => class("IfcGeographicElement", Some("TERRAIN"), ot),
             _ if o.starts_with("KANTOPSLUITING") => class("IfcKerb", Some("NOTDEFINED"), ot),
@@ -540,7 +543,7 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
         },
         "GR" => class("IfcGeographicElement", Some("VEGETATION"), ot),
         "WH" | "OB" => class("IfcGeographicElement", Some("USERDEFINED"), ot),
-        "KL" => klic(o, ot),
+        "KL" => klic(o, ot, ln.element == "S"),
         "RI" => match o {
             // Flow arrows of a sewer design are symbols, not pipes.
             _ if o.contains("STROMINGSRICHTING") => annotation("SYMBOL", ot),

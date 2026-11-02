@@ -30,7 +30,8 @@
       "IfcAlignment": 0,
       "IfcAnnotation": 123,
       "IfcPavement": 19,
-      "IfcPipeSegment": 46
+      "IfcPipeSegment": 43,
+      "IfcFireSuppressionTerminal": 3
     },
     "crs": []
   },
