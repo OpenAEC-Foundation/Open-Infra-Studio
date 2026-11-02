@@ -656,6 +656,116 @@ mod tests {
         assert_eq!(f.lines[0].0.len(), 4);
     }
 
+    const WKB_POINT: &[u8] = include_bytes!("../../tests/fixtures/geopackage/point.wkb");
+    const WKB_LINE: &[u8] = include_bytes!("../../tests/fixtures/geopackage/line.wkb");
+
+    fn gpkg_blob(wkb: &[u8]) -> Vec<u8> {
+        let mut blob = vec![b'G', b'P', 0, 1];
+        blob.extend(2056i32.to_le_bytes());
+        blob.extend(wkb);
+        blob
+    }
+
+    fn temporary_gpkg(name: &str, blob: &[u8]) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!("oi-gpkg-{name}-{}.gpkg", std::process::id()));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch("DROP TABLE IF EXISTS gpkg_contents; DROP TABLE IF EXISTS gpkg_geometry_columns; DROP TABLE IF EXISTS gpkg_spatial_ref_sys; DROP TABLE IF EXISTS sample;
+            CREATE TABLE gpkg_contents (table_name TEXT, data_type TEXT);
+            CREATE TABLE gpkg_geometry_columns (table_name TEXT, column_name TEXT, srs_id INTEGER);
+            CREATE TABLE gpkg_spatial_ref_sys (srs_id INTEGER, organization TEXT, organization_coordsys_id INTEGER);
+            CREATE TABLE sample (id INTEGER, geom BLOB, name TEXT);
+            INSERT INTO gpkg_contents VALUES ('sample','features');
+            INSERT INTO gpkg_geometry_columns VALUES ('sample','geom',2056);
+            INSERT INTO gpkg_spatial_ref_sys VALUES (2056,'EPSG',2056);").unwrap();
+        db.execute("INSERT INTO sample VALUES (1,?1,'synthetic')", [blob]).unwrap();
+        path
+    }
+
+    #[test]
+    fn gpkg_fixed_wkb_and_file_route_preserve_geometry_and_crs() {
+        for (wkb, points, lines) in [(WKB_POINT, 1, 0), (WKB_LINE, 0, 1)] {
+            let mut f = Feature::default();
+            assert!(gpkg_geometry(&gpkg_blob(wkb), &mut f));
+            assert_eq!((f.points.len(), f.lines.len()), (points, lines));
+        }
+        let path = temporary_gpkg("valid", &gpkg_blob(WKB_POINT));
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.crs.as_deref(), Some("EPSG:2056"));
+        assert_eq!(data.features[0].points[0], [2600000.25, 1200000.5]);
+        assert_eq!(data.features[0].props["name"], "synthetic");
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn gpkg_rejects_bad_headers_byte_order_and_trailing_data() {
+        let mut version = gpkg_blob(WKB_POINT);
+        version[2] = 1;
+        let mut envelope = gpkg_blob(WKB_POINT);
+        envelope[3] = 1 | (5 << 1);
+        let mut byte_order = vec![9];
+        byte_order.extend(1u32.to_be_bytes());
+        byte_order.extend(1.0f64.to_be_bytes());
+        byte_order.extend(2.0f64.to_be_bytes());
+        let mut trailing = WKB_POINT.to_vec();
+        trailing.push(0);
+        for blob in [version, envelope, byte_order, trailing] {
+            assert!(!gpkg_geometry(&blob, &mut Feature::default()), "{blob:?}");
+        }
+    }
+
+    #[test]
+    fn gpkg_failure_does_not_leave_partial_geometry() {
+        let mut collection = vec![1];
+        collection.extend(7u32.to_le_bytes());
+        collection.extend(2u32.to_le_bytes());
+        collection.extend(WKB_POINT);
+        collection.extend(&WKB_LINE[..10]);
+        let mut f = Feature { points: vec![[1.0, 2.0]], ..Default::default() };
+        assert!(!gpkg_geometry(&collection, &mut f));
+        assert_eq!(f.points, vec![[1.0, 2.0]], "failed parse must be atomic");
+        assert!(f.lines.is_empty());
+    }
+
+    #[test]
+    fn gpkg_reports_corrupt_geometry_through_the_real_file_reader() {
+        let path = temporary_gpkg("broken", &gpkg_blob(&WKB_LINE[..10]));
+        let result = read(&path, None);
+        std::fs::remove_file(path).unwrap();
+        assert!(result.unwrap_err().starts_with("GeoPackage:"));
+    }
+
+    #[test]
+    fn gpkg_rejects_deep_collections_and_nonfinite_lines() {
+        let mut nested = WKB_POINT.to_vec();
+        for _ in 0..100 {
+            let mut outer = vec![1];
+            outer.extend(7u32.to_le_bytes());
+            outer.extend(1u32.to_le_bytes());
+            outer.extend(nested);
+            nested = outer;
+        }
+        assert!(!gpkg_geometry(&nested, &mut Feature::default()));
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut line = WKB_LINE.to_vec();
+            line[9..17].copy_from_slice(&value.to_le_bytes());
+            assert!(!gpkg_geometry(&line, &mut Feature::default()));
+        }
+        let mut large = WKB_POINT.to_vec();
+        large[5..13].copy_from_slice(&1e100f64.to_le_bytes());
+        assert!(gpkg_geometry(&large, &mut Feature::default()));
+    }
+
+    #[test]
+    fn gpkg_rejects_every_truncation_and_impossible_point_count() {
+        let blob = gpkg_blob(WKB_LINE);
+        for end in 0..blob.len() {
+            assert!(!gpkg_geometry(&blob[..end], &mut Feature::default()), "{end}");
+        }
+        let mut line = WKB_LINE.to_vec();
+        line[5..9].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(!gpkg_geometry(&line, &mut Feature::default()));
+    }
+
     #[test]
     fn test_files_read() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/gisbestanden");
