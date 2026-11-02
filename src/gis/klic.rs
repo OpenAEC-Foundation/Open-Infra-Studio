@@ -19,16 +19,20 @@ pub struct Levering {
 
 /// Read a delivery: the Kadaster zip, or an extracted `GI_gebiedsinformatielevering_*.xml`.
 pub fn read(path: &Path) -> Result<Levering, String> {
-    let lev = match path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref() {
+    // A panic in the shared converter must not take down the plugin process.
+    let lev = std::panic::catch_unwind(|| match path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref() {
         Some("xml") | Some("gml") => {
             let xml = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-            let meld = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").rsplit('_').nth(1).unwrap_or("").to_string();
-            klic2geo::parse_gi_xml(&xml, &meld)?
+            let meld = path.file_stem().and_then(|s| s.to_str()).and_then(|s| s.strip_prefix("GI_gebiedsinformatielevering_")).and_then(|s| s.split('_').next()).unwrap_or("");
+            klic2geo::parse_gi_xml(&xml, meld)
         }
-        _ => klic2geo::convert_zip(path)?,
-    };
+        _ => klic2geo::convert_zip(path),
+    }).map_err(|_| "KLIC: de levering kon niet veilig worden gelezen door de onderliggende lezer".to_string())??;
     let fc = serde_json::json!({ "type": "FeatureCollection", "features": lev.features });
     let features = parse_geojson(&fc);
+    if features.iter().all(|f| f.lines.is_empty() && f.points.is_empty()) {
+        return Err("KLIC: geen geometrie gevonden in deze levering".into());
+    }
     let mut themes = BTreeMap::new();
     let mut operators: Vec<String> = Vec::new();
     for f in &features {
