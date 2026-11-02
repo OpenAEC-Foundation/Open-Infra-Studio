@@ -658,6 +658,15 @@ pub fn fetch_many<T: Send>(ids: &[String], f: fn(&str) -> Result<T, String>, pro
 mod tests {
     use super::*;
 
+    #[test]
+    fn one_bad_search_object_keeps_the_other_bro_points() {
+        let xml = fixture("cpt-characteristics.xml");
+        let bad = xml.replacen("<offset uom=\"m\">2.860</offset>", "<offset uom=\"m\">bad</offset>", 1);
+        assert_ne!(bad, xml);
+        let points = parse_characteristics(&bad).unwrap();
+        assert_eq!(points.len(), 2);
+    }
+
     const SYNTHETIC_CPT: &str = include_str!("../../tests/fixtures/bro-synthetic/cpt.xml");
     const SYNTHETIC_BHR: &str = include_str!("../../tests/fixtures/bro-synthetic/borehole.xml");
 
