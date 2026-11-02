@@ -88,6 +88,24 @@ fn num_of(n: Node, local: &str) -> Option<f64> {
     text_of(n, local).and_then(|t| t.parse().ok())
 }
 
+/// Validate fields used by the geometry before optional-value extraction.
+/// An absent optional field is allowed; a present but broken value is not.
+fn validate_numbers(root: Node) -> Result<(), String> {
+    for n in root.descendants().filter(|n| n.is_element()) {
+        let name = n.tag_name().name();
+        if name == "pos" {
+            let values = n.text().unwrap_or("").split_whitespace().map(|t| t.parse::<f64>()).collect::<Result<Vec<_>, _>>().map_err(|_| "BRO: ongeldige locatiecoördinaten")?;
+            if !(2..=3).contains(&values.len()) || !values.iter().all(|v| v.is_finite()) {
+                return Err("BRO: onvolledige of niet-eindige locatiecoördinaten".into());
+            }
+        } else if matches!(name, "offset" | "finalDepth" | "finalDepthBoring" | "predrilledDepth" | "upperBoundary" | "lowerBoundary") {
+            let value = n.text().unwrap_or("").trim().parse::<f64>().map_err(|_| format!("BRO: ongeldig getal in {name}"))?;
+            if !value.is_finite() { return Err(format!("BRO: niet-eindig getal in {name}")); }
+        }
+    }
+    Ok(())
+}
+
 fn pos(n: Node) -> Option<(XY, String)> {
     let p = first(n, "pos")?;
     let v: Vec<f64> = p.text()?.split_whitespace().filter_map(|t| t.parse().ok()).collect();
@@ -132,6 +150,7 @@ pub fn parse_characteristics(xml: &str) -> Result<Vec<Point>, String> {
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
+    validate_numbers(doc.root_element())?;
     Ok(doc
         .root_element()
         .children()
@@ -234,6 +253,7 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         return Err(format!("BRO: {r}"));
     }
     let root = doc.root_element();
+    validate_numbers(root)?;
     let obj = first(root, "CPT_O").ok_or("BRO: geen sondering (CPT_O) in het antwoord")?;
     let point = point_of(obj, true);
     let columns: Vec<String> = match first(obj, "parameters") {
@@ -252,8 +272,12 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         .and_then(|v| v.text())
         .unwrap_or("");
     let mut rows: Vec<(f64, Sample)> = Vec::new();
-    for r in values.split(block.as_str()).filter(|r| !r.trim().is_empty()) {
-        let v: Vec<f64> = r.split(tok.as_str()).map(|t| if dec == "." { t.trim().parse() } else { t.trim().replace(dec.as_str(), ".").parse() }.unwrap_or(VOID)).collect();
+    for (row, r) in values.split(block.as_str()).filter(|r| !r.trim().is_empty()).enumerate() {
+        let v = r.split(tok.as_str()).map(|t| {
+            let value: f64 = if dec == "." { t.trim().parse() } else { t.trim().replace(dec.as_str(), ".").parse() }.map_err(|_| format!("BRO: ongeldige meetwaarde in regel {}", row + 1))?;
+            if !value.is_finite() { return Err(format!("BRO: niet-eindige meetwaarde in regel {}", row + 1)); }
+            Ok(value)
+        }).collect::<Result<Vec<_>, String>>()?;
         let get = |i: Option<usize>| i.and_then(|i| v.get(i).copied()).filter(|x| *x > VOID + 1.0);
         let length = get(pl).or(get(dp));
         let (Some(length), Some(q)) = (length, get(Some(qc))) else { continue };
@@ -262,6 +286,7 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         }
         let f = get(fs).filter(|f| *f >= 0.0);
         let ratio = get(rf).filter(|r| *r >= 0.0).or_else(|| f.map(|f| f / q * 100.0));
+        if ratio.is_some_and(|r| !r.is_finite()) { return Err(format!("BRO: niet-eindig wrijvingsgetal in regel {}", row + 1)); }
         rows.push((length, Sample { depth: get(dp).unwrap_or(length), qc: q, fs: f, rf: ratio }));
     }
     // The block may hold the rod changes twice and be out of order.
@@ -571,6 +596,7 @@ pub fn parse_bhr(xml: &str) -> Result<Bhr, String> {
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
+    validate_numbers(doc.root_element())?;
     let obj = first(doc.root_element(), "BHR_GT_O").ok_or("BRO: geen boring (BHR_GT_O) in het antwoord")?;
     let point = point_of(obj, false);
     let desc = first(obj, "boreholeSampleDescription");
