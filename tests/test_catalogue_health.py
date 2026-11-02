@@ -1,5 +1,7 @@
 """Vaste controles; geen openbare diensten of internet nodig."""
 import json
+import io
+from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 import subprocess
 import sys
@@ -165,6 +167,20 @@ class CatalogueHealthTest(unittest.TestCase):
         self.assertNotIn("--insecure", command)
         self.assertLessEqual(run.call_args.kwargs["timeout"], 4)
         self.assertIn("time-out", result.error)
+
+    def test_cli_returns_zero_for_failed_services_and_nonzero_for_script_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            catalogue = Path(tmp) / "catalogue.json"
+            catalogue.write_text(json.dumps([service()]))
+            args = ["--catalogue", str(catalogue), "--no-builtins", "--output", tmp]
+            with patch.object(health, "fetch_url", return_value=reply(status=503)) as fetch:
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(health.main(args), 0)
+                fetch.assert_called_once()
+            self.assertEqual(json.loads((Path(tmp) / "rapport.json").read_text())["counts"]["kapot"], 1)
+            with patch.object(health, "fetch_url", side_effect=RuntimeError("lokale fout")):
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    self.assertEqual(health.main(args), 1)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Controleer openbare kaartbronnen zonder de catalogus of app te wijzigen."""
 import argparse
-from collections import Counter, defaultdict
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -219,7 +219,8 @@ def require_success(response):
         raise ServiceError("HTTP " + str(response.status))
 
 
-def check_services(services, *, fetch=fetch_url, timeout=8, slow=3, workers=6):
+def check_services(services, *, fetch=None, timeout=8, slow=3, workers=6):
+    fetch = fetch or fetch_url
     started = datetime.now(timezone.utc).isoformat()
     groups, results = defaultdict(list), {}
     for i, s in enumerate(services):
@@ -320,7 +321,7 @@ def main(argv=None):
         parser.error("curl is vereist")
     try:
         services = load_catalogue(args.catalogue, None if args.no_builtins else args.builtins_source)
-        paths = [args.catalogue] + ([] if args.no_builtins else [args.builtins_source])
+        paths = [Path(__file__).resolve(), args.catalogue] + ([] if args.no_builtins else [args.builtins_source])
         sources = {str(p.relative_to(ROOT) if p.is_relative_to(ROOT) else p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
         print(f"Controle van {len(services)} vermeldingen; maximaal {args.workers} verzoeken tegelijk, één per host.", flush=True)
         report = check_services(services, timeout=args.timeout, slow=args.slow, workers=args.workers)
