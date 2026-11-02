@@ -711,6 +711,28 @@ mod tests {
         assert!(error.contains(crate::lang::tr("ongeldige meetwaarde in regel", "invalid measurement on row")), "{error}");
     }
 
+    #[test]
+    fn unusable_bro_objects_use_the_existing_object_error() {
+        for text in [
+            SYNTHETIC_CPT.replace("<pos>100 200</pos>", "<pos>100 broken 200</pos>"),
+            SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,broken,0.01,0.5"),
+            SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,1e-300,1e100,-999999"),
+        ] {
+            assert_eq!(parse_cpt(&text).unwrap_err(), "BRO: geen sondering (CPT_O) in het antwoord");
+        }
+        let text = SYNTHETIC_BHR.replace("<lowerBoundary>2</lowerBoundary>", "<lowerBoundary>broken</lowerBoundary>");
+        assert_eq!(parse_bhr(&text).unwrap_err(), "BRO: geen boring (BHR_GT_O) in het antwoord");
+    }
+
+    #[test]
+    fn all_unreadable_search_objects_are_counted_in_the_result() {
+        let original = fixture("cpt-characteristics.xml");
+        let broken = ["2.860", "2.470", "3.800"].into_iter().fold(original, |text, value| text.replace(&format!("<offset uom=\"m\">{value}</offset>"), "<offset uom=\"m\">broken</offset>"));
+        let result = parse_characteristics(&broken).unwrap();
+        assert!(result.points.is_empty());
+        assert_eq!(result.warnings.len(), 3);
+    }
+
     const SYNTHETIC_CPT: &str = include_str!("../../tests/fixtures/bro-synthetic/cpt.xml");
     const SYNTHETIC_BHR: &str = include_str!("../../tests/fixtures/bro-synthetic/borehole.xml");
 
