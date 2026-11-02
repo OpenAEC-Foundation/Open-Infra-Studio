@@ -840,9 +840,18 @@ mod tests {
     #[test]
     fn gpkg_reports_corrupt_geometry_through_the_real_file_reader() {
         let path = temporary_gpkg("broken", &gpkg_blob(&WKB_LINE[..10]));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute("INSERT INTO sample (id, geom) VALUES (2, ?1)", [&gpkg_blob(WKB_POINT)]).unwrap();
+        drop(db);
         let result = read(&path, None);
         std::fs::remove_file(path).unwrap();
-        assert!(result.unwrap_err().starts_with("GeoPackage:"));
+        let data = result.unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points.len(), 1);
+        assert_eq!(data.features[0].props["id"], 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("rij 1"));
+        assert!(data.report("1 object gelezen").contains(&data.warnings[0]));
     }
 
     #[test]
