@@ -766,6 +766,42 @@ mod tests {
     }
 
     #[test]
+    fn gpkg_sql_null_geometry_preserves_the_feature_and_attributes() {
+        let path = temporary_gpkg("null", &gpkg_blob(WKB_POINT));
+        {
+            let db = rusqlite::Connection::open(&path).unwrap();
+            db.execute("UPDATE sample SET geom = NULL WHERE id = 1", []).unwrap();
+        }
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].props["name"], "synthetic");
+        assert!(data.features[0].points.is_empty() && data.features[0].lines.is_empty());
+        assert_eq!(data.crs.as_deref(), Some("EPSG:2056"));
+    }
+
+    #[test]
+    fn gpkg_empty_geometries_remain_supported_with_the_empty_flag() {
+        let mut point = WKB_POINT.to_vec();
+        point[5..13].copy_from_slice(&f64::NAN.to_le_bytes());
+        point[13..21].copy_from_slice(&f64::NAN.to_le_bytes());
+        let mut empty = vec![point];
+        for kind in 2..=7u32 {
+            let mut wkb = vec![1];
+            wkb.extend(kind.to_le_bytes());
+            wkb.extend(0u32.to_le_bytes());
+            empty.push(wkb);
+        }
+        for wkb in empty {
+            let mut blob = gpkg_blob(&wkb);
+            blob[3] |= 0x10;
+            let mut f = Feature::default();
+            assert!(gpkg_geometry(&blob, &mut f));
+            assert!(f.points.is_empty() && f.lines.iter().all(|(line, _)| line.is_empty()));
+        }
+    }
+
+    #[test]
     fn gpkg_rejects_bad_headers_byte_order_and_trailing_data() {
         let mut version = gpkg_blob(WKB_POINT);
         version[2] = 1;
