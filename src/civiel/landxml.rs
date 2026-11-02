@@ -23,6 +23,14 @@ pub struct LandXml {
     /// Name and triangles (easting, northing, height in metres).
     pub surfaces: Vec<(String, Vec<[P3; 3]>)>,
     pub alignments: Vec<XmlAlignment>,
+    /// Objects that could not be read; unrelated objects remain available.
+    pub warnings: Vec<String>,
+}
+
+impl LandXml {
+    fn report(&self, message: String) -> String {
+        if self.warnings.is_empty() { message } else { format!("{message} {}", self.warnings.join(" ")) }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -136,12 +144,13 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
     }
     // Points. A group's unnamed reference is membership, not another point.
     for p in survey_points {
+        let parsed = (|| -> Result<(), String> {
         let v = point_values(p, unit, &points, 0)?;
         if !(2..=3).contains(&v.len()) {
             return Err("LandXML: CgPoint verwacht twee of drie coördinaten".into());
         }
         let name = p.attribute("name").or(p.attribute("oID")).unwrap_or("").to_string();
-        if p.attribute("pntRef").is_some() && name.is_empty() { continue; }
+        if p.attribute("pntRef").is_some() && name.is_empty() { return Ok(()); }
         let code = p.attribute("code").or(p.attribute("desc")).unwrap_or("").to_string();
         out.points.push(SurveyPoint {
             name: if name.is_empty() { (out.points.len() + 1).to_string() } else { name },
@@ -150,10 +159,14 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
             z: v.get(2).copied(),
             code,
         });
+        Ok(())
+        })();
+        if let Err(error) = parsed { out.warnings.push(format!("LandXML: CgPoint {} overgeslagen: {error}", p.attribute("name").or(p.attribute("pntRef")).unwrap_or("zonder naam"))); }
     }
     // Surfaces: points by id, faces by three ids; i="1" faces are invisible.
     for surf in root.descendants().filter(|n| n.is_element() && local(n) == "Surface") {
         let Some(def) = child(surf, "Definition") else { continue };
+        let parsed = (|| -> Result<(), String> {
         let mut ids = std::collections::HashMap::new();
         if let Some(pnts) = child(def, "Pnts") {
             for p in children(pnts, "P") {
@@ -181,10 +194,14 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
         if !faces.is_empty() {
             out.surfaces.push((surf.attribute("name").unwrap_or("Oppervlak").to_string(), faces));
         }
+        Ok(())
+        })();
+        if let Err(error) = parsed { out.warnings.push(format!("LandXML: Surface {} overgeslagen: {error}", surf.attribute("name").unwrap_or("zonder naam"))); }
     }
     // Alignments.
     for al in root.descendants().filter(|n| n.is_element() && local(n) == "Alignment") {
         let Some(geom) = child(al, "CoordGeom") else { continue };
+        let parsed = (|| -> Result<(), String> {
         let mut segs = Vec::new();
         let mut spirals = 0;
         for g in geom.children().filter(|c| c.is_element()) {
@@ -244,9 +261,12 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
                 spirals,
             });
         }
+        Ok(())
+        })();
+        if let Err(error) = parsed { out.warnings.push(format!("LandXML: Alignment {} overgeslagen: {error}", al.attribute("name").unwrap_or("zonder naam"))); }
     }
     if out.points.is_empty() && out.surfaces.is_empty() && out.alignments.is_empty() {
-        return Err("geen punten, oppervlakken of assen in dit LandXML-bestand".into());
+        return Err(out.report("geen punten, oppervlakken of assen in dit LandXML-bestand".into()));
     }
     Ok(out)
 }
@@ -265,6 +285,7 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     progress("LandXML lezen…".into());
     let x = parse(&text)?;
+    for warning in &x.warnings { progress(warning.clone()); }
     let file = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut out = Out::default();
     let mut parts = Vec::new();
@@ -324,7 +345,7 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
     }
     super::api::note("assen", x.alignments.iter().zip(axes).map(|(a, h)| serde_json::json!({"naam": a.name, "handle": super::api::handle_text(*h), "beginstation": a.start})).collect::<Vec<_>>());
     let hint = if x.alignments.is_empty() { "" } else { " Selecteer een as en klik op As voor de stationering." };
-    Ok(format!("{file}: {} — {n} elementen.{hint}", parts.join(", ")))
+    Ok(x.report(format!("{file}: {} — {n} elementen.{hint}", parts.join(", "))))
 }
 
 #[cfg(test)]
@@ -344,6 +365,8 @@ mod tests {
             assert_ne!(text, SITE);
             let data = parse(&text).unwrap();
             assert_eq!((data.points.len(), data.surfaces.len(), data.alignments.len()), expected);
+            assert_eq!(data.warnings.len(), 1);
+            assert!(data.report("LandXML gelezen".into()).contains("overgeslagen"));
         }
     }
 
@@ -372,16 +395,18 @@ mod tests {
             ("<CgPoint name=\"1\">200 100 5</CgPoint>", "<CgPoint name=\"1\">200</CgPoint>"),
             ("<P id=\"2\">200 110 6</P>", "<P id=\"2\">200 110</P>"),
         ] {
-            assert!(parse(&SITE.replace(from, to)).is_err(), "{from} -> {to}");
+            let data = parse(&SITE.replace(from, to)).unwrap();
+            assert!(!data.warnings.is_empty(), "{from} -> {to}");
         }
     }
 
     #[test]
     fn rejects_unit_overflow_and_nonfinite_stationing() {
         let overflow = SITE.replace("linearUnit=\"meter\"", "linearUnit=\"kilometer\"").replace("200 100 5", "1e308 100 5");
-        assert!(parse(&overflow).is_err());
+        assert!(!parse(&overflow).unwrap().warnings.is_empty());
         for value in ["NaN", "inf", "bad", "1e999"] {
-            assert!(parse(&SITE.replace("staStart=\"10\"", &format!("staStart=\"{value}\""))).is_err(), "{value}");
+            let data = parse(&SITE.replace("staStart=\"10\"", &format!("staStart=\"{value}\""))).unwrap();
+            assert!(data.alignments.is_empty() && !data.warnings.is_empty(), "{value}");
         }
     }
 
@@ -396,7 +421,8 @@ mod tests {
             ("<Center>50 100</Center>", "<Center>-1.7e308 -1.7e308</Center>"),
         ] {
             assert_ne!(SAMPLE.replace(from, to), SAMPLE, "fixture substitution: {from}");
-            assert!(parse(&SAMPLE.replace(from, to)).is_err(), "{from} -> {to}");
+            let data = parse(&SAMPLE.replace(from, to)).unwrap();
+            assert!(data.alignments.is_empty() && !data.warnings.is_empty(), "{from} -> {to}");
         }
     }
 
@@ -449,9 +475,11 @@ mod tests {
     #[test]
     fn missing_and_cyclic_point_references_return_errors() {
         let missing = SITE.replace("<Start>200 100</Start>", "<Start pntRef=\"missing\"/>");
-        assert!(parse(&missing).is_err());
+        let data = parse(&missing).unwrap();
+        assert!(data.alignments.is_empty() && !data.warnings.is_empty());
         let cycle = SITE.replace("<CgPoint name=\"1\">200 100 5</CgPoint>", "<CgPoint name=\"1\" pntRef=\"2\"/><CgPoint name=\"2\" pntRef=\"1\"/>");
-        assert!(parse(&cycle).is_err());
+        let data = parse(&cycle).unwrap();
+        assert!(data.points.is_empty() && !data.warnings.is_empty());
     }
 
     const SAMPLE: &str = r#"<?xml version="1.0"?>
