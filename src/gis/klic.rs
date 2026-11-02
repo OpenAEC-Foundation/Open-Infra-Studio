@@ -15,6 +15,8 @@ pub struct Levering {
     pub themes: BTreeMap<String, usize>,
     /// Network operators (netbeheerders) in the delivery.
     pub operators: Vec<String>,
+    /// Source features omitted because they have no drawable geometry.
+    pub skipped: usize,
 }
 
 /// Read a delivery: the Kadaster zip, or an extracted `GI_gebiedsinformatielevering_*.xml`.
@@ -50,7 +52,7 @@ pub fn read(path: &Path) -> Result<Levering, String> {
         }
     }
     operators.sort();
-    Ok(Levering { meldnummer: lev.meldnummer, features, themes, operators })
+    Ok(Levering { meldnummer: lev.meldnummer, features, themes, operators, skipped: 0 })
 }
 
 pub fn thema(f: &Feature) -> &str {
@@ -188,6 +190,39 @@ mod tests {
 
     const XML_NAME: &str = "GI_gebiedsinformatielevering_SYNTHETIC_1_V2.xml";
     const XML: &str = include_str!("../../tests/fixtures/klic/GI_gebiedsinformatielevering_SYNTHETIC_1_V2.xml");
+
+    #[test]
+    fn klic_counts_only_wholly_unreadable_features_and_keeps_the_neighbour() {
+        let doc = roxmltree::Document::parse(XML).unwrap();
+        let member = doc.descendants().find(|n| n.has_tag_name("featureMember")).unwrap();
+        let dir = std::env::temp_dir().join(format!("oi-klic-skipped-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        for coordinates in ["NaN NaN NaN NaN", "100 200", ""] {
+            let broken = XML[member.range()].replace("nl.imkl-KL9999.synthetic", "nl.imkl-KL9999.broken").replace("100 200 110 210", coordinates);
+            let text = XML.replace("</gml:FeatureCollection>", &format!("{broken}</gml:FeatureCollection>"));
+            std::fs::write(&path, text).unwrap();
+            let delivery = read(&path).unwrap();
+            assert_eq!(delivery.features.len(), 1, "{coordinates}");
+            assert_eq!(delivery.skipped, 1);
+            assert_eq!(delivery.themes.get("water"), Some(&1));
+            assert_eq!(delivery.features[0].lines[0].0, vec![[100.0, 200.0], [110.0, 210.0]]);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn klic_unusable_input_reuses_the_existing_import_error() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-existing-error-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        let expected = crate::lang::tr("geen tekenbare objecten in het bestand", "no drawable features in the file");
+        for text in ["<Other/>".to_string(), XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")] {
+            std::fs::write(&path, text).unwrap();
+            assert_eq!(read(&path).err().unwrap(), expected);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn renamed_klic_xml_keeps_the_legacy_notification_number() {
