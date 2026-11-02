@@ -180,9 +180,9 @@ pub fn parse_wfs(url: &str, xml: &str) -> Result<WfsCaps, String> {
     let root = doc.root_element();
     let version = root.attribute("version").unwrap_or("2.0.0").to_string();
     let ident = child(root, "ServiceIdentification").or_else(|| child(root, "Service"));
-    let types = root
-        .descendants()
-        .filter(|n| n.is_element() && n.tag_name().name() == "FeatureType")
+    let types = child(root, "FeatureTypeList")
+        .into_iter()
+        .flat_map(|list| children(list, "FeatureType"))
         .filter_map(|ft| {
             let name = text_of(Some(ft), "Name");
             if name.is_empty() {
