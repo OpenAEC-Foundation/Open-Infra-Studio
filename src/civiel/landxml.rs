@@ -290,6 +290,53 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
 mod tests {
     use super::*;
 
+    const SITE: &str = include_str!("../../tests/fixtures/landxml/site.xml");
+
+    #[test]
+    fn fixture_reads_points_tin_and_axis_in_easting_northing_order() {
+        let xml = parse(SITE).unwrap();
+        assert_eq!((xml.points.len(), xml.surfaces.len(), xml.alignments.len()), (1, 1, 1));
+        assert_eq!((xml.points[0].e, xml.points[0].n, xml.points[0].z), (100.0, 200.0, Some(5.0)));
+        assert_eq!(xml.surfaces[0].1[0][2], [110.0, 210.0, 7.0]);
+        assert_eq!(xml.alignments[0].start, 10.0);
+        let huge = parse(&SITE.replace("200 100 5", "1e100 100 5")).unwrap();
+        assert_eq!(huge.points[0].n, 1e100);
+    }
+
+    #[test]
+    fn rejects_invalid_coordinates_instead_of_shifting_or_skipping_them() {
+        for (from, to) in [
+            ("200 100 5", "200 broken 100 5"),
+            ("200 100 5", "200 NaN 5"),
+            ("200 100 5", "200 inf 5"),
+            ("200 110 6", "200 broken 110 6"),
+            ("200 110 6", "200 110 1e999"),
+            ("<Start>200 100</Start>", "<Start>200 broken 100</Start>"),
+            ("<Start>200 100</Start>", "<Start>200 NaN</Start>"),
+            ("<Start>200 100</Start>", ""),
+            ("<CgPoint name=\"1\">200 100 5</CgPoint>", "<CgPoint name=\"1\">200</CgPoint>"),
+            ("<P id=\"2\">200 110 6</P>", "<P id=\"2\">200 110</P>"),
+        ] {
+            assert!(parse(&SITE.replace(from, to)).is_err(), "{from} -> {to}");
+        }
+    }
+
+    #[test]
+    fn rejects_unit_overflow_and_nonfinite_stationing() {
+        let overflow = SITE.replace("linearUnit=\"meter\"", "linearUnit=\"kilometer\"").replace("200 100 5", "1e308 100 5");
+        assert!(parse(&overflow).is_err());
+        for value in ["NaN", "inf", "bad", "1e999"] {
+            assert!(parse(&SITE.replace("staStart=\"10\"", &format!("staStart=\"{value}\""))).is_err(), "{value}");
+        }
+    }
+
+    #[test]
+    fn rejects_empty_wrong_root_and_truncated_xml() {
+        for text in ["", "<Other/>", "<LandXML/>", "<LandXML>", &SITE[..SITE.len() / 2]] {
+            assert!(parse(text).is_err());
+        }
+    }
+
     const SAMPLE: &str = r#"<?xml version="1.0"?>
 <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">
   <Units><Metric linearUnit="meter" areaUnit="squareMeter" volumeUnit="cubicMeter"/></Units>
