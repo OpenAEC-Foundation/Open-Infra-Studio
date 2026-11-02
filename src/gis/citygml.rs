@@ -247,7 +247,7 @@ fn object(o: Node, fallback_dim: usize) -> Option<CityObject> {
 }
 
 /// The first value of an XML attribute anywhere in the text (`srsName`).
-fn first_attribute<'t>(xml: &'t str, name: &str) -> Option<&'t str> {
+fn first_attribute(xml: &str, name: &str) -> Option<String> {
     let mut reader = Reader::from_str(xml);
     loop {
         match reader.read_event().ok()? {
@@ -255,9 +255,7 @@ fn first_attribute<'t>(xml: &'t str, name: &str) -> Option<&'t str> {
                 for attr in tag.attributes() {
                     let attr = attr.ok()?;
                     if attr.key.as_ref() == name.as_bytes() {
-                        if let std::borrow::Cow::Borrowed(value) = attr.value {
-                            return std::str::from_utf8(value).ok();
-                        }
+                        return attr.decode_and_unescape_value(reader.decoder()).ok().map(|value| value.into_owned());
                     }
                 }
             }
@@ -269,7 +267,7 @@ fn first_attribute<'t>(xml: &'t str, name: &str) -> Option<&'t str> {
 
 /// The CRS of a CityGML text, without parsing it.
 pub fn crs_of(xml: &str) -> Option<String> {
-    first_attribute(xml, "srsName").and_then(epsg)
+    first_attribute(xml, "srsName").as_deref().and_then(epsg)
 }
 
 /// The members of a CityGML text one by one: (start, end) of every
