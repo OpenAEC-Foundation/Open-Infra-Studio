@@ -345,22 +345,17 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
     let gi = names.iter().position(|n| n.eq_ignore_ascii_case(&geom_col)).ok_or("GeoPackage: geometry column missing")?;
     let mut rows = st.query([]).map_err(err)?;
     let mut features = Vec::new();
-    let mut warnings = Vec::new();
-    let mut row_index = 0;
-    'rows: while let Some(row) = rows.next().map_err(err)? {
-        row_index += 1;
+    while let Some(row) = rows.next().map_err(err)? {
         let mut f = Feature::default();
         for (i, n) in names.iter().enumerate() {
             let v = row.get_ref(i).map_err(err)?;
             if i == gi {
                 if let ValueRef::Blob(b) = v {
                     if !gpkg_geometry(b, &mut f) {
-                        warnings.push(format!("GeoPackage: onleesbare of niet ondersteunde geometrie in laag {table}, rij {row_index}; object overgeslagen"));
-                        continue 'rows;
+                        return Err(format!("GeoPackage: ongeldige geometrie in laag {table}, rij {}", features.len() + 1));
                     }
                 } else if !matches!(v, ValueRef::Null) {
-                    warnings.push(format!("GeoPackage: geometrie is geen blob in laag {table}, rij {row_index}; object overgeslagen"));
-                    continue 'rows;
+                    return Err(format!("GeoPackage: geometrie is geen blob in laag {table}, rij {}", features.len() + 1));
                 }
                 continue;
             }
@@ -375,7 +370,7 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
         }
         features.push(f);
     }
-    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings })
+    Ok(FileData { format: "GeoPackage", features, crs, layers })
 }
 
 // ── KML / KMZ / GPX ─────────────────────────────────────────────────────────
@@ -710,6 +705,131 @@ mod tests {
             INSERT INTO gpkg_spatial_ref_sys VALUES (2056,'EPSG',2056);").unwrap();
         db.execute("INSERT INTO sample VALUES (1,?1,'synthetic')", [blob]).unwrap();
         path
+    }
+
+    fn circular_string() -> Vec<u8> {
+        let mut wkb = vec![1];
+        wkb.extend(8u32.to_le_bytes());
+        wkb.extend(3u32.to_le_bytes());
+        for (x, y) in [(0.0f64, 0.0f64), (5.0, 5.0), (10.0, 0.0)] {
+            wkb.extend(x.to_le_bytes());
+            wkb.extend(y.to_le_bytes());
+        }
+        wkb
+    }
+
+    fn broken_collection() -> Vec<u8> {
+        let mut wkb = vec![1];
+        wkb.extend(7u32.to_le_bytes());
+        wkb.extend(2u32.to_le_bytes());
+        wkb.extend(WKB_POINT);
+        wkb.extend(&WKB_LINE[..10]);
+        wkb
+    }
+
+    fn mixed_layer_gpkg(name: &str, middle: &[u8]) -> std::path::PathBuf {
+        let path = temporary_gpkg(name, &gpkg_blob(WKB_LINE));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch("DROP TABLE IF EXISTS a_mix; DROP TABLE IF EXISTS b_good;
+            ALTER TABLE sample RENAME TO a_mix;
+            UPDATE gpkg_contents SET table_name = 'a_mix';
+            UPDATE gpkg_geometry_columns SET table_name = 'a_mix';
+            CREATE TABLE b_good (id INTEGER, geom BLOB, name TEXT);
+            INSERT INTO gpkg_contents VALUES ('b_good','features');
+            INSERT INTO gpkg_geometry_columns VALUES ('b_good','geom',2056);").unwrap();
+        db.execute("INSERT INTO a_mix VALUES (2,?1,'middle')", [&gpkg_blob(middle)]).unwrap();
+        db.execute("INSERT INTO a_mix VALUES (3,?1,'point')", [&gpkg_blob(WKB_POINT)]).unwrap();
+        db.execute("INSERT INTO b_good VALUES (1,?1,'healthy')", [&gpkg_blob(WKB_POINT)]).unwrap();
+        path
+    }
+
+    fn assert_readable_neighbours_and_layers(path: &Path) {
+        let mixed = read(path, None).unwrap();
+        assert_eq!(mixed.layers, vec!["a_mix", "b_good"]);
+        let line = mixed.features.iter().find(|f| f.props["id"] == 1).unwrap();
+        let point = mixed.features.iter().find(|f| f.props["id"] == 3).unwrap();
+        let mut expected = Feature::default();
+        assert!(gpkg_geometry(WKB_LINE, &mut expected));
+        assert_eq!(line.lines, expected.lines);
+        assert_eq!(point.points, vec![[2600000.25, 1200000.5]]);
+        let healthy = read(path, Some("b_good")).unwrap();
+        assert_eq!(healthy.layers, vec!["a_mix", "b_good"]);
+        assert_eq!(healthy.features.len(), 1);
+        assert_eq!(healthy.features[0].points, point.points);
+        assert_eq!(healthy.crs.as_deref(), Some("EPSG:2056"));
+    }
+
+    #[test]
+    fn sol_gpkg_circular_string_keeps_readable_rows_and_other_layer() {
+        let path = mixed_layer_gpkg("sol-curve", &circular_string());
+        assert_readable_neighbours_and_layers(&path);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("geometriesoort 8"));
+        assert!(!data.warnings[0].contains("onleesbaar"));
+    }
+
+    #[test]
+    fn sol_gpkg_truncated_wkb_keeps_readable_rows_and_other_layer() {
+        let path = mixed_layer_gpkg("sol-truncated", &WKB_LINE[..10]);
+        assert_readable_neighbours_and_layers(&path);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("onleesbare"));
+    }
+
+    #[test]
+    fn sol_gpkg_broken_collection_keeps_readable_rows_and_other_layer() {
+        let path = mixed_layer_gpkg("sol-collection", &broken_collection());
+        assert_readable_neighbours_and_layers(&path);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[1].points.len(), 1);
+        assert_eq!(data.warnings.len(), 1);
+    }
+
+    #[test]
+    fn gpkg_unreadable_default_layer_keeps_healthy_layer_selectable() {
+        let path = mixed_layer_gpkg("empty-default", &broken_collection());
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute("DELETE FROM a_mix WHERE id != 2", []).unwrap();
+        drop(db);
+        let data = read(&path, None).unwrap();
+        assert!(data.features.is_empty());
+        assert_eq!(data.layers, vec!["a_mix", "b_good"]);
+        assert_eq!(read(&path, Some("b_good")).unwrap().features[0].points, vec![[2600000.25, 1200000.5]]);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn sol_gpkg_65_nested_collections_preserve_the_point_read_by_main() {
+        let mut wkb = Vec::new();
+        for _ in 0..65 {
+            wkb.push(1);
+            wkb.extend(7u32.to_le_bytes());
+            wkb.extend(1u32.to_le_bytes());
+        }
+        wkb.extend(WKB_POINT);
+        let path = temporary_gpkg("sol-depth-65", &gpkg_blob(&wkb));
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600000.25, 1200000.5]]);
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn gpkg_main_compatible_neighbours_and_layers_stay_available() {
+        for (name, middle) in [("compat-curve", circular_string()), ("compat-truncated", WKB_LINE[..10].to_vec()), ("compat-collection", broken_collection())] {
+            let path = mixed_layer_gpkg(name, &middle);
+            assert_readable_neighbours_and_layers(&path);
+            std::fs::remove_file(path).unwrap();
+        }
     }
 
     #[test]
