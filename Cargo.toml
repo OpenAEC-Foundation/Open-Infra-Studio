@@ -34,6 +34,7 @@ ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = 
 proj4rs = "0.2"
 ureq = "3"
 roxmltree = "0.21"
+quick-xml = "0.41"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 # Large drawings: entities of the host's shared-memory view are bincode-encoded
@@ -62,6 +63,11 @@ earcutr = "0.4"
 eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
 winit = "0.30"
 egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
+
+[profile.dev]
+# Keep file/line backtraces without generating full type and variable debug
+# information. Tests inherit this profile; distribution builds do not.
+debug = "line-tables-only"
 
 [profile.release]
 opt-level = 3

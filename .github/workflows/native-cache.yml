@@ -1,0 +1,46 @@
+name: Prepare native dependencies
+
+# Tags can read main's cache, but cannot read caches from other tags. Rebuild
+# this dependency cache only when its inputs change, not for each source edit.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "civiel/Cargo.toml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/native-cache.yml"
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: "1.99.1"
+
+jobs:
+  prepare:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+          - os: windows-latest
+          - os: macos-14
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - id: cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: release
+          cache-bin: false
+      - run: cargo test --lib --locked -p open-infra
+        if: steps.cache.outputs.cache-hit != 'true'
+      - run: cargo build --release --locked -p open-infra
+        if: steps.cache.outputs.cache-hit != 'true'
+      - run: cargo build --release --locked -p open-infra-civiel
+        if: steps.cache.outputs.cache-hit != 'true'

@@ -1,0 +1,383 @@
+{
+  "explicit_profile_override": {
+    "source_commit": "e0192d71de944f6ffdd18ac0500d0fa715e33d3e",
+    "machine": "aia09-MP50",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "jobs": 2,
+    "source_sha256": "8c246c67ded0ef662c48ed82f396fc05f5241b8f25acc73598dd5af4d8eb3bfd",
+    "manifest_sha256": "3f771920817cf25ffd18469405d51ac0dc56425184d7298f1a472f2aaa064257",
+    "lock_sha256": "1ef21ba025c176380573e65be944ad1277bf4fcda4068888075ff9198a669ffe",
+    "variants": [
+      {
+        "codegen_units": 256,
+        "samples": [
+          {
+            "name": "256-clean",
+            "exit": 0,
+            "time": "elapsed_s=299.85\nuser_s=486.50\nsystem_s=89.71\nmax_rss_kib=2476848\nexit=0\n",
+            "load_start": [
+              0.64306640625,
+              0.447265625,
+              0.39892578125
+            ],
+            "load_end": [
+              2.76220703125,
+              1.78759765625,
+              0.998046875
+            ],
+            "wall_s": 299.85
+          },
+          {
+            "name": "256-noop",
+            "exit": 0,
+            "time": "elapsed_s=0.57\nuser_s=0.25\nsystem_s=0.20\nmax_rss_kib=91884\nexit=0\n",
+            "load_start": [
+              2.76220703125,
+              1.78759765625,
+              0.998046875
+            ],
+            "load_end": [
+              2.76220703125,
+              1.78759765625,
+              0.998046875
+            ],
+            "wall_s": 0.57
+          },
+          {
+            "name": "256-incremental-1",
+            "exit": 0,
+            "time": "elapsed_s=5.68\nuser_s=5.31\nsystem_s=2.26\nmax_rss_kib=1194092\nexit=0\n",
+            "load_start": [
+              2.76220703125,
+              1.78759765625,
+              0.998046875
+            ],
+            "load_end": [
+              2.70068359375,
+              1.79150390625,
+              1.00390625
+            ],
+            "wall_s": 5.68
+          },
+          {
+            "name": "256-incremental-2",
+            "exit": 0,
+            "time": "elapsed_s=6.48\nuser_s=5.61\nsystem_s=2.39\nmax_rss_kib=1190028\nexit=0\n",
+            "load_start": [
+              2.70068359375,
+              1.79150390625,
+              1.00390625
+            ],
+            "load_end": [
+              2.72509765625,
+              1.81201171875,
+              1.0146484375
+            ],
+            "wall_s": 6.48
+          },
+          {
+            "name": "256-incremental-3",
+            "exit": 0,
+            "time": "elapsed_s=5.40\nuser_s=5.45\nsystem_s=2.20\nmax_rss_kib=1188976\nexit=0\n",
+            "load_start": [
+              2.72509765625,
+              1.81201171875,
+              1.0146484375
+            ],
+            "load_end": [
+              2.69384765625,
+              1.83544921875,
+              1.03076171875
+            ],
+            "wall_s": 5.4
+          }
+        ],
+        "source_restored": true,
+        "library_bytes": 195055192,
+        "target_kib": 2711576
+      },
+      {
+        "codegen_units": 128,
+        "samples": [
+          {
+            "name": "128-clean",
+            "exit": 0,
+            "time": "elapsed_s=304.70\nuser_s=508.44\nsystem_s=89.71\nmax_rss_kib=2469928\nexit=0\n",
+            "load_start": [
+              2.69384765625,
+              1.83544921875,
+              1.03076171875
+            ],
+            "load_end": [
+              2.671875,
+              2.50732421875,
+              1.58251953125
+            ],
+            "wall_s": 304.7
+          },
+          {
+            "name": "128-noop",
+            "exit": 0,
+            "time": "elapsed_s=0.53\nuser_s=0.21\nsystem_s=0.17\nmax_rss_kib=91556\nexit=0\n",
+            "load_start": [
+              2.671875,
+              2.50732421875,
+              1.58251953125
+            ],
+            "load_end": [
+              2.671875,
+              2.50732421875,
+              1.58251953125
+            ],
+            "wall_s": 0.53
+          },
+          {
+            "name": "128-incremental-1",
+            "exit": 0,
+            "time": "elapsed_s=4.27\nuser_s=4.53\nsystem_s=1.90\nmax_rss_kib=1181872\nexit=0\n",
+            "load_start": [
+              2.671875,
+              2.50732421875,
+              1.58251953125
+            ],
+            "load_end": [
+              2.61767578125,
+              2.49853515625,
+              1.5849609375
+            ],
+            "wall_s": 4.27
+          },
+          {
+            "name": "128-incremental-2",
+            "exit": 0,
+            "time": "elapsed_s=4.19\nuser_s=4.50\nsystem_s=2.01\nmax_rss_kib=1184424\nexit=0\n",
+            "load_start": [
+              2.61767578125,
+              2.49853515625,
+              1.5849609375
+            ],
+            "load_end": [
+              2.48779296875,
+              2.4736328125,
+              1.58154296875
+            ],
+            "wall_s": 4.19
+          },
+          {
+            "name": "128-incremental-3",
+            "exit": 0,
+            "time": "elapsed_s=4.10\nuser_s=4.47\nsystem_s=1.98\nmax_rss_kib=1185008\nexit=0\n",
+            "load_start": [
+              2.48779296875,
+              2.4736328125,
+              1.58154296875
+            ],
+            "load_end": [
+              2.44873046875,
+              2.46533203125,
+              1.583984375
+            ],
+            "wall_s": 4.1
+          }
+        ],
+        "source_restored": true,
+        "library_bytes": 194550848,
+        "target_kib": 2703936
+      },
+      {
+        "codegen_units": 512,
+        "samples": [
+          {
+            "name": "512-clean",
+            "exit": 0,
+            "time": "elapsed_s=298.16\nuser_s=493.26\nsystem_s=93.21\nmax_rss_kib=2474224\nexit=0\n",
+            "load_start": [
+              2.44873046875,
+              2.46533203125,
+              1.583984375
+            ],
+            "load_end": [
+              2.5478515625,
+              2.5478515625,
+              1.87890625
+            ],
+            "wall_s": 298.16
+          },
+          {
+            "name": "512-noop",
+            "exit": 0,
+            "time": "elapsed_s=0.46\nuser_s=0.20\nsystem_s=0.15\nmax_rss_kib=91440\nexit=0\n",
+            "load_start": [
+              2.5478515625,
+              2.5478515625,
+              1.87890625
+            ],
+            "load_end": [
+              2.5478515625,
+              2.5478515625,
+              1.87890625
+            ],
+            "wall_s": 0.46
+          },
+          {
+            "name": "512-incremental-1",
+            "exit": 0,
+            "time": "elapsed_s=4.52\nuser_s=4.71\nsystem_s=2.11\nmax_rss_kib=1200348\nexit=0\n",
+            "load_start": [
+              2.5478515625,
+              2.5478515625,
+              1.87890625
+            ],
+            "load_end": [
+              2.423828125,
+              2.52197265625,
+              1.8740234375
+            ],
+            "wall_s": 4.52
+          },
+          {
+            "name": "512-incremental-2",
+            "exit": 0,
+            "time": "elapsed_s=4.32\nuser_s=4.72\nsystem_s=2.07\nmax_rss_kib=1201920\nexit=0\n",
+            "load_start": [
+              2.423828125,
+              2.52197265625,
+              1.8740234375
+            ],
+            "load_end": [
+              2.3095703125,
+              2.49658203125,
+              1.869140625
+            ],
+            "wall_s": 4.32
+          },
+          {
+            "name": "512-incremental-3",
+            "exit": 0,
+            "time": "elapsed_s=4.35\nuser_s=4.65\nsystem_s=2.21\nmax_rss_kib=1201704\nexit=0\n",
+            "load_start": [
+              2.3095703125,
+              2.49658203125,
+              1.869140625
+            ],
+            "load_end": [
+              2.20458984375,
+              2.4716796875,
+              1.8642578125
+            ],
+            "wall_s": 4.35
+          }
+        ],
+        "source_restored": true,
+        "library_bytes": 195270232,
+        "target_kib": 2715936
+      }
+    ],
+    "source_restored": true
+  },
+  "normal_cargo_defaults": {
+    "source_commit": "e0192d71de944f6ffdd18ac0500d0fa715e33d3e",
+    "machine": "aia09-MP50",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "jobs": 2,
+    "source_sha256": "8c246c67ded0ef662c48ed82f396fc05f5241b8f25acc73598dd5af4d8eb3bfd",
+    "manifest_sha256": "3f771920817cf25ffd18469405d51ac0dc56425184d7298f1a472f2aaa064257",
+    "lock_sha256": "1ef21ba025c176380573e65be944ad1277bf4fcda4068888075ff9198a669ffe",
+    "variants": [
+      {
+        "codegen_units": "default",
+        "samples": [
+          {
+            "name": "default-clean",
+            "exit": 0,
+            "time": "elapsed_s=268.62\nuser_s=444.89\nsystem_s=66.58\nmax_rss_kib=2511220\nexit=0\n",
+            "load_start": [
+              0.10986328125,
+              1.07421875,
+              1.4892578125
+            ],
+            "load_end": [
+              1.7666015625,
+              1.6435546875,
+              1.6435546875
+            ],
+            "wall_s": 268.62
+          },
+          {
+            "name": "default-noop",
+            "exit": 0,
+            "time": "elapsed_s=0.45\nuser_s=0.19\nsystem_s=0.15\nmax_rss_kib=91284\nexit=0\n",
+            "load_start": [
+              1.7666015625,
+              1.6435546875,
+              1.6435546875
+            ],
+            "load_end": [
+              1.7666015625,
+              1.6435546875,
+              1.6435546875
+            ],
+            "wall_s": 0.45
+          },
+          {
+            "name": "default-incremental-1",
+            "exit": 0,
+            "time": "elapsed_s=4.28\nuser_s=4.39\nsystem_s=1.99\nmax_rss_kib=1106316\nexit=0\n",
+            "load_start": [
+              1.7666015625,
+              1.6435546875,
+              1.6435546875
+            ],
+            "load_end": [
+              1.705078125,
+              1.6328125,
+              1.6396484375
+            ],
+            "wall_s": 4.28
+          },
+          {
+            "name": "default-incremental-2",
+            "exit": 0,
+            "time": "elapsed_s=4.52\nuser_s=4.36\nsystem_s=1.96\nmax_rss_kib=1104736\nexit=0\n",
+            "load_start": [
+              1.705078125,
+              1.6328125,
+              1.6396484375
+            ],
+            "load_end": [
+              1.6484375,
+              1.6220703125,
+              1.6357421875
+            ],
+            "wall_s": 4.52
+          },
+          {
+            "name": "default-incremental-3",
+            "exit": 0,
+            "time": "elapsed_s=4.55\nuser_s=4.70\nsystem_s=1.91\nmax_rss_kib=1101996\nexit=0\n",
+            "load_start": [
+              1.6484375,
+              1.6220703125,
+              1.6357421875
+            ],
+            "load_end": [
+              1.46826171875,
+              1.58447265625,
+              1.62353515625
+            ],
+            "wall_s": 4.55
+          }
+        ],
+        "source_restored": true,
+        "library_bytes": 190888632,
+        "target_kib": 2689064
+      }
+    ],
+    "source_restored": true
+  },
+  "excluded_attempt": {
+    "reason": "Procesbewaking zag een Python-testsimulatie van Cargo ten onrechte als een Rust-build; proef gestopt en geheel uitgesloten. De echte Cargo-procesherkenning is daarna aangescherpt en de controle vanaf een lege doelmap herhaald.",
+    "exit": -15
+  },
+  "conclusion": "Geen globale codegen-units-override toegevoegd; de normale Cargo-standaard bouwde in deze reeks schoon sneller."
+}
