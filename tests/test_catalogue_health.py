@@ -1,12 +1,14 @@
 """Vaste controles; geen openbare diensten of internet nodig."""
-import json
 import io
-from contextlib import redirect_stdout, redirect_stderr
-from pathlib import Path
+import json
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +31,11 @@ def reply(filename="wms.xml", **values):
 
 
 class CatalogueHealthTest(unittest.TestCase):
+    def setUp(self):
+        guard = patch.object(health.subprocess, "run", side_effect=AssertionError("De offline tests mogen geen netwerkverzoeken uitvoeren"))
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def test_capabilities_and_default_layer_for_each_protocol(self):
         for kind in ("wms", "wfs", "wmts"):
             with self.subTest(kind=kind):
@@ -39,11 +46,20 @@ class CatalogueHealthTest(unittest.TestCase):
     def test_http_200_is_not_sufficient(self):
         for body in (b"<html>Login</html>", b"", b"<broken", b"<WMS_Capabilities/>",
                      reply("wfs.xml").body):
-            with self.subTest(body=body):
-                with self.assertRaises(health.ServiceError):
-                    health.capability_layers(body, "wms")
+            with self.subTest(body=body), self.assertRaises(health.ServiceError):
+                health.capability_layers(body, "wms")
         with self.assertRaisesRegex(health.ServiceError, "LayerNotDefined"):
             health.capability_layers(reply("exception.xml").body, "wms")
+
+    def test_invalid_xml_encoding_is_a_service_failure(self):
+        body = b'<?xml version="1.0" encoding="missing-encoding"?><WMS_Capabilities/>'
+        with self.assertRaises(health.ServiceError):
+            health.capability_layers(body, "wms")
+
+    def test_exception_without_code_includes_server_explanation(self):
+        body = b'<ServiceExceptionReport><ServiceException>Missing map parameter</ServiceException></ServiceExceptionReport>'
+        with self.assertRaisesRegex(health.ServiceError, "Missing map parameter"):
+            health.capability_layers(body, "wms")
 
     def test_existing_query_parameters_survive_without_duplicate_ogc_parameters(self):
         s = service()
@@ -98,6 +114,25 @@ class CatalogueHealthTest(unittest.TestCase):
         self.assertEqual(len(urls), 1)
         self.assertEqual(report["requests"], 1)
         self.assertEqual(report["counts"]["kapot"], 1)
+
+    def test_only_one_request_per_host_is_active(self):
+        services = [service() for _ in range(8)]
+        for n, s in enumerate(services):
+            s.update(id=str(n), url=s["url"] + "/" + str(n))
+        active, maximum = 0, 0
+        lock = threading.Lock()
+        def fetch(url, timeout):
+            nonlocal active, maximum
+            with lock:
+                active += 1
+                maximum = max(maximum, active)
+            time.sleep(0.005)
+            with lock:
+                active -= 1
+            return reply()
+        report = health.check_services(services, fetch=fetch, workers=6)
+        self.assertEqual(maximum, 1)
+        self.assertEqual(report["counts"]["werkt"], 8)
 
     def test_arcgis_uses_native_extent_and_one_tile_after_metadata(self):
         s = service("xyz")
@@ -178,9 +213,8 @@ class CatalogueHealthTest(unittest.TestCase):
                     self.assertEqual(health.main(args), 0)
                 fetch.assert_called_once()
             self.assertEqual(json.loads((Path(tmp) / "rapport.json").read_text())["counts"]["kapot"], 1)
-            with patch.object(health, "fetch_url", side_effect=RuntimeError("lokale fout")):
-                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-                    self.assertEqual(health.main(args), 1)
+            with patch.object(health, "fetch_url", side_effect=RuntimeError("lokale fout")), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(health.main(args), 1)
 
 
 if __name__ == "__main__":

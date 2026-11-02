@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 """Controleer openbare kaartbronnen zonder de catalogus of app te wijzigen."""
 import argparse
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import hashlib
 import json
 import math
-from pathlib import Path
 import re
 import shutil
 import subprocess
@@ -16,8 +11,13 @@ import sys
 import tempfile
 import threading
 import time
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_BYTES = 16 * 1024 * 1024
@@ -44,7 +44,7 @@ def builtin_services(path):
     Dit is bewust geen algemene Rust-parser.
     """
     source = path.read_text(encoding="utf-8")
-    match = re.search(r"pub\(crate\) fn builtin\(\).*?vec!\[(.*?)\n    \]", source, re.S)
+    match = re.search(r"pub\(crate\) fn builtin\(\).*?vec!\[(.*?)\n    \]", source, re.DOTALL)
     if not match:
         raise ValueError("Ingebouwde catalogus niet herkenbaar in " + str(path))
     declarations = re.sub(r"(?m)^\s*//[^\n]*", "", match[1]).strip()
@@ -57,22 +57,22 @@ def builtin_services(path):
         m = preset.match(declarations)
         h = historical.match(declarations)
         if m:
-            ident, kind, region, name, url, layer, attribution = m.groups()
-            entries.append(dict(id=json.loads(ident), kind=kind.lower(), name=json.loads(name),
-                                url=json.loads(url), default_layer=json.loads(layer),
-                                country={"nl": "NL", "vl": "BE", "world": "GLOBAL"}[region],
-                                bbox={"nl": [3.2, 50.75, 7.23, 53.6],
+            ident, kind, region, name, url, layer, _attribution = m.groups()
+            entries.append({"id": json.loads(ident), "kind": kind.lower(), "name": json.loads(name),
+                                "url": json.loads(url), "default_layer": json.loads(layer),
+                                "country": {"nl": "NL", "vl": "BE", "world": "GLOBAL"}[region],
+                                "bbox": {"nl": [3.2, 50.75, 7.23, 53.6],
                                       "vl": [2.54, 50.68, 5.92, 51.51],
-                                      "world": [-180, -85, 180, 85]}[region], source="builtin"))
+                                      "world": [-180, -85, 180, 85]}[region], "source": "builtin"})
         elif h:
             year = h[1]
             function = source.split("pub fn tijdreis(", 1)[-1]
             template = re.search(r'&format!\(("https://[^"\n]*\{year\}[^"\n]*")\)', function)
             if not template:
                 raise ValueError("URL van Topotijdreis niet herkenbaar")
-            entries.append(dict(id="topotijdreis-" + year, kind="xyz", name="Topotijdreis " + year,
-                                url=json.loads(template[1]).replace("{year}", year), default_layer="",
-                                country="NL", bbox=[3.2, 50.75, 7.23, 53.6], source="builtin"))
+            entries.append({"id": "topotijdreis-" + year, "kind": "xyz", "name": "Topotijdreis " + year,
+                                "url": json.loads(template[1]).replace("{year}", year), "default_layer": "",
+                                "country": "NL", "bbox": [3.2, 50.75, 7.23, 53.6], "source": "builtin"})
         else:
             raise ValueError("Onbekende declaratie in ingebouwde catalogus: " + declarations[:80])
         declarations = declarations[(m or h).end():].strip()
@@ -144,7 +144,7 @@ def fetch_url(url, timeout):
                    "--max-filesize", str(MAX_BYTES), "--user-agent", USER_AGENT,
                    "--output", str(body), "--write-out", "%{http_code}\n%{num_redirects}\n", "--url", url]
         try:
-            run = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 2)
+            run = subprocess.run(command, check=False, capture_output=True, text=True, timeout=timeout + 2)
         except subprocess.TimeoutExpired:
             return Response(elapsed=time.monotonic() - start, error="time-out (proceslimiet)")
         # Lokale configuratie-, schrijf- en uitvoeringsfouten moeten de job laten falen.
@@ -169,11 +169,13 @@ def local_name(tag):
 def capability_layers(body, kind):
     try:
         root = ET.fromstring(body)
-    except ET.ParseError as e:
+    except (ET.ParseError, LookupError, ValueError) as e:
         raise ServiceError("Geen geldige capabilities-XML: " + str(e)) from e
     if local_name(root.tag) in {"ExceptionReport", "ServiceExceptionReport"}:
         codes = [n.get("exceptionCode", n.get("code", "")) for n in root.iter()]
-        raise ServiceError("OGC-fout: " + ", ".join(c for c in codes if c))
+        messages = [" ".join("".join(n.itertext()).split())[:200] for n in root.iter()
+                    if local_name(n.tag) in {"ExceptionText", "ServiceException"}]
+        raise ServiceError("OGC-fout: " + "; ".join(c for c in codes + messages if c))
     expected = {"wms": {"WMS_Capabilities", "WMT_MS_Capabilities"},
                 "wfs": {"WFS_Capabilities"}, "wmts": {"Capabilities"}}[kind]
     if local_name(root.tag) not in expected or (kind == "wmts" and not root.tag.startswith("{http://www.opengis.net/wmts/1.0}")):
@@ -274,10 +276,10 @@ def check_services(services, *, fetch=None, timeout=8, slow=3, workers=6):
             results.update(output)
             request_count += requests
     ordered = [results[i] for i in range(len(services))]
-    return dict(started_at=started, completed_at=datetime.now(timezone.utc).isoformat(),
-                timeout_seconds=timeout, slow_seconds=slow, workers=workers, requests=request_count,
-                counts={status: sum(r["status"] == status for r in ordered) for status in ("werkt", "traag", "kapot")},
-                services=ordered)
+    return {"started_at": started, "completed_at": datetime.now(timezone.utc).isoformat(),
+                "timeout_seconds": timeout, "slow_seconds": slow, "workers": workers, "requests": request_count,
+                "counts": {status: sum(r["status"] == status for r in ordered) for status in ("werkt", "traag", "kapot")},
+                "services": ordered}
 
 
 def write_reports(report, directory):

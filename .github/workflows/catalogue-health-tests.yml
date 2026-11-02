@@ -7,6 +7,8 @@ on:
       - "tools/check_map_services.py"
       - "tests/test_catalogue_health.py"
       - "tests/fixtures/catalogue-health/**"
+      - "assets/servers/world.json"
+      - "src/gis/servers.rs"
       - ".github/workflows/catalogue-health*.yml"
   push:
     branches: [main]
@@ -14,6 +16,8 @@ on:
       - "tools/check_map_services.py"
       - "tests/test_catalogue_health.py"
       - "tests/fixtures/catalogue-health/**"
+      - "assets/servers/world.json"
+      - "src/gis/servers.rs"
       - ".github/workflows/catalogue-health*.yml"
   workflow_dispatch:
 

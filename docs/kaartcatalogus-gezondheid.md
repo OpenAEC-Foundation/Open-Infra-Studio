@@ -7,6 +7,8 @@ De openbare catalogus komt uit twee bronnen:
 
 De wekelijkse controle leest de eerste twee bronnen rechtstreeks. Eigen servers van gebruikers worden niet gelezen. De wereldcatalogus gebruikt `wms`, `wfs` en `xyz`; WMTS-tegeltemplates vallen daarin onder `xyz`. Het controlescript begrijpt daarnaast expliciete `wmts`-capabilities. Het wijzigt geen catalogusgegevens, verificatiedata of appbestanden.
 
+De [eerste volledige meting van 2 november 2026](reports/kaartcatalogus-2026-11-02.md) bevat de aantallen en alle 39 mislukte proeven.
+
 ## Een meting uitvoeren
 
 Vereist: Python 3.12 en curl 8.4 of nieuwer, voor een maximale antwoordgrootte die ook bij een onbekende Content-Length wordt afgedwongen. De workflow gebruikt Ubuntu 24.04. Er is geen Rust-build of Python-pakketinstallatie nodig.
@@ -40,7 +42,7 @@ De uitkomsten zijn:
 
 Dit is een momentopname vanaf de meetomgeving. Een time-out, TLS-probleem, toegangsblokkade of ontbrekende tegel is geen bewijs van een wereldwijde of blijvende storing. Een tegel kan buiten het werkelijke gegevensgebied liggen, ook binnen de grove catalogusdekking. PNG/JPEG/WebP wordt op bestandskenmerken gecontroleerd, niet volledig gedecodeerd. Geldige capabilities bewijzen geen geslaagde GetMap, GetFeature of import in Open CAD Studio. Gebruik deze uitkomsten dus om nader onderzoek te kiezen; verwijder geen diensten op basis van één meting.
 
-Een onleesbare catalogus, onbekende ingebouwde declaratie, ontbrekende afhankelijkheid, programmeerfout of mislukte rapportuitvoer geeft exitcode 1. Mislukte openbare diensten geven exitcode 0 en blijven zichtbaar in het rapport.
+Een onleesbare catalogus, onbekende ingebouwde declaratie, ontbrekende afhankelijkheid, programmeerfout of mislukte rapportuitvoer geeft een exitcode anders dan nul. Mislukte openbare diensten geven exitcode 0 en blijven zichtbaar in het rapport.
 
 ## Automatisch en offline
 
