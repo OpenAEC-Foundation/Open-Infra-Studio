@@ -28,11 +28,13 @@ De unit-test in `src/ifc/mod.rs` schrijft het gemengde model. `tests/ifc_example
 
 `tests/ifc_suite.py` controleert ieder verwacht bestand en geeft exitcode 1 als een bestand ontbreekt, een controle afbreekt of een controle faalt. Per model worden uitgevoerd:
 
-1. `tests/ifc_validate.py`: schema-identificatie, IfcOpenShell-schema- en EXPRESS-validatie en de bestaande geometriecontrole van horizontale en verticale assen.
-2. Het eigen IDS-contract in `tests/data/ifc43-export.ids`: één benoemd project en namen en `OpenInfra_NLCS.Laag` voor de opgesomde geëxporteerde objectklassen. Gegenereerde structuuronderdelen zoals een `IfcRoad`, `IfcBorehole` en de onderverdeling van een as vallen niet onder die laag-eis.
-3. De onafhankelijke verwachtingen uit het modellenoverzicht: aantallen, klassen, CRS en lijnpunten in meters.
+1. `tests/ifc_validate.py`: schema-identificatie, parserfouten, IfcOpenShell-schema- en EXPRESS-validatie en de bestaande geometriecontrole van horizontale en verticale assen.
+2. Het eigen IDS-contract in `tests/data/ifc43-export.ids`: minstens één project, een naam voor ieder gevonden project, en namen en `OpenInfra_NLCS.Laag` voor de opgesomde geëxporteerde objectklassen. De projecteis gebruikt `minOccurs="1"` en `maxOccurs="unbounded"`: de gewone IDS-combinatie voor een verplichte specificatie, geen maximumtelling. Zie de [buildingSMART IDS-handleiding over cardinaliteit](https://github.com/buildingSMART/IDS/blob/ver/1.0.x/Documentation/UserManual/specifications.md#cardinality). Gegenereerde structuuronderdelen zoals een `IfcRoad`, `IfcBorehole` en de onderverdeling van een as vallen niet onder de laag-eis.
+3. De onafhankelijke verwachtingen uit het modellenoverzicht: aantallen, klassen, CRS en lijnpunten in meters. De aanvullende telling `IfcProject: 1` in `tests/data/ifc43-cases.json` vereist per model precies één project; dit is geen IDS-eis. Een model met twee projecten wordt in deze opstelling al eerder door de EXPRESS-regel `IfcSingleProjectInstance` afgekeurd.
 
 Het IDS-bestand wordt zelf aan het meegeleverde XSD-schema getoetst. De W3C-import wordt naar de lokale kopie in `xmlschema` verwezen; externe schema's zijn verboden. Een regressietest voert deze route met geblokkeerde sockets uit. Andere negatieve tests verwijderen de projectnaam, het project of de laaggegevens en moeten worden afgekeurd.
+
+Suite-regressietests gebruiken de echte millimeterexport als uitgangspunt en voeren de ongewijzigde CLI's uit op tijdelijke kopieën. Een onbekende entiteit, een extra attribuut en een dubbele STEP-id moeten ieder zowel de validator als de suite met exitcode 1 laten eindigen. De onbeschadigde export blijft slagen. Een afzonderlijke test laat zien dat twee benoemde projecten de IDS-toets passeren, maar de suite laten falen op de EXPRESS-controle.
 
 De workflow bewaart de IFC-bestanden en `validatie.json` als artifact `ifc43-validatie-<commit>`, ook als de validatiestap faalt. Het rapport bevat de gebruikte validatorversies, SHA-256 van ieder IFC-bestand en het IDS-contract, de schema-exitcodes en de foutmeldingen. De STEP-header bevat het exporttijdstip: een nieuwe export kan daarom een andere bestandshash krijgen bij dezelfde geometrie.
 
