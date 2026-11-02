@@ -138,6 +138,8 @@ What it offers:
 
 Coverage is a bounding box in WGS 84 per service. `tools/import_gis2bim_servers.py` takes the state, province or city the coverage text names (German Länder, Austrian and Australian states, Flanders, Wallonia, Brussels, UK nations, Spanish and Italian regions, cities such as Vienna, Prague, Toronto and Cape Town), otherwise the country or region. A box is coarse: it can include a strip of a neighbouring country.
 
+The separate weekly [catalogue health report](docs/kaartcatalogus-gezondheid.md) checks public endpoints and preset layers, saves JSON and Markdown artifacts, and lists failed probes without changing the catalogue. Pull-request tests use fixed offline fixtures.
+
 For scripts and the MCP server (`gis_services`, `gis_service_load`):
 
 ```
