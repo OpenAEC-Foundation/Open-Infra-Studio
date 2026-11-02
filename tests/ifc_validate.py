@@ -16,6 +16,7 @@ Exits 1 when anything fails. Needs `pip install ifcopenshell pytest` (IfcOpenShe
 
 import argparse
 import collections
+import json
 import math
 import sys
 
@@ -25,9 +26,17 @@ import ifcopenshell.ifcopenshell_wrapper as wrapper
 import ifcopenshell.validate
 
 
-def schema_errors(f, max_errors):
+def schema_errors(path, max_errors, parser_messages=()):
     log = ifcopenshell.validate.json_logger()
-    ifcopenshell.validate.validate(f, log, express_rules=True)
+    # Passing a model discards parser diagnostics (unknown entities, excess
+    # attributes, unresolved references). Pass the path so validate also checks
+    # the initial parse and the lazily parsed attributes.
+    ifcopenshell.validate.validate(path, log, express_rules=True)
+    # IfcOpenShell reports duplicate STEP ids as warnings, and its validation
+    # adapter does not forward these. A silently overwritten instance is loss.
+    for message in parser_messages:
+        if message.get("message", "").startswith("Overwriting instance with name #"):
+            log.error(message["message"])
     errors = [s for s in log.statements if s.get("level", "ERROR").upper() == "ERROR"]
     kinds = collections.Counter()
     for s in errors:
@@ -92,13 +101,16 @@ def main():
     ap.add_argument("path")
     ap.add_argument("--max-errors", type=int, default=20)
     a = ap.parse_args()
+    wrapper.set_log_format_json()
+    ifcopenshell.get_log()
     f = ifcopenshell.open(a.path)
+    parser_messages = [json.loads(line) for line in ifcopenshell.get_log().splitlines() if line]
     print(f"{a.path}: {f.schema_identifier}, {len(list(f))} instances")
     failures = 0
     if f.schema_identifier != "IFC4X3_ADD2":
         print("  schema identifier is not IFC4X3_ADD2")
         failures += 1
-    n = schema_errors(f, a.max_errors)
+    n = schema_errors(a.path, a.max_errors, parser_messages)
     print(f"schema and EXPRESS rules: {n} error(s)")
     failures += n
     settings = ifcopenshell.geom.settings()
