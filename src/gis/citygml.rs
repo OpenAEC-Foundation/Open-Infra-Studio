@@ -74,6 +74,14 @@ pub struct CityModel {
     pub objects: Vec<CityObject>,
     /// All objects with geometry in the file, kept or not.
     pub seen: usize,
+    /// Objects or sequence records skipped while preserving readable ones.
+    pub warnings: Vec<String>,
+}
+
+impl CityModel {
+    pub fn report(&self, message: String) -> String {
+        if self.warnings.is_empty() { message } else { format!("{message} {}", self.warnings.join(" ")) }
+    }
 }
 
 /// EPSG code of a GML srsName (`urn:ogc:def:crs:EPSG::28992`, `EPSG:28992`,
