@@ -1,0 +1,56 @@
+{
+  "code": "JP",
+  "name_nl": "Japan",
+  "name_en": "Japan",
+  "portal": {
+    "name": "GSI — Fundamental Geospatial Data",
+    "url": "https://www.gsi.go.jp/kiban/"
+  },
+  "data": [
+    {
+      "name": "GSI Fundamental Geospatial Data: basisobjecten en digitale hoogtemodellen",
+      "url": "https://www.gsi.go.jp/kiban/",
+      "kind": "download",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "Japanese Geodetic Datum 2024 (JGD2024); vlakke rechthoekige zone per locatie kiezen",
+      "epsg": null,
+      "source_url": "https://web1.gsi.go.jp/ENGLISH/page_e30030.html"
+    }
+  ],
+  "vertical_reference": {
+    "name": "Geoid-based vertical datum, JPGEO2024; referentie gemiddeld zeeniveau Tokyo Bay",
+    "source_url": "https://www.gsi.go.jp/common/000278468.pdf",
+    "notes": "Sinds 1 april 2025 herziene hoogte-uitkomsten en naam JGD2024. Deze actualisatie wijzigt de horizontale coördinaten niet; oudere hoogtegegevens niet automatisch als vernieuwd behandelen. Afwijkende eilandreferenties per bron controleren."
+  },
+  "units": "Meters voor vlakke coördinaten en hoogten; graden voor geografische coördinaten.",
+  "integration": {
+    "next_step": "Kies projectgebied en vlakke zone; controleer datum, versie en hoogteherziening van een GSI-download, maak een importpad voor basisobjecten en DEM.",
+    "limitations": "EPSG-code voor de gekozen JGD2024-variant nog niet met primaire bron bevestigd. Download-URL is in april 2025 gewijzigd; GSI vereist registratie en login. DEM-resolutie en actualiteit variëren per gebied."
+  },
+  "sources": [
+    {
+      "title": "GSI — Fundamental Geospatial Data",
+      "url": "https://www.gsi.go.jp/kiban/"
+    },
+    {
+      "title": "GSI — Geodetic survey",
+      "url": "https://web1.gsi.go.jp/ENGLISH/page_e30030.html"
+    },
+    {
+      "title": "GSI — Transition to the Geoid-Based Vertical Datum",
+      "url": "https://www.gsi.go.jp/common/000278468.pdf"
+    }
+  ],
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "drawing_standard": {
+    "name": "Projectspecifiek; nationale civiele CAD-laagstandaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "GIS- of landmeetkundige referenties bewijzen geen conformiteit van tekenlagen, symbolen of opleverbestanden. Verifieer de actuele eisen van opdrachtgever en lokale beheerder."
+  },
+  "existing_catalogue_services": 5
+}

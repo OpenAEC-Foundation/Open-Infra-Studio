@@ -66,6 +66,12 @@ pub fn import_path(site: &Site, path: &Path, crs: Option<&str>, progress: &dyn F
 /// Draw file features: polylines and rings, points as small circles, labels,
 /// all with their attributes as object data.
 pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, progress: &dyn Fn(String)) -> Result<String, String> {
+    if data.format == "IMRO" {
+        if opt.clip { return Err("IMRO-vlakken worden met volledige binnenringen ingelezen; zet bijsnijden uit.".into()); }
+        let mut plans = crate::gis::planning::Data::from_file_data(data)?;
+        plans.crs = opt.crs.clone();
+        return crate::plannen::place_with_text(site, &plans, source, opt.text_m, progress);
+    }
     let t = bridge::target().ok_or_else(|| tr("geen tekening actief — klik in Open CAD Studio op een knop van het GIS-tabblad", "no drawing active — click a button of the GIS tab in Open CAD Studio").to_string())?;
     let f = t.unit_factor;
     crate::gis::crs::ensure(&opt.crs)?;

@@ -30,6 +30,8 @@ jobs:
       - run: pip install "ifcopenshell==0.8.4.post1" pytest
       - run: python3 tests/ifc_validate.py target/ifc-test/voorbeeld.ifc
       - run: cargo test --test locaties --locked -p open-infra
+      - run: cargo test --test planning --test planning_render --locked -p open-infra
+      - run: python3 -m unittest discover -s tests -p 'test*.py'
       # The Civiel plugin builds on the same engine.
       - run: cargo check --locked -p open-infra-civiel
       - run: python3 -m py_compile mcp/open_infra_mcp.py

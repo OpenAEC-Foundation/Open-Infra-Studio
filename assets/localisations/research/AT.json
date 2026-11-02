@@ -1,0 +1,67 @@
+{
+  "code": "AT",
+  "name_nl": "Oostenrijk",
+  "name_en": "Austria",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "BEV Open Data",
+    "url": "https://data.bev.gv.at/"
+  },
+  "data": [
+    {
+      "name": "Kataster Stichtagsdaten zonder eigenaren",
+      "url": "https://www.bev.gv.at/Services/Produkte/Kataster-und-Verzeichnisse/Kataster-Stichtagsdaten.html",
+      "kind": "download",
+      "service_tested": false
+    },
+    {
+      "name": "Kartographisches Modell 1:50 000 raster",
+      "url": "https://www.bev.gv.at/Services/Produkte/Kartographische-Modelle/KM50-R.html",
+      "kind": "download",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "ETRS89 / Austria Lambert",
+      "epsg": 3416,
+      "source_url": "https://www.bev.gv.at/Services/Produkte/Kartographische-Modelle/KM50-R.html"
+    },
+    {
+      "name": "MGI / Austria Lambert",
+      "epsg": 31287,
+      "source_url": "https://www.bev.gv.at/Services/Produkte/Kartographische-Modelle/KM50-R.html"
+    }
+  ],
+  "vertical_reference": {
+    "name": "MGI-gebruikshoogten, Adria 1875; EVRF2000 Austria height afzonderlijk",
+    "source_url": "https://www.bev.gv.at/Services/Produkte/Grundlagenvermessung/Hoehen-Grid.html",
+    "notes": "BEV onderscheidt GHA height (EPSG:5778) en EVRF2000 Austria height (EPSG:9274); hoogtegrid nodig voor omzetting. Geen vaste landelijke offset toepassen."
+  },
+  "units": "Geprojecteerde coordinaten en hoogten in meter; tekeningseenheden expliciet instellen.",
+  "drawing_standard": {
+    "name": "Projectspecifiek; nationale civiele CAD-standaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "BEV publiceert een kadastrale tekensleutel en interfaces; die zijn niet geverifieerd als algemene civiele opleverstandaard."
+  },
+  "integration": {
+    "next_step": "Selecteer BEV-download en bron-CRS; verifieer lokale Gauß-Kruger-strook voor kadastrale gegevens en de vereiste hoogtetransformatie.",
+    "limitations": "Lambert-opties zijn voor landelijke kaartproducten bevestigd; kadaster gebruikt eigen landmeetkundige stroken M28/M31/M34. Stichtagsdata zijn momentopnamen; actuele eigendomsrelevante informatie vraagt andere levering. Geen download of serviceverzoek getest."
+  },
+  "sources": [
+    {
+      "title": "BEV: Kataster Stichtagsdaten",
+      "url": "https://www.bev.gv.at/Services/Produkte/Kataster-und-Verzeichnisse/Kataster-Stichtagsdaten.html"
+    },
+    {
+      "title": "BEV: KM50-R en referentiesystemen",
+      "url": "https://www.bev.gv.at/Services/Produkte/Kartographische-Modelle/KM50-R.html"
+    },
+    {
+      "title": "BEV: Hohen-Grid",
+      "url": "https://www.bev.gv.at/Services/Produkte/Grundlagenvermessung/Hoehen-Grid.html"
+    }
+  ],
+  "existing_catalogue_services": 27
+}

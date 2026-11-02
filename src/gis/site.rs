@@ -11,6 +11,8 @@ use super::crs::{self, XY};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Site {
+    /// Project jurisdiction, independent of interface language and coordinate system.
+    pub region: crate::localisation::Region,
     pub label: String,
     pub lon: f64,
     pub lat: f64,
@@ -31,6 +33,7 @@ pub struct Site {
 impl Default for Site {
     fn default() -> Self {
         let mut s = Site {
+            region: crate::localisation::Region::Netherlands,
             // Grote Kerk (Onze-Lieve-Vrouwekerk), Dordrecht — building centre in
             // OSM; Lange Geldersekade is also the default
             // of the FreeCAD GIS2BIM location dialog.
@@ -52,6 +55,16 @@ impl Default for Site {
 }
 
 impl Site {
+    /// Defaults for a new drawing only; never changes an existing drawing.
+    pub fn for_region(region:crate::localisation::Region)->Self {
+        let mut site=Self::default();site.region=region;
+        if region!=crate::localisation::Region::Netherlands {
+            let (lon,lat)=if region==crate::localisation::Region::UnitedStates {(-77.0365,38.8977)}else{(0.,0.)};
+            site.lon=lon;site.lat=lat;site.label="Project location".into();
+            site.crs=super::crs::suggest(lon,lat);site.reproject_origin();
+        }
+        site
+    }
     /// Recompute the base point from lon/lat in the current CRS.
     pub fn reproject_origin(&mut self) {
         if let Some(info) = crs::known(&self.crs) {
@@ -157,6 +170,7 @@ pub fn unit_factor_for_insunits(insunits: i64) -> f64 {
         7 => 0.001,  // km
         1 => 1.0 / 0.0254,
         2 => 1.0 / 0.3048,
+        21 => 3937.0 / 1200.0, // historical U.S. survey foot
         _ => 1.0,    // 6 = m, 0 = unitless (civil drawings are metres)
     }
 }
@@ -164,6 +178,24 @@ pub fn unit_factor_for_insunits(insunits: i64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn historical_survey_foot_is_not_the_international_foot() {
+        assert!((unit_factor_for_insunits(21)-3937./1200.).abs()<1e-12);
+        assert!((unit_factor_for_insunits(21)-unit_factor_for_insunits(2)).abs()>0.000001);
+    }
+    #[test]
+    fn region_persists_without_changing_geometry_and_old_sites_remain_readable() {
+        let mut site=Site::default();let bbox=site.bbox();let origin=[site.origin_e,site.origin_n];
+        site.region=crate::localisation::Region::UnitedStates;
+        let encoded=serde_json::to_value(&site).unwrap();
+        let read:Site=serde_json::from_value(encoded.clone()).unwrap();
+        assert_eq!(read.region,crate::localisation::Region::UnitedStates);assert_eq!(read.bbox(),bbox);assert_eq!([read.origin_e,read.origin_n],origin);
+        let mut old=encoded;old.as_object_mut().unwrap().remove("region");
+        assert_eq!(serde_json::from_value::<Site>(old).unwrap().region,crate::localisation::Region::Netherlands);
+        let mut future=serde_json::to_value(&site).unwrap();future["region"]="future-region".into();
+        let read:Site=serde_json::from_value(future).unwrap();assert_eq!(read.region,crate::localisation::Region::International);assert_eq!(read.bbox(),bbox);
+        let us=Site::for_region(crate::localisation::Region::UnitedStates);assert_eq!(us.crs,"EPSG:32618");assert!(us.lon< -70.);
+    }
 
     #[test]
     fn default_site_is_dordrecht_grote_kerk() {

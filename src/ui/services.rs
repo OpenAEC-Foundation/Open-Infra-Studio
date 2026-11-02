@@ -46,6 +46,7 @@ impl Caps {
 pub(super) struct ServicesPage {
     catalogue: Vec<Service>,
     query: String,
+    region: Option<crate::localisation::Region>,
     categories: Vec<String>,
     kinds: Vec<ServerKind>,
     /// Only services whose coverage contains the location.
@@ -70,6 +71,7 @@ impl Default for ServicesPage {
         Self {
             catalogue: Vec::new(),
             query: String::new(),
+            region: None,
             categories: Vec::new(),
             kinds: Vec::new(),
             here: true,
@@ -90,10 +92,28 @@ impl Default for ServicesPage {
 }
 
 impl ServicesPage {
+    pub(super) fn regional(&mut self,region:crate::localisation::Region) {
+        self.region=Some(region);self.query.clear();self.categories.clear();self.kinds.clear();self.here=false;self.cache=None;
+        self.selected=None;self.caps=None;self.caps_job=None;self.layer=None;self.layer_filter.clear();
+    }
     /// Read the catalogue again (the user's servers may have changed).
     pub(super) fn refresh(&mut self) {
         self.catalogue.clear();
         self.cache = None;
+    }
+}
+
+#[cfg(test)]
+mod regional_tests {
+    use super::*;
+    #[test]
+    fn entering_us_catalogue_cannot_import_previously_selected_dutch_service() {
+        let mut page=ServicesPage::default();
+        page.selected=catalog::all().into_iter().find(|s|s.country=="NL");
+        assert!(page.selected.is_some());page.layer=Some("pand".into());
+        page.regional(crate::localisation::Region::UnitedStates);
+        assert!(page.selected.is_none());assert!(page.layer.is_none());
+        assert!(!page.here,"a previous Dutch map centre must not hide the US catalogue");
     }
 }
 
@@ -339,8 +359,16 @@ impl App {
             });
         });
 
+        ui.horizontal(|ui| {
+            ui.label(tr("Regio", "Region"));
+            egui::ComboBox::from_id_salt("service-region").selected_text(self.svc.region.map(|r|r.label()).unwrap_or(tr("Alle regio’s", "All regions"))).show_ui(ui,|ui| {
+                ui.selectable_value(&mut self.svc.region,None,tr("Alle regio’s","All regions"));
+                for region in crate::localisation::REGIONS {ui.selectable_value(&mut self.svc.region,Some(region),region.label());}
+            });
+        });
+
         // The search runs again only when something changed.
-        let q = Query { text: self.svc.query.clone(), categories: self.svc.categories.clone(), kinds: self.svc.kinds.clone(), at: self.svc.here.then(|| self.services_point()) };
+        let q = Query { countries: self.svc.region.map(|r|r.countries()).unwrap_or_default(), text: self.svc.query.clone(), categories: self.svc.categories.clone(), kinds: self.svc.kinds.clone(), at: self.svc.here.then(|| self.services_point()) };
         let hits = match &self.svc.cache {
             Some((cq, h)) if *cq == q => h.clone(),
             _ => {

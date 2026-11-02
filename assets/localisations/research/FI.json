@@ -1,0 +1,66 @@
+{
+  "code": "FI",
+  "name_nl": "Finland",
+  "name_en": "Finland",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "National Land Survey of Finland - MapSite",
+    "url": "https://www.maanmittauslaitos.fi/en/e-services/mapsite"
+  },
+  "data": [
+    {
+      "name": "Elevation model 2 m",
+      "url": "https://www.maanmittauslaitos.fi/en/maps-and-spatial-data/datasets-and-interfaces/product-descriptions/elevation-model-2-m",
+      "kind": "download",
+      "service_tested": false
+    },
+    {
+      "name": "Geospatial file service, OGC API Processes",
+      "url": "https://avoin-paikkatieto.maanmittauslaitos.fi/tiedostopalvelu/ogcproc/v1/",
+      "kind": "OGC API",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "EUREF-FIN / ETRS-TM35FIN (E,N)",
+      "epsg": 3067,
+      "source_url": "https://www.maanmittauslaitos.fi/kartat-ja-paikkatieto/koordinaatit-ja-paikannus/epsg-koodit-ja-proj-muunnosohjelma"
+    }
+  ],
+  "vertical_reference": {
+    "name": "N2000",
+    "source_url": "https://www.maanmittauslaitos.fi/en/maps-and-spatial-data/datasets-and-interfaces/product-descriptions/elevation-model-2-m",
+    "notes": "Terreinproduct vermeldt N2000 height (EPSG:3900). Oudere N60-hoogten zijn afzonderlijk; gemeentelijke GK-projecties vragen een expliciete CRS-keuze."
+  },
+  "units": "TM35FIN-coordinaten en N2000-hoogten in meter; E,N onderscheiden van N,E (andere EPSG-variant).",
+  "drawing_standard": {
+    "name": "Projectspecifiek; nationale civiele CAD-standaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "Contractuele teken- en modelleveringsspecificaties nog onderzoeken."
+  },
+  "integration": {
+    "next_step": "Test de OGC API Processes-bestandsdienst, autorisatievoorwaarden en een 2 m terreinbestand; registreer N2000, kwaliteitsklasse en bronjaar.",
+    "limitations": "De primaire CRS-lijst vermeldt recente EUREF-FIN-codeactualisaties; bibliotheekondersteuning en asvolgorde controleren. De 2 m terreinresolutie garandeert geen centimeternauwkeurigheid en dekking kent uitzonderingen. Geen API-aanroep of download getest."
+  },
+  "sources": [
+    {
+      "title": "NLS: EPSG-codes gebruikt in Finland",
+      "url": "https://www.maanmittauslaitos.fi/kartat-ja-paikkatieto/koordinaatit-ja-paikannus/epsg-koodit-ja-proj-muunnosohjelma"
+    },
+    {
+      "title": "NLS: Elevation model 2 m",
+      "url": "https://www.maanmittauslaitos.fi/en/maps-and-spatial-data/datasets-and-interfaces/product-descriptions/elevation-model-2-m"
+    },
+    {
+      "title": "NLS: technische beschrijving bestandsdienst",
+      "url": "https://www.maanmittauslaitos.fi/paikkatiedon-tiedostopalvelu/tekninen-kuvaus"
+    },
+    {
+      "title": "NLS: tips voor MapSite",
+      "url": "https://www.maanmittauslaitos.fi/en/e-services/mapsite/tips-using-mapsite"
+    }
+  ],
+  "existing_catalogue_services": 17
+}

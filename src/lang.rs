@@ -72,29 +72,15 @@ pub fn save(lang: Lang) -> Result<(), String> {
     std::fs::write(&path, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
 }
 
-/// The Dutch modules (PDOK, BGT, BRK, KLIC, AHN, BRO, 3D BAG, NLCS) in the
-/// ribbons: `netherlands` in settings.json, on unless switched off. Read
-/// once per session, like the language (the ribbon is built at load).
+/// Compatibility check for the application's regional ribbon profile.
+/// The drawing's project region is selected separately in the workbench.
 pub fn dutch() -> bool {
-    static D: OnceLock<bool> = OnceLock::new();
-    *D.get_or_init(|| {
-        std::fs::read_to_string(settings_file())
-            .ok()
-            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-            .and_then(|v| v.get("netherlands").and_then(|b| b.as_bool()))
-            .unwrap_or(true)
-    })
+    crate::localisation::current() == crate::localisation::Region::Netherlands
 }
 
-/// Store the Dutch-modules switch for the next session.
+/// Compatibility entry point; new interfaces select an explicit regional profile.
 pub fn save_dutch(on: bool) -> Result<(), String> {
-    let path = settings_file();
-    let mut v: serde_json::Value = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
-    v["netherlands"] = serde_json::Value::Bool(on);
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(&path, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+    crate::localisation::save(if on {crate::localisation::Region::Netherlands} else {crate::localisation::Region::International})
 }
 
 /// Pick the text for the current language.

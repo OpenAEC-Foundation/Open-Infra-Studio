@@ -1,0 +1,76 @@
+{
+  "code": "SE",
+  "name_nl": "Zweden",
+  "name_en": "Sweden",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "Geotorget — Lantmäteriet",
+    "url": "https://geotorget.lantmateriet.se/"
+  },
+  "data": [
+    {
+      "name": "Geotorget — topografie, gebouwen, terrein- en kadastrale producten",
+      "url": "https://geotorget.lantmateriet.se/",
+      "kind": "catalogue",
+      "service_tested": false
+    },
+    {
+      "name": "Lantmäteriet — gratis geodataproducten en toegangsvoorwaarden",
+      "url": "https://www.lantmateriet.se/sv/geodata/vara-produkter/avgiftsfria-produkter/",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "SWEREF 99 TM",
+      "epsg": 3006,
+      "source_url": "https://www.lantmateriet.se/globalassets/temawebbar/smartare-samhallsbyggnadsprocess/nationella-specifikationer/matningsanvisningar-byggnad-1-1.pdf"
+    },
+    {
+      "name": "SWEREF 99 12 00 — voorbeeld lokale zone",
+      "epsg": 3007,
+      "source_url": "https://www.lantmateriet.se/globalassets/temawebbar/smartare-samhallsbyggnadsprocess/nationella-specifikationer/matningsanvisningar-byggnad-1-1.pdf"
+    },
+    {
+      "name": "SWEREF 99 18 00 — voorbeeld lokale zone",
+      "epsg": 3011,
+      "source_url": "https://www.lantmateriet.se/globalassets/temawebbar/smartare-samhallsbyggnadsprocess/nationella-specifikationer/matningsanvisningar-byggnad-1-1.pdf"
+    }
+  ],
+  "vertical_reference": {
+    "name": "RH 2000",
+    "source_url": "https://www.lantmateriet.se/sv/geodata/gps-geodesi-och-swepos/Referenssystem/",
+    "notes": "Nationaal hoogtesysteem. SWEN17_RH2000 is het nationale geoïdemodel voor GNSS-hoogten; oudere lokale hoogtegegevens niet automatisch gelijkstellen."
+  },
+  "units": "Meters voor SWEREF-planligging en RH2000-hoogten; maatvoering en coördinatenvolgorde per product controleren.",
+  "drawing_standard": {
+    "name": "Projectspecifieke civiele CAD-afspraken",
+    "source_url": null,
+    "notes": "Geen openbare landelijke civiele CAD-tekenstandaard geverifieerd. Laagnamen, symbolen en oplevereisen per opdrachtgever vaststellen; geen conformiteitsclaim."
+  },
+  "integration": {
+    "next_step": "Start met SWEREF99 TM en RH2000, voeg de voor het project vereiste lokale SWEREF-zone toe en test een Geotorget-terrein- en gebouwproduct.",
+    "limitations": "Er bestaan twaalf lokale projectiezones (EPSG:3007–3018); hier zijn alleen twee voorbeelden opgenomen. SWEREF99 niet op meetnauwkeurigheid gelijkstellen aan actuele WGS84-posities. Gratis producten kunnen een account, productautorisatie en specifieke voorwaarden vereisen; sommige vastgoedgegevens vragen doeltoetsing. Services en downloads niet getest."
+  },
+  "sources": [
+    {
+      "title": "Lantmäteriet — Geotorget",
+      "url": "https://www.lantmateriet.se/sv/geodata/vara-produkter/geotorget/"
+    },
+    {
+      "title": "Lantmäteriet — referentiesystemen",
+      "url": "https://www.lantmateriet.se/sv/geodata/gps-geodesi-och-swepos/Referenssystem/"
+    },
+    {
+      "title": "Lantmäteriet — meetinstructie gebouwen 2026, EPSG-tabellen",
+      "url": "https://www.lantmateriet.se/globalassets/temawebbar/smartare-samhallsbyggnadsprocess/nationella-specifikationer/matningsanvisningar-byggnad-1-1.pdf"
+    },
+    {
+      "title": "Lantmäteriet — gratis producten en toegang",
+      "url": "https://www.lantmateriet.se/sv/geodata/vara-produkter/avgiftsfria-produkter/"
+    }
+  ],
+  "existing_catalogue_services": 9
+}

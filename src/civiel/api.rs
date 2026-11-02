@@ -89,6 +89,7 @@ pub const SETTINGS: &[(&str, &str)] = &[
 ];
 
 impl Args {
+    pub fn keys(&self) -> impl Iterator<Item = &str> { self.kv.keys().map(String::as_str) }
     pub fn parse(s: &str) -> Args {
         let mut words = Vec::new();
         let mut kv = HashMap::new();

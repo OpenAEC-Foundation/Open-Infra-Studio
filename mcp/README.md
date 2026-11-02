@@ -34,6 +34,8 @@ Claude Desktop (`claude_desktop_config.json`): dezelfde regel onder `mcpServers`
 
 ## Tools
 
+De infra-bibliotheek biedt daarnaast `infra_catalog`, `infra_place`, `infra_inspect` en `infra_update`. Lees [de bibliotheekreferentie](../docs/infra-bibliotheek.md) voor aansluitpunten, parameters, bronconflicten en voorbeelden. `parameters` bevat numerieke waarden met de sleutels uit de catalogus; `path` bevat absolute projectpunten in meters.
+
 | Groep | Tools |
 |---|---|
 | Sessie | `oi_sessions`, `oi_status` (assen, profielen, corridors, terreinen met handles), `oi_command` (elk `GIS_`/`CIV_`-commando of hostcommando) |

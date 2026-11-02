@@ -1,0 +1,914 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="5750" viewBox="0 0 1440 5750">
+<rect width="100%" height="100%" fill="#f3f5f7"/>
+<g font-family="Segoe UI, sans-serif" fill="#142b40">
+<text x="24" y="42" font-size="30">Open Infra Studio</text>
+<text x="24" y="78" font-size="18">94 infra-objecten · NLCS-classificatie 5.0.2 · schematische catalogus</text>
+<rect x="8" y="118" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,265.00 290.00,265.00 290.00,155.00 70.00,155.00 70.00,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="284.68,265.00 290.00,259.68"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="275.34,265.00 290.00,250.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="266.01,265.00 290.00,241.01"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="256.68,265.00 290.00,231.68"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="247.34,265.00 290.00,222.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="238.01,265.00 290.00,213.01"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="228.67,265.00 290.00,203.67"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="219.34,265.00 290.00,194.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="210.01,265.00 290.00,185.01"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="200.67,265.00 290.00,175.67"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="191.34,265.00 290.00,166.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="182.01,265.00 290.00,157.01"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="172.67,265.00 282.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="163.34,265.00 273.34,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="154.00,265.00 264.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="144.67,265.00 254.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="135.34,265.00 245.34,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="126.00,265.00 236.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="116.67,265.00 226.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="107.34,265.00 217.34,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="98.00,265.00 208.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="88.67,265.00 198.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="79.33,265.00 189.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,265.00 180.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,255.67 170.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,246.33 161.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,237.00 152.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,227.66 142.66,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,218.33 133.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,209.00 124.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,199.66 114.66,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,190.33 105.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,181.00 96.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,171.66 86.66,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,162.33 77.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,246.33 88.67,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,227.66 107.34,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,209.00 126.00,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,190.33 144.67,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,171.66 163.34,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="72.01,155.00 182.01,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="90.67,155.00 200.67,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="109.34,155.00 219.34,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="128.01,155.00 238.01,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="146.68,155.00 256.68,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="165.34,155.00 275.34,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="184.01,155.00 290.00,260.99"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="202.68,155.00 290.00,242.32"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="221.35,155.00 290.00,223.65"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="240.01,155.00 290.00,204.99"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="258.68,155.00 290.00,186.32"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="277.35,155.00 290.00,167.65"/>
+<text x="20" y="290" font-size="16" fill="#142b40">Straatbaksteen keiformaat</text>
+<text x="20" y="311" font-size="13" fill="#486176">straatbaksteen-kf</text>
+<text x="20" y="330" font-size="12" fill="#708695">verharding</text>
+<rect x="368" y="118" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,265.00 650.00,265.00 650.00,155.00 430.00,155.00 430.00,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="644.68,265.00 650.00,259.68"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="635.34,265.00 650.00,250.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="626.01,265.00 650.00,241.01"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="616.68,265.00 650.00,231.68"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="607.34,265.00 650.00,222.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="598.01,265.00 650.00,213.01"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="588.67,265.00 650.00,203.67"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="579.34,265.00 650.00,194.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="570.01,265.00 650.00,185.01"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="560.67,265.00 650.00,175.67"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="551.34,265.00 650.00,166.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="542.01,265.00 650.00,157.01"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="532.67,265.00 642.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="523.34,265.00 633.34,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="514.00,265.00 624.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="504.67,265.00 614.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="495.34,265.00 605.34,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="486.00,265.00 596.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="476.67,265.00 586.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="467.34,265.00 577.34,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="458.00,265.00 568.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="448.67,265.00 558.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="439.33,265.00 549.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,265.00 540.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,255.67 530.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,246.33 521.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,237.00 512.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,227.66 502.66,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,218.33 493.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,209.00 484.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,199.66 474.66,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,190.33 465.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,181.00 456.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,171.66 446.66,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,162.33 437.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,246.33 448.67,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,227.66 467.34,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,209.00 486.00,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,190.33 504.67,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,171.66 523.34,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="432.01,155.00 542.01,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="450.67,155.00 560.67,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="469.34,155.00 579.34,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="488.01,155.00 598.01,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="506.68,155.00 616.68,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="525.34,155.00 635.34,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="544.01,155.00 650.00,260.99"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="562.68,155.00 650.00,242.32"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="581.35,155.00 650.00,223.65"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="600.01,155.00 650.00,204.99"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="618.68,155.00 650.00,186.32"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="637.35,155.00 650.00,167.65"/>
+<text x="380" y="290" font-size="16" fill="#142b40">Straatbaksteen dikformaat</text>
+<text x="380" y="311" font-size="13" fill="#486176">straatbaksteen-df</text>
+<text x="380" y="330" font-size="12" fill="#708695">verharding</text>
+<rect x="728" y="118" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,265.00 1010.00,265.00 1010.00,155.00 790.00,155.00 790.00,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="989.12,265.00 1010.00,244.12"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="964.23,265.00 1010.00,219.23"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="939.34,265.00 1010.00,194.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="914.45,265.00 1010.00,169.45"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="889.56,265.00 999.56,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="864.67,265.00 974.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="839.78,265.00 949.78,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="814.89,265.00 924.89,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,265.00 900.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,240.11 875.11,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,215.22 850.22,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,190.33 825.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,165.44 800.44,155.00"/>
+<text x="740" y="290" font-size="16" fill="#142b40">Rood asfalt deklaag 30 mm</text>
+<text x="740" y="311" font-size="13" fill="#486176">asfalt-rood</text>
+<text x="740" y="330" font-size="12" fill="#708695">verharding</text>
+<rect x="1088" y="118" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,265.00 1370.00,265.00 1370.00,155.00 1150.00,155.00 1150.00,265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1349.12,265.00 1370.00,244.12"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1324.23,265.00 1370.00,219.23"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1299.34,265.00 1370.00,194.34"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1274.45,265.00 1370.00,169.45"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1249.56,265.00 1359.56,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1224.67,265.00 1334.67,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1199.78,265.00 1309.78,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1174.89,265.00 1284.89,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,265.00 1260.00,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,240.11 1235.11,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,215.22 1210.22,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,190.33 1185.33,155.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,165.44 1160.44,155.00"/>
+<text x="1100" y="290" font-size="16" fill="#142b40">Asfalt zwart</text>
+<text x="1100" y="311" font-size="13" fill="#486176">asfalt-zwart</text>
+<text x="1100" y="330" font-size="12" fill="#708695">verharding</text>
+<rect x="8" y="353" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,500.00 290.00,500.00 290.00,390.00 70.00,390.00 70.00,500.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,482.40 290.00,482.40"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,464.80 290.00,464.80"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,447.20 290.00,447.20"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,429.60 290.00,429.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,412.00 290.00,412.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,394.40 290.00,394.40"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="281.20,500.00 281.20,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="254.80,500.00 254.80,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="228.40,500.00 228.40,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="202.00,500.00 202.00,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="175.60,500.00 175.60,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="149.20,500.00 149.20,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="122.80,500.00 122.80,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="96.40,500.00 96.40,390.00"/>
+<text x="20" y="525" font-size="16" fill="#142b40">Grasbeton 120 mm</text>
+<text x="20" y="546" font-size="13" fill="#486176">grasbeton-120</text>
+<text x="20" y="565" font-size="12" fill="#708695">verharding</text>
+<rect x="368" y="353" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,500.00 650.00,500.00 650.00,390.00 430.00,390.00 430.00,500.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,482.40 650.00,482.40"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,464.80 650.00,464.80"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,447.20 650.00,447.20"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,429.60 650.00,429.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,412.00 650.00,412.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,394.40 650.00,394.40"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="641.20,500.00 641.20,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="614.80,500.00 614.80,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="588.40,500.00 588.40,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="562.00,500.00 562.00,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="535.60,500.00 535.60,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="509.20,500.00 509.20,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="482.80,500.00 482.80,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="456.40,500.00 456.40,390.00"/>
+<text x="380" y="525" font-size="16" fill="#142b40">Grasbeton 100 mm</text>
+<text x="380" y="546" font-size="13" fill="#486176">grasbeton-100</text>
+<text x="380" y="565" font-size="12" fill="#708695">verharding</text>
+<rect x="728" y="353" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,500.00 1010.00,500.00 1010.00,390.00 790.00,390.00 790.00,500.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,486.80 1010.00,486.80"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,473.60 1010.00,473.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,460.40 1010.00,460.40"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,447.20 1010.00,447.20"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,434.00 1010.00,434.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,420.80 1010.00,420.80"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,407.60 1010.00,407.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,394.40 1010.00,394.40"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1001.20,500.00 1001.20,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="988.00,500.00 988.00,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="974.80,500.00 974.80,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="961.60,500.00 961.60,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="948.40,500.00 948.40,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="935.20,500.00 935.20,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="922.00,500.00 922.00,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="908.80,500.00 908.80,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="895.60,500.00 895.60,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="882.40,500.00 882.40,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="869.20,500.00 869.20,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="856.00,500.00 856.00,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="842.80,500.00 842.80,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="829.60,500.00 829.60,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="816.40,500.00 816.40,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="803.20,500.00 803.20,390.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,500.00 790.00,390.00"/>
+<text x="740" y="525" font-size="16" fill="#142b40">Betontegel 300×300×50</text>
+<text x="740" y="546" font-size="13" fill="#486176">betontegel-300</text>
+<text x="740" y="565" font-size="12" fill="#708695">verharding</text>
+<rect x="1088" y="353" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,500.00 1370.00,500.00 1370.00,390.00 1150.00,390.00 1150.00,500.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,473.60 1370.00,473.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,447.20 1370.00,447.20"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,420.80 1370.00,420.80"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,394.40 1370.00,394.40"/>
+<text x="1100" y="525" font-size="16" fill="#142b40">Halfverharding gestabiliseerd</text>
+<text x="1100" y="546" font-size="13" fill="#486176">halfverharding</text>
+<text x="1100" y="565" font-size="12" fill="#708695">verharding</text>
+<rect x="8" y="588" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,735.00 290.00,735.00 290.00,625.00 70.00,625.00 70.00,735.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,708.60 290.00,708.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,682.20 290.00,682.20"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,655.80 290.00,655.80"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="70.00,629.40 290.00,629.40"/>
+<text x="20" y="760" font-size="16" fill="#142b40">Houtsnipperpad</text>
+<text x="20" y="781" font-size="13" fill="#486176">houtsnipperpad</text>
+<text x="20" y="800" font-size="12" fill="#708695">verharding</text>
+<rect x="368" y="588" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,735.00 650.00,735.00 650.00,625.00 430.00,625.00 430.00,735.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,708.60 650.00,708.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,682.20 650.00,682.20"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,655.80 650.00,655.80"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,629.40 650.00,629.40"/>
+<text x="380" y="760" font-size="16" fill="#142b40">Grindverharding</text>
+<text x="380" y="781" font-size="13" fill="#486176">grind</text>
+<text x="380" y="800" font-size="12" fill="#708695">verharding</text>
+<rect x="728" y="588" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,735.00 1010.00,735.00 1010.00,625.00 790.00,625.00 790.00,735.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,708.60 1010.00,708.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,682.20 1010.00,682.20"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,655.80 1010.00,655.80"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,629.40 1010.00,629.40"/>
+<text x="740" y="760" font-size="16" fill="#142b40">Betonplaat</text>
+<text x="740" y="781" font-size="13" fill="#486176">betonplaat</text>
+<text x="740" y="800" font-size="12" fill="#708695">verharding</text>
+<rect x="1088" y="588" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,735.00 1370.00,735.00 1370.00,625.00 1150.00,625.00 1150.00,735.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,708.60 1370.00,708.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,682.20 1370.00,682.20"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,655.80 1370.00,655.80"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,629.40 1370.00,629.40"/>
+<text x="1100" y="760" font-size="16" fill="#142b40">Betonstraatsteen</text>
+<text x="1100" y="781" font-size="13" fill="#486176">betonstraatsteen</text>
+<text x="1100" y="800" font-size="12" fill="#708695">verharding</text>
+<rect x="8" y="823" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,915.00 315.00,915.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,910.95 315.00,910.95"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,919.05 315.00,919.05"/>
+<circle cx="45.00" cy="915.00" r="3" fill="#169ac1"/>
+<circle cx="315.00" cy="915.00" r="3" fill="#169ac1"/>
+<text x="20" y="995" font-size="16" fill="#142b40">Opsluitband 150×250</text>
+<text x="20" y="1016" font-size="13" fill="#486176">opsluitband-150x250</text>
+<text x="20" y="1035" font-size="12" fill="#708695">banden</text>
+<rect x="368" y="823" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,915.00 675.00,915.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,912.30 675.00,912.30"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,917.70 675.00,917.70"/>
+<circle cx="405.00" cy="915.00" r="3" fill="#169ac1"/>
+<circle cx="675.00" cy="915.00" r="3" fill="#169ac1"/>
+<text x="380" y="995" font-size="16" fill="#142b40">Opsluitband 100×200</text>
+<text x="380" y="1016" font-size="13" fill="#486176">opsluitband-100x200</text>
+<text x="380" y="1035" font-size="12" fill="#708695">banden</text>
+<rect x="728" y="823" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,915.00 1035.00,915.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,910.95 1035.00,910.95"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,919.05 1035.00,919.05"/>
+<circle cx="765.00" cy="915.00" r="3" fill="#169ac1"/>
+<circle cx="1035.00" cy="915.00" r="3" fill="#169ac1"/>
+<text x="740" y="995" font-size="16" fill="#142b40">Trottoirband</text>
+<text x="740" y="1016" font-size="13" fill="#486176">trottoirband</text>
+<text x="740" y="1035" font-size="12" fill="#708695">banden</text>
+<rect x="1088" y="823" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,915.00 1395.00,915.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,909.60 1395.00,909.60"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,920.40 1395.00,920.40"/>
+<circle cx="1125.00" cy="915.00" r="3" fill="#169ac1"/>
+<circle cx="1395.00" cy="915.00" r="3" fill="#169ac1"/>
+<text x="1100" y="995" font-size="16" fill="#142b40">Inritband</text>
+<text x="1100" y="1016" font-size="13" fill="#486176">inritband</text>
+<text x="1100" y="1035" font-size="12" fill="#708695">banden</text>
+<rect x="8" y="1058" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,1150.00 315.00,1150.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,1147.30 315.00,1147.30"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,1152.70 315.00,1152.70"/>
+<circle cx="45.00" cy="1150.00" r="3" fill="#169ac1"/>
+<circle cx="315.00" cy="1150.00" r="3" fill="#169ac1"/>
+<text x="20" y="1230" font-size="16" fill="#142b40">Gazonband</text>
+<text x="20" y="1251" font-size="13" fill="#486176">gazonband</text>
+<text x="20" y="1270" font-size="12" fill="#708695">banden</text>
+<rect x="368" y="1058" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,1150.00 675.00,1150.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,1145.95 675.00,1145.95"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,1154.05 675.00,1154.05"/>
+<circle cx="405.00" cy="1150.00" r="3" fill="#169ac1"/>
+<circle cx="675.00" cy="1150.00" r="3" fill="#169ac1"/>
+<text x="380" y="1230" font-size="16" fill="#142b40">Verloopband</text>
+<text x="380" y="1251" font-size="13" fill="#486176">verloopband</text>
+<text x="380" y="1270" font-size="12" fill="#708695">banden</text>
+<rect x="728" y="1058" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,1150.00 1035.00,1150.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,1149.15 1035.00,1149.15"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,1150.85 1035.00,1150.85"/>
+<circle cx="765.00" cy="1150.00" r="3" fill="#169ac1"/>
+<circle cx="1035.00" cy="1150.00" r="3" fill="#169ac1"/>
+<text x="740" y="1230" font-size="16" fill="#142b40">Persleiding HDPE Ø63 SDR17</text>
+<text x="740" y="1251" font-size="13" fill="#486176">persleiding-pe63</text>
+<text x="740" y="1270" font-size="12" fill="#708695">riolering</text>
+<rect x="1088" y="1058" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1172.00,1205.00 1348.00,1095.00 1348.00,1205.00 1172.00,1095.00 1172.00,1205.00"/>
+<circle cx="1172.00" cy="1150.00" r="3" fill="#169ac1"/>
+<circle cx="1348.00" cy="1150.00" r="3" fill="#169ac1"/>
+<text x="1100" y="1230" font-size="16" fill="#142b40">Afsluiter Ø63</text>
+<text x="1100" y="1251" font-size="13" fill="#486176">afsluiter-pe63</text>
+<text x="1100" y="1270" font-size="12" fill="#708695">riolering</text>
+<rect x="8" y="1293" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="92.00,1440.00 268.00,1330.00 268.00,1440.00 92.00,1330.00 92.00,1440.00"/>
+<circle cx="92.00" cy="1385.00" r="3" fill="#169ac1"/>
+<circle cx="268.00" cy="1385.00" r="3" fill="#169ac1"/>
+<text x="20" y="1465" font-size="16" fill="#142b40">Balkeerklep Ø63</text>
+<text x="20" y="1486" font-size="13" fill="#486176">balkeerklep-pe63</text>
+<text x="20" y="1505" font-size="12" fill="#708695">riolering</text>
+<rect x="368" y="1293" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="452.00,1440.00 628.00,1440.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="540.00,1440.00 540.00,1330.00"/>
+<circle cx="452.00" cy="1440.00" r="3" fill="#169ac1"/>
+<circle cx="628.00" cy="1440.00" r="3" fill="#169ac1"/>
+<circle cx="540.00" cy="1330.00" r="3" fill="#169ac1"/>
+<text x="380" y="1465" font-size="16" fill="#142b40">PIG-stuk Ø63</text>
+<text x="380" y="1486" font-size="13" fill="#486176">pig-stuk-pe63</text>
+<text x="380" y="1505" font-size="12" fill="#708695">riolering</text>
+<rect x="728" y="1293" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="872.50,1440.00 872.50,1330.00 927.50,1330.00"/>
+<circle cx="872.50" cy="1440.00" r="3" fill="#169ac1"/>
+<text x="740" y="1465" font-size="16" fill="#142b40">Ontluchter Ø63</text>
+<text x="740" y="1486" font-size="13" fill="#486176">ontluchter-pe63</text>
+<text x="740" y="1505" font-size="12" fill="#708695">riolering</text>
+<rect x="1088" y="1293" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1205.00,1440.00 1215.78,1439.47 1226.46,1437.89 1236.93,1435.26 1247.10,1431.63 1256.85,1427.01 1266.11,1421.46 1274.78,1415.03 1282.78,1407.78 1290.03,1399.78 1296.46,1391.11 1302.01,1381.85 1306.63,1372.10 1310.26,1361.93 1312.89,1351.46 1314.47,1340.78 1315.00,1330.00"/>
+<circle cx="1205.00" cy="1440.00" r="3" fill="#169ac1"/>
+<circle cx="1315.00" cy="1330.00" r="3" fill="#169ac1"/>
+<text x="1100" y="1465" font-size="16" fill="#142b40">Bocht Ø63</text>
+<text x="1100" y="1486" font-size="13" fill="#486176">bocht-pe63</text>
+<text x="1100" y="1505" font-size="12" fill="#708695">riolering</text>
+<rect x="8" y="1528" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="92.00,1675.00 268.00,1675.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="180.00,1675.00 180.00,1565.00"/>
+<circle cx="92.00" cy="1675.00" r="3" fill="#169ac1"/>
+<circle cx="268.00" cy="1675.00" r="3" fill="#169ac1"/>
+<circle cx="180.00" cy="1565.00" r="3" fill="#169ac1"/>
+<text x="20" y="1700" font-size="16" fill="#142b40">T-stuk Ø63</text>
+<text x="20" y="1721" font-size="13" fill="#486176">t-stuk-pe63</text>
+<text x="20" y="1740" font-size="12" fill="#708695">riolering</text>
+<rect x="368" y="1528" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,1620.00 675.00,1620.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,1618.99 675.00,1618.99"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,1621.01 675.00,1621.01"/>
+<circle cx="405.00" cy="1620.00" r="3" fill="#169ac1"/>
+<circle cx="675.00" cy="1620.00" r="3" fill="#169ac1"/>
+<text x="380" y="1700" font-size="16" fill="#142b40">Persleiding HDPE Ø75 SDR17</text>
+<text x="380" y="1721" font-size="13" fill="#486176">persleiding-pe75</text>
+<text x="380" y="1740" font-size="12" fill="#708695">riolering</text>
+<rect x="728" y="1528" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="812.00,1675.00 988.00,1565.00 988.00,1675.00 812.00,1565.00 812.00,1675.00"/>
+<circle cx="812.00" cy="1620.00" r="3" fill="#169ac1"/>
+<circle cx="988.00" cy="1620.00" r="3" fill="#169ac1"/>
+<text x="740" y="1700" font-size="16" fill="#142b40">Afsluiter Ø75</text>
+<text x="740" y="1721" font-size="13" fill="#486176">afsluiter-pe75</text>
+<text x="740" y="1740" font-size="12" fill="#708695">riolering</text>
+<rect x="1088" y="1528" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1172.00,1675.00 1348.00,1565.00 1348.00,1675.00 1172.00,1565.00 1172.00,1675.00"/>
+<circle cx="1172.00" cy="1620.00" r="3" fill="#169ac1"/>
+<circle cx="1348.00" cy="1620.00" r="3" fill="#169ac1"/>
+<text x="1100" y="1700" font-size="16" fill="#142b40">Balkeerklep Ø75</text>
+<text x="1100" y="1721" font-size="13" fill="#486176">balkeerklep-pe75</text>
+<text x="1100" y="1740" font-size="12" fill="#708695">riolering</text>
+<rect x="8" y="1763" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="92.00,1910.00 268.00,1910.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="180.00,1910.00 180.00,1800.00"/>
+<circle cx="92.00" cy="1910.00" r="3" fill="#169ac1"/>
+<circle cx="268.00" cy="1910.00" r="3" fill="#169ac1"/>
+<circle cx="180.00" cy="1800.00" r="3" fill="#169ac1"/>
+<text x="20" y="1935" font-size="16" fill="#142b40">PIG-stuk Ø75</text>
+<text x="20" y="1956" font-size="13" fill="#486176">pig-stuk-pe75</text>
+<text x="20" y="1975" font-size="12" fill="#708695">riolering</text>
+<rect x="368" y="1763" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="512.50,1910.00 512.50,1800.00 567.50,1800.00"/>
+<circle cx="512.50" cy="1910.00" r="3" fill="#169ac1"/>
+<text x="380" y="1935" font-size="16" fill="#142b40">Ontluchter Ø75</text>
+<text x="380" y="1956" font-size="13" fill="#486176">ontluchter-pe75</text>
+<text x="380" y="1975" font-size="12" fill="#708695">riolering</text>
+<rect x="728" y="1763" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="845.00,1910.00 855.78,1909.47 866.46,1907.89 876.93,1905.26 887.10,1901.63 896.85,1897.01 906.11,1891.46 914.78,1885.03 922.78,1877.78 930.03,1869.78 936.46,1861.11 942.01,1851.85 946.63,1842.10 950.26,1831.93 952.89,1821.46 954.47,1810.78 955.00,1800.00"/>
+<circle cx="845.00" cy="1910.00" r="3" fill="#169ac1"/>
+<circle cx="955.00" cy="1800.00" r="3" fill="#169ac1"/>
+<text x="740" y="1935" font-size="16" fill="#142b40">Bocht Ø75</text>
+<text x="740" y="1956" font-size="13" fill="#486176">bocht-pe75</text>
+<text x="740" y="1975" font-size="12" fill="#708695">riolering</text>
+<rect x="1088" y="1763" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1172.00,1910.00 1348.00,1910.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1260.00,1910.00 1260.00,1800.00"/>
+<circle cx="1172.00" cy="1910.00" r="3" fill="#169ac1"/>
+<circle cx="1348.00" cy="1910.00" r="3" fill="#169ac1"/>
+<circle cx="1260.00" cy="1800.00" r="3" fill="#169ac1"/>
+<text x="1100" y="1935" font-size="16" fill="#142b40">T-stuk Ø75</text>
+<text x="1100" y="1956" font-size="13" fill="#486176">t-stuk-pe75</text>
+<text x="1100" y="1975" font-size="12" fill="#708695">riolering</text>
+<rect x="8" y="1998" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,2115.31 315.00,2111.26 315.00,2068.74 45.00,2064.69 45.00,2115.31"/>
+<circle cx="45.00" cy="2090.00" r="3" fill="#169ac1"/>
+<circle cx="315.00" cy="2090.00" r="3" fill="#169ac1"/>
+<text x="20" y="2170" font-size="16" fill="#142b40">Verloop Ø75 naar Ø63</text>
+<text x="20" y="2191" font-size="13" fill="#486176">reductie-75-63</text>
+<text x="20" y="2210" font-size="12" fill="#708695">riolering</text>
+<rect x="368" y="1998" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,2090.00 675.00,2090.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,2085.75 675.00,2085.75"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,2094.25 675.00,2094.25"/>
+<circle cx="405.00" cy="2090.00" r="3" fill="#169ac1"/>
+<circle cx="675.00" cy="2090.00" r="3" fill="#169ac1"/>
+<text x="380" y="2170" font-size="16" fill="#142b40">DWA PVC Ø315</text>
+<text x="380" y="2191" font-size="13" fill="#486176">dwa-pvc315</text>
+<text x="380" y="2210" font-size="12" fill="#708695">riolering</text>
+<rect x="728" y="1998" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,2090.00 1035.00,2090.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,2085.75 1035.00,2085.75"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,2094.25 1035.00,2094.25"/>
+<circle cx="765.00" cy="2090.00" r="3" fill="#169ac1"/>
+<circle cx="1035.00" cy="2090.00" r="3" fill="#169ac1"/>
+<text x="740" y="2170" font-size="16" fill="#142b40">HWA PVC Ø315</text>
+<text x="740" y="2191" font-size="13" fill="#486176">hwa-pvc315</text>
+<text x="740" y="2210" font-size="12" fill="#708695">hemelwater</text>
+<rect x="1088" y="1998" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,2090.00 1395.00,2090.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,2087.84 1395.00,2087.84"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,2092.16 1395.00,2092.16"/>
+<circle cx="1125.00" cy="2090.00" r="3" fill="#169ac1"/>
+<circle cx="1395.00" cy="2090.00" r="3" fill="#169ac1"/>
+<text x="1100" y="2170" font-size="16" fill="#142b40">Drain PP Ø160</text>
+<text x="1100" y="2191" font-size="13" fill="#486176">drain-pp160</text>
+<text x="1100" y="2210" font-size="12" fill="#708695">hemelwater</text>
+<rect x="8" y="2233" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,2325.00 315.00,2325.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,2320.95 315.00,2320.95"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,2329.05 315.00,2329.05"/>
+<circle cx="45.00" cy="2325.00" r="3" fill="#169ac1"/>
+<circle cx="315.00" cy="2325.00" r="3" fill="#169ac1"/>
+<text x="20" y="2405" font-size="16" fill="#142b40">Duiker beton Ø300</text>
+<text x="20" y="2426" font-size="13" fill="#486176">duiker-beton300</text>
+<text x="20" y="2445" font-size="12" fill="#708695">hemelwater</text>
+<rect x="368" y="2233" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="485.00,2380.00 595.00,2380.00 595.00,2270.00 485.00,2270.00 485.00,2380.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="485.00,2380.00 595.00,2270.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="485.00,2270.00 595.00,2380.00"/>
+<circle cx="485.00" cy="2325.00" r="3" fill="#169ac1"/>
+<circle cx="595.00" cy="2325.00" r="3" fill="#169ac1"/>
+<circle cx="540.00" cy="2270.00" r="3" fill="#169ac1"/>
+<circle cx="540.00" cy="2380.00" r="3" fill="#169ac1"/>
+<text x="380" y="2405" font-size="16" fill="#142b40">Inspectieput persriool 1250×1250</text>
+<text x="380" y="2426" font-size="13" fill="#486176">inspectieput-pers</text>
+<text x="380" y="2445" font-size="12" fill="#708695">riolering</text>
+<rect x="728" y="2233" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="845.00,2380.00 955.00,2380.00 955.00,2270.00 845.00,2270.00 845.00,2380.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="845.00,2380.00 955.00,2270.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="845.00,2270.00 955.00,2380.00"/>
+<circle cx="845.00" cy="2325.00" r="3" fill="#169ac1"/>
+<circle cx="955.00" cy="2325.00" r="3" fill="#169ac1"/>
+<circle cx="900.00" cy="2270.00" r="3" fill="#169ac1"/>
+<circle cx="900.00" cy="2380.00" r="3" fill="#169ac1"/>
+<text x="740" y="2405" font-size="16" fill="#142b40">Inspectieput DWA</text>
+<text x="740" y="2426" font-size="13" fill="#486176">inspectieput-dwa</text>
+<text x="740" y="2445" font-size="12" fill="#708695">riolering</text>
+<rect x="1088" y="2233" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1205.00,2380.00 1315.00,2380.00 1315.00,2270.00 1205.00,2270.00 1205.00,2380.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1205.00,2380.00 1315.00,2270.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1205.00,2270.00 1315.00,2380.00"/>
+<circle cx="1205.00" cy="2325.00" r="3" fill="#169ac1"/>
+<circle cx="1315.00" cy="2325.00" r="3" fill="#169ac1"/>
+<circle cx="1260.00" cy="2270.00" r="3" fill="#169ac1"/>
+<circle cx="1260.00" cy="2380.00" r="3" fill="#169ac1"/>
+<text x="1100" y="2405" font-size="16" fill="#142b40">Inspectieput HWA</text>
+<text x="1100" y="2426" font-size="13" fill="#486176">inspectieput-hwa</text>
+<text x="1100" y="2445" font-size="12" fill="#708695">hemelwater</text>
+<rect x="8" y="2468" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="125.00,2615.00 235.00,2615.00 235.00,2505.00 125.00,2505.00 125.00,2615.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="125.00,2615.00 235.00,2505.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="125.00,2505.00 235.00,2615.00"/>
+<circle cx="125.00" cy="2560.00" r="3" fill="#169ac1"/>
+<circle cx="235.00" cy="2560.00" r="3" fill="#169ac1"/>
+<circle cx="180.00" cy="2505.00" r="3" fill="#169ac1"/>
+<circle cx="180.00" cy="2615.00" r="3" fill="#169ac1"/>
+<text x="20" y="2640" font-size="16" fill="#142b40">Drainageput</text>
+<text x="20" y="2661" font-size="13" fill="#486176">drainageput</text>
+<text x="20" y="2680" font-size="12" fill="#708695">hemelwater</text>
+<rect x="368" y="2468" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="485.00,2615.00 595.00,2615.00 595.00,2505.00 485.00,2505.00 485.00,2615.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="485.00,2615.00 595.00,2505.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="485.00,2505.00 595.00,2615.00"/>
+<circle cx="485.00" cy="2560.00" r="3" fill="#169ac1"/>
+<circle cx="595.00" cy="2560.00" r="3" fill="#169ac1"/>
+<circle cx="540.00" cy="2505.00" r="3" fill="#169ac1"/>
+<circle cx="540.00" cy="2615.00" r="3" fill="#169ac1"/>
+<text x="380" y="2640" font-size="16" fill="#142b40">Slokop roosterput</text>
+<text x="380" y="2661" font-size="13" fill="#486176">slokop</text>
+<text x="380" y="2680" font-size="12" fill="#708695">hemelwater</text>
+<rect x="728" y="2468" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="845.00,2615.00 955.00,2615.00 955.00,2505.00 845.00,2505.00 845.00,2615.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="845.00,2615.00 955.00,2505.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="845.00,2505.00 955.00,2615.00"/>
+<circle cx="845.00" cy="2560.00" r="3" fill="#169ac1"/>
+<circle cx="955.00" cy="2560.00" r="3" fill="#169ac1"/>
+<circle cx="900.00" cy="2505.00" r="3" fill="#169ac1"/>
+<circle cx="900.00" cy="2615.00" r="3" fill="#169ac1"/>
+<text x="740" y="2640" font-size="16" fill="#142b40">Uitstroombak beton</text>
+<text x="740" y="2661" font-size="13" fill="#486176">uitstroombak</text>
+<text x="740" y="2680" font-size="12" fill="#708695">hemelwater</text>
+<rect x="1088" y="2468" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,2615.00 1370.00,2615.00 1370.00,2505.00 1150.00,2505.00 1150.00,2615.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,2598.50 1370.00,2598.50"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,2582.00 1370.00,2582.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,2565.50 1370.00,2565.50"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,2549.00 1370.00,2549.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,2532.50 1370.00,2532.50"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1150.00,2516.00 1370.00,2516.00"/>
+<text x="1100" y="2640" font-size="16" fill="#142b40">Wadi</text>
+<text x="1100" y="2661" font-size="13" fill="#486176">wadi</text>
+<text x="1100" y="2680" font-size="12" fill="#708695">hemelwater</text>
+<rect x="8" y="2703" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,2795.00 315.00,2795.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,2793.99 315.00,2793.99"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,2796.01 315.00,2796.01"/>
+<circle cx="45.00" cy="2795.00" r="3" fill="#169ac1"/>
+<circle cx="315.00" cy="2795.00" r="3" fill="#169ac1"/>
+<text x="20" y="2875" font-size="16" fill="#142b40">Waterleiding</text>
+<text x="20" y="2896" font-size="13" fill="#486176">waterleiding</text>
+<text x="20" y="2915" font-size="12" fill="#708695">nuts</text>
+<rect x="368" y="2703" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,2795.00 675.00,2795.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,2794.73 675.00,2794.73"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,2795.27 675.00,2795.27"/>
+<circle cx="405.00" cy="2795.00" r="3" fill="#169ac1"/>
+<circle cx="675.00" cy="2795.00" r="3" fill="#169ac1"/>
+<text x="380" y="2875" font-size="16" fill="#142b40">Glasvezel</text>
+<text x="380" y="2896" font-size="13" fill="#486176">glasvezel</text>
+<text x="380" y="2915" font-size="12" fill="#708695">nuts</text>
+<rect x="728" y="2703" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,2795.00 1035.00,2795.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,2794.73 1035.00,2794.73"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,2795.27 1035.00,2795.27"/>
+<circle cx="765.00" cy="2795.00" r="3" fill="#169ac1"/>
+<circle cx="1035.00" cy="2795.00" r="3" fill="#169ac1"/>
+<text x="740" y="2875" font-size="16" fill="#142b40">Laagspanningskabel</text>
+<text x="740" y="2896" font-size="13" fill="#486176">laagspanning</text>
+<text x="740" y="2915" font-size="12" fill="#708695">nuts</text>
+<rect x="1088" y="2703" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,2795.00 1395.00,2795.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,2792.84 1395.00,2792.84"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,2797.16 1395.00,2797.16"/>
+<circle cx="1125.00" cy="2795.00" r="3" fill="#169ac1"/>
+<circle cx="1395.00" cy="2795.00" r="3" fill="#169ac1"/>
+<text x="1100" y="2875" font-size="16" fill="#142b40">Mantelbuis water Ø160</text>
+<text x="1100" y="2896" font-size="13" fill="#486176">mantelbuis-water</text>
+<text x="1100" y="2915" font-size="12" fill="#708695">nuts</text>
+<rect x="8" y="2938" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,3030.00 315.00,3030.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,3028.99 315.00,3028.99"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,3031.01 315.00,3031.01"/>
+<circle cx="45.00" cy="3030.00" r="3" fill="#169ac1"/>
+<circle cx="315.00" cy="3030.00" r="3" fill="#169ac1"/>
+<text x="20" y="3110" font-size="16" fill="#142b40">Mantelbuis data Ø75</text>
+<text x="20" y="3131" font-size="13" fill="#486176">mantelbuis-data75</text>
+<text x="20" y="3150" font-size="12" fill="#708695">nuts</text>
+<rect x="368" y="2938" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,3030.00 675.00,3030.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,3028.99 675.00,3028.99"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,3031.01 675.00,3031.01"/>
+<circle cx="405.00" cy="3030.00" r="3" fill="#169ac1"/>
+<circle cx="675.00" cy="3030.00" r="3" fill="#169ac1"/>
+<text x="380" y="3110" font-size="16" fill="#142b40">Mantelbuis laden Ø75</text>
+<text x="380" y="3131" font-size="13" fill="#486176">mantelbuis-laad75</text>
+<text x="380" y="3150" font-size="12" fill="#708695">nuts</text>
+<rect x="728" y="2938" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,3030.00 1035.00,3030.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,3028.51 1035.00,3028.51"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,3031.49 1035.00,3031.49"/>
+<circle cx="765.00" cy="3030.00" r="3" fill="#169ac1"/>
+<circle cx="1035.00" cy="3030.00" r="3" fill="#169ac1"/>
+<text x="740" y="3110" font-size="16" fill="#142b40">Mantelbuis laden Ø110</text>
+<text x="740" y="3131" font-size="13" fill="#486176">mantelbuis-laad110</text>
+<text x="740" y="3150" font-size="12" fill="#708695">nuts</text>
+<rect x="1088" y="2938" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1189.89,3085.00 1330.11,3085.00 1330.11,2975.00 1189.89,2975.00 1189.89,3085.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1189.89,3085.00 1330.11,2975.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1189.89,2975.00 1330.11,3085.00"/>
+<circle cx="1189.89" cy="3030.00" r="3" fill="#169ac1"/>
+<circle cx="1330.11" cy="3030.00" r="3" fill="#169ac1"/>
+<text x="1100" y="3110" font-size="16" fill="#142b40">Watermeterput 1160×910</text>
+<text x="1100" y="3131" font-size="13" fill="#486176">watermeterput</text>
+<text x="1100" y="3150" font-size="12" fill="#708695">nuts</text>
+<rect x="8" y="3173" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="97.50,3320.00 262.50,3320.00 262.50,3210.00 97.50,3210.00 97.50,3320.00"/>
+<circle cx="97.50" cy="3265.00" r="3" fill="#169ac1"/>
+<circle cx="262.50" cy="3265.00" r="3" fill="#169ac1"/>
+<text x="20" y="3345" font-size="16" fill="#142b40">Meterkast</text>
+<text x="20" y="3366" font-size="13" fill="#486176">meterkast</text>
+<text x="20" y="3385" font-size="12" fill="#708695">nuts</text>
+<rect x="368" y="3173" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="441.00,3320.00 639.00,3320.00 639.00,3210.00 441.00,3210.00 441.00,3320.00"/>
+<circle cx="441.00" cy="3265.00" r="3" fill="#169ac1"/>
+<circle cx="639.00" cy="3265.00" r="3" fill="#169ac1"/>
+<circle cx="540.00" cy="3155.00" r="3" fill="#169ac1"/>
+<circle cx="540.00" cy="3375.00" r="3" fill="#169ac1"/>
+<text x="380" y="3345" font-size="16" fill="#142b40">Trafostation 3600×2000</text>
+<text x="380" y="3366" font-size="13" fill="#486176">trafostation</text>
+<text x="380" y="3385" font-size="12" fill="#708695">nuts</text>
+<rect x="728" y="3173" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="845.00,3265.00 955.00,3265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="900.00,3320.00 900.00,3210.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="927.50,3265.00 927.37,3262.30 926.97,3259.64 926.32,3257.02 925.41,3254.48 924.25,3252.04 922.87,3249.72 921.26,3247.55 919.45,3245.55 917.45,3243.74 915.28,3242.13 912.96,3240.75 910.52,3239.59 907.98,3238.68 905.36,3238.03 902.70,3237.63 900.00,3237.50 897.30,3237.63 894.64,3238.03 892.02,3238.68 889.48,3239.59 887.04,3240.75 884.72,3242.13 882.55,3243.74 880.55,3245.55 878.74,3247.55 877.13,3249.72 875.75,3252.04 874.59,3254.48 873.68,3257.02 873.03,3259.64 872.63,3262.30 872.50,3265.00 872.63,3267.70 873.03,3270.36 873.68,3272.98 874.59,3275.52 875.75,3277.96 877.13,3280.28 878.74,3282.45 880.55,3284.45 882.55,3286.26 884.72,3287.87 887.04,3289.25 889.48,3290.41 892.02,3291.32 894.64,3291.97 897.30,3292.37 900.00,3292.50 902.70,3292.37 905.36,3291.97 907.98,3291.32 910.52,3290.41 912.96,3289.25 915.28,3287.87 917.45,3286.26 919.45,3284.45 921.26,3282.45 922.87,3280.28 924.25,3277.96 925.41,3275.52 926.32,3272.98 926.97,3270.36 927.37,3267.70 927.50,3265.00"/>
+<circle cx="900.00" cy="3265.00" r="3" fill="#169ac1"/>
+<text x="740" y="3345" font-size="16" fill="#142b40">Brandhydrant</text>
+<text x="740" y="3366" font-size="13" fill="#486176">hydrant</text>
+<text x="740" y="3385" font-size="12" fill="#708695">nuts</text>
+<rect x="1088" y="3173" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1205.00,3265.00 1315.00,3265.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1260.00,3320.00 1260.00,3210.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1287.50,3265.00 1287.37,3262.30 1286.97,3259.64 1286.32,3257.02 1285.41,3254.48 1284.25,3252.04 1282.87,3249.72 1281.26,3247.55 1279.45,3245.55 1277.45,3243.74 1275.28,3242.13 1272.96,3240.75 1270.52,3239.59 1267.98,3238.68 1265.36,3238.03 1262.70,3237.63 1260.00,3237.50 1257.30,3237.63 1254.64,3238.03 1252.02,3238.68 1249.48,3239.59 1247.04,3240.75 1244.72,3242.13 1242.55,3243.74 1240.55,3245.55 1238.74,3247.55 1237.13,3249.72 1235.75,3252.04 1234.59,3254.48 1233.68,3257.02 1233.03,3259.64 1232.63,3262.30 1232.50,3265.00 1232.63,3267.70 1233.03,3270.36 1233.68,3272.98 1234.59,3275.52 1235.75,3277.96 1237.13,3280.28 1238.74,3282.45 1240.55,3284.45 1242.55,3286.26 1244.72,3287.87 1247.04,3289.25 1249.48,3290.41 1252.02,3291.32 1254.64,3291.97 1257.30,3292.37 1260.00,3292.50 1262.70,3292.37 1265.36,3291.97 1267.98,3291.32 1270.52,3290.41 1272.96,3289.25 1275.28,3287.87 1277.45,3286.26 1279.45,3284.45 1281.26,3282.45 1282.87,3280.28 1284.25,3277.96 1285.41,3275.52 1286.32,3272.98 1286.97,3270.36 1287.37,3267.70 1287.50,3265.00"/>
+<circle cx="1260.00" cy="3265.00" r="3" fill="#169ac1"/>
+<text x="1100" y="3345" font-size="16" fill="#142b40">Lichtmast</text>
+<text x="1100" y="3366" font-size="13" fill="#486176">lichtmast</text>
+<text x="1100" y="3385" font-size="12" fill="#708695">verlichting</text>
+<rect x="8" y="3408" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="125.00,3500.00 235.00,3500.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="180.00,3555.00 180.00,3445.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="207.50,3500.00 207.37,3497.30 206.97,3494.64 206.32,3492.02 205.41,3489.48 204.25,3487.04 202.87,3484.72 201.26,3482.55 199.45,3480.55 197.45,3478.74 195.28,3477.13 192.96,3475.75 190.52,3474.59 187.98,3473.68 185.36,3473.03 182.70,3472.63 180.00,3472.50 177.30,3472.63 174.64,3473.03 172.02,3473.68 169.48,3474.59 167.04,3475.75 164.72,3477.13 162.55,3478.74 160.55,3480.55 158.74,3482.55 157.13,3484.72 155.75,3487.04 154.59,3489.48 153.68,3492.02 153.03,3494.64 152.63,3497.30 152.50,3500.00 152.63,3502.70 153.03,3505.36 153.68,3507.98 154.59,3510.52 155.75,3512.96 157.13,3515.28 158.74,3517.45 160.55,3519.45 162.55,3521.26 164.72,3522.87 167.04,3524.25 169.48,3525.41 172.02,3526.32 174.64,3526.97 177.30,3527.37 180.00,3527.50 182.70,3527.37 185.36,3526.97 187.98,3526.32 190.52,3525.41 192.96,3524.25 195.28,3522.87 197.45,3521.26 199.45,3519.45 201.26,3517.45 202.87,3515.28 204.25,3512.96 205.41,3510.52 206.32,3507.98 206.97,3505.36 207.37,3502.70 207.50,3500.00"/>
+<circle cx="180.00" cy="3500.00" r="3" fill="#169ac1"/>
+<text x="20" y="3580" font-size="16" fill="#142b40">Bolderverlichting</text>
+<text x="20" y="3601" font-size="13" fill="#486176">bolderlamp</text>
+<text x="20" y="3620" font-size="12" fill="#708695">verlichting</text>
+<rect x="368" y="3408" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="430.00,3555.00 650.00,3555.00 650.00,3445.00 430.00,3445.00 430.00,3555.00"/>
+<circle cx="430.00" cy="3500.00" r="3" fill="#169ac1"/>
+<text x="380" y="3580" font-size="16" fill="#142b40">Voedingskast OV</text>
+<text x="380" y="3601" font-size="13" fill="#486176">voedingskast-ov</text>
+<text x="380" y="3620" font-size="12" fill="#708695">verlichting</text>
+<rect x="728" y="3408" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,3555.00 1010.00,3555.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="900.00,3555.00 900.00,3445.00"/>
+<circle cx="790.00" cy="3555.00" r="3" fill="#169ac1"/>
+<text x="740" y="3580" font-size="16" fill="#142b40">Aftakmof OV</text>
+<text x="740" y="3601" font-size="13" fill="#486176">aftakmof-ov</text>
+<text x="740" y="3620" font-size="12" fill="#708695">verlichting</text>
+<rect x="1088" y="3408" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1177.50,3555.00 1342.50,3555.00 1342.50,3445.00 1177.50,3445.00 1177.50,3555.00"/>
+<circle cx="1177.50" cy="3500.00" r="3" fill="#169ac1"/>
+<text x="1100" y="3580" font-size="16" fill="#142b40">Laadpaal</text>
+<text x="1100" y="3601" font-size="13" fill="#486176">laadpaal</text>
+<text x="1100" y="3620" font-size="12" fill="#708695">verlichting</text>
+<rect x="8" y="3643" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,3735.00 315.00,3735.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,3734.73 315.00,3734.73"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,3735.27 315.00,3735.27"/>
+<circle cx="45.00" cy="3735.00" r="3" fill="#169ac1"/>
+<circle cx="315.00" cy="3735.00" r="3" fill="#169ac1"/>
+<text x="20" y="3815" font-size="16" fill="#142b40">OV kabel 4×2.5 mm²</text>
+<text x="20" y="3836" font-size="13" fill="#486176">ov-kabel-2-5</text>
+<text x="20" y="3855" font-size="12" fill="#708695">verlichting</text>
+<rect x="368" y="3643" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,3735.00 675.00,3735.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,3734.73 675.00,3734.73"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,3735.27 675.00,3735.27"/>
+<circle cx="405.00" cy="3735.00" r="3" fill="#169ac1"/>
+<circle cx="675.00" cy="3735.00" r="3" fill="#169ac1"/>
+<text x="380" y="3815" font-size="16" fill="#142b40">OV kabel 4×10 mm²</text>
+<text x="380" y="3836" font-size="13" fill="#486176">ov-kabel-10</text>
+<text x="380" y="3855" font-size="12" fill="#708695">verlichting</text>
+<rect x="728" y="3643" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,3735.00 1035.00,3735.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,3734.73 1035.00,3734.73"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,3735.27 1035.00,3735.27"/>
+<circle cx="765.00" cy="3735.00" r="3" fill="#169ac1"/>
+<circle cx="1035.00" cy="3735.00" r="3" fill="#169ac1"/>
+<text x="740" y="3815" font-size="16" fill="#142b40">OV kabel 4×16 mm²</text>
+<text x="740" y="3836" font-size="13" fill="#486176">ov-kabel-16</text>
+<text x="740" y="3855" font-size="12" fill="#708695">verlichting</text>
+<rect x="1088" y="3643" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,3735.00 1395.00,3735.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,3734.73 1395.00,3734.73"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,3735.27 1395.00,3735.27"/>
+<circle cx="1125.00" cy="3735.00" r="3" fill="#169ac1"/>
+<circle cx="1395.00" cy="3735.00" r="3" fill="#169ac1"/>
+<text x="1100" y="3815" font-size="16" fill="#142b40">OV kabel 4×25 mm²</text>
+<text x="1100" y="3836" font-size="13" fill="#486176">ov-kabel-25</text>
+<text x="1100" y="3855" font-size="12" fill="#708695">verlichting</text>
+<rect x="8" y="3878" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="166.25,3970.00 193.75,3970.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="235.00,3970.00 234.74,3964.61 233.94,3959.27 232.63,3954.03 230.81,3948.95 228.51,3944.07 225.73,3939.44 222.52,3935.11 218.89,3931.11 214.89,3927.48 210.56,3924.27 205.93,3921.49 201.05,3919.19 195.97,3917.37 190.73,3916.06 185.39,3915.26 180.00,3915.00 174.61,3915.26 169.27,3916.06 164.03,3917.37 158.95,3919.19 154.07,3921.49 149.44,3924.27 145.11,3927.48 141.11,3931.11 137.48,3935.11 134.27,3939.44 131.49,3944.07 129.19,3948.95 127.37,3954.03 126.06,3959.27 125.26,3964.61 125.00,3970.00 125.26,3975.39 126.06,3980.73 127.37,3985.97 129.19,3991.05 131.49,3995.93 134.27,4000.56 137.48,4004.89 141.11,4008.89 145.11,4012.52 149.44,4015.73 154.07,4018.51 158.95,4020.81 164.03,4022.63 169.27,4023.94 174.61,4024.74 180.00,4025.00 185.39,4024.74 190.73,4023.94 195.97,4022.63 201.05,4020.81 205.93,4018.51 210.56,4015.73 214.89,4012.52 218.89,4008.89 222.52,4004.89 225.73,4000.56 228.51,3995.93 230.81,3991.05 232.63,3985.97 233.94,3980.73 234.74,3975.39 235.00,3970.00"/>
+<text x="20" y="4050" font-size="16" fill="#142b40">Boom kroon en stam</text>
+<text x="20" y="4071" font-size="13" fill="#486176">boom</text>
+<text x="20" y="4090" font-size="12" fill="#708695">groen</text>
+<rect x="368" y="3878" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="526.25,3970.00 553.75,3970.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="595.00,3970.00 594.74,3964.61 593.94,3959.27 592.63,3954.03 590.81,3948.95 588.51,3944.07 585.73,3939.44 582.52,3935.11 578.89,3931.11 574.89,3927.48 570.56,3924.27 565.93,3921.49 561.05,3919.19 555.97,3917.37 550.73,3916.06 545.39,3915.26 540.00,3915.00 534.61,3915.26 529.27,3916.06 524.03,3917.37 518.95,3919.19 514.07,3921.49 509.44,3924.27 505.11,3927.48 501.11,3931.11 497.48,3935.11 494.27,3939.44 491.49,3944.07 489.19,3948.95 487.37,3954.03 486.06,3959.27 485.26,3964.61 485.00,3970.00 485.26,3975.39 486.06,3980.73 487.37,3985.97 489.19,3991.05 491.49,3995.93 494.27,4000.56 497.48,4004.89 501.11,4008.89 505.11,4012.52 509.44,4015.73 514.07,4018.51 518.95,4020.81 524.03,4022.63 529.27,4023.94 534.61,4024.74 540.00,4025.00 545.39,4024.74 550.73,4023.94 555.97,4022.63 561.05,4020.81 565.93,4018.51 570.56,4015.73 574.89,4012.52 578.89,4008.89 582.52,4004.89 585.73,4000.56 588.51,3995.93 590.81,3991.05 592.63,3985.97 593.94,3980.73 594.74,3975.39 595.00,3970.00"/>
+<text x="380" y="4050" font-size="16" fill="#142b40">Bestaande boom</text>
+<text x="380" y="4071" font-size="13" fill="#486176">boom-bestaand</text>
+<text x="380" y="4090" font-size="12" fill="#708695">groen</text>
+<rect x="728" y="3878" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="808.33,4025.00 991.67,4025.00 991.67,3915.00 808.33,3915.00 808.33,4025.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="808.33,4003.00 991.67,4003.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="808.33,3981.00 991.67,3981.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="808.33,3959.00 991.67,3959.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="808.33,3937.00 991.67,3937.00"/>
+<text x="740" y="4050" font-size="16" fill="#142b40">Plantvak heesters</text>
+<text x="740" y="4071" font-size="13" fill="#486176">plantvak</text>
+<text x="740" y="4090" font-size="12" fill="#708695">groen</text>
+<rect x="1088" y="3878" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1168.33,4025.00 1351.67,4025.00 1351.67,3915.00 1168.33,3915.00 1168.33,4025.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1168.33,4003.00 1351.67,4003.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1168.33,3981.00 1351.67,3981.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1168.33,3959.00 1351.67,3959.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1168.33,3937.00 1351.67,3937.00"/>
+<text x="1100" y="4050" font-size="16" fill="#142b40">Kruidenrijk gras</text>
+<text x="1100" y="4071" font-size="13" fill="#486176">kruidenrijk-gras</text>
+<text x="1100" y="4090" font-size="12" fill="#708695">groen</text>
+<rect x="8" y="4113" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="97.50,4260.00 262.50,4260.00 262.50,4150.00 97.50,4150.00 97.50,4260.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="97.50,4243.50 262.50,4243.50"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="97.50,4227.00 262.50,4227.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="97.50,4210.50 262.50,4210.50"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="97.50,4194.00 262.50,4194.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="97.50,4177.50 262.50,4177.50"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="97.50,4161.00 262.50,4161.00"/>
+<text x="20" y="4285" font-size="16" fill="#142b40">Bosplantsoen</text>
+<text x="20" y="4306" font-size="13" fill="#486176">bosplantsoen</text>
+<text x="20" y="4325" font-size="12" fill="#708695">groen</text>
+<rect x="368" y="4113" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,4255.62 675.00,4255.62 675.00,4154.38 405.00,4154.38 405.00,4255.62"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,4235.38 675.00,4235.38"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,4215.12 675.00,4215.12"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,4194.88 675.00,4194.88"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,4174.62 675.00,4174.62"/>
+<text x="380" y="4285" font-size="16" fill="#142b40">Riet en waterplanten</text>
+<text x="380" y="4306" font-size="13" fill="#486176">riet-oever</text>
+<text x="380" y="4325" font-size="12" fill="#708695">groen</text>
+<rect x="728" y="4113" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,4255.62 1035.00,4255.62 1035.00,4154.38 765.00,4154.38 765.00,4255.62"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,4235.38 1035.00,4235.38"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,4215.12 1035.00,4215.12"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,4194.88 1035.00,4194.88"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,4174.62 1035.00,4174.62"/>
+<text x="740" y="4285" font-size="16" fill="#142b40">Natuurlijke oeverzone</text>
+<text x="740" y="4306" font-size="13" fill="#486176">oeverzone</text>
+<text x="740" y="4325" font-size="12" fill="#708695">groen</text>
+<rect x="1088" y="4113" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,4245.50 1395.00,4245.50 1395.00,4164.50 1125.00,4164.50 1125.00,4245.50"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1145.25,4245.50 1145.25,4164.50"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1374.75,4245.50 1374.75,4164.50"/>
+<text x="1100" y="4285" font-size="16" fill="#142b40">Zitbank 2 m</text>
+<text x="1100" y="4306" font-size="13" fill="#486176">zitbank</text>
+<text x="1100" y="4325" font-size="12" fill="#708695">inrichting</text>
+<rect x="8" y="4348" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,4440.00 315.00,4440.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,4458.00 45.00,4422.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="315.00,4458.00 315.00,4422.00"/>
+<text x="20" y="4520" font-size="16" fill="#142b40">Fietsnietje</text>
+<text x="20" y="4541" font-size="13" fill="#486176">fietsnietje</text>
+<text x="20" y="4560" font-size="12" fill="#708695">inrichting</text>
+<rect x="368" y="4348" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="485.00,4495.00 595.00,4495.00 595.00,4385.00 485.00,4385.00 485.00,4495.00"/>
+<text x="380" y="4520" font-size="16" fill="#142b40">Afvalbak</text>
+<text x="380" y="4541" font-size="13" fill="#486176">afvalbak</text>
+<text x="380" y="4560" font-size="12" fill="#708695">inrichting</text>
+<rect x="728" y="4348" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="790.00,4495.00 1010.00,4495.00 1010.00,4385.00 790.00,4385.00 790.00,4495.00"/>
+<text x="740" y="4520" font-size="16" fill="#142b40">Containeropstelplaats</text>
+<text x="740" y="4541" font-size="13" fill="#486176">containeropstelling</text>
+<text x="740" y="4560" font-size="12" fill="#708695">inrichting</text>
+<rect x="1088" y="4348" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1182.21,4495.00 1337.79,4495.00 1292.21,4385.00"/>
+<text x="1100" y="4520" font-size="16" fill="#142b40">Poort 1200 mm</text>
+<text x="1100" y="4541" font-size="13" fill="#486176">poort</text>
+<text x="1100" y="4560" font-size="12" fill="#708695">inrichting</text>
+<rect x="8" y="4583" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,4708.75 315.00,4708.75 315.00,4641.25 45.00,4641.25 45.00,4708.75"/>
+<text x="20" y="4755" font-size="16" fill="#142b40">Landhoofd schematisch</text>
+<text x="20" y="4776" font-size="13" fill="#486176">landhoofd</text>
+<text x="20" y="4795" font-size="12" fill="#708695">inrichting</text>
+<rect x="368" y="4583" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,4708.75 675.00,4708.75 675.00,4641.25 405.00,4641.25 405.00,4708.75"/>
+<text x="380" y="4755" font-size="16" fill="#142b40">Faunapassage schematisch</text>
+<text x="380" y="4776" font-size="13" fill="#486176">faunapassage</text>
+<text x="380" y="4795" font-size="12" fill="#708695">inrichting</text>
+<rect x="728" y="4583" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="803.57,4675.00 803.48,4673.11 803.20,4671.24 802.74,4669.40 802.10,4667.62 801.29,4665.91 800.32,4664.29 799.19,4662.77 797.92,4661.36 796.52,4660.09 795.00,4658.96 793.38,4657.99 791.67,4657.18 789.88,4656.54 788.05,4656.08 786.18,4655.81 784.29,4655.71 782.40,4655.81 780.52,4656.08 778.69,4656.54 776.91,4657.18 775.19,4657.99 773.57,4658.96 772.05,4660.09 770.65,4661.36 769.38,4662.77 768.25,4664.29 767.28,4665.91 766.47,4667.62 765.83,4669.40 765.37,4671.24 765.09,4673.11 765.00,4675.00 765.09,4676.89 765.37,4678.76 765.83,4680.60 766.47,4682.38 767.28,4684.09 768.25,4685.71 769.38,4687.23 770.65,4688.64 772.05,4689.91 773.57,4691.04 775.19,4692.01 776.91,4692.82 778.69,4693.46 780.52,4693.92 782.40,4694.19 784.29,4694.29 786.18,4694.19 788.05,4693.92 789.88,4693.46 791.67,4692.82 793.38,4692.01 795.00,4691.04 796.52,4689.91 797.92,4688.64 799.19,4687.23 800.32,4685.71 801.29,4684.09 802.10,4682.38 802.74,4680.60 803.20,4678.76 803.48,4676.89 803.57,4675.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="919.29,4675.00 919.19,4673.11 918.92,4671.24 918.46,4669.40 917.82,4667.62 917.01,4665.91 916.04,4664.29 914.91,4662.77 913.64,4661.36 912.23,4660.09 910.71,4658.96 909.09,4657.99 907.38,4657.18 905.60,4656.54 903.76,4656.08 901.89,4655.81 900.00,4655.71 898.11,4655.81 896.24,4656.08 894.40,4656.54 892.62,4657.18 890.91,4657.99 889.29,4658.96 887.77,4660.09 886.36,4661.36 885.09,4662.77 883.96,4664.29 882.99,4665.91 882.18,4667.62 881.54,4669.40 881.08,4671.24 880.81,4673.11 880.71,4675.00 880.81,4676.89 881.08,4678.76 881.54,4680.60 882.18,4682.38 882.99,4684.09 883.96,4685.71 885.09,4687.23 886.36,4688.64 887.77,4689.91 889.29,4691.04 890.91,4692.01 892.62,4692.82 894.40,4693.46 896.24,4693.92 898.11,4694.19 900.00,4694.29 901.89,4694.19 903.76,4693.92 905.60,4693.46 907.38,4692.82 909.09,4692.01 910.71,4691.04 912.23,4689.91 913.64,4688.64 914.91,4687.23 916.04,4685.71 917.01,4684.09 917.82,4682.38 918.46,4680.60 918.92,4678.76 919.19,4676.89 919.29,4675.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1035.00,4675.00 1034.91,4673.11 1034.63,4671.24 1034.17,4669.40 1033.53,4667.62 1032.72,4665.91 1031.75,4664.29 1030.62,4662.77 1029.35,4661.36 1027.95,4660.09 1026.43,4658.96 1024.81,4657.99 1023.09,4657.18 1021.31,4656.54 1019.48,4656.08 1017.60,4655.81 1015.71,4655.71 1013.82,4655.81 1011.95,4656.08 1010.12,4656.54 1008.33,4657.18 1006.62,4657.99 1005.00,4658.96 1003.48,4660.09 1002.08,4661.36 1000.81,4662.77 999.68,4664.29 998.71,4665.91 997.90,4667.62 997.26,4669.40 996.80,4671.24 996.52,4673.11 996.43,4675.00 996.52,4676.89 996.80,4678.76 997.26,4680.60 997.90,4682.38 998.71,4684.09 999.68,4685.71 1000.81,4687.23 1002.08,4688.64 1003.48,4689.91 1005.00,4691.04 1006.62,4692.01 1008.33,4692.82 1010.12,4693.46 1011.95,4693.92 1013.82,4694.19 1015.71,4694.29 1017.60,4694.19 1019.48,4693.92 1021.31,4693.46 1023.09,4692.82 1024.81,4692.01 1026.43,4691.04 1027.95,4689.91 1029.35,4688.64 1030.62,4687.23 1031.75,4685.71 1032.72,4684.09 1033.53,4682.38 1034.17,4680.60 1034.63,4678.76 1034.91,4676.89 1035.00,4675.00"/>
+<text x="740" y="4755" font-size="16" fill="#142b40">Landart palen schematisch</text>
+<text x="740" y="4776" font-size="13" fill="#486176">landart-palen</text>
+<text x="740" y="4795" font-size="12" fill="#708695">inrichting</text>
+<rect x="1088" y="4583" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,4691.88 1395.00,4691.88 1395.00,4658.12 1125.00,4658.12 1125.00,4691.88"/>
+<text x="1100" y="4755" font-size="16" fill="#142b40">Klimboom schematisch</text>
+<text x="1100" y="4776" font-size="13" fill="#486176">klimboom</text>
+<text x="1100" y="4795" font-size="12" fill="#708695">inrichting</text>
+<rect x="8" y="4818" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,4910.00 315.00,4910.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,4907.84 315.00,4907.84"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,4912.16 315.00,4912.16"/>
+<circle cx="45.00" cy="4910.00" r="3" fill="#169ac1"/>
+<circle cx="315.00" cy="4910.00" r="3" fill="#169ac1"/>
+<text x="20" y="4990" font-size="16" fill="#142b40">Hekwerk dubbelstaafmat</text>
+<text x="20" y="5011" font-size="13" fill="#486176">hekwerk</text>
+<text x="20" y="5030" font-size="12" fill="#708695">inrichting</text>
+<rect x="368" y="4818" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="503.33,4928.33 576.67,4928.33 576.67,4855.00 503.33,4855.00 503.33,4928.33"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="540.00,4928.33 540.00,4965.00"/>
+<text x="380" y="4990" font-size="16" fill="#142b40">Verkeersbord generiek</text>
+<text x="380" y="5011" font-size="13" fill="#486176">verkeersbord</text>
+<text x="380" y="5030" font-size="12" fill="#708695">verkeer</text>
+<rect x="728" y="4818" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="863.33,4928.33 936.67,4928.33 936.67,4855.00 863.33,4855.00 863.33,4928.33"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="900.00,4928.33 900.00,4965.00"/>
+<text x="740" y="4990" font-size="16" fill="#142b40">Bord fietsstraat</text>
+<text x="740" y="5011" font-size="13" fill="#486176">fietsstraat-bord</text>
+<text x="740" y="5030" font-size="12" fill="#708695">verkeer</text>
+<rect x="1088" y="4818" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,4910.00 1395.00,4910.00"/>
+<text x="1100" y="4990" font-size="16" fill="#142b40">Waterlijn</text>
+<text x="1100" y="5011" font-size="13" fill="#486176">waterlijn</text>
+<text x="1100" y="5030" font-size="12" fill="#708695">groen</text>
+<rect x="8" y="5053" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<text x="100" y="5145" font-size="25">NAP ?</text>
+<text x="20" y="5225" font-size="16" fill="#142b40">Hoogtepunt NAP</text>
+<text x="20" y="5246" font-size="13" fill="#486176">hoogtepunt</text>
+<text x="20" y="5265" font-size="12" fill="#708695">annotatie</text>
+<rect x="368" y="5053" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<text x="460" y="5145" font-size="25">0.0 ‰ →</text>
+<text x="380" y="5225" font-size="16" fill="#142b40">Afschotpijl</text>
+<text x="380" y="5246" font-size="13" fill="#486176">afschotpijl</text>
+<text x="380" y="5265" font-size="12" fill="#708695">annotatie</text>
+<rect x="728" y="5053" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<text x="820" y="5145" font-size="25">A — A</text>
+<text x="740" y="5225" font-size="16" fill="#142b40">Profielmarkering</text>
+<text x="740" y="5246" font-size="13" fill="#486176">profielmarkering</text>
+<text x="740" y="5265" font-size="12" fill="#708695">annotatie</text>
+<rect x="1088" y="5053" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,5143.99 1395.00,5143.99 1395.00,5141.96 1125.00,5141.96 1125.00,5143.99"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,5148.04 1395.00,5148.04 1395.00,5143.99 1125.00,5143.99 1125.00,5148.04"/>
+<text x="1100" y="5225" font-size="16" fill="#142b40">Opbouw fietsstraat</text>
+<text x="1100" y="5246" font-size="13" fill="#486176">profiel-fietsstraat</text>
+<text x="1100" y="5265" font-size="12" fill="#708695">profielen</text>
+<rect x="8" y="5288" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,5354.01 315.00,5354.01 315.00,5348.61 45.00,5348.61 45.00,5354.01"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,5357.39 315.00,5357.39 315.00,5354.01 45.00,5354.01 45.00,5357.39"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,5377.64 315.00,5377.64 315.00,5357.39 45.00,5357.39 45.00,5377.64"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,5411.39 315.00,5411.39 315.00,5377.64 45.00,5377.64 45.00,5411.39"/>
+<text x="20" y="5460" font-size="16" fill="#142b40">Opbouw straatbaksteen</text>
+<text x="20" y="5481" font-size="13" fill="#486176">profiel-straatbaksteen</text>
+<text x="20" y="5500" font-size="12" fill="#708695">profielen</text>
+<rect x="368" y="5288" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,5358.06 675.00,5358.06 675.00,5351.31 405.00,5351.31 405.00,5358.06"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,5374.94 675.00,5374.94 675.00,5358.06 405.00,5358.06 405.00,5374.94"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,5408.69 675.00,5408.69 675.00,5374.94 405.00,5374.94 405.00,5408.69"/>
+<text x="380" y="5460" font-size="16" fill="#142b40">Opbouw halfverharding</text>
+<text x="380" y="5481" font-size="13" fill="#486176">profiel-halfverharding</text>
+<text x="380" y="5500" font-size="12" fill="#708695">profielen</text>
+<rect x="728" y="5288" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,5359.75 1035.00,5359.75 1035.00,5349.62 765.00,5349.62 765.00,5359.75"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,5369.88 1035.00,5369.88 1035.00,5359.75 765.00,5359.75 765.00,5369.88"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="765.00,5410.38 1035.00,5410.38 1035.00,5369.88 765.00,5369.88 765.00,5410.38"/>
+<text x="740" y="5460" font-size="16" fill="#142b40">Wadi bodemopbouw</text>
+<text x="740" y="5481" font-size="13" fill="#486176">profiel-wadi</text>
+<text x="740" y="5500" font-size="12" fill="#708695">profielen</text>
+<rect x="1088" y="5288" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="1125.00,5420.50 1395.00,5420.50 1395.00,5339.50 1125.00,5339.50 1125.00,5420.50"/>
+<text x="1100" y="5460" font-size="16" fill="#142b40">Nutsprofiel 0,8×1,2 m</text>
+<text x="1100" y="5481" font-size="13" fill="#486176">profiel-nutssleuf</text>
+<text x="1100" y="5500" font-size="12" fill="#708695">profielen</text>
+<rect x="8" y="5523" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,5654.66 315.00,5654.66 315.00,5570.28 45.00,5570.28 45.00,5654.66"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="45.00,5659.72 315.00,5659.72 315.00,5654.66 45.00,5654.66 45.00,5659.72"/>
+<text x="20" y="5695" font-size="16" fill="#142b40">Aansluitdetail waterhof</text>
+<text x="20" y="5716" font-size="13" fill="#486176">detail-waterhof</text>
+<text x="20" y="5735" font-size="12" fill="#708695">profielen</text>
+<rect x="368" y="5523" width="344" height="219" rx="8" fill="white" stroke="#d8e0e6"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,5615.00 675.00,5615.00 675.00,5581.25 405.00,5581.25 405.00,5615.00"/>
+<polyline fill="none" stroke="#24495e" stroke-width="2" points="405.00,5648.75 675.00,5648.75 675.00,5615.00 405.00,5615.00 405.00,5648.75"/>
+<text x="380" y="5695" font-size="16" fill="#142b40">Oeverprofiel schematisch</text>
+<text x="380" y="5716" font-size="13" fill="#486176">profiel-oever</text>
+<text x="380" y="5735" font-size="12" fill="#708695">profielen</text>
+</g></svg>

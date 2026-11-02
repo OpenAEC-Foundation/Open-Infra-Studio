@@ -271,6 +271,50 @@ def tool(name, description, properties=None, required=None):
     return wrap
 
 
+@tool("infra_catalog", "Search the NLCS 5.0.2 infrastructure library; returns parameters, connectors, material variants and source conflicts.",
+      {"query": STR, "category": STR})
+def t_infra_catalog(a):
+    return OCS.run("GIS_INFRA_CATALOG " + _kv(QUERY=a.get("query"), CATEGORY=a.get("category")))
+
+
+def _infra_parameters(values):
+    import math
+    out = []
+    for key, value in values.items():
+        if not key.replace('_', '').isalnum() or not key.isascii():
+            raise ValueError("Invalid parameter name")
+        if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value):
+            raise ValueError(f"{key}: a finite number is required")
+        out.append(f"{key.upper()}={value}")
+    return ' '.join(out)
+
+
+@tool("infra_place", "Place a parametric infrastructure object or attach it to an existing instance. Coordinates in project metres; rotation in degrees. Conflict items require confirm=true and explicit design parameters. Returns instance, handles, ports and warnings.",
+      {"item": STR, "at": PT, "path": PTS, "rotation": NUM, "scale": NUM,
+       "status": {"type":"string", "enum":["B","N","T","V"]}, "discipline": STR,
+       "parameters": {"type":"object", "additionalProperties": NUM},
+       "instance": STR, "connect": STR, "port": STR, "own": STR, "confirm": {"type":"boolean"}}, ["item"])
+def t_infra_place(a):
+    parameters = _infra_parameters(a.get('parameters', {}))
+    return OCS.run("GIS_INFRA_PLACE " + _kv(ITEM=a['item'], AT=_pt(a['at']) if 'at' in a else None,
+        PATH=_pts(a['path']) if 'path' in a else None, ROTATION=a.get('rotation'), SCALE=a.get('scale'),
+        STATUS=a.get('status'), DISCIPLINE=a.get('discipline'), INSTANCE=a.get('instance'),
+        CONNECT=a.get('connect'), PORT=a.get('port'), OWN=a.get('own'),
+        CONFIRM='true' if a.get('confirm') else None) + ' ' + parameters)
+
+
+@tool("infra_inspect", "Read saved infrastructure instances, parameters, connector positions and warnings from the active drawing.", {"instance": STR})
+def t_infra_inspect(a):
+    return OCS.run("GIS_INFRA_INSPECT " + _kv(INSTANCE=a.get('instance')))
+
+
+@tool("infra_update", "Regenerate a saved infrastructure instance and its connections atomically. Invalid or incompatible edits leave the drawing unchanged.",
+      {"instance": STR, "parameters": {"type":"object", "additionalProperties": NUM}, "path": PTS}, ["instance"])
+def t_infra_update(a):
+    parameters = _infra_parameters(a.get('parameters', {}))
+    return OCS.run("GIS_INFRA_UPDATE " + _kv(INSTANCE=a['instance'], PATH=_pts(a['path']) if 'path' in a else None) + ' ' + parameters)
+
+
 @tool("oi_sessions", "List the running Open CAD Studio windows; `select` picks one by session id, pid or drawing name.",
       {"select": STR})
 def t_sessions(a):
@@ -332,13 +376,14 @@ SERVICE_CATEGORIES = ["cadastre", "aerial", "elevation", "subsurface", "zoning",
 @tool("gis_services", "Search the catalogue of about 620 public WMS, WFS and XYZ tile services in 50+ countries (cadastral parcels, "
       "aerial photos, elevation, geology, zoning, buildings …). Free text in Dutch or English (e.g. 'cadastral parcels Bavaria', "
       "'luchtfoto', 'Flurstücke'); `here` keeps only services covering the project location, or give lon/lat. Returns id, type, "
-      "name, provider, country, coverage, category, url, default_layer, crs (request CRS first), license and bbox per service.",
+      "name, provider, country, coverage, category, url, default_layer, crs (request CRS first), license and bbox per service. "
+      "country filters ISO codes separated by semicolons, e.g. US;GLOBAL; omit it for all regions.",
       {"query": STR, "category": {"type": "string", "enum": SERVICE_CATEGORIES}, "type": {"type": "string", "enum": ["WMS", "WFS", "XYZ"]},
-       "here": {"type": "boolean"}, "lon": NUM, "lat": NUM, "limit": NUM})
+       "country": STR, "here": {"type": "boolean"}, "lon": NUM, "lat": NUM, "limit": NUM})
 def t_services(a):
     words = " HIER" if a.get("here") and a.get("lon") is None else ""
     return OCS.run("GIS_SERVICES " + _kv(ZOEK=a.get("query"), CATEGORIE=a.get("category"), TYPE=a.get("type"),
-                                         LON=a.get("lon"), LAT=a.get("lat"), LIMIET=a.get("limit") or 50) + words)
+                                         COUNTRY=a.get("country"), LON=a.get("lon"), LAT=a.get("lat"), LIMIET=a.get("limit") or 50) + words)
 
 
 @tool("gis_service_load", "Load one layer of a catalogue service (id from gis_services) into the project area: WMS and tiles as "
@@ -346,6 +391,23 @@ def t_services(a):
       {"service": STR, "layer": STR, "resolution": NUM, "limit": NUM}, ["service"])
 def t_service_load(a):
     return OCS.run("GIS_SERVICE_LOAD " + _kv(DIENST=a["service"], LAAG=a.get("layer"), RESOLUTIE=a.get("resolution"), LIMIET=a.get("limit")))
+
+
+@tool("planning_search", "Find legacy IMRO/TAM plans at an RD point or the project location. Requires OPENINFRA_RP_API_KEY in the plugin process; never pass a key as an argument. Returns plan IDs, status and dates.", {"x": NUM, "y": NUM})
+def t_planning_search(a):
+    if (a.get("x") is None) != (a.get("y") is None):
+        raise ValueError("Provide both RD x and y")
+    return OCS.run("GIS_PLAN_SEARCH " + _kv(X=a.get("x"), Y=a.get("y")))
+
+
+@tool("planning_import", "Download a selected legacy IMRO/TAM plan as editable styled geometry. Requires local OPENINFRA_RP_API_KEY and a project location.", {"plan": STR}, ["plan"])
+def t_planning_import(a):
+    return OCS.run("GIS_PLAN_IMPORT " + _kv(PLAN=a["plan"]), 1800)
+
+
+@tool("planning_gml", "Import local IMRO GML with planning styles and source metadata; no API key required.", {"path": STR}, ["path"])
+def t_planning_gml(a):
+    return OCS.run("GIS_PLAN_GML " + _quote(a["path"]), 1800)
 
 
 @tool("nlcs_check", "NLCS 5.02 check of the drawing (report beside the drawing); repair=true sets layer styles and ByLayer.",

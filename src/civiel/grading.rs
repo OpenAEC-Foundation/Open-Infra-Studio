@@ -1526,7 +1526,8 @@ fn grading_volume(ctx: &Ctx, ground: &mut Maaiveld, tris: &[Tri]) -> Option<(f64
             let v = terrein::volume_between(t, &tin, f);
             Some((v.cut, v.fill, true))
         }
-        Maaiveld::Bron(_) => {
+        // AHN or a point-cloud strip: sampled on a 0.5 m grid.
+        Maaiveld::Bron(_) | Maaiveld::Puntenwolk(_) => {
             let w = terrein::earthwork(tin.extent(), 0.5 * f, f, |p| ground.height(p, f).map(|z| z * f), |p| tin.height(p));
             Some((w.cut, w.fill, false))
         }

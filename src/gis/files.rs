@@ -37,7 +37,7 @@ impl FileData {
 
     /// Attribute names, in first-seen order.
     pub fn fields(&self) -> Vec<String> {
-        vector::property_names(&self.features)
+        vector::property_names(&self.features).into_iter().filter(|k| !k.starts_with("__imro_")).collect()
     }
 }
 
@@ -506,6 +506,7 @@ fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> bool {
 /// WFS response) with its geometry and its simple properties. The CRS comes
 /// from the first `srsName`.
 pub fn gml(text: &str) -> Result<FileData, String> {
+    if super::planning::gml::is_imro(text) { return Ok(super::planning::gml::parse(text)?.file_data()); }
     let doc = roxmltree::Document::parse(text).map_err(|e| format!("GML: {e}"))?;
     let root = doc.root_element();
     let crs = doc.descendants().find_map(|n| n.attribute("srsName")).and_then(epsg_from_name);

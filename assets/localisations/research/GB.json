@@ -1,0 +1,71 @@
+{
+  "code": "GB",
+  "name_nl": "Verenigd Koninkrijk",
+  "name_en": "United Kingdom",
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "portal": {
+    "name": "Ordnance Survey Data Hub — Groot-Brittannië",
+    "url": "https://osdatahub.os.uk/"
+  },
+  "data": [
+    {
+      "name": "OS Terrain 50 — terreinraster en hoogtelijnen",
+      "url": "https://osdatahub.os.uk/downloads/open/Terrain50",
+      "kind": "download",
+      "service_tested": false
+    },
+    {
+      "name": "OS Terrain 50 — productinformatie en toegang",
+      "url": "https://www.ordnancesurvey.co.uk/products/os-terrain-50",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "OSGB36 / British National Grid — Engeland, Schotland en Wales",
+      "epsg": 27700,
+      "source_url": "https://www.gov.uk/government/publications/uk-geospatial-data-standards-register/national-geospatial-data-standards-register"
+    },
+    {
+      "name": "ETRS89 / Irish Transverse Mercator — Noord-Ierland",
+      "epsg": 2157,
+      "source_url": "https://www.gov.uk/government/publications/uk-geospatial-data-standards-register/national-geospatial-data-standards-register"
+    }
+  ],
+  "vertical_reference": {
+    "name": "Ordnance Datum Newlyn (ODN); regionale en eilanddatums",
+    "source_url": "https://www.gov.uk/government/publications/uk-geospatial-data-standards-register/national-geospatial-data-standards-register",
+    "notes": "ODN is de gebruikelijke referentie voor Groot-Brittannië; het officiële register onderscheidt ook Belfast Lough, Malin Head en eilanddatums. Hoogtedatum per dataset en project behouden."
+  },
+  "units": "Meters voor National Grid-coördinaten en actuele hoogtedata; detailmaten meestal projectgebonden, historische feet expliciet herkennen.",
+  "drawing_standard": {
+    "name": "Projectspecifieke civiele CAD-afspraken",
+    "source_url": null,
+    "notes": "Geen openbare landelijke civiele CAD-tekenstandaard geverifieerd. Laagnamen, symbolen en oplevereisen per opdrachtgever vaststellen; geen conformiteitsclaim."
+  },
+  "integration": {
+    "next_step": "Maak aparte profielen voor Groot-Brittannië en Noord-Ierland; test eerst een Terrain 50-download met expliciete horizontale en verticale metadata.",
+    "limitations": "OS Terrain 50 dekt Groot-Brittannië en heeft 50 m rasterafstand en 10 m hoogtelijnen; geschikt voor regionale context, geen gedetailleerde civiele ontwerpondergrond. Noord-Ierland vereist eigen bronkeuze. OSGB36/ETRS89-transformatie met officiële roosters beoordelen; overige datasetlicenties en datums apart controleren. Services niet getest."
+  },
+  "sources": [
+    {
+      "title": "UK Government — Geospatial Data Standards Register",
+      "url": "https://www.gov.uk/government/publications/uk-geospatial-data-standards-register/national-geospatial-data-standards-register"
+    },
+    {
+      "title": "OS — OS Terrain 50",
+      "url": "https://www.ordnancesurvey.co.uk/products/os-terrain-50"
+    },
+    {
+      "title": "OS — Coordinate systems",
+      "url": "https://docs.os.uk/more-than-maps/a-guide-to-coordinate-systems-in-great-britain/ordnance-survey-coordinate-systems"
+    },
+    {
+      "title": "OS — Terrain 50-overzicht",
+      "url": "https://www.ordnancesurvey.co.uk/documents/product-support/support/os-terrain-50-overview-v1.5.pdf"
+    }
+  ],
+  "existing_catalogue_services": 14
+}

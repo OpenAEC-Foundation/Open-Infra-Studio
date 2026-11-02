@@ -1,6 +1,6 @@
 # Infra-bibliotheek en civiele tekenvaardigheden
 
-Datum: 29 oktober 2026. Status: ontwerp ter beoordeling; implementatie nog niet uitgevoerd.
+Datum: 29 oktober 2026. Uitwerking: 30 oktober 2026. Status: vastgesteld ontwerp voor de implementatie.
 
 ## Doel en afbakening
 
@@ -133,7 +133,9 @@ Voeg zoek-/catalogus- en plaatsingsfuncties toe aan de bestaande Open Infra MCP-
 
 ## Civiele teken-skills
 
-Gebruik `skill-creator` en `writing-skills` voor de uitwerking. Bewaar overdraagbare projectskills onder `.agents/skills/`; laat bronverwijzingen en gedeelde bibliotheekinformatie in onderhoudbare referenties staan. Geen chatverslagen of projectspecifieke ontwerpwaarden als universele eisen.
+Alle zes civiele teken-skills worden als versiebeheerbare projectbestanden opgeslagen in de Open Infra Studio-repository, onder `.agents/skills/<skillnaam>/SKILL.md`. Bijbehorende referenties, scripts en eventuele skillmetadata staan in dezelfde skillmap en worden eveneens in Git opgenomen. Verwijzingen naar de implementatie zijn relatief aan de repository; de skills mogen niet afhankelijk zijn van een persoonlijke skillinstallatie of absolute paden op één werkstation.
+
+Gebruik `skill-creator` en `writing-skills` voor de uitwerking. Laat bronverwijzingen en gedeelde bibliotheekinformatie in onderhoudbare referenties staan. Geen chatverslagen of projectspecifieke ontwerpwaarden als universele eisen.
 
 Voorgestelde skills:
 
@@ -158,6 +160,6 @@ Gerichte controles: unieke IDs, geldige NLCS-object/elementcombinaties, numeriek
 
 Voer passende Rust-tests en de build uit. Controleer plaatsing en uitvoer ook in een echte Open CAD Studio-sessie wanneer die beschikbaar is; rapporteer ontbrekende runtimecontrole als beperking. Valideer de skills met de beschikbare skill-validator en realistische scenario's voor bronconflicten, ontbrekende peilen en eenhedenomrekening.
 
-## Nog te besluiten vóór uitvoering
+## Uitvoeringsbasis
 
-Goedkeuring van deze concrete opzet. Er is geen extra keuze nodig over een nieuwe app of framework: Rust, de bestaande plugin en de bestaande NLCS-tabellen blijven het uitgangspunt. Onopgeloste technische bronconflicten blokkeren alleen het als definitief toepassen van die specifieke projectwaarde, niet het bouwen van de generieke bibliotheek.
+Rust, de bestaande plugin en de bestaande NLCS-tabellen blijven het uitgangspunt. Onopgeloste technische bronconflicten blokkeren alleen het als definitief toepassen van die specifieke projectwaarde, niet het bouwen van de generieke bibliotheek. De implementatie voegt expliciete aansluitpunten, diameter-/systeemcontrole, vlakrandkoppelingen en hergeneratie van afhankelijke onderdelen toe. De actuele mogelijkheden en beperkingen staan in `docs/infra-bibliotheek.md`.

@@ -12,6 +12,8 @@ use crate::nlcs;
 
 #[derive(Clone, Debug, Default)]
 pub struct Row {
+    /// Explicit measure of a parametric library object; decoration is excluded.
+    pub quantity_unit: String,
     pub layer: String,
     /// From the layer name when it is an NLCS name.
     pub status: String,
@@ -44,6 +46,12 @@ impl Row {
     /// The quantity that matters for this layer: area for hatches and
     /// mostly-closed layers, otherwise length, or the count.
     pub fn main(&self) -> (f64, &'static str) {
+        match self.quantity_unit.as_str() {
+            "m" => return (self.length, "m"),
+            "m2" => return (self.area, "m²"),
+            "st" => return (self.count as f64, "st"),
+            _ => {}
+        }
         if self.element == "A" || (self.closed * 2 > self.count && self.area > 0.0) {
             (self.area, "m²")
         } else if self.length > 0.0 && self.element != "S" && self.element != "T" {
@@ -248,7 +256,10 @@ pub fn compute(doc: &CadDocument, unit_factor: f64, selection: Option<&HashSet<H
         if selection.is_some_and(|s| !s.contains(&c.handle)) {
             continue;
         }
-        let row = rows.entry(c.layer.clone()).or_insert_with(|| {
+        let infra = crate::library::infra::host::data(e);
+        if infra.get("infra_primary").is_some_and(|v| v == "0") { continue; }
+        let row_key = if let Some(unit)=infra.get("infra_unit") { format!("{}|{unit}",c.layer) } else { c.layer.clone() };
+        let row = rows.entry(row_key).or_insert_with(|| {
             let mut r = Row { layer: c.layer.clone(), ..Default::default() };
             if let Ok(p) = nlcs::parse_layer(&c.layer) {
                 r.status = p.status.code().into();
@@ -260,6 +271,16 @@ pub fn compute(doc: &CadDocument, unit_factor: f64, selection: Option<&HashSet<H
             r
         });
         let (len, area, closed) = measure(e);
+        if infra.get("infra_primary").is_some_and(|v| v == "1") {
+            let unit = infra.get("infra_unit").map(String::as_str).unwrap_or("");
+            let quantity = infra.get("infra_quantity").and_then(|v| v.parse::<f64>().ok()).filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(0.0);
+            row.quantity_unit = unit.to_string();
+            row.count += 1;
+            if unit == "m" { row.length += quantity; }
+            if unit == "m2" { row.area += quantity; row.closed += 1; }
+            q.entities += 1;
+            continue;
+        }
         row.count += 1;
         row.length += len / f;
         row.area += area / (f * f);
@@ -276,9 +297,9 @@ pub fn compute(doc: &CadDocument, unit_factor: f64, selection: Option<&HashSet<H
 
 /// Rows summed per object and status (G, S and A of one object together).
 pub fn per_object(q: &Quantities) -> Vec<Row> {
-    let mut m: BTreeMap<(String, String, String), Row> = BTreeMap::new();
+    let mut m: BTreeMap<(String, String, String, String, String), Row> = BTreeMap::new();
     for r in q.rows.iter().filter(|r| r.nlcs() && !r.annotation() && r.element != "T" && r.element != "M" && r.element != "L") {
-        let e = m.entry((r.group.clone(), r.object.clone(), r.status.clone())).or_insert_with(|| Row {
+        let e = m.entry((r.group.clone(), r.object.clone(), r.status.clone(), r.discipline.clone(), r.quantity_unit.clone())).or_insert_with(|| Row {
             layer: format!("{}-{}-{}-{}", r.status, r.discipline, r.group, r.object),
             status: r.status.clone(),
             discipline: r.discipline.clone(),
@@ -288,6 +309,7 @@ pub fn per_object(q: &Quantities) -> Vec<Row> {
             ..Default::default()
         });
         e.count += r.count;
+        if !r.quantity_unit.is_empty() { e.quantity_unit = r.quantity_unit.clone(); }
         e.length += r.length;
         e.area += r.area;
         e.closed += r.closed;

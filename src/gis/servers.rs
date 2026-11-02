@@ -130,6 +130,7 @@ pub(crate) fn builtin() -> Vec<MapServer> {
         preset("pdok-luchtfoto", Wms, nl, "PDOK Luchtfoto RGB (actueel, 8 cm)", "https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0", "Actueel_orthoHR", "Beeldmateriaal.nl / PDOK"),
         preset("pdok-kadastralekaart-wms", Wms, nl, "PDOK Kadastrale kaart", "https://service.pdok.nl/kadaster/kadastralekaart/wms/v5_0", "Kadastralekaart", "Kadaster / PDOK"),
         preset("pdok-bag-wms", Wms, nl, "PDOK BAG (panden)", "https://service.pdok.nl/lv/bag/wms/v2_0", "pand", "Kadaster / PDOK"),
+        preset("pdok-ruimtelijke-plannen-wms", Wms, nl, "PDOK Ruimtelijke plannen (enkelbestemming)", "https://service.pdok.nl/kadaster/plu/wms/v1_0", "enkelbestemming", "Kadaster / PDOK"),
         preset("pdok-top10nl-wms", Wms, nl, "PDOK TOP10NL topografie", "https://service.pdok.nl/brt/top10nl/wms/v1_0", "", "Kadaster / PDOK"),
         preset("pdok-ahn-wms", Wms, nl, "PDOK AHN hoogtebestand (DTM 0,5 m)", "https://service.pdok.nl/rws/ahn/wms/v1_0", "dtm_05m", "AHN / Rijkswaterstaat / PDOK"),
         // Nederland — PDOK WFS

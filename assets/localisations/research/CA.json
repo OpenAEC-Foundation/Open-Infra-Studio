@@ -1,0 +1,66 @@
+{
+  "code": "CA",
+  "name_nl": "Canada",
+  "name_en": "Canada",
+  "portal": {
+    "name": "GEO.ca",
+    "url": "https://geo.ca/getting-started/"
+  },
+  "data": [
+    {
+      "name": "GEO.ca: federale, provinciale en territoriale basisgegevens",
+      "url": "https://geo.ca/getting-started/",
+      "kind": "catalogue",
+      "service_tested": false
+    },
+    {
+      "name": "NRCan: CanElevation en lidar",
+      "url": "https://natural-resources.canada.ca/science-data/data-analysis/geospatial-data-tools-services/elevation-data",
+      "kind": "catalogue",
+      "service_tested": false
+    }
+  ],
+  "horizontal_crs": [
+    {
+      "name": "NAD83(CSRS), realisatie en epoch per bron; projectie per provincie en project",
+      "epsg": null,
+      "source_url": "https://natural-resources.canada.ca/science-data/science-research/geomatics/geodetic-reference-systems/canadian-spatial-reference-system-csrs"
+    }
+  ],
+  "vertical_reference": {
+    "name": "Canadian Geodetic Vertical Datum of 2013 (CGVD2013)",
+    "source_url": "https://natural-resources.canada.ca/science-data/science-research/geomatics/geodetic-reference-systems/canadian-spatial-reference-system-csrs",
+    "notes": "Geoidrealisatie expliciet vastleggen; oudere CGVD28-hoogten niet zonder transformatie mengen. NRCan kondigt SGEOID2022 aan als basis voor een volgende CGVD2013-realisatie; dit is geen bewijs dat iedere dataset al is omgezet."
+  },
+  "units": "Meters voor project- en hoogtecoördinaten; graden bij geografische datasets. Broneenheden en provinciale projectie controleren.",
+  "integration": {
+    "next_step": "Kies provincie, NAD83(CSRS)-realisatie en epoch; selecteer lokale projectie en controleer metadata van een CanElevation-tegel voor import.",
+    "limitations": "EPSG-code niet vastgezet: bronrealisatie en regionale projectie moeten eerst worden gekozen. Hoogteresolutie, kadastertoegang en licentie verschillen per provincie; catalogusverwijzingen zijn geen geteste service-endpoints."
+  },
+  "sources": [
+    {
+      "title": "GEO.ca — Getting started",
+      "url": "https://geo.ca/getting-started/"
+    },
+    {
+      "title": "NRCan — Elevation Data",
+      "url": "https://natural-resources.canada.ca/science-data/data-analysis/geospatial-data-tools-services/elevation-data"
+    },
+    {
+      "title": "NRCan — Canadian Spatial Reference System",
+      "url": "https://natural-resources.canada.ca/science-data/science-research/geomatics/geodetic-reference-systems/canadian-spatial-reference-system-csrs"
+    },
+    {
+      "title": "NRCan — Spatial reference system updates",
+      "url": "https://natural-resources.canada.ca/science-data/science-research/geomatics/geodetic-reference-systems/spatial-reference-system-updates"
+    }
+  ],
+  "status": "researched",
+  "verified_on": "2026-10-31",
+  "drawing_standard": {
+    "name": "Projectspecifiek; nationale civiele CAD-laagstandaard nog niet geverifieerd",
+    "source_url": null,
+    "notes": "GIS- of landmeetkundige referenties bewijzen geen conformiteit van tekenlagen, symbolen of opleverbestanden. Verifieer de actuele eisen van opdrachtgever en lokale beheerder."
+  },
+  "existing_catalogue_services": 14
+}

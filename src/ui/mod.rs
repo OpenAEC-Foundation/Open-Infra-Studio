@@ -9,7 +9,9 @@ mod app;
 mod files;
 mod jobs;
 mod library;
+mod infra;
 mod map;
+mod planning;
 
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
@@ -18,6 +20,7 @@ use eframe::egui;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tab {
+    Localisation,
     Location,
     Raster,
     Wfs,
@@ -33,6 +36,8 @@ pub enum Tab {
     Files,
     /// Service browser: WMS/WFS/tile services worldwide.
     Services,
+    /// Legacy IMRO and TAM spatial planning data.
+    Planning,
     /// The Civiel plugin's settings and actions.
     Civiel,
 }
@@ -56,6 +61,8 @@ pub fn product() -> Product {
 }
 
 pub enum UiMsg {
+    RegionalServices(crate::localisation::Region),
+    InfraLibrary,
     Show(Tab),
     /// A point picked in the drawing (project CRS), for the coordinate tab.
     Picked([f64; 2]),

@@ -11,6 +11,7 @@ pub mod draw;
 pub mod parking;
 pub mod place;
 pub mod swept;
+pub mod infra;
 
 use std::sync::OnceLock;
 

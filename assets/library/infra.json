@@ -1,0 +1,7646 @@
+[
+  {
+    "id": "straatbaksteen-kf",
+    "name_nl": "Straatbaksteen keiformaat",
+    "name_en": "Clay pavers large",
+    "category": "verharding",
+    "object_id": 2529,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "baksteen-keperverband",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "baksteen-keperverband",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.08,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "baksteen-keperverband",
+        "thickness": 0.08,
+        "object_id": 2529
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "straatbaksteen-df",
+    "name_nl": "Straatbaksteen dikformaat",
+    "name_en": "Clay pavers small",
+    "category": "verharding",
+    "object_id": 2529,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "baksteen-halfsteens",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "baksteen-halfsteens",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.065,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "baksteen-halfsteens",
+        "thickness": 0.065,
+        "object_id": 2529
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "asfalt-rood",
+    "name_nl": "Rood asfalt deklaag 30 mm",
+    "name_en": "Red asphalt wearing course",
+    "category": "verharding",
+    "object_id": 2468,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "asfalt-rood",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "asfalt-rood",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.03,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "asfalt-rood",
+        "thickness": 0.03,
+        "object_id": 2468
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "asfalt-zwart",
+    "name_nl": "Asfalt zwart",
+    "name_en": "Black asphalt",
+    "category": "verharding",
+    "object_id": 2464,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "asfalt",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "asfalt",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.03,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "asfalt",
+        "thickness": 0.03,
+        "object_id": 2464
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "grasbeton-120",
+    "name_nl": "Grasbeton 120 mm",
+    "name_en": "Grass concrete 120 mm",
+    "category": "verharding",
+    "object_id": 2508,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "grasbeton",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "grasbeton",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.12,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      },
+      {
+        "document": "25-308-01-TEK-DO-02/03",
+        "revision": "6.0/1.0",
+        "location": "legenda persleiding / opbouw grasbeton",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "conflict",
+    "conflicts": [
+      "Bronvarianten grasbeton: 100 mm op blad 03 versus 120 mm in TO; kies expliciet."
+    ],
+    "layers": [
+      {
+        "material": "grasbeton",
+        "thickness": 0.12,
+        "object_id": 2508
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "grasbeton-100",
+    "name_nl": "Grasbeton 100 mm",
+    "name_en": "Grass concrete 100 mm",
+    "category": "verharding",
+    "object_id": 2508,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "grasbeton",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "grasbeton",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      },
+      {
+        "document": "25-308-01-TEK-DO-02/03",
+        "revision": "6.0/1.0",
+        "location": "legenda persleiding / opbouw grasbeton",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "conflict",
+    "conflicts": [
+      "Bronvarianten grasbeton: 100 mm op blad 03 versus 120 mm in TO; kies expliciet."
+    ],
+    "layers": [
+      {
+        "material": "grasbeton",
+        "thickness": 0.1,
+        "object_id": 2508
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "betontegel-300",
+    "name_nl": "Betontegel 300×300×50",
+    "name_en": "Concrete tile 300×300×50",
+    "category": "verharding",
+    "object_id": 2531,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "beton",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.05,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "beton",
+        "thickness": 0.05,
+        "object_id": 2531
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "halfverharding",
+    "name_nl": "Halfverharding gestabiliseerd",
+    "name_en": "Stabilised aggregate",
+    "category": "verharding",
+    "object_id": 2511,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "halfverharding",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "halfverharding",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "halfverharding",
+        "thickness": 0.1,
+        "object_id": 2511
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "houtsnipperpad",
+    "name_nl": "Houtsnipperpad",
+    "name_en": "Wood chip path",
+    "category": "verharding",
+    "object_id": 2511,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "houtsnippers",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "houtsnippers",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "houtsnippers",
+        "thickness": 0.1,
+        "object_id": 2511
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "grind",
+    "name_nl": "Grindverharding",
+    "name_en": "Gravel",
+    "category": "verharding",
+    "object_id": 2512,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "grind",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "grind",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "grind",
+        "thickness": 0.1,
+        "object_id": 2512
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "betonplaat",
+    "name_nl": "Betonplaat",
+    "name_en": "Concrete slab",
+    "category": "verharding",
+    "object_id": 2484,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "beton",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.14,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "beton",
+        "thickness": 0.14,
+        "object_id": 2484
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "betonstraatsteen",
+    "name_nl": "Betonstraatsteen",
+    "name_en": "Concrete paver",
+    "category": "verharding",
+    "object_id": 2488,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "verharding",
+      "beton",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.08,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [
+      {
+        "material": "beton",
+        "thickness": 0.08,
+        "object_id": 2488
+      }
+    ],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "opsluitband-150x250",
+    "name_nl": "Opsluitband 150×250",
+    "name_en": "Opsluitband 150×250",
+    "category": "banden",
+    "object_id": 2405,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "curb",
+    "system": "curb",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "banden",
+      "beton",
+      "curb"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.15,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "opsluitband-100x200",
+    "name_nl": "Opsluitband 100×200",
+    "name_en": "Opsluitband 100×200",
+    "category": "banden",
+    "object_id": 2401,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "curb",
+    "system": "curb",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "banden",
+      "beton",
+      "curb"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "trottoirband",
+    "name_nl": "Trottoirband",
+    "name_en": "Trottoirband",
+    "category": "banden",
+    "object_id": 2439,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "curb",
+    "system": "curb",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "banden",
+      "beton",
+      "curb"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.15,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "inritband",
+    "name_nl": "Inritband",
+    "name_en": "Inritband",
+    "category": "banden",
+    "object_id": 2395,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "curb",
+    "system": "curb",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "banden",
+      "beton",
+      "curb"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "gazonband",
+    "name_nl": "Gazonband",
+    "name_en": "Gazonband",
+    "category": "banden",
+    "object_id": 2377,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "curb",
+    "system": "curb",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "banden",
+      "beton",
+      "curb"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "verloopband",
+    "name_nl": "Verloopband",
+    "name_en": "Verloopband",
+    "category": "banden",
+    "object_id": 2376,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "curb",
+    "system": "curb",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "banden",
+      "beton",
+      "curb"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.15,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "persleiding-pe63",
+    "name_nl": "Persleiding HDPE Ø63 SDR17",
+    "name_en": "Pressure sewer HDPE 63",
+    "category": "riolering",
+    "object_id": 2054,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "pressure-sewer",
+    "material": "HDPE-SDR17",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE-SDR17",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.063,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.063,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 63,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      },
+      {
+        "document": "25-308-01-TEK-DO-02/03",
+        "revision": "6.0/1.0",
+        "location": "legenda persleiding / opbouw grasbeton",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "conflict",
+    "conflicts": [
+      "Afschot projectreferentie: TO circa 5 mm/m; blad 02 voor Ø75 3 mm/m. Nul is geen ontwerpkeuze: stel de waarde expliciet in."
+    ],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "afsluiter-pe63",
+    "name_nl": "Afsluiter Ø63",
+    "name_en": "Afsluiter 63",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "valve",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 63,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "balkeerklep-pe63",
+    "name_nl": "Balkeerklep Ø63",
+    "name_en": "Balkeerklep 63",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "check",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 63,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "pig-stuk-pe63",
+    "name_nl": "PIG-stuk Ø63",
+    "name_en": "PIG-stuk 63",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "tee",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 63,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "angle",
+        "label": "Hoek",
+        "default": 90,
+        "unit": "deg",
+        "min": 5,
+        "max": 175
+      }
+    ],
+    "port_count": 3,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "ontluchter-pe63",
+    "name_nl": "Ontluchter Ø63",
+    "name_en": "Ontluchter 63",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "vent",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 63,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 1,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "bocht-pe63",
+    "name_nl": "Bocht Ø63",
+    "name_en": "Bocht 63",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "bend",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 63,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "angle",
+        "label": "Hoek",
+        "default": 90,
+        "unit": "deg",
+        "min": 5,
+        "max": 175
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "t-stuk-pe63",
+    "name_nl": "T-stuk Ø63",
+    "name_en": "T-stuk 63",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "tee",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 63,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "angle",
+        "label": "Hoek",
+        "default": 90,
+        "unit": "deg",
+        "min": 5,
+        "max": 175
+      }
+    ],
+    "port_count": 3,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "persleiding-pe75",
+    "name_nl": "Persleiding HDPE Ø75 SDR17",
+    "name_en": "Pressure sewer HDPE 75",
+    "category": "riolering",
+    "object_id": 2054,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "pressure-sewer",
+    "material": "HDPE-SDR17",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE-SDR17",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.075,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.075,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      },
+      {
+        "document": "25-308-01-TEK-DO-02/03",
+        "revision": "6.0/1.0",
+        "location": "legenda persleiding / opbouw grasbeton",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "conflict",
+    "conflicts": [
+      "Afschot projectreferentie: TO circa 5 mm/m; blad 02 voor Ø75 3 mm/m. Nul is geen ontwerpkeuze: stel de waarde expliciet in."
+    ],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "afsluiter-pe75",
+    "name_nl": "Afsluiter Ø75",
+    "name_en": "Afsluiter 75",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "valve",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "balkeerklep-pe75",
+    "name_nl": "Balkeerklep Ø75",
+    "name_en": "Balkeerklep 75",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "check",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "pig-stuk-pe75",
+    "name_nl": "PIG-stuk Ø75",
+    "name_en": "PIG-stuk 75",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "tee",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "angle",
+        "label": "Hoek",
+        "default": 90,
+        "unit": "deg",
+        "min": 5,
+        "max": 175
+      }
+    ],
+    "port_count": 3,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "ontluchter-pe75",
+    "name_nl": "Ontluchter Ø75",
+    "name_en": "Ontluchter 75",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "vent",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 1,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "bocht-pe75",
+    "name_nl": "Bocht Ø75",
+    "name_en": "Bocht 75",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "bend",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "angle",
+        "label": "Hoek",
+        "default": 90,
+        "unit": "deg",
+        "min": 5,
+        "max": 175
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "t-stuk-pe75",
+    "name_nl": "T-stuk Ø75",
+    "name_en": "T-stuk 75",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "tee",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "angle",
+        "label": "Hoek",
+        "default": 90,
+        "unit": "deg",
+        "min": 5,
+        "max": 175
+      }
+    ],
+    "port_count": 3,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "reductie-75-63",
+    "name_nl": "Verloop Ø75 naar Ø63",
+    "name_en": "Reducer 75 to 63",
+    "category": "riolering",
+    "object_id": 2068,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "reducer",
+    "system": "pressure-sewer",
+    "material": "HDPE",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "HDPE",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "out_diameter",
+        "label": "Uitgaande diameter",
+        "default": 63,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "dwa-pvc315",
+    "name_nl": "DWA PVC Ø315",
+    "name_en": "DWA PVC Ø315",
+    "category": "riolering",
+    "object_id": 3940,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "gravity-sewer",
+    "material": "PVC",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "PVC",
+      "gravity-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.315,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.315,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 315,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "hwa-pvc315",
+    "name_nl": "HWA PVC Ø315",
+    "name_en": "HWA PVC Ø315",
+    "category": "hemelwater",
+    "object_id": 3710,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "stormwater",
+    "material": "PVC",
+    "revision": 1,
+    "keywords": [
+      "hemelwater",
+      "PVC",
+      "stormwater"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.315,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.315,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 315,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "drain-pp160",
+    "name_nl": "Drain PP Ø160",
+    "name_en": "Drain PP Ø160",
+    "category": "hemelwater",
+    "object_id": 1638,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "drainage",
+    "material": "PP",
+    "revision": 1,
+    "keywords": [
+      "hemelwater",
+      "PP",
+      "drainage"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.16,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.16,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 160,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "duiker-beton300",
+    "name_nl": "Duiker beton Ø300",
+    "name_en": "Duiker beton Ø300",
+    "category": "hemelwater",
+    "object_id": 1429,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "stormwater",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "hemelwater",
+      "beton",
+      "stormwater"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 300,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "inspectieput-pers",
+    "name_nl": "Inspectieput persriool 1250×1250",
+    "name_en": "Inspectieput persriool 1250×1250",
+    "category": "riolering",
+    "object_id": 2074,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "chamber",
+    "system": "pressure-sewer",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "beton",
+      "pressure-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 4,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "inspectieput-dwa",
+    "name_nl": "Inspectieput DWA",
+    "name_en": "Inspectieput DWA",
+    "category": "riolering",
+    "object_id": 2257,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "chamber",
+    "system": "gravity-sewer",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "riolering",
+      "beton",
+      "gravity-sewer"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 315,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 4,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "inspectieput-hwa",
+    "name_nl": "Inspectieput HWA",
+    "name_en": "Inspectieput HWA",
+    "category": "hemelwater",
+    "object_id": 1839,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "chamber",
+    "system": "stormwater",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "hemelwater",
+      "beton",
+      "stormwater"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 315,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 4,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "drainageput",
+    "name_nl": "Drainageput",
+    "name_en": "Drainageput",
+    "category": "hemelwater",
+    "object_id": 1656,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "chamber",
+    "system": "drainage",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "hemelwater",
+      "beton",
+      "drainage"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 160,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 4,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "slokop",
+    "name_nl": "Slokop roosterput",
+    "name_en": "Slokop roosterput",
+    "category": "hemelwater",
+    "object_id": 1832,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "chamber",
+    "system": "stormwater",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "hemelwater",
+      "beton",
+      "stormwater"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 315,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 4,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "uitstroombak",
+    "name_nl": "Uitstroombak beton",
+    "name_en": "Uitstroombak beton",
+    "category": "hemelwater",
+    "object_id": 3500,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "chamber",
+    "system": "drainage",
+    "material": "beton",
+    "revision": 1,
+    "keywords": [
+      "hemelwater",
+      "beton",
+      "drainage"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 160,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 4,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "wadi",
+    "name_nl": "Wadi",
+    "name_en": "Infiltration swale",
+    "category": "hemelwater",
+    "object_id": 3830,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "infiltratie",
+    "revision": 1,
+    "keywords": [
+      "hemelwater",
+      "infiltratie",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "waterleiding",
+    "name_nl": "Waterleiding",
+    "name_en": "Waterleiding",
+    "category": "nuts",
+    "object_id": 1365,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "water",
+    "material": "PE",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "PE",
+      "water"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.075,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "glasvezel",
+    "name_nl": "Glasvezel",
+    "name_en": "Glasvezel",
+    "category": "nuts",
+    "object_id": 750,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "data",
+    "material": "glasvezel",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "glasvezel",
+      "data"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "laagspanning",
+    "name_nl": "Laagspanningskabel",
+    "name_en": "Laagspanningskabel",
+    "category": "nuts",
+    "object_id": 878,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "electric",
+    "material": "kabel",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "kabel",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "mantelbuis-water",
+    "name_nl": "Mantelbuis water Ø160",
+    "name_en": "Mantelbuis water Ø160",
+    "category": "nuts",
+    "object_id": 1358,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "duct-water",
+    "material": "PVC",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "PVC",
+      "duct-water"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.16,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 160,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "mantelbuis-data75",
+    "name_nl": "Mantelbuis data Ø75",
+    "name_en": "Mantelbuis data Ø75",
+    "category": "nuts",
+    "object_id": 786,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "duct-data",
+    "material": "PVC",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "PVC",
+      "duct-data"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.075,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "mantelbuis-laad75",
+    "name_nl": "Mantelbuis laden Ø75",
+    "name_en": "Mantelbuis laden Ø75",
+    "category": "nuts",
+    "object_id": 969,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "duct-electric",
+    "material": "PVC",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "PVC",
+      "duct-electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.075,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "mantelbuis-laad110",
+    "name_nl": "Mantelbuis laden Ø110",
+    "name_en": "Mantelbuis laden Ø110",
+    "category": "nuts",
+    "object_id": 969,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "duct-electric",
+    "material": "PVC",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "PVC",
+      "duct-electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.11,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 110,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "watermeterput",
+    "name_nl": "Watermeterput 1160×910",
+    "name_en": "Watermeterput 1160×910",
+    "category": "nuts",
+    "object_id": 1361,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "chamber",
+    "system": "water",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "",
+      "water"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1.16,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.91,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "meterkast",
+    "name_nl": "Meterkast",
+    "name_en": "Meterkast",
+    "category": "nuts",
+    "object_id": 953,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "box",
+    "system": "electric",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "trafostation",
+    "name_nl": "Trafostation 3600×2000",
+    "name_en": "Trafostation 3600×2000",
+    "category": "nuts",
+    "object_id": 984,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "box",
+    "system": "electric",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 3.6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 2.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 4,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "hydrant",
+    "name_nl": "Brandhydrant",
+    "name_en": "Brandhydrant",
+    "category": "nuts",
+    "object_id": 1281,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "hydrant",
+    "system": "water",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "nuts",
+      "",
+      "water"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "diameter",
+        "label": "Aansluitdiameter",
+        "default": 75,
+        "unit": "mm",
+        "min": 1,
+        "max": 3000
+      }
+    ],
+    "port_count": 1,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "lichtmast",
+    "name_nl": "Lichtmast",
+    "name_en": "Lichtmast",
+    "category": "verlichting",
+    "object_id": 911,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "lamp",
+    "system": "electric",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "verlichting",
+      "",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 1,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "bolderlamp",
+    "name_nl": "Bolderverlichting",
+    "name_en": "Bolderverlichting",
+    "category": "verlichting",
+    "object_id": 911,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "lamp",
+    "system": "electric",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "verlichting",
+      "",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 1,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "voedingskast-ov",
+    "name_nl": "Voedingskast OV",
+    "name_en": "Voedingskast OV",
+    "category": "verlichting",
+    "object_id": 3548,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "box",
+    "system": "electric",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "verlichting",
+      "",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 1,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "aftakmof-ov",
+    "name_nl": "Aftakmof OV",
+    "name_en": "Aftakmof OV",
+    "category": "verlichting",
+    "object_id": 879,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "tee",
+    "system": "electric",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "verlichting",
+      "",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.15,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.15,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "angle",
+        "label": "Hoek",
+        "default": 90,
+        "unit": "deg",
+        "min": 5,
+        "max": 175
+      }
+    ],
+    "port_count": 1,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "laadpaal",
+    "name_nl": "Laadpaal",
+    "name_en": "Laadpaal",
+    "category": "verlichting",
+    "object_id": 953,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "charger",
+    "system": "electric",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "verlichting",
+      "",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 1,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "ov-kabel-2-5",
+    "name_nl": "OV kabel 4×2.5 mm²",
+    "name_en": "Lighting cable",
+    "category": "verlichting",
+    "object_id": 901,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "electric",
+    "material": "kabel-4x2.5",
+    "revision": 1,
+    "keywords": [
+      "verlichting",
+      "kabel-4x2.5",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "ov-kabel-10",
+    "name_nl": "OV kabel 4×10 mm²",
+    "name_en": "Lighting cable",
+    "category": "verlichting",
+    "object_id": 901,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "electric",
+    "material": "kabel-4x10",
+    "revision": 1,
+    "keywords": [
+      "verlichting",
+      "kabel-4x10",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "ov-kabel-16",
+    "name_nl": "OV kabel 4×16 mm²",
+    "name_en": "Lighting cable",
+    "category": "verlichting",
+    "object_id": 901,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "electric",
+    "material": "kabel-4x16",
+    "revision": 1,
+    "keywords": [
+      "verlichting",
+      "kabel-4x16",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "ov-kabel-25",
+    "name_nl": "OV kabel 4×25 mm²",
+    "name_en": "Lighting cable",
+    "category": "verlichting",
+    "object_id": 901,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "pipe",
+    "system": "electric",
+    "material": "kabel-4x25",
+    "revision": 1,
+    "keywords": [
+      "verlichting",
+      "kabel-4x25",
+      "electric"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.02,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot (positief = dalend)",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "boom",
+    "name_nl": "Boom kroon en stam",
+    "name_en": "Boom kroon en stam",
+    "category": "groen",
+    "object_id": 360,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "tree",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "groen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "boom-bestaand",
+    "name_nl": "Bestaande boom",
+    "name_en": "Bestaande boom",
+    "category": "groen",
+    "object_id": 360,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "tree",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "groen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "plantvak",
+    "name_nl": "Plantvak heesters",
+    "name_en": "Plantvak heesters",
+    "category": "groen",
+    "object_id": 2888,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "groen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "kruidenrijk-gras",
+    "name_nl": "Kruidenrijk gras",
+    "name_en": "Kruidenrijk gras",
+    "category": "groen",
+    "object_id": 2899,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "groen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "bosplantsoen",
+    "name_nl": "Bosplantsoen",
+    "name_en": "Bosplantsoen",
+    "category": "groen",
+    "object_id": 2897,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "groen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "riet-oever",
+    "name_nl": "Riet en waterplanten",
+    "name_en": "Riet en waterplanten",
+    "category": "groen",
+    "object_id": 2892,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "groen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "oeverzone",
+    "name_nl": "Natuurlijke oeverzone",
+    "name_en": "Natuurlijke oeverzone",
+    "category": "groen",
+    "object_id": 2901,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "area",
+    "shape": "surface",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "groen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m2"
+  },
+  {
+    "id": "zitbank",
+    "name_nl": "Zitbank 2 m",
+    "name_en": "Zitbank 2 m",
+    "category": "inrichting",
+    "object_id": 3413,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "bench",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "fietsnietje",
+    "name_nl": "Fietsnietje",
+    "name_en": "Fietsnietje",
+    "category": "inrichting",
+    "object_id": 3406,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "rack",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.9,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.06,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "afvalbak",
+    "name_nl": "Afvalbak",
+    "name_en": "Afvalbak",
+    "category": "inrichting",
+    "object_id": 3401,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "box",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "containeropstelling",
+    "name_nl": "Containeropstelplaats",
+    "name_en": "Containeropstelplaats",
+    "category": "inrichting",
+    "object_id": 3414,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "box",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "poort",
+    "name_nl": "Poort 1200 mm",
+    "name_en": "Poort 1200 mm",
+    "category": "inrichting",
+    "object_id": 548,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "point",
+    "shape": "gate",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.08,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1.8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "landhoofd",
+    "name_nl": "Landhoofd schematisch",
+    "name_en": "Landhoofd schematisch",
+    "category": "inrichting",
+    "object_id": 1471,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "point",
+    "shape": "box",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "faunapassage",
+    "name_nl": "Faunapassage schematisch",
+    "name_en": "Faunapassage schematisch",
+    "category": "inrichting",
+    "object_id": 244,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "point",
+    "shape": "box",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "landart-palen",
+    "name_nl": "Landart palen schematisch",
+    "name_en": "Landart palen schematisch",
+    "category": "inrichting",
+    "object_id": 3416,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "posts",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "klimboom",
+    "name_nl": "Klimboom schematisch",
+    "name_en": "Klimboom schematisch",
+    "category": "inrichting",
+    "object_id": 3398,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "log",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "hekwerk",
+    "name_nl": "Hekwerk dubbelstaafmat",
+    "name_en": "Panel fence",
+    "category": "inrichting",
+    "object_id": 548,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "fence",
+    "system": "fence",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "inrichting",
+      "",
+      "fence"
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.08,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 1.8,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 2,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "verkeersbord",
+    "name_nl": "Verkeersbord generiek",
+    "name_en": "Generic traffic sign",
+    "category": "verkeer",
+    "object_id": 2638,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "sign",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "verkeer",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "fietsstraat-bord",
+    "name_nl": "Bord fietsstraat",
+    "name_en": "Cycle street sign",
+    "category": "verkeer",
+    "object_id": 2638,
+    "nlcs_version": "5.0.2",
+    "element": "S",
+    "kind": "point",
+    "shape": "sign",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "verkeer",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 0.6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "waterlijn",
+    "name_nl": "Waterlijn",
+    "name_en": "Water line",
+    "category": "groen",
+    "object_id": 459,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "line",
+    "shape": "line",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "groen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 10,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "m"
+  },
+  {
+    "id": "hoogtepunt",
+    "name_nl": "Hoogtepunt NAP",
+    "name_en": "Hoogtepunt NAP",
+    "category": "annotatie",
+    "object_id": 417,
+    "nlcs_version": "5.0.2",
+    "element": "T",
+    "kind": "annotation",
+    "shape": "label",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "annotatie",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "afschotpijl",
+    "name_nl": "Afschotpijl",
+    "name_en": "Afschotpijl",
+    "category": "annotatie",
+    "object_id": 417,
+    "nlcs_version": "5.0.2",
+    "element": "T",
+    "kind": "annotation",
+    "shape": "label",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "annotatie",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "slope",
+        "label": "Afschot",
+        "default": 0,
+        "unit": "m/m",
+        "min": -0.25,
+        "max": 0.25
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "profielmarkering",
+    "name_nl": "Profielmarkering",
+    "name_en": "Profielmarkering",
+    "category": "annotatie",
+    "object_id": 34,
+    "nlcs_version": "5.0.2",
+    "element": "T",
+    "kind": "annotation",
+    "shape": "label",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "annotatie",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Lengte",
+        "default": 1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "width",
+        "label": "Breedte",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "height",
+        "label": "Hoogte",
+        "default": 0.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "profiel-fietsstraat",
+    "name_nl": "Opbouw fietsstraat",
+    "name_en": "Opbouw fietsstraat",
+    "category": "profielen",
+    "object_id": 2468,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "profile",
+    "shape": "section",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "profielen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Breedte doorsnede",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_1",
+        "label": "asfalt-deklaag",
+        "default": 0.03,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_2",
+        "label": "asfalt-tussenlaag",
+        "default": 0.06,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [
+      {
+        "material": "asfalt-deklaag",
+        "thickness": 0.03,
+        "object_id": 2468
+      },
+      {
+        "material": "asfalt-tussenlaag",
+        "thickness": 0.06,
+        "object_id": 2464
+      }
+    ],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "profiel-straatbaksteen",
+    "name_nl": "Opbouw straatbaksteen",
+    "name_en": "Opbouw straatbaksteen",
+    "category": "profielen",
+    "object_id": 2529,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "profile",
+    "shape": "section",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "profielen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Breedte doorsnede",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_1",
+        "label": "straatbaksteen",
+        "default": 0.08,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_2",
+        "label": "straatlaag",
+        "default": 0.05,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_3",
+        "label": "menggranulaat",
+        "default": 0.3,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_4",
+        "label": "zandbed",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [
+      {
+        "material": "straatbaksteen",
+        "thickness": 0.08,
+        "object_id": 2529
+      },
+      {
+        "material": "straatlaag",
+        "thickness": 0.05,
+        "object_id": 2503
+      },
+      {
+        "material": "menggranulaat",
+        "thickness": 0.3,
+        "object_id": 2497
+      },
+      {
+        "material": "zandbed",
+        "thickness": 0.5,
+        "object_id": 503
+      }
+    ],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "profiel-halfverharding",
+    "name_nl": "Opbouw halfverharding",
+    "name_en": "Opbouw halfverharding",
+    "category": "profielen",
+    "object_id": 2511,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "profile",
+    "shape": "section",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "profielen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Breedte doorsnede",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_1",
+        "label": "halfverharding",
+        "default": 0.1,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_2",
+        "label": "menggranulaat",
+        "default": 0.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_3",
+        "label": "zandbed",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [
+      {
+        "material": "halfverharding",
+        "thickness": 0.1,
+        "object_id": 2511
+      },
+      {
+        "material": "menggranulaat",
+        "thickness": 0.25,
+        "object_id": 2497
+      },
+      {
+        "material": "zandbed",
+        "thickness": 0.5,
+        "object_id": 503
+      }
+    ],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "profiel-wadi",
+    "name_nl": "Wadi bodemopbouw",
+    "name_en": "Wadi bodemopbouw",
+    "category": "profielen",
+    "object_id": 3830,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "profile",
+    "shape": "section",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "profielen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Breedte doorsnede",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_1",
+        "label": "compost-drainagezand",
+        "default": 0.15,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_2",
+        "label": "drainagezand",
+        "default": 0.15,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_3",
+        "label": "watervoerend-zand",
+        "default": 0.6,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [
+      {
+        "material": "compost-drainagezand",
+        "thickness": 0.15,
+        "object_id": 480
+      },
+      {
+        "material": "drainagezand",
+        "thickness": 0.15,
+        "object_id": 505
+      },
+      {
+        "material": "watervoerend-zand",
+        "thickness": 0.6,
+        "object_id": 501
+      }
+    ],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "profiel-nutssleuf",
+    "name_nl": "Nutsprofiel 0,8×1,2 m",
+    "name_en": "Nutsprofiel 0,8×1,2 m",
+    "category": "profielen",
+    "object_id": 414,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "profile",
+    "shape": "section",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "profielen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Breedte doorsnede",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_1",
+        "label": "sleufaanvulling",
+        "default": 1.2,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [
+      {
+        "material": "sleufaanvulling",
+        "thickness": 1.2,
+        "object_id": 501
+      }
+    ],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "detail-waterhof",
+    "name_nl": "Aansluitdetail waterhof",
+    "name_en": "Aansluitdetail waterhof",
+    "category": "profielen",
+    "object_id": 2074,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "profile",
+    "shape": "section",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "profielen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Breedte doorsnede",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_1",
+        "label": "inspectieput",
+        "default": 1.25,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_2",
+        "label": "persleiding",
+        "default": 0.075,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [
+      {
+        "material": "inspectieput",
+        "thickness": 1.25,
+        "object_id": 2074
+      },
+      {
+        "material": "persleiding",
+        "thickness": 0.075,
+        "object_id": 2054
+      }
+    ],
+    "quantity_unit": "st"
+  },
+  {
+    "id": "profiel-oever",
+    "name_nl": "Oeverprofiel schematisch",
+    "name_en": "Oeverprofiel schematisch",
+    "category": "profielen",
+    "object_id": 427,
+    "nlcs_version": "5.0.2",
+    "element": "G",
+    "kind": "profile",
+    "shape": "section",
+    "system": "",
+    "material": "",
+    "revision": 1,
+    "keywords": [
+      "profielen",
+      "",
+      ""
+    ],
+    "parameters": [
+      {
+        "key": "length",
+        "label": "Breedte doorsnede",
+        "default": 4,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_1",
+        "label": "oever",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      },
+      {
+        "key": "layer_2",
+        "label": "ondergrond",
+        "default": 0.5,
+        "unit": "m",
+        "min": 0.001,
+        "max": 1000
+      }
+    ],
+    "port_count": 0,
+    "sources": [
+      {
+        "document": "NLCS objecttabellen",
+        "revision": "5.0.2",
+        "location": "object-ID",
+        "url": "https://github.com/nl-digigo/NLCS",
+        "license": "CC-BY-4.0"
+      },
+      {
+        "document": "Generieke parametrische geometrie Open Infra",
+        "revision": "1",
+        "location": "tools/build_infra.py",
+        "url": "",
+        "license": "GPL-3.0-only"
+      },
+      {
+        "document": "TO Openbaar gebied",
+        "revision": "2026-10-07",
+        "location": "Technische uitgangspunten; thematische referentie, geometrie opnieuw opgebouwd",
+        "url": "",
+        "license": "reference-only"
+      }
+    ],
+    "value_status": "generic",
+    "conflicts": [],
+    "layers": [],
+    "components": [
+      {
+        "material": "oever",
+        "thickness": 0.5,
+        "object_id": 427
+      },
+      {
+        "material": "ondergrond",
+        "thickness": 0.5,
+        "object_id": 501
+      }
+    ],
+    "quantity_unit": "st"
+  }
+]

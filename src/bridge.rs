@@ -26,6 +26,20 @@ pub struct Target {
     pub doc_path: Option<PathBuf>,
 }
 
+struct CommandContext { target: Target, site: Option<Site>, reply: Option<String> }
+thread_local! { static COMMAND_CONTEXT: std::cell::RefCell<Option<CommandContext>> = const { std::cell::RefCell::new(None) }; }
+
+/// Bind a queued worker to its originating document and result ID, even if the active tab changes.
+pub fn with_command_context<R>(target: Target, site: Option<Site>, reply: Option<String>, f: impl FnOnce() -> R) -> R {
+    struct Restore(Option<CommandContext>);
+    impl Drop for Restore { fn drop(&mut self) { COMMAND_CONTEXT.with(|c| *c.borrow_mut() = self.0.take()); } }
+    let old = COMMAND_CONTEXT.with(|c| c.replace(Some(CommandContext { target, site, reply })));
+    let _restore = Restore(old);
+    f()
+}
+
+pub fn take_reply_id() -> Option<String> { pending_reply().lock().unwrap().take() }
+
 #[derive(Default)]
 struct Shared {
     target: Option<Target>,
@@ -135,10 +149,12 @@ fn record_units(f: f64) {
 }
 
 pub fn target() -> Option<Target> {
+    if let Some(t) = COMMAND_CONTEXT.with(|c| c.borrow().as_ref().map(|v| v.target.clone())) { return Some(t); }
     shared().lock().unwrap().target.clone()
 }
 
 pub fn site() -> Option<Site> {
+    if let Some(s) = COMMAND_CONTEXT.with(|c| c.borrow().as_ref().map(|v| v.site.clone())) { return s; }
     shared().lock().unwrap().site.clone()
 }
 
@@ -195,7 +211,8 @@ pub fn expect_reply(id: Option<String>) {
 
 /// Answer the waiting script now (argument errors, commands that finish at once).
 pub fn reply(ok: bool, msg: &str) {
-    if let Some(id) = pending_reply().lock().unwrap().take() {
+    let bound = COMMAND_CONTEXT.with(|c| c.borrow_mut().as_mut().map(|v| v.reply.take()));
+    if let Some(id) = bound.unwrap_or_else(|| pending_reply().lock().unwrap().take()) {
         crate::civiel::api::write(&id, ok, msg, crate::civiel::api::take());
     }
 }
