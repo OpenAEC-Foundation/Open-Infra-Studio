@@ -120,19 +120,44 @@ pub fn read_asc(text: &str) -> Result<Grid, String> {
         }
     }
     let get = |k: &str| head.get(k).copied().ok_or_else(|| format!("ASC: '{k}' ontbreekt"));
-    let (w, h, cell) = (get("ncols")? as usize, get("nrows")? as usize, get("cellsize")?);
+    let dimension = |key: &str| -> Result<usize, String> {
+        let value = get(key)?;
+        if !value.is_finite() || value <= 0.0 || value.fract() != 0.0 || value >= usize::MAX as f64 {
+            return Err(format!("ASC: '{key}' moet een positief geheel getal zijn"));
+        }
+        Ok(value as usize)
+    };
+    let (w, h, cell) = (dimension("ncols")?, dimension("nrows")?, get("cellsize")?);
+    let count = w.checked_mul(h).filter(|n| *n <= isize::MAX as usize / std::mem::size_of::<f32>()).ok_or("ASC: rasterafmetingen zijn te groot")?;
+    if !cell.is_finite() || cell <= 0.0 {
+        return Err("ASC: cellsize moet positief en eindig zijn".into());
+    }
     let x0 = head.get("xllcorner").copied().or_else(|| head.get("xllcenter").map(|c| c - cell / 2.0)).ok_or("ASC: xllcorner ontbreekt")?;
     let y0 = head.get("yllcorner").copied().or_else(|| head.get("yllcenter").map(|c| c - cell / 2.0)).ok_or("ASC: yllcorner ontbreekt")?;
-    let nodata = head.get("nodata_value").copied();
-    let z: Vec<f32> = lines
-        .flat_map(|l| l.split_whitespace())
-        .map(|t| t.parse::<f64>().map(|v| if nodata == Some(v) { f32::NAN } else { v as f32 }).unwrap_or(f32::NAN))
-        .take(w * h)
-        .collect();
-    if z.len() < w * h {
-        return Err(format!("ASC: {} waarden, {} verwacht", z.len(), w * h));
+    let y1 = y0 + h as f64 * cell;
+    if ![x0, y0, x0 + w as f64 * cell, y1].iter().all(|v| v.is_finite()) {
+        return Err("ASC: niet-eindige rasterbegrenzing".into());
     }
-    Ok(Grid { x0, y1: y0 + h as f64 * cell, cell, w, h, z })
+    let nodata = head.get("nodata_value").copied();
+    // Grow with the actual input, never reserve from untrusted dimensions.
+    let mut z = Vec::new();
+    for (i, token) in lines.flat_map(|l| l.split_whitespace()).enumerate() {
+        if i >= count {
+            return Err(format!("ASC: meer dan {count} rasterwaarden"));
+        }
+        let value = token.parse::<f64>().map_err(|_| format!("ASC: ongeldige rasterwaarde {}: '{token}'", i + 1))?;
+        if nodata.is_some_and(|n| n == value || (n.is_nan() && value.is_nan())) {
+            z.push(f32::NAN);
+        } else if !value.is_finite() || !(value as f32).is_finite() {
+            return Err(format!("ASC: rasterwaarde {} is niet eindig of te groot", i + 1));
+        } else {
+            z.push(value as f32);
+        }
+    }
+    if z.len() != count {
+        return Err(format!("ASC: {} waarden, {count} verwacht", z.len()));
+    }
+    Ok(Grid { x0, y1, cell, w, h, z })
 }
 
 /// The world file beside an image: .tfw/.jgw/.pgw (first and last letter of
