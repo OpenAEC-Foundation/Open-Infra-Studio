@@ -694,6 +694,24 @@ mod tests {
     }
 
     #[test]
+    fn gml_nil_properties_preserve_other_features_without_fake_coordinates() {
+        for geometry in [
+            "<t:geometry nilReason=\"unknown\"/>",
+            "<t:geometry xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:nil=\"true\"/>",
+            "<t:geometry><gml:MultiSurface/></t:geometry>",
+        ] {
+            let missing = format!("<wfs:member><t:missing gml:id=\"missing\">{geometry}<t:height xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:nil=\"true\"/></t:missing></wfs:member>");
+            let text = GML.replace("</wfs:FeatureCollection>", &format!("{missing}</wfs:FeatureCollection>"));
+            let data = gml(&text).unwrap();
+            assert_eq!(data.features.len(), 3);
+            assert_eq!(data.features[0].lines[0].0, vec![[2600000.0, 1200000.0], [2600010.0, 1200020.0]]);
+            assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+            assert!(data.features[2].points.is_empty() && data.features[2].lines.is_empty());
+            assert_eq!(data.features[2].props["gml_id"], "missing");
+        }
+    }
+
+    #[test]
     fn wkt_codes() {
         assert_eq!(epsg_from_wkt(r#"PROJCS["Amersfoort / RD New",GEOGCS["Amersfoort",AUTHORITY["EPSG","4289"]],AUTHORITY["EPSG","28992"]]"#).as_deref(), Some("EPSG:28992"));
         assert_eq!(epsg_from_wkt(r#"PROJCS["ETRS_1989_UTM_Zone_32N",GEOGCS["GCS_ETRS_1989"]]"#).as_deref(), Some("EPSG:25832"));
