@@ -160,6 +160,7 @@ fn point_of(n: Node, cpt: bool) -> Point {
 #[derive(Debug, Default, PartialEq)]
 pub struct SearchResult {
     pub points: Vec<Point>,
+    /// Skipped search objects, retained for callers; not displayed in the UI.
     pub warnings: Vec<String>,
 }
 
@@ -281,8 +282,9 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         return Err(format!("BRO: {r}"));
     }
     let root = doc.root_element();
-    validate_numbers(root)?;
-    let obj = first(root, "CPT_O").ok_or("BRO: geen sondering (CPT_O) in het antwoord")?;
+    let invalid = "BRO: geen sondering (CPT_O) in het antwoord";
+    validate_numbers(root).map_err(|_| invalid.to_string())?;
+    let obj = first(root, "CPT_O").ok_or(invalid)?;
     let point = point_of(obj, true);
     let columns: Vec<String> = match first(obj, "parameters") {
         Some(p) => p.children().filter(|c| c.is_element()).map(|c| c.tag_name().name().to_string()).collect(),
@@ -300,10 +302,10 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         .and_then(|v| v.text())
         .unwrap_or("");
     let mut rows: Vec<(f64, Sample)> = Vec::new();
-    for (row, r) in values.split(block.as_str()).filter(|r| !r.trim().is_empty()).enumerate() {
+    for r in values.split(block.as_str()).filter(|r| !r.trim().is_empty()) {
         let v = r.split(tok.as_str()).map(|t| {
-            let value: f64 = if dec == "." { t.trim().parse() } else { t.trim().replace(dec.as_str(), ".").parse() }.map_err(|_| format!("BRO: {} {}", tr("ongeldige meetwaarde in regel", "invalid measurement on row"), row + 1))?;
-            if !value.is_finite() { return Err(format!("BRO: {} {}", tr("niet-eindige meetwaarde in regel", "non-finite measurement on row"), row + 1)); }
+            let value: f64 = if dec == "." { t.trim().parse() } else { t.trim().replace(dec.as_str(), ".").parse() }.map_err(|_| invalid.to_string())?;
+            if !value.is_finite() { return Err(invalid.to_string()); }
             Ok(value)
         }).collect::<Result<Vec<_>, String>>()?;
         let get = |i: Option<usize>| i.and_then(|i| v.get(i).copied()).filter(|x| *x > VOID + 1.0);
@@ -314,7 +316,7 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         }
         let f = get(fs).filter(|f| *f >= 0.0);
         let ratio = get(rf).filter(|r| *r >= 0.0).or_else(|| f.map(|f| f / q * 100.0));
-        if ratio.is_some_and(|r| !r.is_finite()) { return Err(format!("BRO: {} {}", tr("niet-eindig wrijvingsgetal in regel", "non-finite friction ratio on row"), row + 1)); }
+        if ratio.is_some_and(|r| !r.is_finite()) { return Err(invalid.to_string()); }
         rows.push((length, Sample { depth: get(dp).unwrap_or(length), qc: q, fs: f, rf: ratio }));
     }
     // The block may hold the rod changes twice and be out of order.
@@ -624,8 +626,9 @@ pub fn parse_bhr(xml: &str) -> Result<Bhr, String> {
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
-    validate_numbers(doc.root_element())?;
-    let obj = first(doc.root_element(), "BHR_GT_O").ok_or("BRO: geen boring (BHR_GT_O) in het antwoord")?;
+    let invalid = "BRO: geen boring (BHR_GT_O) in het antwoord";
+    validate_numbers(doc.root_element()).map_err(|_| invalid.to_string())?;
+    let obj = first(doc.root_element(), "BHR_GT_O").ok_or(invalid)?;
     let point = point_of(obj, false);
     let desc = first(obj, "boreholeSampleDescription");
     // A field log covers the whole boring; a lab log only its samples.
@@ -702,13 +705,15 @@ mod tests {
     }
 
     #[test]
-    fn bro_read_errors_follow_the_selected_language() {
+    fn internal_bro_diagnostics_follow_the_selected_language() {
         let xml = SYNTHETIC_CPT.replace("<pos>100 200</pos>", "<pos>100 broken 200</pos>");
-        let error = parse_cpt(&xml).unwrap_err();
+        let doc = Document::parse(&xml).unwrap();
+        let error = validate_numbers(doc.root_element()).unwrap_err();
         assert!(error.contains(crate::lang::tr("ongeldige locatiecoördinaten", "invalid location coordinates")), "{error}");
-        let xml = SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,broken,0.01,0.5");
-        let error = parse_cpt(&xml).unwrap_err();
-        assert!(error.contains(crate::lang::tr("ongeldige meetwaarde in regel", "invalid measurement on row")), "{error}");
+        let xml = SYNTHETIC_CPT.replace("<offset>1</offset>", "<offset>broken</offset>");
+        let doc = Document::parse(&xml).unwrap();
+        let error = validate_numbers(doc.root_element()).unwrap_err();
+        assert!(error.contains(crate::lang::tr("ongeldig getal in", "invalid number in")), "{error}");
     }
 
     #[test]

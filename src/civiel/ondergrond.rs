@@ -57,14 +57,12 @@ fn layer(ctx: &Ctx, kind: Kind, el: Element) -> Result<LayerSpec, String> {
 
 /// The BRO objects of the project area with their drawing position, nearest
 /// to the centre first; the second value counts what `max` left out.
-fn find(ctx: &Ctx, kind: Kind, max: usize, progress: &dyn Fn(String), warnings: &mut Vec<String>) -> Result<(Vec<(Point, XY)>, usize), String> {
+fn find(ctx: &Ctx, kind: Kind, max: usize, progress: &dyn Fn(String)) -> Result<(Vec<(Point, XY)>, usize), String> {
     let site = ctx.site.clone().ok_or("stel eerst de projectlocatie in (GIS → Locatie, of GIS_SITE)")?;
     let rd = crate::basisdata::rd_bbox(&site)?;
     let ll = crate::gis::site::envelope(rd, &crate::gis::crs::Transformer::new("EPSG:28992", "EPSG:4326")?)?;
     progress(format!("BRO: {}en zoeken…", kind.label()));
     let found = bro::search(kind, ll)?;
-    for warning in &found.warnings { progress(warning.clone()); }
-    warnings.extend(found.warnings);
     let to = crate::gis::vector::data_to_site(&site, "EPSG:28992", &[])?;
     let rect = site.drawing_rect(ctx.f);
     let mut pts: Vec<(Point, XY)> = found.points
@@ -80,10 +78,6 @@ fn find(ctx: &Ctx, kind: Kind, max: usize, progress: &dyn Fn(String), warnings: 
     let cut = pts.len().saturating_sub(max);
     pts.truncate(max);
     Ok((pts, cut))
-}
-
-fn report(message: String, warnings: &[String]) -> String {
-    if warnings.is_empty() { message } else { format!("{message} {}", warnings.join(" ")) }
 }
 
 fn point_data(p: &Point) -> Vec<(&'static str, String)> {
@@ -142,9 +136,8 @@ pub fn overview(opt: &CivielOptions, kinds: &[Kind], progress: &dyn Fn(String)) 
     let mut out = Out::default();
     let mut counts = Vec::new();
     let mut ids = Vec::new();
-    let mut warnings = Vec::new();
     for kind in kinds {
-        let (pts, _) = find(&ctx, *kind, usize::MAX, progress, &mut warnings)?;
+        let (pts, _) = find(&ctx, *kind, usize::MAX, progress)?;
         for (p, at) in &pts {
             plan_symbol(&ctx, p, *at, &mut out)?;
             ids.push(serde_json::json!({"bro_id": p.id, "soort": kind.label(), "maaiveld_m_nap": p.surface, "einddiepte_m": p.end_depth, "datum": p.date}));
@@ -152,12 +145,12 @@ pub fn overview(opt: &CivielOptions, kinds: &[Kind], progress: &dyn Fn(String)) 
         counts.push(format!("{} {}en", pts.len(), kind.label()));
     }
     if ids.is_empty() {
-        return Err(report("geen sonderingen of boringen in de BRO voor het projectgebied (alleen Nederland)".into(), &warnings));
+        return Err("geen sonderingen of boringen in de BRO voor het projectgebied (alleen Nederland)".into());
     }
     let n = out.write("BRO sonderingen en boringen")?;
     crate::bridge::note_source("BRO sonderingen en boringen (TNO / BRO, CC0)");
     super::api::note("objecten", ids);
-    Ok(report(format!("BRO: {} — {n} elementen op MO-ONDERZOEK_SONDERING en _BORING.", counts.join(", ")), &warnings))
+    Ok(format!("BRO: {} — {n} elementen op MO-ONDERZOEK_SONDERING en _BORING.", counts.join(", ")))
 }
 
 /// A vertical prism of `sides` sides from `z_top` down to `z_bottom`
@@ -264,9 +257,8 @@ pub fn columns(opt: &CivielOptions, req: &Request, progress: &dyn Fn(String)) ->
     let mut counts = Vec::new();
     let mut soils: std::collections::BTreeMap<&'static str, f64> = Default::default();
     let mut list = Vec::new();
-    let mut warnings = Vec::new();
     for kind in &req.kinds {
-        let (pts, cut) = find(&ctx, *kind, req.max, progress, &mut warnings)?;
+        let (pts, cut) = find(&ctx, *kind, req.max, progress)?;
         cut_total += cut;
         if pts.is_empty() {
             counts.push(format!("0 {}en", kind.label()));
@@ -325,10 +317,10 @@ pub fn columns(opt: &CivielOptions, req: &Request, progress: &dyn Fn(String)) ->
         counts.push(format!("{k} {}en", kind.label()));
     }
     if made == 0 {
-        return Err(report(match failed.first() {
+        return Err(match failed.first() {
             Some(e) => format!("geen kolommen getekend ({e})"),
             None => "geen sonderingen of boringen in de BRO voor het projectgebied (alleen Nederland)".into(),
-        }, &warnings));
+        });
     }
     progress("Sonderingen in 3D tekenen…".into());
     let n = out.write("BRO sonderingen 3D")?;
@@ -342,13 +334,13 @@ pub fn columns(opt: &CivielOptions, req: &Request, progress: &dyn Fn(String)) ->
     super::api::note("lagen", segs);
     super::api::note("overgeslagen", failed.clone());
     super::api::note("afgekapt", cut_total);
-    Ok(report(format!(
+    Ok(format!(
         "Sonderingen 3D: {} met {segs} lagen ({}){}{} — {n} elementen op MO-ONDERZOEK_SONDERING en _BORING.",
         counts.join(", "),
         mix.join(", "),
         if failed.is_empty() { String::new() } else { format!(", {} overgeslagen", failed.len()) },
         if cut_total > 0 { format!(", {cut_total} verder weg niet getekend (verhoog MAX=)") } else { String::new() },
-    ), &warnings))
+    ))
 }
 
 #[cfg(test)]
