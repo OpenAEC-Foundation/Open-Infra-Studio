@@ -32,7 +32,9 @@ witruimte rond de dimensie en alle tekstdelen rond XML-commentaar. Een
 getal na commentaar mag niet verdwijnen achter een geldig gelezen begin.
 
 Diepe varianten nesten 65 en 256 `CompositeCurve`- of `MultiGeometry`-
-containers rond één lijn. De lezer van main houdt die lijn en het buurpunt
-behouden. De verwerking gebruikt daarom een expliciete werklijst in plaats
-van recursie met een vaste dieptelimiet. De testgevallen volgen de geneste
-geometrietypen uit `geometryAggregates.xsd` en `geometryComplexes.xsd`.
+containers rond één lijn. De lezer van main houdt de lijn en het buurpunt
+bij 65 containers behouden. Bij 256 containers loopt de oude XML-parser
+in de CI over zijn stack. De geometrieverwerking gebruikt een expliciete
+werklijst; de werkstack voor de recursieve XML-bibliotheek groeit mee met
+de vooraf gemeten XML-diepte. De testgevallen volgen de geneste typen uit
+`geometryAggregates.xsd` en `geometryComplexes.xsd`.

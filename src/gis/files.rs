@@ -458,56 +458,157 @@ pub fn gpx(text: &str) -> Result<FileData, String> {
 
 // ── GML (simple features, GML 2 and 3) ─────────────────────────────────────
 
-fn gml_coords(node: roxmltree::Node, dim: usize) -> Vec<XY> {
-    // GML 3: posList / pos (space separated); GML 2: coordinates ("x,y x,y").
-    if let Some(t) = node.descendants().find(|d| d.has_tag_name("posList")).and_then(|n| n.text()) {
-        let d = node.descendants().find(|d| d.has_tag_name("posList")).and_then(|n| n.attribute("srsDimension")).and_then(|v| v.parse().ok()).unwrap_or(dim);
-        let v: Vec<f64> = t.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-        return v.chunks(d.max(2)).filter(|c| c.len() >= 2).map(|c| [c[0], c[1]]).collect();
+fn gml_numbers(text: &str, separator: Option<char>) -> Result<Vec<f64>, String> {
+    text.split(|c: char| separator.map_or_else(|| c.is_whitespace(), |s| c == s)).filter(|t| separator.is_some() || !t.is_empty()).map(|t| {
+        let v = t.trim().parse::<f64>().map_err(|_| format!("GML: ongeldig coördinaatgetal '{t}'"))?;
+        if !v.is_finite() { return Err(format!("GML: niet-eindig coördinaatgetal '{t}'")); }
+        Ok(v)
+    }).collect()
+}
+
+fn gml_dimension(node: roxmltree::Node, fallback: usize) -> Result<usize, String> {
+    match node.ancestors().find_map(|n| n.attribute("srsDimension")) {
+        Some(text) => match text.trim().parse::<usize>() {
+            Ok(d) if d >= 2 => Ok(d),
+            _ => Err(format!("GML: srsDimension '{text}' kan niet naar XY worden gelezen")),
+        },
+        None => Ok(fallback),
     }
-    let pos: Vec<XY> = node
-        .descendants()
-        .filter(|d| d.has_tag_name("pos"))
-        .filter_map(|p| {
-            let v: Vec<f64> = p.text()?.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-            (v.len() >= 2).then(|| [v[0], v[1]])
-        })
-        .collect();
-    if !pos.is_empty() {
-        return pos;
+}
+
+// XML comments can split a simple value into several text nodes. Joining
+// without added whitespace preserves the XML value, including split numbers.
+fn gml_text(node: roxmltree::Node) -> String {
+    node.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect()
+}
+
+fn gml_coords(node: roxmltree::Node, dim: usize) -> Result<Vec<XY>, String> {
+    // GML 3: inherit the nearest dimension from the coordinate or geometry.
+    if let Some(list) = node.descendants().find(|d| d.has_tag_name("posList")) {
+        let d = gml_dimension(list, dim)?;
+        let v = gml_numbers(gml_text(list).trim(), None)?;
+        if v.len() % d != 0 { return Err("GML: onvolledige coördinaat in posList".into()); }
+        return Ok(v.chunks_exact(d).map(|c| [c[0], c[1]]).collect());
     }
-    node.descendants().find(|d| d.has_tag_name("coordinates")).and_then(|c| c.text()).map(kml_coords).unwrap_or_default()
+    let mut pos = Vec::new();
+    for p in node.descendants().filter(|d| d.has_tag_name("pos")) {
+        let v = gml_numbers(gml_text(p).trim(), None)?;
+        let d = gml_dimension(p, v.len())?;
+        if d < 2 || v.len() != d { return Err("GML: onvolledige coördinaat in pos".into()); }
+        pos.push([v[0], v[1]]);
+    }
+    if !pos.is_empty() { return Ok(pos); }
+    // GML 2: x,y[,z] tuples, separated by whitespace.
+    if let Some(c) = node.descendants().find(|d| d.has_tag_name("coordinates")) {
+        let mut dimension = None;
+        return gml_text(c).split_whitespace().map(|tuple| {
+            let v = gml_numbers(tuple, Some(','))?;
+            let d = *dimension.get_or_insert(gml_dimension(c, v.len())?);
+            if d < 2 || v.len() != d { return Err("GML: onvolledige coordinates-tuple".into()); }
+            Ok([v[0], v[1]])
+        }).collect();
+    }
+    Ok(Vec::new())
+}
+
+// A Ring/Curve contains ordered curve parts. Read every supported part before
+// applying any length check; an unhandled part must not become a partial ring.
+fn gml_curve(root: roxmltree::Node) -> Result<Vec<XY>, String> {
+    let mut pending = vec![root];
+    let mut points = Vec::new();
+    while let Some(node) = pending.pop() {
+        let name = node.tag_name().name();
+        if matches!(name, "LineString" | "LineStringSegment" | "LinearRing") {
+            let next = gml_coords(node, 2)?;
+            if next.len() < if name == "LinearRing" { 3 } else { 2 } { return Err(format!("GML: te weinig coördinaten in {name}")); }
+            let shared = points.last().is_some_and(|p| *p == next[0]);
+            if !points.is_empty() && !shared { return Err("GML: curveonderdelen sluiten niet aan".into()); }
+            points.extend(next.into_iter().skip(usize::from(shared)));
+            continue;
+        }
+        let parts: Vec<_> = match name {
+            "Curve" => node.children().find(|n| n.has_tag_name("segments"))
+                .ok_or("GML: Curve zonder segments")?.children().filter(|n| n.is_element()).collect(),
+            "Ring" | "CompositeCurve" => {
+                let mut parts = Vec::new();
+                for member in node.children().filter(|n| n.has_tag_name("curveMember")) {
+                    let part = member.children().find(|n| n.is_element())
+                        .ok_or("GML: curveMember zonder inline curve wordt niet ondersteund")?;
+                    parts.push(part);
+                }
+                if parts.is_empty() { return Err(format!("GML: {name} zonder curveMember")); }
+                parts
+            }
+            _ => return Err(format!("GML: curveonderdeel {name} wordt niet ondersteund")),
+        };
+        // XML nodes form an acyclic tree. An explicit stack keeps arbitrary
+        // nesting off the Rust call stack without imposing a schema limit.
+        pending.extend(parts.into_iter().rev());
+    }
+    Ok(points)
 }
 
 /// The geometry elements directly under a property, read into `f`.
-fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> bool {
-    let name = node.tag_name().name();
-    match name {
-        "Point" => f.points.extend(gml_coords(node, 2).into_iter().take(1)),
-        "LineString" | "Curve" | "LineStringSegment" => f.lines.push((gml_coords(node, 2), false)),
-        "LinearRing" | "Ring" => f.lines.push((gml_coords(node, 2), true)),
-        "Polygon" | "Surface" | "PolygonPatch" => {
-            for r in node.descendants().filter(|d| d.has_tag_name("LinearRing") || d.has_tag_name("Ring")) {
-                f.lines.push((gml_coords(r, 2), true));
+fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> Result<bool, String> {
+    let mut pending = vec![node];
+    let mut recognized = false;
+    while let Some(node) = pending.pop() {
+        let name = node.tag_name().name();
+        match name {
+            "Point" => {
+                let points = gml_coords(node, 2)?;
+                if points.len() != 1 { return Err("GML: Point verwacht één coördinaat".into()); }
+                f.points.extend(points);
             }
-        }
-        "MultiPoint" | "MultiCurve" | "MultiLineString" | "MultiSurface" | "MultiPolygon" | "MultiGeometry" | "CompositeCurve" | "CompositeSurface" => {
-            for m in node.children().filter(|c| c.is_element()) {
+            "LineString" | "Curve" | "LineStringSegment" | "LinearRing" | "Ring" | "CompositeCurve" => {
+                let ring = matches!(name, "LinearRing" | "Ring");
+                let points = gml_curve(node)?;
+                if ring && points.len() < 3 { return Err(format!("GML: te weinig coördinaten in {name}")); }
+                if !points.is_empty() { f.lines.push((points, ring)); }
+            }
+            "Polygon" | "Surface" | "PolygonPatch" => {
+                let rings: Vec<_> = node.descendants().filter(|d| d.has_tag_name("LinearRing") || d.has_tag_name("Ring")).collect();
+                pending.extend(rings.into_iter().rev());
+            }
+            "MultiPoint" | "MultiCurve" | "MultiLineString" | "MultiSurface" | "MultiPolygon" | "MultiGeometry" | "CompositeSurface" => {
                 // pointMember / surfaceMembers: the geometries one level down.
-                for g in m.children().filter(|c| c.is_element()) {
-                    gml_geometry(g, f);
-                }
+                let parts: Vec<_> = node.children().filter(|c| c.is_element()).flat_map(|m| m.children().filter(|c| c.is_element())).collect();
+                pending.extend(parts.into_iter().rev());
             }
+            _ => continue,
         }
-        _ => return false,
+        recognized = true;
     }
-    true
+    Ok(recognized)
 }
 
 /// Features from a GML file: every member of a feature collection (or of a
 /// WFS response) with its geometry and its simple properties. The CRS comes
 /// from the first `srsName`.
 pub fn gml(text: &str) -> Result<FileData, String> {
+    // roxmltree's tokenizer is recursive. Measure nesting with a streaming
+    // parser first, then provide enough stack for deep valid XML instead of
+    // rejecting it at a fixed depth or overflowing the caller's stack.
+    let invalid = || crate::lang::tr("geen tekenbare objecten in het bestand", "no drawable features in the file").to_string();
+    let mut reader = quick_xml::Reader::from_str(text);
+    let (mut depth, mut deepest) = (0usize, 0usize);
+    loop {
+        match reader.read_event().map_err(|_| invalid())? {
+            quick_xml::events::Event::Start(_) => { depth += 1; deepest = deepest.max(depth); }
+            quick_xml::events::Event::End(_) => depth = depth.checked_sub(1).ok_or_else(invalid)?,
+            quick_xml::events::Event::Eof => break,
+            _ => {}
+        }
+    }
+    if deepest <= 64 { return gml_inner(text); }
+    let stack = deepest.checked_mul(32 * 1024).and_then(|size| size.checked_add(2 * 1024 * 1024)).ok_or_else(invalid)?;
+    std::thread::scope(|scope| {
+        let handle = std::thread::Builder::new().stack_size(stack).spawn_scoped(scope, || gml_inner(text)).map_err(|_| invalid())?;
+        handle.join().map_err(|_| invalid())?
+    })
+}
+
+fn gml_inner(text: &str) -> Result<FileData, String> {
     if super::planning::gml::is_imro(text) { return Ok(super::planning::gml::parse(text)?.file_data()); }
     let doc = roxmltree::Document::parse(text).map_err(|e| format!("GML: {e}"))?;
     let root = doc.root_element();
@@ -527,10 +628,16 @@ pub fn gml(text: &str) -> Result<FileData, String> {
         })
         .collect();
     let mut features = Vec::new();
-    for fnode in members {
+    let mut warnings = Vec::new();
+    for (index, fnode) in members.into_iter().enumerate() {
+        let id = fnode.attributes().find(|a| a.name() == "id").map(|a| a.value().to_string());
+        let parsed = (|| -> Result<Feature, String> {
         let mut f = Feature::default();
         for prop in fnode.children().filter(|c| c.is_element()) {
-            let geom = prop.children().filter(|c| c.is_element()).any(|g| gml_geometry(g, &mut f));
+            let mut geom = false;
+            for g in prop.children().filter(|c| c.is_element()) {
+                if gml_geometry(g, &mut f)? { geom = true; break; }
+            }
             if !geom {
                 if let Some(t) = prop.text().map(str::trim).filter(|t| !t.is_empty()) {
                     if prop.children().all(|c| !c.is_element()) {
@@ -539,12 +646,18 @@ pub fn gml(text: &str) -> Result<FileData, String> {
                 }
             }
         }
-        if let Some(id) = fnode.attributes().find(|a| a.name() == "id").map(|a| a.value().to_string()) {
-            f.props.entry("gml_id").or_insert(Value::String(id));
+        if let Some(id) = &id {
+            f.props.entry("gml_id").or_insert(Value::String(id.clone()));
         }
-        features.push(f);
+        Ok(f)
+        })();
+        match parsed {
+            Ok(f) => features.push(f),
+            Err(error) => warnings.push(format!("GML: object {} overgeslagen: {error}", id.unwrap_or_else(|| (index + 1).to_string()))),
+        }
     }
-    Ok(FileData { format: "GML", features, crs, layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
+    let skipped = warnings.len();
+    Ok(FileData { format: "GML", features, crs, layers: Vec::new(), warnings, skipped })
 }
 
 // ── CSV ─────────────────────────────────────────────────────────────────────
@@ -764,7 +877,7 @@ mod tests {
 
     #[test]
     fn gml_deep_curves_and_collections_keep_the_geometry_read_by_main() {
-        for depth in [65] {
+        for depth in [65, 256] {
             for (container, member) in [("CompositeCurve", "curveMember"), ("MultiGeometry", "geometryMember")] {
                 let mut geometry = "<gml:LineString><gml:posList>0 0 10 0</gml:posList></gml:LineString>".to_string();
                 for _ in 0..depth {
