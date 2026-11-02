@@ -368,6 +368,65 @@ fn point_cloud(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Result<St
 mod tests {
     use super::*;
 
+    const ASC: &str = include_str!("../../tests/fixtures/asc/terrain.asc");
+
+    fn asc_error(text: &str) {
+        match read_asc(text) {
+            Err(error) => assert!(error.starts_with("ASC:"), "{error}"),
+            Ok(_) => panic!("ongeldige ASC-invoer geaccepteerd: {text}"),
+        }
+    }
+
+    #[test]
+    fn asc_fixture_preserves_heights_nodata_and_cell_centres() {
+        let grid = read_asc(ASC).unwrap();
+        assert_eq!((grid.w, grid.h, grid.x0, grid.y1, grid.cell), (3, 2, 100.0, 210.0, 5.0));
+        assert_eq!(grid.z.len(), 6);
+        assert_eq!(grid.at(0, 0), Some(1.0));
+        assert_eq!(grid.at(1, 1), None);
+        let centres = ASC.replace("xllcorner 100", "xllcenter 102.5").replace("yllcorner 200", "yllcenter 202.5");
+        let centred = read_asc(&centres).unwrap();
+        assert_eq!((centred.x0, centred.y1), (grid.x0, grid.y1));
+    }
+
+    #[test]
+    fn asc_rejects_invalid_dimensions_without_panicking() {
+        for key in ["ncols 3", "nrows 2"] {
+            for value in ["0", "-1", "0.5", "NaN", "inf", "1e300", "18446744073709551616"] {
+                asc_error(&ASC.replace(key, &format!("{} {value}", key.split_whitespace().next().unwrap())));
+            }
+        }
+    }
+
+    #[test]
+    fn asc_rejects_invalid_georeference_and_overflow() {
+        for cell in ["0", "-1", "NaN", "inf", "1e308"] {
+            asc_error(&ASC.replace("cellsize 5", &format!("cellsize {cell}")));
+        }
+        for key in ["xllcorner 100", "yllcorner 200"] {
+            for value in ["NaN", "inf"] {
+                asc_error(&ASC.replace(key, &format!("{} {value}", key.split_whitespace().next().unwrap())));
+            }
+        }
+    }
+
+    #[test]
+    fn asc_rejects_bad_or_extra_samples_and_float32_overflow() {
+        for row in ["4 bad 6", "4 NaN 6", "4 inf 6", "4 1e100 6", "4 -9999 6 7"] {
+            asc_error(&ASC.replace("4 -9999 6", row));
+        }
+        let large_finite = ASC.replace("4 -9999 6", "4 1e30 6");
+        assert!(read_asc(&large_finite).unwrap().at(1, 1).unwrap().is_finite());
+    }
+
+    #[test]
+    fn asc_rejects_empty_missing_and_truncated_input() {
+        asc_error("");
+        for line in ["ncols 3\n", "nrows 2\n", "cellsize 5\n", "xllcorner 100\n", "yllcorner 200\n", "4 -9999 6\n"] {
+            asc_error(&ASC.replace(line, ""));
+        }
+    }
+
     #[test]
     fn ascii_grids_and_world_files() {
         let g = read_asc("ncols 3\nnrows 2\nxllcorner 100\nyllcorner 200\ncellsize 5\nNODATA_value -9999\n1 2 3\n4 -9999 6\n").unwrap();
