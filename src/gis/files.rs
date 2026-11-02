@@ -233,9 +233,8 @@ impl Wkb<'_> {
 
     /// One geometry into `f`. ISO (1001, 2001, 3001) and EWKB-style flag
     /// dimensions are both read; Z and M are skipped.
-    fn geometry(&mut self, f: &mut Feature, depth: usize) -> Option<()> {
-        if depth > 64 { return None; }
-        let le = match self.u8()? { 0 => false, 1 => true, _ => return None };
+    fn geometry(&mut self, f: &mut Feature) -> Option<()> {
+        let le = self.u8()? == 1;
         let raw = self.u32(le)?;
         let (base, mut dims) = match raw {
             r if r & 0x8000_0000 != 0 || r & 0x4000_0000 != 0 => (r & 0xFFFF, 2 + (r & 0x8000_0000 != 0) as usize + (r & 0x4000_0000 != 0) as usize),
@@ -257,17 +256,13 @@ impl Wkb<'_> {
         };
         let line = |w: &mut Self| -> Option<Vec<XY>> {
             let n = w.u32(le)? as usize;
-            if n.checked_mul(dims * 8)? > w.b.len().saturating_sub(w.i) { return None; }
-            let points: Vec<XY> = (0..n).map(|_| point(w)).collect::<Option<_>>()?;
-            points.iter().flatten().all(|v| v.is_finite()).then_some(points)
+            (0..n).map(|_| point(w)).collect()
         };
         match base {
             1 => {
                 let p = point(self)?;
                 if p[0].is_finite() && p[1].is_finite() {
                     f.points.push(p);
-                } else if !p.iter().all(|v| v.is_nan()) {
-                    return None;
                 }
             }
             2 => {
@@ -283,9 +278,8 @@ impl Wkb<'_> {
             }
             4..=7 => {
                 let n = self.u32(le)?;
-                if n as usize > self.b.len().saturating_sub(self.i) / 5 { return None; }
                 for _ in 0..n {
-                    self.geometry(f, depth + 1)?;
+                    self.geometry(f)?;
                 }
             }
             _ => return None,
@@ -297,28 +291,18 @@ impl Wkb<'_> {
 /// A GeoPackage geometry blob: the `GP` header (with an optional envelope),
 /// then standard WKB.
 pub fn gpkg_geometry(blob: &[u8], f: &mut Feature) -> bool {
-    let bytes = if blob.starts_with(b"GP") {
-        if blob.len() < 8 || blob[2] != 0 || blob[3] & 0b1110_0000 != 0 { return false; }
-        let envelope = match (blob[3] >> 1) & 0b111 {
-            0 => 0,
-            1 => 32,
-            2 | 3 => 48,
-            4 => 64,
-            _ => return false,
-        };
-        let Some(bytes) = blob.get(8 + envelope..) else { return false };
-        bytes
-    } else {
-        blob
+    if blob.len() < 8 || &blob[0..2] != b"GP" {
+        return Wkb { b: blob, i: 0 }.geometry(f).is_some();
+    }
+    let flags = blob[3];
+    let envelope = match (flags >> 1) & 0b111 {
+        1 => 32,
+        2 | 3 => 48,
+        4 => 64,
+        _ => 0,
     };
-    // Commit only a complete geometry; a broken later member must not leave
-    // an earlier member in the caller's feature.
-    let mut parsed = Feature::default();
-    let mut wkb = Wkb { b: bytes, i: 0 };
-    if wkb.geometry(&mut parsed, 0).is_none() || wkb.i != bytes.len() { return false; }
-    f.points.extend(parsed.points);
-    f.lines.extend(parsed.lines);
-    true
+    let start = 8 + envelope;
+    blob.get(start..).is_some_and(|b| Wkb { b, i: 0 }.geometry(f).is_some())
 }
 
 pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> {
@@ -349,11 +333,7 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
             let v = row.get_ref(i).map_err(err)?;
             if i == gi {
                 if let ValueRef::Blob(b) = v {
-                    if !gpkg_geometry(b, &mut f) {
-                        return Err(format!("GeoPackage: ongeldige geometrie in laag {table}, rij {}", features.len() + 1));
-                    }
-                } else if !matches!(v, ValueRef::Null) {
-                    return Err(format!("GeoPackage: geometrie is geen blob in laag {table}, rij {}", features.len() + 1));
+                    gpkg_geometry(b, &mut f);
                 }
                 continue;
             }
