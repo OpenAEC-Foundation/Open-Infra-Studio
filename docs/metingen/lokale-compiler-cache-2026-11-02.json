@@ -195,5 +195,79 @@
         "effective_cache_mode": "ReadWrite"
       }
     }
-  ]
+  ],
+  "script_validation": {
+    "head": "d16802095ab49c71162c29e78bd8d6fb0c371ca3",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "jobs": 2,
+    "exit": 0,
+    "time": "elapsed_s=20.59\nmax_rss_kib=1386840\nexit=0\n",
+    "library_bytes": 190947392,
+    "library_sha256": "4975a462cad0a7a4d383e57296744fbe9ebf4bd774e6b5c6e015aa36f340c739",
+    "plugin_symbols": [
+      "ocs_plugin_api_version",
+      "ocs_plugin_register"
+    ],
+    "stats": {
+      "stats": {
+        "compile_requests": 0,
+        "requests_unsupported_compiler": 0,
+        "requests_not_compile": 0,
+        "requests_not_cacheable": 3,
+        "requests_executed": 0,
+        "cache_errors": {
+          "counts": {},
+          "adv_counts": {}
+        },
+        "cache_hits": {
+          "counts": {},
+          "adv_counts": {}
+        },
+        "cache_misses": {
+          "counts": {},
+          "adv_counts": {}
+        },
+        "cache_timeouts": 0,
+        "cache_read_errors": 0,
+        "non_cacheable_compilations": 0,
+        "forced_recaches": 0,
+        "cache_write_errors": 0,
+        "cache_writes": 0,
+        "cache_write_duration": {
+          "secs": 0,
+          "nanos": 0
+        },
+        "cache_read_hit_duration": {
+          "secs": 0,
+          "nanos": 0
+        },
+        "compilations": 0,
+        "compiler_write_duration": {
+          "secs": 0,
+          "nanos": 0
+        },
+        "compile_fails": 0,
+        "not_cached": {
+          "-": 1,
+          "missing input": 1,
+          "crate-type (cdylib)": 1
+        },
+        "dist_compiles": {},
+        "dist_errors": 0,
+        "multi_level": null
+      },
+      "cache_location": "Local disk: \"/tmp/ois-sccache-cache\"",
+      "cache_size": null,
+      "max_cache_size": 10737418240,
+      "use_preprocessor_cache_mode": true,
+      "version": "0.19.0",
+      "basedirs": [],
+      "effective_cache_mode": "ReadWrite"
+    },
+    "loaded_api_version": 13,
+    "source_tree": "185fe30de18d8a7d28f0ff3a5ce1c5571cb4923d",
+    "command": "CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/ois-compile-evidence/line-tables-repeat/target ./scripts/build.sh --locked --offline -p open-infra --timings",
+    "cache_wrapper_selected_from_path": true,
+    "helper_sha256": "d53e56af71dcac0fa0cb0984b6ada38add017d91e6f5b71035b5c2e6b33adfc2"
+  }
 }

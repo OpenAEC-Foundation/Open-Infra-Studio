@@ -104,3 +104,57 @@ Ze controleren het ontbreken van sccache, aanwezige sccache, expliciete wrappers
 en opt-out, bestaande cacheopties, argumenten met spaties en een Cargo-fout met
 exitcode 42. Deze shellcontrole vraagt POSIX met Bash en dirname; op andere
 omgevingen wordt hij expliciet overgeslagen.
+
+De echte scriptversie op head `d16802095ab49c71162c29e78bd8d6fb0c371ca3`
+is aanvullend met de echte Rust-compiler en een beschikbare sccache uitgevoerd:
+`CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/ois-compile-evidence/line-tables-repeat/target ./scripts/build.sh --locked --offline -p open-infra --timings`.
+De doelmap bevatte dependencies van eerdere proeven. Resultaat: 20,59 s, exit 0;
+`nm` toont `ocs_plugin_api_version` en `ocs_plugin_register`. De library laadt
+met `ctypes.CDLL` en geeft plug-in-API-versie 13 terug. Dit bewijst de echte
+buildroute, niet een extra snelheidsvergelijking. Deze aanvullende bronboom
+bevat de latere main-wijzigingen en is daarom niet bytegelijk vergeleken met de
+oudere meetcommit. De ruwe JSON bevat deze controle apart. De tijdelijke
+cacheserver is na de aanroep gestopt.
+
+## Andere onderzochte compilerinstellingen
+
+Dezelfde vaste broncommit is daarna zonder compiler-cache opnieuw gebouwd met
+expliciete globale `CARGO_PROFILE_DEV_CODEGEN_UNITS`-waarden en met de normale
+Cargo-standaard. Per variant: één schone build, één ongewijzigde build en drie
+kleine wijzigingen in dezelfde bestaande functie. Alle twintig aanroepen:
+exit 0. Het bronbestand is na elke variant exact hersteld.
+
+| Instelling | Schoon | Mediaan van drie kleine wijzigingen |
+| --- | ---: | ---: |
+| Normale Cargo-standaard, geen override | 268,62 s | 4,52 s |
+| Globaal 128 eenheden | 304,70 s | 4,19 s |
+| Globaal 256 eenheden | 299,85 s | 5,68 s |
+| Globaal 512 eenheden | 298,16 s | 4,35 s |
+
+Een expliciete globale waarde is niet gelijk aan de normale standaard. Cargo
+gebruikt verschillende aantallen voor incrementele en niet-incrementele crates;
+zie de [Cargo-profielen](https://doc.rust-lang.org/cargo/reference/profiles.html#codegen-units).
+De normale `acadrust`-rlib bevat hier 16 objectbestanden; de expliciete varianten
+maken respectievelijk 128, 256 en 512 objectbestanden in die dependencyvariant.
+De globale wijziging raakt dus ook dependencies. De kleine incrementele winst
+bij 128 staat hier tegenover een duidelijk langere schone build. Deze reeks
+onderbouwt geen extra globale override; de repository houdt de Cargo-standaard.
+Volgorde en gedeelde machine kunnen de getallen beïnvloeden.
+
+De ruwe metingen staan in
+[`metingen/codegen-onderzoek-2026-11-02.json`](metingen/codegen-onderzoek-2026-11-02.json).
+Een eerdere standaardcontrole is afgebroken doordat de procesbewaking een
+Python-testsimulatie van Cargo als compilerwerk zag. Die proef telt niet mee;
+de procesherkenning is gecorrigeerd en de standaardcontrole is vanaf een lege
+doelmap geheel herhaald.
+
+De lokale library vermeldt al `Linker: LLD 23.1.1` in `readelf -p .comment`.
+Er is daarom geen veronderstelde versnelling door alleen op LLD over te stappen.
+Een afzonderlijke mold-vergelijking is niet uitgevoerd.
+
+Ook `cargo build --workspace --locked --offline` is op de vaste broncommit
+uitgevoerd: exit 101, met dubbele `ocs_plugin_api_version`- en
+`ocs_plugin_register`-symbolen. De bestaande afzonderlijke GIS- en Civiel-builds
+blijven nodig. Een engine-/pluginherstructurering moet de binaire uitvoer en het
+laden in de host apart laten controleren; die wijziging is niet in dit script
+opgenomen. Optimalisatieniveau, features, hostpin en releaseprofiel blijven staan.
