@@ -19,13 +19,23 @@ pub struct FileData {
     pub crs: Option<String>,
     /// Layers in a GeoPackage (the one read is the first, or the asked one).
     pub layers: Vec<String>,
-    /// Internal read diagnostics; never attributes or automatic UI messages.
+    /// Read diagnostics, kept separate from object attributes.
     pub warnings: Vec<String>,
     /// Source objects omitted while keeping the rest of the file readable.
     pub skipped: usize,
 }
 
 impl FileData {
+    /// Existing CSV/IMRO notices may be displayed while their wording awaits
+    /// approval. Other readers retain their diagnostics only in the result.
+    pub fn import_warnings(&self) -> &[String] {
+        if matches!(self.format, "CSV" | "IMRO") { &self.warnings } else { &[] }
+    }
+    pub fn report(&self, message: impl Into<String>) -> String {
+        let message = message.into();
+        let warnings = self.import_warnings();
+        if warnings.is_empty() { message } else { format!("{message} {}", warnings.join(" ")) }
+    }
     /// Coordinate bounds of all features (file CRS).
     pub fn bounds(&self) -> Option<[f64; 4]> {
         let mut b = [f64::MAX, f64::MAX, f64::MIN, f64::MIN];
@@ -712,6 +722,7 @@ fn split_line(line: &str, sep: char) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     let mut quoted = false;
+    let mut quoted_field = false;
     let mut chars = line.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
@@ -719,13 +730,64 @@ fn split_line(line: &str, sep: char) -> Vec<String> {
                 cur.push('"');
                 chars.next();
             }
-            '"' => quoted = !quoted,
-            c if c == sep && !quoted => out.push(std::mem::take(&mut cur)),
+            '"' => {
+                if !quoted && cur.trim().is_empty() { quoted_field = true; cur.clear(); }
+                quoted = !quoted;
+            }
+            c if c == sep && !quoted => {
+                out.push(if quoted_field { std::mem::take(&mut cur) } else { std::mem::take(&mut cur).trim().to_string() });
+                quoted_field = false;
+            }
+            c if quoted_field && !quoted && c.is_whitespace() => {}
             c => cur.push(c),
         }
     }
-    out.push(cur);
-    out.into_iter().map(|s| s.trim().to_string()).collect()
+    out.push(if quoted_field { cur } else { cur.trim().to_string() });
+    out
+}
+
+/// Complete records with their physical start line. Keep newlines inside
+/// quoted fields verbatim. Unterminated input falls back to main's physical
+/// line handling so a malformed note cannot consume later valid points.
+fn csv_records<'a>(text: &'a str, sep: char, warnings: &mut Vec<String>) -> Vec<(usize, &'a str)> {
+    let mut records = Vec::new();
+    let (mut start, mut start_line, mut line) = (0usize, 1usize, 1usize);
+    let (mut quoted, mut field_start) = (false, true);
+    let mut chars = text.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '"' if quoted => {
+                if chars.peek().is_some_and(|(_, c)| *c == '"') { chars.next(); }
+                else { quoted = false; }
+            }
+            '"' if field_start => { quoted = true; field_start = false; }
+            '\r' | '\n' => {
+                let end = if c == '\r' && chars.peek().is_some_and(|(_, c)| *c == '\n') {
+                    chars.next(); i + 2
+                } else { i + 1 };
+                line += 1;
+                if !quoted {
+                    let record = &text[start..i];
+                    if !record.trim().is_empty() { records.push((start_line, record)); }
+                    start = end;
+                    start_line = line;
+                    field_start = true;
+                }
+            }
+            c if c == sep && !quoted => field_start = true,
+            c if !quoted && !c.is_whitespace() => field_start = false,
+            _ => {}
+        }
+    }
+    if quoted {
+        warnings.push(format!("CSV: {} {start_line}; {}",
+            crate::lang::tr("niet afgesloten aangehaald veld vanaf regel", "unterminated quoted field starting on line"),
+            crate::lang::tr("resterende regels afzonderlijk gelezen", "remaining lines read separately")));
+        records.extend(text[start..].lines().enumerate().filter(|(_, record)| !record.trim().is_empty()).map(|(i, record)| (start_line + i, record)));
+    } else if !text[start..].trim().is_empty() {
+        records.push((start_line, &text[start..]));
+    }
+    records
 }
 
 fn number(s: &str) -> Option<f64> {
@@ -736,10 +798,12 @@ fn number(s: &str) -> Option<f64> {
 /// Points from a table with coordinate columns: x/y, easting/northing,
 /// lon/lat (also Dutch names). `;`, tab or `,` separated.
 pub fn csv(text: &str) -> Result<FileData, String> {
-    let mut lines = text.lines().filter(|l| !l.trim().is_empty());
-    let head = lines.next().ok_or("CSV: empty file")?;
+    let head = text.lines().find(|line| !line.trim().is_empty()).ok_or("CSV: empty file")?;
     let sep = [';', '\t', ','].into_iter().max_by_key(|s| head.matches(*s).count()).unwrap_or(',');
-    let cols: Vec<String> = split_line(head, sep).into_iter().map(|c| c.trim_start_matches('\u{feff}').to_string()).collect();
+    let mut warnings = Vec::new();
+    let mut records = csv_records(text, sep, &mut warnings).into_iter();
+    let (_, head) = records.next().ok_or("CSV: empty file")?;
+    let cols: Vec<String> = split_line(head, sep).into_iter().map(|c| c.trim().trim_start_matches('\u{feff}').to_string()).collect();
     let find = |names: &[&str]| cols.iter().position(|c| names.iter().any(|n| c.eq_ignore_ascii_case(n)));
     let (ix, iy, geographic) = if let (Some(x), Some(y)) = (find(&["lon", "lng", "long", "longitude", "lengtegraad"]), find(&["lat", "latitude", "breedtegraad"])) {
         (x, y, true)
@@ -749,9 +813,16 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         return Err(format!("CSV: no coordinate columns (x/y, easting/northing or lon/lat) in {}", cols.join(", ")));
     };
     let mut features = Vec::new();
-    for line in lines {
+    let mut skipped = 0;
+    for (line_number, line) in records {
         let vals = split_line(line, sep);
-        let (Some(x), Some(y)) = (vals.get(ix).and_then(|v| number(v)), vals.get(iy).and_then(|v| number(v))) else { continue };
+        let coordinate = |index: usize| {
+            vals.get(index).and_then(|v| number(v)).filter(|v| v.is_finite()).ok_or_else(|| format!("CSV: {} {line_number}: {} {}; {}", crate::lang::tr("regel", "line"), crate::lang::tr("ontbrekende of ongeldige coördinaat in kolom", "missing or invalid coordinate in column"), cols[index], crate::lang::tr("rij overgeslagen", "row skipped")))
+        };
+        let (x, y) = match coordinate(ix).and_then(|x| coordinate(iy).map(|y| (x, y))) {
+            Ok(xy) => xy,
+            Err(error) => { skipped += 1; warnings.push(error); continue; }
+        };
         let mut f = Feature { points: vec![[x, y]], ..Default::default() };
         for (i, c) in cols.iter().enumerate() {
             if i != ix && i != iy {
@@ -762,12 +833,52 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
+    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings, skipped })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sol_csv_multiline_note_preserves_both_points_full_text_and_no_warnings() {
+        let text = "x,y,note\n100,200,\"put\nwest\"\n110,220,normaal";
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+        assert_eq!(data.features[0].props["note"], "put\nwest");
+        assert_eq!(data.features[1].props["note"], "normaal");
+        assert!(data.warnings.is_empty(), "geen onterechte waarschuwing voor west: {:?}", data.warnings);
+    }
+
+    #[test]
+    fn csv_unterminated_note_diagnostic_does_not_count_a_skipped_point() {
+        let data = csv("x,y,note\n100,200,\"unfinished\n110,220,normaal\n").unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+        assert_eq!(data.warnings.len(), 1);
+        assert_eq!(data.skipped, 0);
+    }
+
+    #[test]
+    fn csv_import_reporting_keeps_other_readers_diagnostics_internal() {
+        let csv_data = csv("x,y\n100,200\nbad,220\n").unwrap();
+        assert_eq!(csv_data.skipped, 1);
+        assert!(csv_data.report("CSV gelezen").contains(&csv_data.warnings[0]));
+
+        let generic = gml(include_str!("../../tests/fixtures/gml/mixed.gml")).unwrap();
+        assert_eq!((generic.features.len(), generic.skipped, generic.warnings.len()), (1, 1, 1));
+        assert_eq!(generic.report("GML gelezen"), "GML gelezen");
+        assert!(generic.import_warnings().is_empty());
+    }
+
+    #[test]
+    fn csv_reporting_route_preserves_the_existing_imro_notice() {
+        let text = include_str!("../../tests/fixtures/planning/synthetic-imro.gml").replace("<imro:geometrie xlink:href=\"#polygon\"/>", "");
+        let data = gml(&text).unwrap();
+        assert_eq!(data.format, "IMRO");
+        assert!(!data.features.is_empty());
+        assert!(data.warnings.iter().any(|w| w == "zone: geen tekenbare geometrie"));
+        assert!(data.report("IMRO gelezen").contains("zone: geen tekenbare geometrie"));
+    }
 
     const GML: &str = include_str!("../../tests/fixtures/gml/features.gml");
 
@@ -1453,5 +1564,80 @@ mod tests {
         let d = geojson(br#"{"type":"FeatureCollection","crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:EPSG::28992"}},"features":[{"type":"Feature","properties":{"a":1},"geometry":{"type":"Point","coordinates":[1,2]}}]}"#).unwrap();
         assert_eq!(d.crs.as_deref(), Some("EPSG:28992"));
         assert_eq!(d.features[0].points[0], [1.0, 2.0]);
+    }
+
+    #[test]
+    fn csv_multiline_records_keep_the_points_read_by_main() {
+        let text = include_str!("../../tests/fixtures/csv/multiline.csv");
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+    }
+
+    #[test]
+    fn csv_multiline_records_preserve_the_whole_quoted_attribute() {
+        for newline in ["\n", "\r\n"] {
+            let text = include_str!("../../tests/fixtures/csv/multiline.csv").replace('\n', newline);
+            let data = csv(&text).unwrap();
+            assert_eq!(data.features.len(), 2);
+            assert_eq!(data.features[0].props["note"], format!("put{newline}west"));
+            assert!(data.warnings.is_empty());
+            let text = text.replace(&format!("put{newline}west"), &format!("put{newline}{newline}\"\"west\"\", vijf"));
+            let data = csv(&text).unwrap();
+            assert_eq!(data.features[0].props["note"], format!("put{newline}{newline}\"west\", vijf"));
+            assert_eq!(data.features[1].points, vec![[110.0, 220.0]]);
+            assert!(data.warnings.is_empty());
+        }
+    }
+
+    #[test]
+    fn csv_multiline_records_report_the_physical_start_line_of_a_bad_record() {
+        let text = "\nx,y,note\n100,200,\"put\nwest\"\nbad,220,kapot\n110,220,normaal\n";
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains(crate::lang::tr("regel 5", "line 5")));
+    }
+
+    #[test]
+    fn csv_unterminated_quotes_keep_the_points_read_by_main() {
+        for note in ["text\"", "\"unfinished"] {
+            let data = csv(&format!("x,y,note\n100,200,{note}\n110,220,normaal\n")).unwrap();
+            assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+        }
+    }
+
+    #[test]
+    fn csv_fixture_preserves_decimal_commas_quotes_and_optional_fields() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/csv/points.csv");
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].points[0], [100.25, 200.5]);
+        assert_eq!(data.features[1].props["type"], "boom; groot");
+        assert_eq!(data.crs, None);
+        assert_eq!(csv("lon,lat\n4.6,51.8\n").unwrap().crs.as_deref(), Some("EPSG:4326"));
+        assert_eq!(csv("x;y;name\n1;2\n").unwrap().features[0].points[0], [1.0, 2.0]);
+    }
+
+    #[test]
+    fn csv_keeps_good_rows_and_reports_bad_or_nonfinite_coordinates() {
+        for row in ["p2;bad;220;tree", "p2;NaN;220;tree", "p2;110;inf;tree", "p2;1e999;220;tree", "p2;110", "p2;;220;tree"] {
+            let text = format!("id;x;y;type\np1;100;200;put\n{row}\n");
+            let data = csv(&text).unwrap();
+            assert_eq!(data.features.len(), 1, "{row}");
+            assert_eq!(data.features[0].points, vec![[100.0, 200.0]]);
+            assert_eq!(data.warnings.len(), 1);
+            assert!(data.warnings[0].starts_with("CSV:") && data.warnings[0].contains(crate::lang::tr("regel 3", "line 3")));
+            assert!(data.report("1 object gelezen").contains(&data.warnings[0]));
+        }
+    }
+
+    #[test]
+    fn csv_handles_empty_missing_columns_and_large_finite_coordinates() {
+        for text in ["", "\n", "id;name\np1;tree\n"] {
+            assert!(csv(text).is_err());
+        }
+        assert!(csv("x;y\n").unwrap().features.is_empty());
+        let large = csv("x;y\n1e100;-1e100\n").unwrap();
+        assert_eq!(large.features[0].points[0], [1e100, -1e100]);
     }
 }

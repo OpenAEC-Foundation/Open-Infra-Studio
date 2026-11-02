@@ -3,6 +3,7 @@
 //! northing before easting.
 
 use std::f64::consts::PI;
+use std::collections::HashMap;
 
 use ocs_plugin_api::host::codec::EntityType;
 
@@ -22,6 +23,14 @@ pub struct LandXml {
     /// Name and triangles (easting, northing, height in metres).
     pub surfaces: Vec<(String, Vec<[P3; 3]>)>,
     pub alignments: Vec<XmlAlignment>,
+    /// Objects that could not be read; unrelated objects remain available.
+    pub warnings: Vec<String>,
+}
+
+impl LandXml {
+    fn report(&self, message: String) -> String {
+        if self.warnings.is_empty() { message } else { format!("{message} {}", self.warnings.join(" ")) }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -45,14 +54,42 @@ fn children<'a, 'i>(n: roxmltree::Node<'a, 'i>, name: &'static str) -> impl Iter
     n.children().filter(move |c| c.is_element() && local(c) == name)
 }
 
-fn numbers(s: &str) -> Vec<f64> {
-    s.split(|c: char| c.is_whitespace() || c == ',').filter(|t| !t.is_empty()).filter_map(|t| t.parse().ok()).collect()
+fn numbers(s: &str, unit: f64) -> Result<Vec<f64>, String> {
+    s.split(|c: char| c.is_whitespace() || c == ',').filter(|t| !t.is_empty()).map(|t| {
+        let value = t.parse::<f64>().map_err(|_| format!("LandXML: ongeldig getal '{t}'"))? * unit;
+        if !value.is_finite() { return Err(format!("LandXML: niet-eindig getal '{t}' na eenhedenconversie")); }
+        Ok(value)
+    }).collect()
 }
 
-/// "N E" in a node's text → [E, N] in metres.
-fn en(n: Option<roxmltree::Node>, unit: f64) -> Option<XY> {
-    let v = numbers(n?.text()?);
-    (v.len() >= 2).then(|| [v[1] * unit, v[0] * unit])
+fn point_values<'a, 'i>(n: roxmltree::Node<'a, 'i>, unit: f64, points: &HashMap<String, roxmltree::Node<'a, 'i>>, depth: usize) -> Result<Vec<f64>, String> {
+    // PointType permits text and pntRef together. The text supplies the
+    // location; consult the reference only when no coordinate text exists.
+    let text = n.text().unwrap_or("");
+    if !text.trim().is_empty() { return numbers(text, unit); }
+    if depth > 64 { return Err("LandXML: puntverwijzing te diep of cyclisch".into()); }
+    if let Some(reference) = n.attribute("pntRef") {
+        let reference = reference.trim();
+        let target = points.get(reference).ok_or_else(|| format!("LandXML: onbekende puntverwijzing '{reference}'"))?;
+        return point_values(*target, unit, points, depth + 1);
+    }
+    numbers(text, unit)
+}
+
+/// "N E" or a point reference → [E, N] in metres.
+fn en<'a, 'i>(n: Option<roxmltree::Node<'a, 'i>>, unit: f64, points: &HashMap<String, roxmltree::Node<'a, 'i>>) -> Result<Option<XY>, String> {
+    let Some(n) = n else { return Ok(None) };
+    let v = point_values(n, unit, points, 0)?;
+    if !(2..=3).contains(&v.len()) { return Err(format!("LandXML: {} verwacht twee of drie coördinaten", local(&n))); }
+    Ok(Some([v[1], v[0]]))
+}
+
+fn number_attr(n: roxmltree::Node, name: &str, unit: f64) -> Result<Option<f64>, String> {
+    n.attribute(name).map(|text| {
+        let value = text.trim().parse::<f64>().map_err(|_| format!("LandXML: ongeldig {name}: '{text}'"))? * unit;
+        if !value.is_finite() { return Err(format!("LandXML: niet-eindig {name}")); }
+        Ok(value)
+    }).transpose()
 }
 
 fn unit_of(name: &str) -> f64 {
@@ -98,33 +135,46 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
         }
     }
     let unit = out.unit;
-    // Points.
-    for set in children(root, "CgPoints") {
-        for p in set.descendants().filter(|n| n.is_element() && local(n) == "CgPoint") {
-            let v = numbers(p.text().unwrap_or(""));
-            if v.len() < 2 {
-                continue;
-            }
-            let name = p.attribute("name").or(p.attribute("oID")).unwrap_or("").to_string();
-            let code = p.attribute("code").or(p.attribute("desc")).unwrap_or("").to_string();
-            out.points.push(SurveyPoint {
-                name: if name.is_empty() { (out.points.len() + 1).to_string() } else { name },
-                e: v[1] * unit,
-                n: v[0] * unit,
-                z: v.get(2).map(|z| z * unit),
-                code,
-            });
+    // Index all point definitions first, including those after a reference.
+    let survey_points: Vec<_> = children(root, "CgPoints").flat_map(|set| set.descendants().filter(|n| n.is_element() && local(n) == "CgPoint")).collect();
+    let mut points = HashMap::new();
+    for p in &survey_points {
+        if let Some(name) = p.attribute("name").or(p.attribute("oID")) {
+            points.entry(name.trim().to_string()).or_insert(*p);
         }
+    }
+    // Points. A group's unnamed reference is membership, not another point.
+    for p in survey_points {
+        let parsed = (|| -> Result<(), String> {
+        let v = point_values(p, unit, &points, 0)?;
+        if !(2..=3).contains(&v.len()) {
+            return Err("LandXML: CgPoint verwacht twee of drie coördinaten".into());
+        }
+        let name = p.attribute("name").or(p.attribute("oID")).unwrap_or("").to_string();
+        if p.attribute("pntRef").is_some() && name.is_empty() && p.text().is_none_or(|text| text.trim().is_empty()) { return Ok(()); }
+        let code = p.attribute("code").or(p.attribute("desc")).unwrap_or("").to_string();
+        out.points.push(SurveyPoint {
+            name: if name.is_empty() { (out.points.len() + 1).to_string() } else { name },
+            e: v[1],
+            n: v[0],
+            z: v.get(2).copied(),
+            code,
+        });
+        Ok(())
+        })();
+        if let Err(error) = parsed { out.warnings.push(format!("LandXML: CgPoint {} overgeslagen: {error}", p.attribute("name").or(p.attribute("pntRef")).unwrap_or("zonder naam"))); }
     }
     // Surfaces: points by id, faces by three ids; i="1" faces are invisible.
     for surf in root.descendants().filter(|n| n.is_element() && local(n) == "Surface") {
         let Some(def) = child(surf, "Definition") else { continue };
+        let parsed = (|| -> Result<(), String> {
         let mut ids = std::collections::HashMap::new();
         if let Some(pnts) = child(def, "Pnts") {
             for p in children(pnts, "P") {
-                let v = numbers(p.text().unwrap_or(""));
-                if let (Some(id), true) = (p.attribute("id"), v.len() >= 3) {
-                    ids.insert(id.to_string(), [v[1] * unit, v[0] * unit, v[2] * unit]);
+                let v = point_values(p, unit, &points, 0)?;
+                if v.len() != 3 { return Err("LandXML: TIN-punt verwacht drie coördinaten".into()); }
+                if let Some(id) = p.attribute("id") {
+                    ids.insert(id.to_string(), [v[1], v[0], v[2]]);
                 }
             }
         }
@@ -145,20 +195,27 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
         if !faces.is_empty() {
             out.surfaces.push((surf.attribute("name").unwrap_or("Oppervlak").to_string(), faces));
         }
+        Ok(())
+        })();
+        if let Err(error) = parsed { out.warnings.push(format!("LandXML: Surface {} overgeslagen: {error}", surf.attribute("name").unwrap_or("zonder naam"))); }
     }
     // Alignments.
     for al in root.descendants().filter(|n| n.is_element() && local(n) == "Alignment") {
         let Some(geom) = child(al, "CoordGeom") else { continue };
+        let parsed = (|| -> Result<(), String> {
         let mut segs = Vec::new();
         let mut spirals = 0;
         for g in geom.children().filter(|c| c.is_element()) {
-            let start = en(child(g, "Start"), unit);
-            let end = en(child(g, "End"), unit);
+            if !matches!(local(&g), "Line" | "Curve" | "Spiral") { continue; }
+            let start = en(child(g, "Start"), unit, &points)?;
+            let end = en(child(g, "End"), unit, &points)?;
+            if start.is_none() || end.is_none() { return Err(format!("LandXML: {} zonder Start of End", local(&g))); }
             match (local(&g), start, end) {
                 ("Line", Some(a), Some(b)) => segs.push(Seg::Line { a, b }),
                 ("Curve", Some(a), Some(b)) => {
-                    let Some(c) = en(child(g, "Center"), unit) else { continue };
+                    let c = en(child(g, "Center"), unit, &points)?.ok_or("LandXML: Curve zonder Center")?;
                     let r = (a[0] - c[0]).hypot(a[1] - c[1]);
+                    if !r.is_finite() || r <= 0.0 { return Err("LandXML: ongeldige boogstraal".into()); }
                     let a0 = (a[1] - c[1]).atan2(a[0] - c[0]);
                     let a1 = (b[1] - c[1]).atan2(b[0] - c[0]);
                     let ccw = g.attribute("rot") != Some("cw");
@@ -172,23 +229,25 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
                 }
                 ("Spiral", Some(a), Some(b)) => {
                     // From the start towards the PI; curvature from radiusStart
-                    // to radiusEnd ("INF" is straight).
-                    let len: f64 = g.attribute("length").and_then(|v| v.parse().ok()).map(|l: f64| l * unit).unwrap_or_else(|| (b[0] - a[0]).hypot(b[1] - a[1]));
-                    let pi = en(child(g, "PI"), unit).unwrap_or(b);
+                    // to radiusEnd ("INF" and "-INF" are straight).
+                    let len = number_attr(g, "length", unit)?.unwrap_or_else(|| (b[0] - a[0]).hypot(b[1] - a[1]));
+                    if !len.is_finite() || len <= 0.0 { return Err("LandXML: ongeldige spiraallengte".into()); }
+                    let pi = en(child(g, "PI"), unit, &points)?.unwrap_or(b);
                     let dir = (pi[1] - a[1]).atan2(pi[0] - a[0]);
                     let left = if g.attribute("rot") == Some("cw") { -1.0 } else { 1.0 };
-                    let k = |attr: &str| -> f64 {
+                    let k = |attr: &str| -> Result<f64, String> {
                         match g.attribute(attr).map(str::trim) {
-                            None => 0.0,
-                            Some(v) if v.eq_ignore_ascii_case("INF") => 0.0,
-                            Some(v) => v.parse::<f64>().map(|r| if r.abs() > 1e-9 { left / (r * unit) } else { 0.0 }).unwrap_or(0.0),
+                            None => Ok(0.0),
+                            Some(v) if v.eq_ignore_ascii_case("INF") || v.eq_ignore_ascii_case("-INF") || v.eq_ignore_ascii_case("+INF") => Ok(0.0),
+                            Some(_) => Ok(number_attr(g, attr, unit)?.filter(|r| r.abs() > 1e-9).map(|r| left / r).unwrap_or(0.0)),
                         }
                     };
-                    let pts = spiral_points(a, dir, len, k("radiusStart"), k("radiusEnd"));
+                    let pts = spiral_points(a, dir, len, k("radiusStart")?, k("radiusEnd")?);
                     // Close the small integration gap on the given end point.
                     let gap = [b[0] - pts[pts.len() - 1][0], b[1] - pts[pts.len() - 1][1]];
                     let n = pts.len() - 1;
                     let pts: Vec<XY> = pts.iter().enumerate().map(|(i, p)| [p[0] + gap[0] * i as f64 / n as f64, p[1] + gap[1] * i as f64 / n as f64]).collect();
+                    if !pts.iter().flatten().all(|v| v.is_finite()) { return Err("LandXML: niet-eindige spiraalcoördinaten".into()); }
                     segs.extend(pts.windows(2).map(|w| Seg::Line { a: w[0], b: w[1] }));
                     spirals += 1;
                 }
@@ -198,14 +257,17 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
         if !segs.is_empty() {
             out.alignments.push(XmlAlignment {
                 name: al.attribute("name").unwrap_or("As").to_string(),
-                start: al.attribute("staStart").and_then(|v| v.parse().ok()).unwrap_or(0.0) * unit,
+                start: number_attr(al, "staStart", unit)?.unwrap_or(0.0),
                 segs,
                 spirals,
             });
         }
+        Ok(())
+        })();
+        if let Err(error) = parsed { out.warnings.push(format!("LandXML: Alignment {} overgeslagen: {error}", al.attribute("name").unwrap_or("zonder naam"))); }
     }
     if out.points.is_empty() && out.surfaces.is_empty() && out.alignments.is_empty() {
-        return Err("geen punten, oppervlakken of assen in dit LandXML-bestand".into());
+        return Err(out.report("geen punten, oppervlakken of assen in dit LandXML-bestand".into()));
     }
     Ok(out)
 }
@@ -283,12 +345,187 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
     }
     super::api::note("assen", x.alignments.iter().zip(axes).map(|(a, h)| serde_json::json!({"naam": a.name, "handle": super::api::handle_text(*h), "beginstation": a.start})).collect::<Vec<_>>());
     let hint = if x.alignments.is_empty() { "" } else { " Selecteer een as en klik op As voor de stationering." };
-    Ok(format!("{file}: {} — {n} elementen.{hint}", parts.join(", ")))
+    Ok(x.report(format!("{file}: {} — {n} elementen.{hint}", parts.join(", "))))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SITE: &str = include_str!("../../tests/fixtures/landxml/site.xml");
+
+    #[test]
+    fn sol_start_coordinate_text_overrides_pntref() {
+        let text = SITE.replace("<Start>200 100</Start>", "<Start pntRef=\"1\">205 105</Start>");
+        assert_ne!(text, SITE);
+        let data = parse(&text).unwrap();
+        assert_eq!(data.alignments.len(), 1);
+        assert_eq!(data.alignments[0].segs[0], Seg::Line { a: [105.0, 205.0], b: [110.0, 200.0] });
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn sol_named_cgpoint_coordinate_text_overrides_pntref() {
+        let point = "<CgPoint name=\"2\" pntRef=\"1\">205 105 7</CgPoint>";
+        let text = SITE.replace("</CgPoints>", &format!("{point}</CgPoints>"));
+        let data = parse(&text).unwrap();
+        assert_eq!(data.points.len(), 2);
+        let point = &data.points[1];
+        assert_eq!(point.name, "2");
+        assert_eq!((point.e, point.n, point.z), (105.0, 205.0, Some(7.0)));
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn sol_unnamed_cgpoint_coordinate_text_overrides_pntref() {
+        let point = "<CgPoint pntRef=\"1\">205 105 7</CgPoint>";
+        let text = SITE.replace("</CgPoints>", &format!("{point}</CgPoints>"));
+        let data = parse(&text).unwrap();
+        assert_eq!(data.points.len(), 2);
+        assert_eq!((data.points[1].e, data.points[1].n, data.points[1].z), (105.0, 205.0, Some(7.0)));
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn sol_negative_infinite_spiral_radius_keeps_zero_start_curvature() {
+        let text = SAMPLE.replace("INF", "-INF");
+        assert!(text.contains("radiusStart=\"-INF\""));
+        let data = parse(&text).unwrap();
+        assert_eq!(data.alignments.len(), 1);
+        assert_eq!(data.alignments[0].spirals, 1);
+        // INF means zero start curvature. The literal -INF substitution
+        // must retain exactly the same axis, including all spiral chords.
+        assert_eq!(data.alignments[0].segs, parse(SAMPLE).unwrap().alignments[0].segs);
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn one_bad_landxml_object_keeps_unrelated_points_surfaces_and_axes() {
+        for (from, to, expected) in [
+            ("<CgPoint name=\"1\">200 100 5</CgPoint>", "<CgPoint name=\"1\">200 bad 5</CgPoint>", (0, 1, 1)),
+            ("<P id=\"2\">200 110 6</P>", "<P id=\"2\">200 bad 6</P>", (1, 0, 1)),
+            ("<Start>200 100</Start>", "<Start>200 bad</Start>", (1, 1, 0)),
+        ] {
+            let text = SITE.replace(from, to);
+            assert_ne!(text, SITE);
+            let data = parse(&text).unwrap();
+            assert_eq!((data.points.len(), data.surfaces.len(), data.alignments.len()), expected);
+            assert_eq!(data.warnings.len(), 1);
+            assert!(data.report("LandXML gelezen".into()).contains("overgeslagen"));
+        }
+    }
+
+    #[test]
+    fn fixture_reads_points_tin_and_axis_in_easting_northing_order() {
+        let xml = parse(SITE).unwrap();
+        assert_eq!((xml.points.len(), xml.surfaces.len(), xml.alignments.len()), (1, 1, 1));
+        assert_eq!((xml.points[0].e, xml.points[0].n, xml.points[0].z), (100.0, 200.0, Some(5.0)));
+        assert_eq!(xml.surfaces[0].1[0][2], [110.0, 210.0, 7.0]);
+        assert_eq!(xml.alignments[0].start, 10.0);
+        let huge = parse(&SITE.replace("200 100 5", "1e100 100 5")).unwrap();
+        assert_eq!(huge.points[0].n, 1e100);
+    }
+
+    #[test]
+    fn rejects_invalid_coordinates_instead_of_shifting_or_skipping_them() {
+        for (from, to) in [
+            ("200 100 5", "200 broken 100 5"),
+            ("200 100 5", "200 NaN 5"),
+            ("200 100 5", "200 inf 5"),
+            ("200 110 6", "200 broken 110 6"),
+            ("200 110 6", "200 110 1e999"),
+            ("<Start>200 100</Start>", "<Start>200 broken 100</Start>"),
+            ("<Start>200 100</Start>", "<Start>200 NaN</Start>"),
+            ("<Start>200 100</Start>", ""),
+            ("<CgPoint name=\"1\">200 100 5</CgPoint>", "<CgPoint name=\"1\">200</CgPoint>"),
+            ("<P id=\"2\">200 110 6</P>", "<P id=\"2\">200 110</P>"),
+        ] {
+            let data = parse(&SITE.replace(from, to)).unwrap();
+            assert!(!data.warnings.is_empty(), "{from} -> {to}");
+        }
+    }
+
+    #[test]
+    fn rejects_unit_overflow_and_nonfinite_stationing() {
+        let overflow = SITE.replace("linearUnit=\"meter\"", "linearUnit=\"kilometer\"").replace("200 100 5", "1e308 100 5");
+        assert!(!parse(&overflow).unwrap().warnings.is_empty());
+        for value in ["NaN", "inf", "bad", "1e999"] {
+            let data = parse(&SITE.replace("staStart=\"10\"", &format!("staStart=\"{value}\""))).unwrap();
+            assert!(data.alignments.is_empty() && !data.warnings.is_empty(), "{value}");
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_spiral_numbers_and_nonfinite_arc_radius() {
+        for (from, to) in [
+            ("length=\"30\"", "length=\"0\""),
+            ("length=\"30\"", "length=\"NaN\""),
+            ("length=\"30\"", "length=\"bad\""),
+            ("radiusEnd=\"200\"", "radiusEnd=\"NaN\""),
+            ("radiusEnd=\"200\"", "radiusEnd=\"bad\""),
+            ("<Center>50 100</Center>", "<Center>-1.7e308 -1.7e308</Center>"),
+        ] {
+            assert_ne!(SAMPLE.replace(from, to), SAMPLE, "fixture substitution: {from}");
+            let data = parse(&SAMPLE.replace(from, to)).unwrap();
+            assert!(data.alignments.is_empty() && !data.warnings.is_empty(), "{from} -> {to}");
+        }
+    }
+
+    #[test]
+    fn rejects_empty_wrong_root_and_truncated_xml() {
+        for text in ["", "<Other/>", "<LandXML/>", "<LandXML>", &SITE[..SITE.len() / 2]] {
+            assert!(parse(text).is_err());
+        }
+    }
+
+    #[test]
+    fn point_group_reference_preserves_the_existing_point_without_duplicates() {
+        for group in [
+            "<CgPoints name=\"groep\"><CgPoint pntRef=\"1\"/></CgPoints>",
+            "<CgPoints name=\"groep\"><CgPoint pntRef=\" 1 \"/></CgPoints>",
+        ] {
+            // Put the group first as well: references do not depend on order.
+            let text = SITE.replace("<CgPoints>", &format!("{group}<CgPoints>"));
+            let model = parse(&text).unwrap();
+            assert_eq!((model.points.len(), model.surfaces.len(), model.alignments.len()), (1, 1, 1));
+            assert_eq!((model.points[0].e, model.points[0].n, model.points[0].z), (100.0, 200.0, Some(5.0)));
+        }
+    }
+
+    #[test]
+    fn mixed_axis_geometry_resolves_point_references_before_unit_conversion() {
+        let definitions = "<CgPoint name=\"axis-start\">0 0</CgPoint><CgPoint name=\"axis-center\">50 100</CgPoint><CgPoint name=\"axis-pi\">60 150</CgPoint><CgPoint name=\"axis-end\">79.9 149.2</CgPoint>";
+        for unit in ["meter", "millimeter"] {
+            let inline = SAMPLE.replace("linearUnit=\"meter\"", &format!("linearUnit=\"{unit}\""));
+            let referenced = inline
+                .replace("</CgPoints>", &format!("{definitions}</CgPoints>"))
+                .replace("<Start>0 0</Start>", "<Start pntRef=\"axis-start\"/>")
+                .replace("<Center>50 100</Center>", "<Center pntRef=\"axis-center\"/>")
+                .replace("<PI>60 150</PI>", "<PI pntRef=\"axis-pi\"/>")
+                .replace("<End>79.9 149.2</End>", "<End pntRef=\"axis-end\"/>");
+            let expected = parse(&inline).unwrap();
+            let model = parse(&referenced).unwrap();
+            assert_eq!(model.alignments[0].segs, expected.alignments[0].segs, "{unit}");
+            assert_eq!(model.alignments[0].spirals, 1);
+            assert_eq!(model.alignments[0].start, expected.alignments[0].start);
+        }
+    }
+
+    #[test]
+    fn spiral_radius_allows_surrounding_whitespace() {
+        let text = SAMPLE.replace("radiusEnd=\"200\"", "radiusEnd=\" 200 \"");
+        assert_eq!(parse(&text).unwrap().alignments[0].segs, parse(SAMPLE).unwrap().alignments[0].segs);
+    }
+
+    #[test]
+    fn missing_and_cyclic_point_references_return_errors() {
+        let missing = SITE.replace("<Start>200 100</Start>", "<Start pntRef=\"missing\"/>");
+        let data = parse(&missing).unwrap();
+        assert!(data.alignments.is_empty() && !data.warnings.is_empty());
+        let cycle = SITE.replace("<CgPoint name=\"1\">200 100 5</CgPoint>", "<CgPoint name=\"1\" pntRef=\"2\"/><CgPoint name=\"2\" pntRef=\"1\"/>");
+        let data = parse(&cycle).unwrap();
+        assert!(data.points.is_empty() && !data.warnings.is_empty());
+    }
 
     const SAMPLE: &str = r#"<?xml version="1.0"?>
 <LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">
