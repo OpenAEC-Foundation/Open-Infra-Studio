@@ -693,4 +693,37 @@ mod tests {
         assert_eq!(d.crs.as_deref(), Some("EPSG:28992"));
         assert_eq!(d.features[0].points[0], [1.0, 2.0]);
     }
+
+    const CSV_POINTS: &str = include_str!("../../tests/fixtures/csv/points.csv");
+
+    #[test]
+    fn csv_fixture_preserves_decimal_commas_quotes_and_optional_fields() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/csv/points.csv");
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].points[0], [100.25, 200.5]);
+        assert_eq!(data.features[1].props["type"], "boom; groot");
+        assert_eq!(data.crs, None);
+        assert_eq!(csv("lon,lat\n4.6,51.8\n").unwrap().crs.as_deref(), Some("EPSG:4326"));
+        assert_eq!(csv("x;y;name\n1;2\n").unwrap().features[0].points[0], [1.0, 2.0]);
+    }
+
+    #[test]
+    fn csv_rejects_bad_rows_instead_of_partial_success_or_nonfinite_points() {
+        for row in ["p2;bad;220;tree", "p2;NaN;220;tree", "p2;110;inf;tree", "p2;1e999;220;tree", "p2;110", "p2;;220;tree"] {
+            let text = format!("id;x;y;type\np1;100;200;put\n{row}\n");
+            let error = csv(&text).unwrap_err();
+            assert!(error.starts_with("CSV:") && error.contains('3'), "{row}: {error}");
+        }
+    }
+
+    #[test]
+    fn csv_handles_empty_missing_columns_and_large_finite_coordinates() {
+        for text in ["", "\n", "id;name\np1;tree\n"] {
+            assert!(csv(text).is_err());
+        }
+        assert!(csv("x;y\n").unwrap().features.is_empty());
+        let large = csv("x;y\n1e100;-1e100\n").unwrap();
+        assert_eq!(large.features[0].points[0], [1e100, -1e100]);
+    }
 }
