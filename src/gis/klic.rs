@@ -184,6 +184,66 @@ mod tests {
     const XML: &str = include_str!("../../tests/fixtures/klic/GI_gebiedsinformatielevering_SYNTHETIC_1_V2.xml");
 
     #[test]
+    fn renamed_klic_xml_keeps_the_legacy_notification_number() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-renamed-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["copy_SYNTHETIC_V2.xml", "copy_SYNTHETIC_V2.gml"] {
+            let path = dir.join(name);
+            std::fs::write(&path, XML).unwrap();
+            let delivery = read(&path).unwrap();
+            assert_eq!(delivery.meldnummer, "SYNTHETIC", "{name}");
+            assert_eq!(delivery.features[0].lines[0].0, vec![[100.0, 200.0], [110.0, 210.0]]);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn klic_requires_at_least_one_drawable_line_or_point() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-undrawable-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        for coordinates in ["NaN NaN NaN NaN", "100 200 NaN NaN", "100 200", ""] {
+            let text = XML.replace("100 200 110 210", coordinates);
+            assert_ne!(text, XML);
+            std::fs::write(&path, text).unwrap();
+            assert!(read(&path).is_err(), "{coordinates}");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn klic_reader_errors_leave_the_ui_prefix_to_the_caller() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-prefix-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        for text in ["<Other/>".to_string(), XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")] {
+            std::fs::write(&path, text).unwrap();
+            let error = read(&path).err().expect("read error");
+            assert!(!error.starts_with("KLIC: "), "{error}");
+            assert!(!error.is_empty());
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn an_empty_klic_line_does_not_hide_a_valid_neighbour() {
+        let doc = roxmltree::Document::parse(XML).unwrap();
+        let member = doc.descendants().find(|n| n.has_tag_name("featureMember")).unwrap();
+        for coordinates in ["NaN NaN NaN NaN", "100 200 NaN NaN", ""] {
+            let broken = XML[member.range()].replace("nl.imkl-KL9999.synthetic", "nl.imkl-KL9999.broken").replace("100 200 110 210", coordinates);
+            let text = XML.replace("</gml:FeatureCollection>", &format!("{broken}</gml:FeatureCollection>"));
+            let dir = std::env::temp_dir().join(format!("oi-klic-neighbour-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join(XML_NAME);
+            std::fs::write(&path, text).unwrap();
+            let delivery = read(&path).unwrap();
+            assert_eq!(delivery.meldnummer, "SYNTHETIC");
+            assert!(delivery.features.iter().flat_map(|f| &f.lines).any(|(line, _)| line == &vec![[100.0, 200.0], [110.0, 210.0]]));
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
     fn fixed_klic_xml_and_zip_preserve_the_same_delivery_and_geometry() {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/klic");
         for path in [dir.join(XML_NAME), dir.join("delivery.zip")] {
