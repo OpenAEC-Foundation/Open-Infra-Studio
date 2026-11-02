@@ -1675,7 +1675,7 @@ pub mod tests {
         doc.add_entity(on(terrain, &nl("OG", "TRIANGULATIE", Element::G, Status::B), &[])).unwrap();
         doc.add_entity(on(
             lw(&[[0.0, 10.0], [5.0, 10.0], [5.0, 15.0], [0.0, 15.0]], true, 0.0),
-            &nl("GW", "ONTGRAVINGSVAK-WERK", Element::G, Status::N), &[],
+            &nl("GW", "ONTGRAVINGSVAK-WERK", Element::G, Status::N), &[("controle_id", "ontgraving-behoud-017")],
         )).unwrap();
         let src = Source { doc: &doc, f: 1.0, site: None, name: format!("{name}.dwg") };
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/ifc-test");
