@@ -31,16 +31,30 @@ jobs:
           shared-key: test
           cache-bin: false
       # Validate the development profile across every offline Rust test target.
-      # Network-dependent tests remain ignored by the normal test harness.
+      # Fixed local DWGs and boundary cases use the same writer as GIS_IFC /
+      # CIV_IFC. Network-dependent tests remain ignored by the normal harness.
       - run: cargo test --lib --tests --locked -p open-infra
-      # The IFC 4.3 export of the sample drawing (written by the unit tests),
-      # checked by IfcOpenShell: schema, EXPRESS rules, alignment geometry.
-      - run: pip install "ifcopenshell==0.8.4.post1" pytest
-      - run: python3 tests/ifc_validate.py target/ifc-test/voorbeeld.ifc
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install -r tests/requirements-ifc.txt
+      - name: IFC 4.3 schema, EXPRESS, alignment geometry and IDS
+        run: python3 tests/ifc_suite.py target/ifc-test --report target/ifc-test/validatie.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ifc43-validatie-${{ github.sha }}
+          path: |
+            target/ifc-test/*.ifc
+            target/ifc-test/validatie.json
       - run: python3 -m unittest discover -s tests -p 'test*.py'
       # The Civiel plugin builds on the same engine.
       - run: cargo check --locked -p open-infra-civiel
       - run: python3 -m py_compile mcp/open_infra_mcp.py
+      - name: Validate excavation regression exports
+        run: |
+          python3 tests/ifc_validate.py target/ifc-test/ontgraving-ingeklapt-terrein.ifc
+          python3 tests/ifc_validate.py target/ifc-test/ontgraving-terreinomtrek.ifc
 
   online:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

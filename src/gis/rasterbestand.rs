@@ -112,7 +112,7 @@ pub fn read_asc(text: &str) -> Result<Grid, String> {
     while let Some(l) = lines.peek() {
         let mut parts = l.split_whitespace();
         match (parts.next(), parts.next()) {
-            (Some(k), Some(v)) if k.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) => {
+            (Some(k), Some(v)) if matches!(k.to_ascii_lowercase().as_str(), "ncols" | "nrows" | "xllcorner" | "yllcorner" | "xllcenter" | "yllcenter" | "cellsize" | "nodata_value") => {
                 head.insert(k.to_ascii_lowercase(), v.parse::<f64>().map_err(|_| format!("ASC: kopregel '{l}'"))?);
                 lines.next();
             }
@@ -424,6 +424,35 @@ mod tests {
     }
 
     #[test]
+    fn asc_rejects_dimension_product_overflow_before_reading_cells() {
+        // 4294967296 × 4294967296 on the 64-bit CI runner; 65536² on 32-bit.
+        let side = 1u64 << (usize::BITS / 2);
+        let text = ASC.replace("ncols 3", &format!("ncols {side}")).replace("nrows 2", &format!("nrows {side}"));
+        let error = read_asc(&text).unwrap_err();
+        assert!(error.contains("rasterafmetingen zijn te groot"), "{error}");
+    }
+
+    #[test]
+    fn asc_rejects_dimensions_above_vector_capacity_before_reading_cells() {
+        let cells = isize::MAX as u64 / std::mem::size_of::<f32>() as u64 + 1;
+        let text = ASC.replace("ncols 3", &format!("ncols {cells}")).replace("nrows 2", "nrows 1");
+        let error = read_asc(&text).unwrap_err();
+        assert!(error.contains("rasterafmetingen zijn te groot"), "{error}");
+    }
+
+    #[test]
+    fn asc_nan_first_cell_is_data_when_nan_is_the_nodata_value() {
+        let text = include_str!("../../tests/fixtures/asc/nan-first-cell.asc");
+        let grid = read_asc(text).unwrap();
+        assert_eq!((grid.w, grid.h, grid.x0, grid.y1), (2, 2, 100.0, 202.0));
+        assert_eq!(grid.z.len(), 4);
+        assert_eq!(grid.at(0, 0), None);
+        assert_eq!(grid.at(1, 0), Some(1.0));
+        assert_eq!(grid.at(0, 1), Some(2.0));
+        assert_eq!(grid.at(1, 1), Some(3.0));
+    }
+
+    #[test]
     fn asc_rejects_invalid_georeference_and_overflow() {
         for cell in ["0", "-1", "NaN", "inf", "1e308"] {
             asc_error(&ASC.replace("cellsize 5", &format!("cellsize {cell}")));
@@ -447,8 +476,14 @@ mod tests {
     #[test]
     fn asc_rejects_empty_missing_and_truncated_input() {
         asc_error("");
-        for line in ["ncols 3\n", "nrows 2\n", "cellsize 5\n", "xllcorner 100\n", "yllcorner 200\n", "4 -9999 6\n"] {
-            asc_error(&ASC.replace(line, ""));
+        for ending in ["\n", "\r\n"] {
+            let source = ASC.lines().collect::<Vec<_>>().join(ending) + ending;
+            assert!(read_asc(&source).is_ok(), "geldige fixture met {ending:?}");
+            for line in ["ncols 3", "nrows 2", "cellsize 5", "xllcorner 100", "yllcorner 200", "4 -9999 6"] {
+                let incomplete = source.replace(&format!("{line}{ending}"), "");
+                assert_ne!(incomplete, source, "de test moet {line:?} met {ending:?} werkelijk verwijderen");
+                asc_error(&incomplete);
+            }
         }
     }
 

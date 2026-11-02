@@ -180,9 +180,9 @@ pub fn parse_wfs(url: &str, xml: &str) -> Result<WfsCaps, String> {
     let root = doc.root_element();
     let version = root.attribute("version").unwrap_or("2.0.0").to_string();
     let ident = child(root, "ServiceIdentification").or_else(|| child(root, "Service"));
-    let types = root
-        .descendants()
-        .filter(|n| n.is_element() && n.tag_name().name() == "FeatureType")
+    let types = child(root, "FeatureTypeList")
+        .into_iter()
+        .flat_map(|list| children(list, "FeatureType"))
         .filter_map(|ft| {
             let name = text_of(Some(ft), "Name");
             if name.is_empty() {
@@ -296,5 +296,56 @@ mod tests {
         let c = parse_wfs("https://example.org/wfs", v1).unwrap();
         assert_eq!(c.types[0].bbox, Some([10.9, 55.3, 24.2, 69.1]));
         assert_eq!(c.types[0].title, "roads");
+    }
+
+    #[test]
+    fn wfs_without_feature_type_list_has_no_types() {
+        let xml = r#"<wfs:WFS_Capabilities version="2.0.0" xmlns:wfs="http://www.opengis.net/wfs/2.0">
+          <wfs:Service><wfs:FeatureType><wfs:Name>misplaced</wfs:Name></wfs:FeatureType></wfs:Service>
+        </wfs:WFS_Capabilities>"#;
+        assert!(parse_wfs("https://example.org/wfs", xml).unwrap().types.is_empty());
+    }
+
+    #[test]
+    fn wfs_reads_only_direct_feature_types_of_the_root_list() {
+        let xml = r#"<WFS_Capabilities version="1.1.0" xmlns="http://www.opengis.net/wfs">
+          <Service>
+            <FeatureType><Name>in_service</Name></FeatureType>
+            <FeatureTypeList><FeatureType><Name>nested_list</Name></FeatureType></FeatureTypeList>
+          </Service>
+          <FeatureTypeList>
+            <FeatureType><Name>parcels</Name></FeatureType>
+            <Metadata><FeatureType><Name>nested_type</Name></FeatureType></Metadata>
+          </FeatureTypeList>
+        </WFS_Capabilities>"#;
+        let c = parse_wfs("https://example.org/wfs", xml).unwrap();
+        assert_eq!(c.types.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), vec!["parcels"]);
+    }
+
+    #[test]
+    fn wfs_11_and_20_accept_default_and_prefixed_namespaces() {
+        for (version, namespace, ows_namespace, default_crs, other_crs) in [
+            ("1.1.0", "http://www.opengis.net/wfs", "http://www.opengis.net/ows", "DefaultSRS", "OtherSRS"),
+            ("2.0.0", "http://www.opengis.net/wfs/2.0", "http://www.opengis.net/ows/1.1", "DefaultCRS", "OtherCRS"),
+        ] {
+            for prefix in ["", "wfs:"] {
+                let xmlns = if prefix.is_empty() { "xmlns" } else { "xmlns:wfs" };
+                let xml = format!(r#"<{p}WFS_Capabilities version="{version}" {xmlns}="{namespace}" xmlns:ows="{ows_namespace}" xmlns:cad="https://example.org/cad">
+                  <{p}FeatureTypeList><{p}FeatureType>
+                    <{p}Name>cad:parcels</{p}Name><{p}Title>Parcels</{p}Title>
+                    <{p}{default_crs}>urn:ogc:def:crs:EPSG::28992</{p}{default_crs}>
+                    <{p}{other_crs}>EPSG:4326</{p}{other_crs}>
+                    <ows:WGS84BoundingBox><ows:LowerCorner>4 51</ows:LowerCorner><ows:UpperCorner>6 53</ows:UpperCorner></ows:WGS84BoundingBox>
+                  </{p}FeatureType></{p}FeatureTypeList>
+                </{p}WFS_Capabilities>"#, p = prefix);
+                let c = parse_wfs("https://example.org/wfs", &xml).unwrap();
+                assert_eq!(c.version, version);
+                assert_eq!(c.types.len(), 1, "WFS {version}, prefix {prefix:?}");
+                assert_eq!(c.types[0].name, "cad:parcels");
+                assert_eq!(c.types[0].title, "Parcels");
+                assert_eq!(c.types[0].crs, vec!["EPSG:28992", "EPSG:4326"]);
+                assert_eq!(c.types[0].bbox, Some([4.0, 51.0, 6.0, 53.0]));
+            }
+        }
     }
 }
