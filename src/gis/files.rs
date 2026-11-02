@@ -712,6 +712,45 @@ mod tests {
     }
 
     #[test]
+    fn gml_composite_ring_keeps_every_part_and_the_adjacent_point() {
+        let ring = "<gml:Polygon><gml:exterior><gml:Ring><gml:curveMember><gml:LineString><gml:posList>0 0 10 0</gml:posList></gml:LineString></gml:curveMember><gml:curveMember><gml:LineString><gml:posList>10 0 10 10</gml:posList></gml:LineString></gml:curveMember><gml:curveMember><gml:LineString><gml:posList>10 10 0 0</gml:posList></gml:LineString></gml:curveMember></gml:Ring></gml:exterior></gml:Polygon>";
+        let from = "<gml:LineString srsName=\"urn:ogc:def:crs:EPSG::2056\" srsDimension=\"3\">\n      <gml:posList>2600000 1200000 5 2600010 1200020 6</gml:posList>\n    </gml:LineString>";
+        assert!(GML.contains(from));
+        let data = gml(&GML.replace(from, ring)).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]], true));
+        assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+    }
+
+    #[test]
+    fn gml_empty_curve_container_does_not_hide_the_adjacent_point() {
+        let text = GML.replace("<gml:LineString srsName=\"urn:ogc:def:crs:EPSG::2056\" srsDimension=\"3\">\n      <gml:posList>2600000 1200000 5 2600010 1200020 6</gml:posList>\n    </gml:LineString>", "<gml:Curve><gml:segments/></gml:Curve>");
+        assert_ne!(text, GML);
+        let data = gml(&text).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert!(data.features[0].lines.is_empty());
+        assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+    }
+
+    #[test]
+    fn gml_projects_complete_four_and_five_dimensional_tuples_to_xy() {
+        for (dim, values) in [(4, "1 2 3 4 5 6 7 8"), (5, "1 2 3 4 5 6 7 8 9 10")] {
+            let text = GML.replace("srsDimension=\"3\"", &format!("srsDimension=\"{dim}\""))
+                .replace("2600000 1200000 5 2600010 1200020 6", values);
+            let data = gml(&text).unwrap();
+            assert_eq!(data.features[0].lines[0].0, vec![[1.0, 2.0], [if dim == 4 { 5.0 } else { 6.0 }, if dim == 4 { 6.0 } else { 7.0 }]]);
+            assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+        }
+    }
+
+    #[test]
+    fn gml_bad_object_does_not_discard_the_valid_adjacent_point() {
+        let data = gml(&GML.replace("2600000 1200000 5 2600010 1200020 6", "2600000 broken 5 2600010 1200020 6")).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+    }
+
+    #[test]
     fn wkt_codes() {
         assert_eq!(epsg_from_wkt(r#"PROJCS["Amersfoort / RD New",GEOGCS["Amersfoort",AUTHORITY["EPSG","4289"]],AUTHORITY["EPSG","28992"]]"#).as_deref(), Some("EPSG:28992"));
         assert_eq!(epsg_from_wkt(r#"PROJCS["ETRS_1989_UTM_Zone_32N",GEOGCS["GCS_ETRS_1989"]]"#).as_deref(), Some("EPSG:25832"));
