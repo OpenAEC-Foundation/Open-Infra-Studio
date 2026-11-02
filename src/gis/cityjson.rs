@@ -263,11 +263,12 @@ mod tests {
     }
 
     #[test]
-    fn sequence_rejects_broken_lines_instead_of_partial_success() {
+    fn sequence_reports_broken_lines_and_keeps_valid_features() {
         for line in ["{", "not-json", "null", r#"{"type":"Other"}"#] {
-            let error = parse_with(&format!("{SEQUENCE}{line}\n"), &|_| true, &|_| {}).unwrap_err();
-            assert!(error.starts_with("CityJSON:"), "{error}");
-            assert!(error.contains('3'), "line number missing: {error}");
+            let data = parse_with(&format!("{SEQUENCE}{line}\n"), &|_| true, &|_| {}).unwrap();
+            assert_eq!((data.seen, data.objects.len()), (1, 1));
+            assert_eq!(data.warnings.len(), 1);
+            assert!(data.warnings[0].contains("regel 3"), "{}", data.warnings[0]);
         }
     }
 
@@ -287,10 +288,12 @@ mod tests {
                 None => { bad.as_object_mut().unwrap().remove("vertices"); }
             }
             // Preserve the valid feature and append a broken second one.
-            // Dropping the broken feature must not become a successful import.
+            // Recovery must identify the omitted record, never silently drop it.
             let text = format!("{}\n{}\n{bad}\n", rows[0], rows[1]);
-            let error = parse_with(&text, &|_| true, &|_| {}).unwrap_err();
-            assert!(error.starts_with("CityJSON:"), "{vertices:?}: {error}");
+            let data = parse_with(&text, &|_| true, &|_| {}).unwrap();
+            assert_eq!((data.seen, data.objects.len()), (1, 1), "{vertices:?}");
+            assert_eq!(data.warnings.len(), 1);
+            assert!(data.warnings[0].contains("regel 3"));
         }
     }
 
@@ -343,8 +346,22 @@ mod tests {
     #[test]
     fn sequence_error_reports_physical_line_including_blank_lines() {
         let bad = format!("\n{SEQUENCE}\n{{");
-        let error = parse_with(&bad, &|_| true, &|_| {}).unwrap_err();
-        assert!(error.contains("regel 5"), "{error}");
+        let data = parse_with(&bad, &|_| true, &|_| {}).unwrap();
+        assert_eq!(data.objects.len(), 1);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("regel 5"));
+    }
+
+    #[test]
+    fn a_bad_cityjson_object_does_not_discard_the_valid_building() {
+        let mut doc: Value = serde_json::from_str(BUILDING).unwrap();
+        let mut bad = doc["CityObjects"]["building"].clone();
+        bad["geometry"][0]["boundaries"] = serde_json::json!([[[0, 1, 2, 999]]]);
+        doc["CityObjects"]["broken"] = bad;
+        let data = parse_with(&doc.to_string(), &|_| true, &|_| {}).unwrap();
+        assert_eq!((data.seen, data.objects.len()), (1, 1));
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.report("CityJSON gelezen".into()).contains("broken"));
     }
 
     #[test]
