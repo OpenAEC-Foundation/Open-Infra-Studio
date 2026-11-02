@@ -1,0 +1,12 @@
+# Zelfgemaakte BRO-testinvoer
+
+Deze twee kleine XML-bestanden zijn specifiek voor de bestaande BRO-lezer
+gemaakt. Ze zijn vereenvoudigde leesvoorbeelden, geen officiële BRO-XSD-
+validatiebestanden en geen gegevens uit het register. Alle ids, locaties en
+metingen zijn verzonnen. Bron: OpenAEC Foundation, Open Infra Studio, 2026.
+Licentie: GPL-3.0-only, zoals [LICENSE](../../../LICENSE).
+
+`cpt.xml` bevat twee metingen met expliciete kolommen en scheidingstekens,
+plus RD en een breedte/lengtepositie in EPSG:4258. `borehole.xml` heeft één
+bodemlaag. De tests veranderen getallen, scheidingstekens en ontbrekende
+meetvelden gericht. Ze gebruiken uitsluitend de lokale parse-functies.

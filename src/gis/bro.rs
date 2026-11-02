@@ -620,6 +620,69 @@ pub fn fetch_many<T: Send>(ids: &[String], f: fn(&str) -> Result<T, String>, pro
 mod tests {
     use super::*;
 
+    const SYNTHETIC_CPT: &str = include_str!("../../tests/fixtures/bro-synthetic/cpt.xml");
+    const SYNTHETIC_BHR: &str = include_str!("../../tests/fixtures/bro-synthetic/borehole.xml");
+
+    #[test]
+    fn synthetic_bro_fixtures_preserve_positions_and_measurements() {
+        let cpt = parse_cpt(SYNTHETIC_CPT).unwrap();
+        assert_eq!(cpt.point.rd, Some([100.0, 200.0]));
+        assert_eq!(cpt.point.lonlat, Some([5.0, 52.0]));
+        assert_eq!(cpt.samples.len(), 2);
+        assert_eq!(cpt.samples[0].qc, 2.0);
+        let borehole = parse_bhr(SYNTHETIC_BHR).unwrap();
+        assert_eq!(borehole.layers.len(), 1);
+        assert_eq!((borehole.layers[0].top, borehole.layers[0].bottom), (0.0, 2.0));
+        let other_crs = parse_cpt(&SYNTHETIC_CPT.replace("EPSG:28992", "EPSG:25832")).unwrap();
+        assert_eq!(other_crs.point.rd, None);
+        assert_eq!(other_crs.point.lonlat, Some([5.0, 52.0]));
+    }
+
+    #[test]
+    fn bro_rejects_bad_positions_and_nonfinite_metadata() {
+        for text in [SYNTHETIC_CPT, SYNTHETIC_BHR] {
+            for position in ["100 broken 200", "NaN 200", "inf 200", "100"] {
+                let bad = text.replace("<pos>100 200</pos>", &format!("<pos>{position}</pos>"));
+                let result = if text == SYNTHETIC_CPT { parse_cpt(&bad).map(|_| ()) } else { parse_bhr(&bad).map(|_| ()) };
+                assert!(result.is_err(), "{position}");
+                assert!(parse_characteristics(&bad).is_err(), "characteristics: {position}");
+            }
+            for value in ["NaN", "inf", "broken", "1e999"] {
+                let bad = text.replace("<offset>1</offset>", &format!("<offset>{value}</offset>"));
+                let result = if text == SYNTHETIC_CPT { parse_cpt(&bad).map(|_| ()) } else { parse_bhr(&bad).map(|_| ()) };
+                assert!(result.is_err(), "{value}");
+            }
+        }
+    }
+
+    #[test]
+    fn bro_rejects_bad_measurements_instead_of_missing_or_infinite_samples() {
+        for row in ["1,1,inf,0.01,0.5", "1,1,broken,0.01,0.5", "1,NaN,2,0.01,0.5", "1,1,2,inf,0.5", "1,1,2,0.01,NaN"] {
+            assert!(parse_cpt(&SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", row)).is_err(), "{row}");
+        }
+        let void = parse_cpt(&SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,-999999,-999999,-999999")).unwrap();
+        assert_eq!(void.samples.len(), 1, "official missing-value sentinel stays supported");
+        let large = parse_cpt(&SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,1e100,0.01,0.5")).unwrap();
+        assert_eq!(large.samples[0].qc, 1e100);
+    }
+
+    #[test]
+    fn bro_rejects_nonfinite_borehole_boundaries() {
+        for value in ["NaN", "inf", "broken", "1e999"] {
+            let bad = SYNTHETIC_BHR.replace("<lowerBoundary>2</lowerBoundary>", &format!("<lowerBoundary>{value}</lowerBoundary>"));
+            assert!(parse_bhr(&bad).is_err(), "{value}");
+        }
+    }
+
+    #[test]
+    fn bro_reports_empty_wrong_root_and_truncated_objects() {
+        for text in ["", "<response/>", "<", &SYNTHETIC_CPT[..SYNTHETIC_CPT.len() / 2]] {
+            assert!(parse_cpt(text).is_err());
+            assert!(parse_bhr(text).is_err());
+        }
+        assert!(parse_characteristics("<response/>").unwrap().is_empty());
+    }
+
     const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bro/");
 
     fn fixture(name: &str) -> String {
