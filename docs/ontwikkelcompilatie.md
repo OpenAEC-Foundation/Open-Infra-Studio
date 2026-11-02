@@ -37,34 +37,71 @@ De mutaties worden niet gecommit. De grootte van de doelmap wordt na die drie
 herhalingen gemeten. RSS is de maximale RSS van het zwaarste afzonderlijke
 proces, niet de som van twee gelijktijdige compilerprocessen.
 
-## Nulmeting
+## Resultaten
 
-De bewaakte nulmeting van 2 november 2026, begonnen om 20:30:51 CET:
+De bewaakte nulmeting van 2 november 2026 begon om 20:30:51 CET; de
+profielvergelijking begon om 20:38:35 CET. De bronnen, manifesthash en lockhash
+zijn in deze twee meetreeksen gelijk. Alleen de tijdelijke omgevingsinstelling
+`CARGO_PROFILE_DEV_DEBUG=line-tables-only` verschilt.
 
-| Maat | Huidig ontwikkelprofiel |
-| --- | ---: |
-| Schone build | 374,40 s |
-| Incrementeel, drie herhalingen | 5,35 / 7,17 / 6,41 s |
-| Incrementeel, mediaan | 6,41 s |
-| Ongewijzigd opnieuw bouwen | 2,83 s |
-| Maximale proces-RSS, schoon | 2.634.568 KiB |
-| Doelmap na drie wijzigingen | 3.966.204 KiB |
+| Maat | Volledige debug-informatie | Alleen bronregels |
+| --- | ---: | ---: |
+| Schone build | 374,40 s | 282,76 s |
+| Incrementeel, drie herhalingen | 5,35 / 7,17 / 6,41 s | 4,23 / 4,98 / 4,31 s |
+| Incrementeel, mediaan | 6,41 s | 4,31 s |
+| Ongewijzigd opnieuw bouwen | 2,83 s | 1,91 s |
+| Maximale proces-RSS, schoon | 2.634.568 KiB | 2.499.480 KiB |
+| Maximale proces-RSS, eerste kleine wijziging | 2.169.816 KiB | 1.112.004 KiB |
+| Doelmap na drie wijzigingen | 3.966.204 KiB | 2.688.508 KiB |
+| GIS-ontwikkelbibliotheek, schoon | 503.980.552 bytes | 190.887.256 bytes |
 
-Alle vijf aanroepen eindigden met exitcode 0; de bron is exact hersteld.
+In deze vergelijking is de schone build 24,5% korter en de mediaan van de drie
+incrementele builds 32,8% korter. De doelmap is 32,2% kleiner. De ongewijzigde
+aanroep is één waarneming per variant en geen onderbouwde algemene winstclaim.
+Er is één schone build per variant gemeten, op een gedeelde machine; dit is geen
+garantie voor alle machines, workloads of belastingniveaus.
+
+Alle tien aanroepen eindigden met exitcode 0; de bron is na beide reeksen exact hersteld.
 Een eerdere verkennende meting had kort overlap met een elders gestarte test;
 een eerste profielmeting is om dezelfde reden afgebroken. Deze beide reeksen
 worden niet gebruikt voor de vergelijking.
 
-## Profielvergelijking
+## Profiel en verificatie
 
-De bewaakte vergelijking met `CARGO_PROFILE_DEV_DEBUG=line-tables-only` loopt
-afzonderlijk. Dit is een tijdelijke omgevingsinstelling; de kandidaat wordt pas
-in het manifest gezet na de meting. Definitieve cijfers volgen in deze PR.
+Het manifest kiest nu `debug = "line-tables-only"` voor `profile.dev`.
+De normale testprofielen erven die instelling. Optimalisatie, incrementele
+compilatie, assertions, overflowchecks en unwind behouden Cargo's standaard.
+Het releaseprofiel behoudt exact `opt-level = 3`.
+
+Bronbestand en regelnummer blijven beschikbaar in backtraces. Types, lokale
+variabelen en functieparameters zijn standaard niet volledig beschikbaar in de
+debugger. Zie de [Cargo-profielen](https://doc.rust-lang.org/cargo/reference/profiles.html#debug).
+Volledige informatie kan per aanroep terug:
+
+```sh
+CARGO_PROFILE_DEV_DEBUG=2 cargo build --locked -p open-infra
+CARGO_PROFILE_TEST_DEBUG=2 cargo test --lib --locked -p open-infra
+```
+
+De gemeten ontwikkelbibliotheken exporteren beide uitsluitend
+`ocs_plugin_register` en `ocs_plugin_api_version`. `readelf` vindt de
+`.debug_line`-sectie in de kandidaat en `addr2line` vertaalt het adres van
+`open_infra::hoogte::nap` naar `src/hoogte.rs:76`. De releasebibliotheken zijn
+geen onderdeel van deze groottevergelijking.
 
 De regressiecontrole faalt zonder de profielinstelling, lokaal met exit 1 en in
 CI op commit `ca6272623a35b6caf404d7bfcc4e014256df08b3`:
 [run 41510581417](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/actions/runs/41510581417).
 De fout is de ontbrekende `profile.dev.debug`; de voorafgaande Rust-tests slagen.
+Na de manifestwijziging slagen deze controle en alle zes lokale Python-tests
+met exit 0. `actionlint` en `git diff --check` slagen ook.
+
+De CI voert nu `cargo test --lib --tests --locked -p open-infra` uit zodat het
+gewijzigde ontwikkelprofiel voor alle offline Rust-testtargets wordt gevalideerd,
+inclusief eerder niet geselecteerde integratietests. Genegeerde netwerktests
+blijven genegeerd. IFC-validatie en de afzonderlijke Civiel-check blijven staan.
+De definitieve groene CI-run moet nog op deze wijziging volgen; de lokale
+volledige Rust-testsuite is niet uitgevoerd.
 
 ## Niet gewijzigd
 
