@@ -592,12 +592,16 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         return Err(format!("CSV: no coordinate columns (x/y, easting/northing or lon/lat) in {}", cols.join(", ")));
     };
     let mut features = Vec::new();
+    let mut warnings = Vec::new();
     for (line_index, line) in lines {
         let vals = split_line(line, sep);
         let coordinate = |index: usize| {
             vals.get(index).and_then(|v| number(v)).filter(|v| v.is_finite()).ok_or_else(|| format!("CSV: regel {}: ontbrekende of ongeldige coördinaat in kolom {}", line_index + 1, cols[index]))
         };
-        let (x, y) = (coordinate(ix)?, coordinate(iy)?);
+        let (x, y) = match coordinate(ix).and_then(|x| coordinate(iy).map(|y| (x, y))) {
+            Ok(xy) => xy,
+            Err(error) => { warnings.push(format!("{error}; rij overgeslagen")); continue; }
+        };
         let mut f = Feature { points: vec![[x, y]], ..Default::default() };
         for (i, c) in cols.iter().enumerate() {
             if i != ix && i != iy {
@@ -608,7 +612,7 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings: Vec::new() })
+    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings })
 }
 
 #[cfg(test)]
