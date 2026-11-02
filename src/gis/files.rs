@@ -718,11 +718,15 @@ mod tests {
     }
 
     #[test]
-    fn csv_rejects_bad_rows_instead_of_partial_success_or_nonfinite_points() {
+    fn csv_keeps_good_rows_and_reports_bad_or_nonfinite_coordinates() {
         for row in ["p2;bad;220;tree", "p2;NaN;220;tree", "p2;110;inf;tree", "p2;1e999;220;tree", "p2;110", "p2;;220;tree"] {
             let text = format!("id;x;y;type\np1;100;200;put\n{row}\n");
-            let error = csv(&text).unwrap_err();
-            assert!(error.starts_with("CSV:") && error.contains('3'), "{row}: {error}");
+            let data = csv(&text).unwrap();
+            assert_eq!(data.features.len(), 1, "{row}");
+            assert_eq!(data.features[0].points, vec![[100.0, 200.0]]);
+            assert_eq!(data.warnings.len(), 1);
+            assert!(data.warnings[0].starts_with("CSV:") && data.warnings[0].contains("regel 3"));
+            assert!(data.report("1 object gelezen").contains(&data.warnings[0]));
         }
     }
 
