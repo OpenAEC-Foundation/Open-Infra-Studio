@@ -209,6 +209,13 @@ pub fn shapefile(path: &Path) -> Result<FileData, String> {
 
 // ── WKB (GeoPackage) ────────────────────────────────────────────────────────
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GpkgGeometryError {
+    Corrupt,
+    Unsupported(u32),
+    UnsupportedEncoding,
+}
+
 struct Wkb<'a> {
     b: &'a [u8],
     i: usize,
@@ -233,76 +240,100 @@ impl Wkb<'_> {
 
     /// One geometry into `f`. ISO (1001, 2001, 3001) and EWKB-style flag
     /// dimensions are both read; Z and M are skipped.
-    fn geometry(&mut self, f: &mut Feature) -> Option<()> {
-        let le = self.u8()? == 1;
-        let raw = self.u32(le)?;
-        let (base, mut dims) = match raw {
-            r if r & 0x8000_0000 != 0 || r & 0x4000_0000 != 0 => (r & 0xFFFF, 2 + (r & 0x8000_0000 != 0) as usize + (r & 0x4000_0000 != 0) as usize),
-            r if r >= 3000 => (r - 3000, 4),
-            r if r >= 2000 => (r - 2000, 3),
-            r if r >= 1000 => (r - 1000, 3),
-            r => (r, 2),
-        };
-        if dims < 2 {
-            dims = 2;
+    fn geometry(&mut self, f: &mut Feature) -> Result<Option<u32>, GpkgGeometryError> {
+        use GpkgGeometryError::{Corrupt, Unsupported};
+        // WKB stores children immediately after each collection header. A
+        // count of pending geometries consumes that preorder stream without
+        // recursion or a fixed nesting limit.
+        let mut pending = 1usize;
+        let mut unsupported = None;
+        while pending > 0 {
+            pending -= 1;
+            let le = match self.u8().ok_or(Corrupt)? { 0 => false, 1 => true, _ => return Err(Corrupt) };
+            let raw = self.u32(le).ok_or(Corrupt)?;
+            let (base, dims) = match raw {
+                r if r & 0x8000_0000 != 0 || r & 0x4000_0000 != 0 => (r & 0xFFFF, 2 + (r & 0x8000_0000 != 0) as usize + (r & 0x4000_0000 != 0) as usize),
+                r if r >= 3000 => (r - 3000, 4),
+                r if r >= 2000 => (r - 2000, 3),
+                r if r >= 1000 => (r - 1000, 3),
+                r => (r, 2),
+            };
+            let point = |w: &mut Self| -> Option<XY> {
+                let x = w.f64(le)?;
+                let y = w.f64(le)?;
+                for _ in 2..dims { w.f64(le)?; }
+                Some([x, y])
+            };
+            let line = |w: &mut Self| -> Option<Vec<XY>> {
+                let n = w.u32(le)? as usize;
+                if n.checked_mul(dims * 8)? > w.b.len().saturating_sub(w.i) { return None; }
+                let points: Vec<XY> = (0..n).map(|_| point(w)).collect::<Option<_>>()?;
+                points.iter().flatten().all(|v| v.is_finite()).then_some(points)
+            };
+            match base {
+                1 => {
+                    let p = point(self).ok_or(Corrupt)?;
+                    if p[0].is_finite() && p[1].is_finite() { f.points.push(p); }
+                    else if !p.iter().all(|v| v.is_nan()) { return Err(Corrupt); }
+                }
+                2 => f.lines.push((line(self).ok_or(Corrupt)?, false)),
+                3 => {
+                    let rings = self.u32(le).ok_or(Corrupt)? as usize;
+                    if rings > self.b.len().saturating_sub(self.i) / 4 { return Err(Corrupt); }
+                    for _ in 0..rings { f.lines.push((line(self).ok_or(Corrupt)?, true)); }
+                }
+                4..=7 => {
+                    let count = self.u32(le).ok_or(Corrupt)? as usize;
+                    if count > self.b.len().saturating_sub(self.i) / 5 { return Err(Corrupt); }
+                    pending = pending.checked_add(count).ok_or(Corrupt)?;
+                }
+                8 => {
+                    // CircularString uses a point array. Validate its bytes
+                    // but do not turn a curve into straight segments. Empty
+                    // curves preserve their record and optional attributes.
+                    if !line(self).ok_or(Corrupt)?.is_empty() { unsupported.get_or_insert(base); }
+                }
+                _ => return Err(Unsupported(base)),
+            }
         }
-        let point = |w: &mut Self| -> Option<XY> {
-            let x = w.f64(le)?;
-            let y = w.f64(le)?;
-            for _ in 2..dims {
-                w.f64(le)?;
-            }
-            Some([x, y])
-        };
-        let line = |w: &mut Self| -> Option<Vec<XY>> {
-            let n = w.u32(le)? as usize;
-            (0..n).map(|_| point(w)).collect()
-        };
-        match base {
-            1 => {
-                let p = point(self)?;
-                if p[0].is_finite() && p[1].is_finite() {
-                    f.points.push(p);
-                }
-            }
-            2 => {
-                let l = line(self)?;
-                f.lines.push((l, false));
-            }
-            3 => {
-                let rings = self.u32(le)?;
-                for _ in 0..rings {
-                    let r = line(self)?;
-                    f.lines.push((r, true));
-                }
-            }
-            4..=7 => {
-                let n = self.u32(le)?;
-                for _ in 0..n {
-                    self.geometry(f)?;
-                }
-            }
-            _ => return None,
-        }
-        Some(())
+        Ok(unsupported)
     }
 }
 
 /// A GeoPackage geometry blob: the `GP` header (with an optional envelope),
 /// then standard WKB.
 pub fn gpkg_geometry(blob: &[u8], f: &mut Feature) -> bool {
-    if blob.len() < 8 || &blob[0..2] != b"GP" {
-        return Wkb { b: blob, i: 0 }.geometry(f).is_some();
-    }
-    let flags = blob[3];
-    let envelope = match (flags >> 1) & 0b111 {
-        1 => 32,
-        2 | 3 => 48,
-        4 => 64,
-        _ => 0,
+    gpkg_geometry_result(blob, f).is_ok()
+}
+
+fn gpkg_geometry_result(blob: &[u8], f: &mut Feature) -> Result<(), GpkgGeometryError> {
+    use GpkgGeometryError::{Corrupt, Unsupported, UnsupportedEncoding};
+    let mut extended = false;
+    let bytes = if blob.starts_with(b"GP") {
+        if blob.len() < 8 || blob[2] != 0 || blob[3] & 0b1100_0000 != 0 { return Err(Corrupt); }
+        extended = blob[3] & 0x20 != 0;
+        let envelope = match (blob[3] >> 1) & 0b111 {
+            0 => 0,
+            1 => 32,
+            2 | 3 => 48,
+            4 => 64,
+            _ => return Err(Corrupt),
+        };
+        blob.get(8 + envelope..).ok_or(Corrupt)?
+    } else { blob };
+    let mut parsed = Feature::default();
+    let mut wkb = Wkb { b: bytes, i: 0 };
+    let kind = match wkb.geometry(&mut parsed) {
+        Err(Corrupt) if extended => return Err(UnsupportedEncoding),
+        result => result?,
     };
-    let start = 8 + envelope;
-    blob.get(start..).is_some_and(|b| Wkb { b, i: 0 }.geometry(f).is_some())
+    // Legacy extended headers with fully readable WKB keep working. An
+    // unknown extended payload is unsupported; standard WKB must be complete.
+    if wkb.i != bytes.len() { return Err(if extended { UnsupportedEncoding } else { Corrupt }); }
+    if let Some(kind) = kind { return Err(Unsupported(kind)); }
+    f.points.extend(parsed.points);
+    f.lines.extend(parsed.lines);
+    Ok(())
 }
 
 pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> {
@@ -327,13 +358,27 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
     let gi = names.iter().position(|n| n.eq_ignore_ascii_case(&geom_col)).ok_or("GeoPackage: geometry column missing")?;
     let mut rows = st.query([]).map_err(err)?;
     let mut features = Vec::new();
-    while let Some(row) = rows.next().map_err(err)? {
+    let mut warnings = Vec::new();
+    let mut row_index = 0;
+    'rows: while let Some(row) = rows.next().map_err(err)? {
+        row_index += 1;
         let mut f = Feature::default();
         for (i, n) in names.iter().enumerate() {
             let v = row.get_ref(i).map_err(err)?;
             if i == gi {
                 if let ValueRef::Blob(b) = v {
-                    gpkg_geometry(b, &mut f);
+                    if let Err(error) = gpkg_geometry_result(b, &mut f) {
+                        let reason = match error {
+                            GpkgGeometryError::Corrupt => "onleesbare geometrie".to_string(),
+                            GpkgGeometryError::Unsupported(kind) => format!("niet ondersteunde geometriesoort {kind}"),
+                            GpkgGeometryError::UnsupportedEncoding => "niet ondersteunde uitgebreide geometrie".to_string(),
+                        };
+                        warnings.push(format!("GeoPackage: {reason} in laag {table}, rij {row_index}; object overgeslagen"));
+                        continue 'rows;
+                    }
+                } else if !matches!(v, ValueRef::Null) {
+                    warnings.push(format!("GeoPackage: geometrie is geen blob in laag {table}, rij {row_index}; object overgeslagen"));
+                    continue 'rows;
                 }
                 continue;
             }
@@ -348,7 +393,8 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
         }
         features.push(f);
     }
-    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings: Vec::new(), skipped: 0 })
+    let skipped = warnings.len();
+    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings, skipped })
 }
 
 // ── KML / KMZ / GPX ─────────────────────────────────────────────────────────
@@ -983,6 +1029,392 @@ mod tests {
         assert!(gpkg_geometry(&b, &mut f));
         assert_eq!(f.lines.len(), 1);
         assert_eq!(f.lines[0].0.len(), 4);
+    }
+
+    const WKB_POINT: &[u8] = include_bytes!("../../tests/fixtures/geopackage/point.wkb");
+    const WKB_LINE: &[u8] = include_bytes!("../../tests/fixtures/geopackage/line.wkb");
+
+    fn gpkg_blob(wkb: &[u8]) -> Vec<u8> {
+        let mut blob = vec![b'G', b'P', 0, 1];
+        blob.extend(2056i32.to_le_bytes());
+        blob.extend(wkb);
+        blob
+    }
+
+    fn temporary_gpkg(name: &str, blob: &[u8]) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!("oi-gpkg-{name}-{}.gpkg", std::process::id()));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch("DROP TABLE IF EXISTS gpkg_contents; DROP TABLE IF EXISTS gpkg_geometry_columns; DROP TABLE IF EXISTS gpkg_spatial_ref_sys; DROP TABLE IF EXISTS sample;
+            CREATE TABLE gpkg_contents (table_name TEXT, data_type TEXT);
+            CREATE TABLE gpkg_geometry_columns (table_name TEXT, column_name TEXT, srs_id INTEGER);
+            CREATE TABLE gpkg_spatial_ref_sys (srs_id INTEGER, organization TEXT, organization_coordsys_id INTEGER);
+            CREATE TABLE sample (id INTEGER, geom BLOB, name TEXT);
+            INSERT INTO gpkg_contents VALUES ('sample','features');
+            INSERT INTO gpkg_geometry_columns VALUES ('sample','geom',2056);
+            INSERT INTO gpkg_spatial_ref_sys VALUES (2056,'EPSG',2056);").unwrap();
+        db.execute("INSERT INTO sample VALUES (1,?1,'synthetic')", [blob]).unwrap();
+        path
+    }
+
+    fn circular_string() -> Vec<u8> {
+        include_bytes!("../../tests/fixtures/geopackage/circular.wkb").to_vec()
+    }
+
+    fn broken_collection() -> Vec<u8> {
+        let mut wkb = vec![1];
+        wkb.extend(7u32.to_le_bytes());
+        wkb.extend(2u32.to_le_bytes());
+        wkb.extend(WKB_POINT);
+        wkb.extend(&WKB_LINE[..10]);
+        wkb
+    }
+
+    fn mixed_layer_gpkg(name: &str, middle: &[u8]) -> std::path::PathBuf {
+        let path = temporary_gpkg(name, &gpkg_blob(WKB_LINE));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch("DROP TABLE IF EXISTS a_mix; DROP TABLE IF EXISTS b_good;
+            ALTER TABLE sample RENAME TO a_mix;
+            UPDATE gpkg_contents SET table_name = 'a_mix';
+            UPDATE gpkg_geometry_columns SET table_name = 'a_mix';
+            CREATE TABLE b_good (id INTEGER, geom BLOB, name TEXT);
+            INSERT INTO gpkg_contents VALUES ('b_good','features');
+            INSERT INTO gpkg_geometry_columns VALUES ('b_good','geom',2056);").unwrap();
+        db.execute("INSERT INTO a_mix VALUES (2,?1,'middle')", [&gpkg_blob(middle)]).unwrap();
+        db.execute("INSERT INTO a_mix VALUES (3,?1,'point')", [&gpkg_blob(WKB_POINT)]).unwrap();
+        db.execute("INSERT INTO b_good VALUES (1,?1,'healthy')", [&gpkg_blob(WKB_POINT)]).unwrap();
+        path
+    }
+
+    fn assert_readable_neighbours_and_layers(path: &Path) {
+        let mixed = read(path, None).unwrap();
+        assert_eq!(mixed.layers, vec!["a_mix", "b_good"]);
+        let line = mixed.features.iter().find(|f| f.props["id"] == 1).unwrap();
+        let point = mixed.features.iter().find(|f| f.props["id"] == 3).unwrap();
+        let mut expected = Feature::default();
+        assert!(gpkg_geometry(WKB_LINE, &mut expected));
+        assert_eq!(line.lines, expected.lines);
+        assert_eq!(point.points, vec![[2600000.25, 1200000.5]]);
+        let healthy = read(path, Some("b_good")).unwrap();
+        assert_eq!(healthy.layers, vec!["a_mix", "b_good"]);
+        assert_eq!(healthy.features.len(), 1);
+        assert_eq!(healthy.features[0].points, point.points);
+        assert_eq!(healthy.crs.as_deref(), Some("EPSG:2056"));
+    }
+
+    #[test]
+    fn sol_gpkg_circular_string_keeps_readable_rows_and_other_layer() {
+        let path = mixed_layer_gpkg("sol-curve", &circular_string());
+        assert_readable_neighbours_and_layers(&path);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("geometriesoort 8"));
+        assert!(!data.warnings[0].contains("onleesbaar"));
+    }
+
+    #[test]
+    fn sol_gpkg_truncated_wkb_keeps_readable_rows_and_other_layer() {
+        let path = mixed_layer_gpkg("sol-truncated", &WKB_LINE[..10]);
+        assert_readable_neighbours_and_layers(&path);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("onleesbare"));
+    }
+
+    #[test]
+    fn sol_gpkg_broken_collection_keeps_readable_rows_and_other_layer() {
+        let path = mixed_layer_gpkg("sol-collection", &broken_collection());
+        assert_readable_neighbours_and_layers(&path);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[1].points.len(), 1);
+        assert_eq!(data.warnings.len(), 1);
+    }
+
+    #[test]
+    fn gpkg_unreadable_default_layer_keeps_healthy_layer_selectable() {
+        let path = mixed_layer_gpkg("empty-default", &broken_collection());
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute("DELETE FROM a_mix WHERE id != 2", []).unwrap();
+        drop(db);
+        let data = read(&path, None).unwrap();
+        assert!(data.features.is_empty());
+        assert_eq!(data.layers, vec!["a_mix", "b_good"]);
+        assert_eq!(read(&path, Some("b_good")).unwrap().features[0].points, vec![[2600000.25, 1200000.5]]);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn sol_gpkg_65_nested_collections_preserve_the_point_read_by_main() {
+        let mut wkb = Vec::new();
+        for _ in 0..65 {
+            wkb.push(1);
+            wkb.extend(7u32.to_le_bytes());
+            wkb.extend(1u32.to_le_bytes());
+        }
+        wkb.extend(WKB_POINT);
+        let path = temporary_gpkg("sol-depth-65", &gpkg_blob(&wkb));
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600000.25, 1200000.5]]);
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn gpkg_many_nested_collections_do_not_use_the_call_stack() {
+        let mut wkb = Vec::new();
+        for _ in 0..5000 {
+            wkb.push(1);
+            wkb.extend(7u32.to_le_bytes());
+            wkb.extend(1u32.to_le_bytes());
+        }
+        wkb.extend(WKB_POINT);
+        let mut feature = Feature::default();
+        assert!(gpkg_geometry(&wkb, &mut feature));
+        assert_eq!(feature.points, vec![[2600000.25, 1200000.5]]);
+    }
+
+    #[test]
+    fn gpkg_truncated_circular_string_is_corrupt_instead_of_unsupported() {
+        let curve = circular_string();
+        let path = mixed_layer_gpkg("truncated-curve", &curve[..curve.len() - 1]);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("onleesbare geometrie"));
+        assert!(!data.warnings[0].contains("niet ondersteunde"));
+    }
+
+    #[test]
+    fn gpkg_unsupported_collection_does_not_commit_a_readable_prefix() {
+        let mut wkb = vec![1];
+        wkb.extend(7u32.to_le_bytes());
+        wkb.extend(2u32.to_le_bytes());
+        wkb.extend(WKB_POINT);
+        wkb.extend(circular_string());
+        let mut feature = Feature { points: vec![[1.0, 2.0]], ..Default::default() };
+        assert!(!gpkg_geometry(&wkb, &mut feature));
+        assert_eq!(feature.points, vec![[1.0, 2.0]]);
+        assert!(feature.lines.is_empty());
+    }
+
+    #[test]
+    fn gpkg_main_compatible_neighbours_and_layers_stay_available() {
+        for (name, middle) in [("compat-curve", circular_string()), ("compat-truncated", WKB_LINE[..10].to_vec()), ("compat-collection", broken_collection())] {
+            let path = mixed_layer_gpkg(name, &middle);
+            assert_readable_neighbours_and_layers(&path);
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn gpkg_fixed_wkb_and_file_route_preserve_geometry_and_crs() {
+        for (wkb, points, lines) in [(WKB_POINT, 1, 0), (WKB_LINE, 0, 1)] {
+            let mut f = Feature::default();
+            assert!(gpkg_geometry(&gpkg_blob(wkb), &mut f));
+            assert_eq!((f.points.len(), f.lines.len()), (points, lines));
+        }
+        let path = temporary_gpkg("valid", &gpkg_blob(WKB_POINT));
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.crs.as_deref(), Some("EPSG:2056"));
+        assert_eq!(data.features[0].points[0], [2600000.25, 1200000.5]);
+        assert_eq!(data.features[0].props["name"], "synthetic");
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn gpkg_preserves_big_endian_iso_dimensions_and_empty_points() {
+        let mut big_endian = vec![0];
+        big_endian.extend(1u32.to_be_bytes());
+        big_endian.extend(12.0f64.to_be_bytes());
+        big_endian.extend(34.0f64.to_be_bytes());
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&big_endian, &mut f));
+        assert_eq!(f.points, vec![[12.0, 34.0]]);
+        for kind in [1001u32, 2001, 3001, 0x8000_0001, 0x4000_0001] {
+            let mut point = vec![1];
+            point.extend(kind.to_le_bytes());
+            point.extend(12.0f64.to_le_bytes());
+            point.extend(34.0f64.to_le_bytes());
+            point.extend(5.0f64.to_le_bytes());
+            if kind == 3001 { point.extend(6.0f64.to_le_bytes()); }
+            let mut f = Feature::default();
+            assert!(gpkg_geometry(&point, &mut f), "{kind}");
+            assert_eq!(f.points, vec![[12.0, 34.0]]);
+        }
+        let mut empty = WKB_POINT.to_vec();
+        empty[5..13].copy_from_slice(&f64::NAN.to_le_bytes());
+        empty[13..21].copy_from_slice(&f64::NAN.to_le_bytes());
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&empty, &mut f));
+        assert!(f.points.is_empty());
+    }
+
+    #[test]
+    fn gpkg_preserves_envelopes_and_valid_geometry_collections() {
+        let mut envelope = vec![b'G', b'P', 0, 3];
+        envelope.extend(2056i32.to_le_bytes());
+        for bound in [2600000.0f64, 2600010.0, 1200000.0, 1200020.0] {
+            envelope.extend(bound.to_le_bytes());
+        }
+        envelope.extend(WKB_POINT);
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&envelope, &mut f));
+        assert_eq!(f.points.len(), 1);
+        let mut collection = vec![1];
+        collection.extend(7u32.to_le_bytes());
+        collection.extend(2u32.to_le_bytes());
+        collection.extend(WKB_POINT);
+        collection.extend(WKB_LINE);
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&collection, &mut f));
+        assert_eq!((f.points.len(), f.lines.len()), (1, 1));
+    }
+
+    #[test]
+    fn gpkg_legacy_extended_flag_keeps_the_readable_point_from_main() {
+        let mut blob = gpkg_blob(WKB_POINT);
+        blob[3] |= 0x20;
+        let mut feature = Feature::default();
+        assert!(gpkg_geometry(&blob, &mut feature));
+        assert_eq!(feature.points, vec![[2600000.25, 1200000.5]]);
+    }
+
+    #[test]
+    fn gpkg_empty_circular_string_preserves_the_record_attributes() {
+        let mut empty = vec![1];
+        empty.extend(8u32.to_le_bytes());
+        empty.extend(0u32.to_le_bytes());
+        let mut blob = gpkg_blob(&empty);
+        blob[3] |= 0x10;
+        let path = temporary_gpkg("empty-circular", &blob);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].props["name"], "synthetic");
+        assert!(data.features[0].points.is_empty() && data.features[0].lines.is_empty());
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn gpkg_sql_null_geometry_preserves_the_feature_and_attributes() {
+        let path = temporary_gpkg("null", &gpkg_blob(WKB_POINT));
+        {
+            let db = rusqlite::Connection::open(&path).unwrap();
+            db.execute("UPDATE sample SET geom = NULL WHERE id = 1", []).unwrap();
+        }
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].props["name"], "synthetic");
+        assert!(data.features[0].points.is_empty() && data.features[0].lines.is_empty());
+        assert_eq!(data.crs.as_deref(), Some("EPSG:2056"));
+    }
+
+    #[test]
+    fn gpkg_empty_geometries_remain_supported_with_the_empty_flag() {
+        let mut point = WKB_POINT.to_vec();
+        point[5..13].copy_from_slice(&f64::NAN.to_le_bytes());
+        point[13..21].copy_from_slice(&f64::NAN.to_le_bytes());
+        let mut empty = vec![point];
+        for kind in 2..=7u32 {
+            let mut wkb = vec![1];
+            wkb.extend(kind.to_le_bytes());
+            wkb.extend(0u32.to_le_bytes());
+            empty.push(wkb);
+        }
+        for wkb in empty {
+            let mut blob = gpkg_blob(&wkb);
+            blob[3] |= 0x10;
+            let mut f = Feature::default();
+            assert!(gpkg_geometry(&blob, &mut f));
+            assert!(f.points.is_empty() && f.lines.iter().all(|(line, _)| line.is_empty()));
+        }
+    }
+
+    #[test]
+    fn gpkg_rejects_bad_headers_byte_order_and_trailing_data() {
+        let mut version = gpkg_blob(WKB_POINT);
+        version[2] = 1;
+        let mut envelope = gpkg_blob(WKB_POINT);
+        envelope[3] = 1 | (5 << 1);
+        let mut byte_order = vec![9];
+        byte_order.extend(1u32.to_be_bytes());
+        byte_order.extend(1.0f64.to_be_bytes());
+        byte_order.extend(2.0f64.to_be_bytes());
+        let mut trailing = WKB_POINT.to_vec();
+        trailing.push(0);
+        for blob in [version, envelope, byte_order, trailing] {
+            assert!(!gpkg_geometry(&blob, &mut Feature::default()), "{blob:?}");
+        }
+    }
+
+    #[test]
+    fn gpkg_failure_does_not_leave_partial_geometry() {
+        let mut collection = vec![1];
+        collection.extend(7u32.to_le_bytes());
+        collection.extend(2u32.to_le_bytes());
+        collection.extend(WKB_POINT);
+        collection.extend(&WKB_LINE[..10]);
+        let mut f = Feature { points: vec![[1.0, 2.0]], ..Default::default() };
+        assert!(!gpkg_geometry(&collection, &mut f));
+        assert_eq!(f.points, vec![[1.0, 2.0]], "failed parse must be atomic");
+        assert!(f.lines.is_empty());
+    }
+
+    #[test]
+    fn gpkg_reports_corrupt_geometry_through_the_real_file_reader() {
+        let path = temporary_gpkg("broken", &gpkg_blob(&WKB_LINE[..10]));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute("INSERT INTO sample (id, geom) VALUES (2, ?1)", [&gpkg_blob(WKB_POINT)]).unwrap();
+        drop(db);
+        let result = read(&path, None);
+        std::fs::remove_file(path).unwrap();
+        let data = result.unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points.len(), 1);
+        assert_eq!(data.features[0].props["id"], 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("rij 1"));
+        assert_eq!(data.skipped, 1);
+    }
+
+    #[test]
+    fn gpkg_reads_deep_collections_and_rejects_nonfinite_lines() {
+        let mut nested = WKB_POINT.to_vec();
+        for _ in 0..100 {
+            let mut outer = vec![1];
+            outer.extend(7u32.to_le_bytes());
+            outer.extend(1u32.to_le_bytes());
+            outer.extend(nested);
+            nested = outer;
+        }
+        assert!(gpkg_geometry(&nested, &mut Feature::default()));
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut line = WKB_LINE.to_vec();
+            line[9..17].copy_from_slice(&value.to_le_bytes());
+            assert!(!gpkg_geometry(&line, &mut Feature::default()));
+        }
+        let mut large = WKB_POINT.to_vec();
+        large[5..13].copy_from_slice(&1e100f64.to_le_bytes());
+        assert!(gpkg_geometry(&large, &mut Feature::default()));
+    }
+
+    #[test]
+    fn gpkg_rejects_every_truncation_and_impossible_point_count() {
+        let blob = gpkg_blob(WKB_LINE);
+        for end in 0..blob.len() {
+            assert!(!gpkg_geometry(&blob[..end], &mut Feature::default()), "{end}");
+        }
+        let mut line = WKB_LINE.to_vec();
+        line[5..9].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(!gpkg_geometry(&line, &mut Feature::default()));
     }
 
     #[test]
