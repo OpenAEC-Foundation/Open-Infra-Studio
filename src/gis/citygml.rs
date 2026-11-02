@@ -276,7 +276,7 @@ fn first_attribute(xml: &str, name: &str) -> Option<String> {
         match reader.read_event().ok()? {
             Event::Start(tag) | Event::Empty(tag) => {
                 for attr in tag.attributes() {
-                    let attr = attr.ok()?;
+                    let Ok(attr) = attr else { continue; };
                     if attr.key.as_ref() == name.as_bytes() {
                         return attr.decode_and_unescape_value(reader.decoder()).ok().map(|value| value.into_owned());
                     }
@@ -356,6 +356,9 @@ fn document(xml: &str, depth: usize) -> Result<Document<'_>, String> {
 /// not have to fit in memory as one XML tree. `keep` decides per object
 /// (e.g. only those in the project area).
 pub fn parse_with(xml: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn Fn(String)) -> Result<CityModel, String> {
+    // Preserve the original diagnostic when no complete XML opening tag exists.
+    let root_start = xml.match_indices('<').map(|(i, _)| i).find(|&i| !matches!(xml.as_bytes().get(i + 1), Some(b'?') | Some(b'!'))).ok_or("CityGML: geen XML")?;
+    xml[root_start..].find('>').ok_or("CityGML: geen XML")?;
     let mut model = CityModel { crs: crs_of(xml), ..Default::default() };
     // The namespace declarations of the root element, for every member.
     let unavailable = || "CityGML: geen stadsobjecten met geometrie gevonden".to_string();
