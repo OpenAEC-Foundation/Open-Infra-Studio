@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<response><dispatchDocument><BHR_GT_O>
+  <broId>BHR-SYNTHETIC</broId>
+  <deliveredLocation><Point srsName="EPSG:28992"><pos>100 200</pos></Point></deliveredLocation>
+  <offset>1</offset><finalDepthBoring>2</finalDepthBoring>
+  <boreholeSampleDescription><descriptionProcedure>synthetic</descriptionProcedure><descriptiveBoreholeLog>
+    <layer><upperBoundary>0</upperBoundary><lowerBoundary>2</lowerBoundary><geotechnicalSoilName>zand</geotechnicalSoilName></layer>
+  </descriptiveBoreholeLog></boreholeSampleDescription>
+</BHR_GT_O></dispatchDocument></response>
