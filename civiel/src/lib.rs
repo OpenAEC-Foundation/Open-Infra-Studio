@@ -11,7 +11,7 @@ use ocs_plugin_api::manifest::{ApiVersion, PluginManifest};
 use ocs_plugin_api::ribbon::{CadModule, IconKind, ModuleEvent, RibbonGroup, RibbonItem, ToolDef};
 
 use open_infra::civiel::api::{self, Args};
-use open_infra::civiel::{self, as_profiel, corridor, landmeten, landxml, terrein};
+use open_infra::civiel::{self, as_profiel, corridor, landmeten, landxml, riool, terrein};
 use open_infra::{bridge, ui};
 // Grading: feature lines, plateaus, slopes, TIN volumes, mass haul.
 use open_infra::civiel::{grading, massa};
@@ -86,6 +86,13 @@ const I_CATCHMENT: IconKind = icon!("stroomgebied.svg");
 const I_PONDS: IconKind = icon!("plassen.svg");
 // Exchange (stream uitwisseling).
 const I_LANDXML_EXPORT: IconKind = icon!("landxml-export.svg");
+// Riolering (src/civiel/riool.rs).
+const I_RIOOL: IconKind = icon!("riool.svg");
+const I_RIOOL_PROFIEL: IconKind = icon!("riool-profiel.svg");
+const I_RIOOL_TOETS: IconKind = icon!("riool-toets.svg");
+const I_RIOOL_BIJWERKEN: IconKind = icon!("riool-bijwerken.svg");
+const I_RIOOL_EXPORT: IconKind = icon!("riool-export.svg");
+const I_RIOOL_GWSW: IconKind = icon!("riool-gwsw.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -216,6 +223,8 @@ impl CadModule for CivielModule {
                         small("CIV_GRONDBALANS", tr("Grondbalans", "Mass haul"), I_MASS_HAUL),
                     ],
                 },
+                // Pipe networks, for Dutch sewer practice (GWSW, NLCS RI).
+                RibbonGroup { title: tr("Riolering", "Sewers"), tools: riool_tools() },
             ];
             // Survey codes to linework, and parcels.
             groups.push(RibbonGroup {
@@ -829,6 +838,65 @@ fn catchment_request(args: &Args, ponds_only: bool) -> Result<civiel::hydrologie
         min_depth: args.f64("MINDIEPTE")?.unwrap_or(0.05).max(0.0),
         min_area: args.f64("MINOPP")?.unwrap_or(2.0).max(0.0),
     })
+}
+
+/// The sewer tools; the GWSW data tools (Dutch municipal sewer data) only
+/// with the Dutch modules switched on.
+fn riool_tools() -> Vec<RibbonItem> {
+    use open_infra::lang::tr;
+    let mut tools = vec![
+        large("CIV_RIOOL", tr("Riool ontwerpen", "Design sewer"), I_RIOOL),
+        small("CIV_RIOOL_PROFIEL", tr("Lengteprofiel", "Length profile"), I_RIOOL_PROFIEL),
+        small("CIV_RIOOL_TOETS", tr("Toetsen", "Check"), I_RIOOL_TOETS),
+        small("CIV_RIOOL_BIJWERKEN", tr("Bijwerken", "Update"), I_RIOOL_BIJWERKEN),
+        small("CIV_RIOOL_EXPORT", tr("Exporteren", "Export"), I_RIOOL_EXPORT),
+    ];
+    if open_infra::lang::dutch() {
+        tools.push(small("CIV_RIOOL_GWSW", tr("GWSW overnemen", "Take over GWSW"), I_RIOOL_GWSW));
+        tools.push(file_tool("CIV_RIOOL_IMPORT", tr("GWSW-bestand", "GWSW file"), I_RIOOL_GWSW, tr("GWSW-OroX openen", "Open GWSW-OroX"), "GWSW-OroX (Turtle)", &["ttl"], false));
+    }
+    tools
+}
+
+/// `CIV_RIOOL` from the ribbon: pick the manholes, upstream first; Enter
+/// designs the run.
+struct RioolCmd {
+    pts: Vec<[f64; 2]>,
+    design: riool::Ontwerp,
+    opt: civiel::CivielOptions,
+}
+
+impl InteractiveCommand for RioolCmd {
+    fn prompt(&self) -> String {
+        use open_infra::lang::tr;
+        if self.pts.is_empty() {
+            tr("Riolering: eerste put (bovenstrooms)", "Sewers: first manhole (upstream)").into()
+        } else {
+            format!("{} {} [{}]", tr("Riolering: put", "Sewers: manhole"), self.pts.len() + 1, tr("Enter = klaar", "Enter = done"))
+        }
+    }
+    fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
+        self.pts.push([pt[0], pt[1]]);
+        CommandStep::NeedPoint
+    }
+    fn on_enter(&mut self) -> CommandStep {
+        if self.pts.len() >= 2 {
+            let (pts, design, opt) = (std::mem::take(&mut self.pts), self.design.clone(), self.opt.clone());
+            std::thread::spawn(move || match riool::ontwerp(&opt, riool::Invoer::Punten(pts), design, &|_| {}) {
+                Ok(m) => bridge::info(&m),
+                Err(e) => bridge::error(&format!("{}: {e}", open_infra::lang::tr("Riool ontwerpen", "Design sewer"))),
+            });
+        }
+        CommandStep::Done
+    }
+    fn on_cursor_move(&mut self, pt: [f64; 3]) -> Vec<PreviewWire> {
+        if self.pts.is_empty() {
+            return Vec::new();
+        }
+        let mut line: Vec<[f64; 3]> = self.pts.iter().map(|p| [p[0], p[1], 0.0]).collect();
+        line.push(pt);
+        vec![PreviewWire::with_color(line, [0.75, 0.35, 0.85, 1.0])]
+    }
 }
 
 fn open_settings(host: &mut dyn HostApi) {
@@ -1496,6 +1564,76 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let o = opt(&[])?;
             job(host, open_infra::lang::tr("Labels bijwerken", "Update labels"), id, move |p| civiel::labels::update(&o, p));
         }
+        // ── Riolering (src/civiel/riool.rs) ──
+        "CIV_RIOOL" => {
+            use open_infra::lang::tr;
+            let mut o = opt(riool::ONTWERP_ARGS)?;
+            // A design: new work, unless STATUS= says otherwise.
+            if args.str("STATUS").is_none() {
+                o.nlcs.status = open_infra::nlcs::Status::N;
+            }
+            let design = riool::Ontwerp::from_args(args)?;
+            let input = match (args.points("PUNTEN")?, args.handle("LIJN")?) {
+                (Some(p), _) => riool::Invoer::Project(p),
+                (None, Some(h)) => riool::Invoer::Lijn(Some(h)),
+                (None, None) if host.selection().len() == 1 => riool::Invoer::Lijn(None),
+                (None, None) => {
+                    host.start_interactive(Box::new(RioolCmd { pts: Vec::new(), design, opt: o }));
+                    return Ok(());
+                }
+            };
+            job(host, tr("Riool ontwerpen", "Design sewer"), id, move |p| riool::ontwerp(&o, input, design, p));
+        }
+        "CIV_RIOOL_BIJWERKEN" => {
+            let mut o = opt(riool::BIJWERKEN_ARGS)?;
+            if args.str("STATUS").is_none() {
+                o.nlcs.status = open_infra::nlcs::Status::N;
+            }
+            let w = riool::Wijziging::from_args(args)?;
+            let naam = args.str("RIOOL").map(str::to_string);
+            job(host, open_infra::lang::tr("Riool bijwerken", "Update sewer"), id, move |p| riool::bijwerken(&o, naam, w, p));
+        }
+        "CIV_RIOOL_PROFIEL" => {
+            let o = opt(&["RIOOL", "VAN", "NAAR", "PLAATS"])?;
+            let (naam, van, naar) = (args.str("RIOOL").map(str::to_string), args.str("VAN").map(str::to_string), args.str("NAAR").map(str::to_string));
+            let at = place_arg(args)?;
+            job(host, open_infra::lang::tr("Lengteprofiel riool", "Sewer length profile"), id, move |p| riool::profiel(&o, naam, van, naar, at, p));
+        }
+        "CIV_RIOOL_TOETS" => {
+            let o = opt(riool::TOETS_ARGS)?;
+            let t = riool::Toets::from_args(args)?;
+            let naam = args.str("RIOOL").map(str::to_string);
+            job(host, open_infra::lang::tr("Riooltoets", "Sewer check"), id, move |p| riool::toets(&o, naam, t, p));
+        }
+        "CIV_RIOOL_EXPORT" => {
+            // FORMAAT= is this command's own (GWSW or CSV), not the point file format.
+            let o = args.without(&["FORMAAT"]).apply(&base, &["RIOOL", "PAD"])?;
+            let formaat = match args.str("FORMAAT") {
+                Some(f) => riool::Formaat::parse(f).ok_or(open_infra::lang::tr("FORMAAT: GWSW of CSV", "FORMAAT: GWSW or CSV"))?,
+                None => riool::Formaat::Gwsw,
+            };
+            let (naam, pad) = (args.str("RIOOL").map(str::to_string), args.str("PAD").map(std::path::PathBuf::from));
+            job(host, open_infra::lang::tr("Riool exporteren", "Export sewer"), id, move |_| riool::export(&o, naam, formaat, pad));
+        }
+        "CIV_RIOOL_IMPORT" => {
+            let Some(file) = path() else {
+                return Err(open_infra::lang::tr("geef een bestand: CIV_RIOOL_IMPORT <pad.orox.ttl> (of kies via de knop in het lint)", "give a file: CIV_RIOOL_IMPORT <path.orox.ttl> (or pick one with the ribbon button)").into());
+            };
+            let o = opt(&[])?;
+            job(host, open_infra::lang::tr("GWSW-bestand", "GWSW file"), id, move |_| riool::import(&o, std::path::Path::new(&file)));
+        }
+        "CIV_RIOOL_GWSW" => {
+            let o = opt(&["NAAM"])?;
+            let naam = args.str("NAAM").map(str::to_string);
+            job(host, open_infra::lang::tr("GWSW overnemen", "Take over GWSW"), id, move |p| riool::van_gwsw(&o, naam, p));
+        }
+        "CIV_RIOOL_HELP" => host.push_info(
+            "[Open Infra — Riolering / Sewers] CIV_RIOOL [LIJN=<handle> | PUNTEN=x,y;x,y;… | selectie | klikken] [STELSEL=DWA|HWA|GWA|ITR] [DIAMETER=mm] [MATERIAAL=beton|PVC|PP|PE|gres] \
+             [DEKKING=m] [VERHANG=1:250|4 (‰)] [BOB=m NAP|AUTO] [PUT=800|800x1000] [PUTNR=P101] [NAAM=] [OMKEREN=ja] [MAAIVELD=AUTO|ONTWERP|AHN]; \
+             CIV_RIOOL_BIJWERKEN [RIOOL=] [PUTNR= BOB=|MAAIVELD=|PUT=] [LEIDING=P101-P102 DIAMETER=|MATERIAAL=|VERHANG=|DEKKING=] [INVOEGEN=x,y]; \
+             CIV_RIOOL_PROFIEL [RIOOL=] [VAN=] [NAAR=] [PLAATS=x,y]; CIV_RIOOL_TOETS [RIOOL=] [Q=l/s | OPPERVLAK=m² of ha [REGEN=l/s/ha] | INWONERS=] [PUTAFSTAND=] [VRIJ=] [RUWHEID=mm]; \
+             CIV_RIOOL_EXPORT [RIOOL=] [FORMAAT=GWSW|CSV] [PAD=]; CIV_RIOOL_IMPORT <pad.orox.ttl>; CIV_RIOOL_GWSW [NAAM=].",
+        ),
         "CIV_INFO" => {
             opt(&[])?;
             job(host, "Modelinfo", id, |_| civiel::info());

@@ -169,6 +169,8 @@ Corridor parts (kerbs, footways, cycle paths, ditches, pavement layers), your ow
 **Exchange:** `CIV_LANDXML_EXPORT` writes LandXML 1.2 (points, TINs, alignments with ground and design profiles, corridor feature lines), checked against the XSD and read back; see [docs/civiel-uitwisseling.md](docs/civiel-uitwisseling.md).
 
 
+Sewer design (group **Riolering**: runs of manholes and pipes with their invert levels, length profile, checks, GWSW-OroX and CSV export) is described in [docs/civiel-riolering.md](docs/civiel-riolering.md).
+
 The window page **Civiel — instellingen** (settings) holds all settings, and they also apply to the ribbon buttons. Checked on a real road near Dordrecht: the corridor's average-end-area volumes and the independent TIN-to-TIN grid volume agree within 2 %.
 
 Survey codes to linework and symbols, parcels, water drops, catchments and ponds, swept paths in reverse and NEN 2443 parking bays: see [docs/civiel-overig.md](docs/civiel-overig.md).

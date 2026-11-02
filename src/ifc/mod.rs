@@ -418,6 +418,37 @@ fn road_of(d: &Data) -> Option<&str> {
     get(d, "corridor").or_else(|| get(d, "kruispunt")).or_else(|| get(d, "rotonde"))
 }
 
+/// The sewer values of a pipe or manhole (CIV_RIOOL, GWSW), under English
+/// names: invert levels (BOB) in m above the datum (NAP), sizes in mm.
+fn sewer_props(d: &Data) -> Data {
+    let pick = |keys: &[&str]| keys.iter().find_map(|k| get(d, k)).map(str::to_string);
+    let mut out = Data::new();
+    for (name, keys) in [
+        ("InvertLevelStart", &["bob_van", "bob_beginpunt_leiding"][..]),
+        ("InvertLevelEnd", &["bob_naar", "bob_eindpunt_leiding"]),
+        ("NominalDiameter", &["diameter", "breedte_leiding"]),
+        ("InnerDiameter", &["binnendiameter"]),
+        ("WallThickness", &["wanddikte"]),
+        ("Material", &["materiaal", "materiaal_leiding"]),
+        ("Length", &["lengte", "lengte_leiding"]),
+        ("Slope", &["verhang"]),
+        ("System", &["stelsel", "stelseltype"]),
+        ("FromManhole", &["van", "beginpunt"]),
+        ("ToManhole", &["naar", "eindpunt"]),
+        ("ManholeNumber", &["put"]),
+        ("GroundLevel", &["maaiveld", "maaiveldhoogte"]),
+        ("BottomLevel", &["bob_laagst"]),
+        ("Depth", &["diepte"]),
+        ("ManholeSize", &["afmeting", "breedte_put"]),
+    ] {
+        if let Some(v) = pick(keys) {
+            out.push((name.to_string(), v));
+        }
+    }
+    // Only sewer objects: something with an invert level or a manhole bottom.
+    if out.iter().any(|(k, _)| k.starts_with("InvertLevel") || k == "BottomLevel" || (k == "GroundLevel" && get(d, "rol") == Some("put"))) { out } else { Data::new() }
+}
+
 /// KLIC cables and pipes, after the NLCS objects of `nlcs::klic_object`.
 fn klic(o: &str, ot: Option<String>) -> Class {
     let electric = o.starts_with("ET_") || o.starts_with("DATA_");
@@ -511,6 +542,8 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
         "WH" | "OB" => class("IfcGeographicElement", Some("USERDEFINED"), ot),
         "KL" => klic(o, ot),
         "RI" => match o {
+            // Flow arrows of a sewer design are symbols, not pipes.
+            _ if o.contains("STROMINGSRICHTING") => annotation("SYMBOL", ot),
             _ if o.contains("PUT") => class("IfcDistributionChamberElement", Some("MANHOLE"), ot),
             _ if o.contains("KOLK") => class("IfcDistributionChamberElement", Some("SUMP"), ot),
             _ if o.contains("GOOT") => class("IfcPipeSegment", Some("GUTTER"), ot),
@@ -879,6 +912,50 @@ impl<'a, W: Write> Exporter<'a, W> {
         Ok(format!("{}", self.step.add("IFCPRODUCTDEFINITIONSHAPE", &format!("$,$,{}", refs(&ids)))?))
     }
 
+    /// A sewer pipe or manhole in 3D from its object data (CIV_RIOOL or a
+    /// GWSW import): the pipe as a hollow tube along its invert levels, the
+    /// manhole as a shaft from its bottom to the ground. `None` without the
+    /// levels.
+    fn sewer_body(&mut self, e: &EntityType, geo: &Geo, data: &Data) -> io::Result<Option<Id>> {
+        let num = |k: &str| get(data, k).and_then(|v| v.replace(',', ".").parse::<f64>().ok()).filter(|v| v.is_finite());
+        let item = match (geo, e) {
+            (Geo::Curve { pts, closed: false, .. }, _) if pts.len() >= 2 => {
+                let (Some(b0), Some(b1)) = (num("bob_van").or_else(|| num("bob_beginpunt_leiding")), num("bob_eindpunt_leiding").or_else(|| num("bob_naar"))) else { return Ok(None) };
+                let inner = num("binnendiameter").or_else(|| num("breedte_leiding")).filter(|d| *d > 10.0).map(|d| d / 1000.0);
+                let Some(d) = inner else { return Ok(None) };
+                let t = num("wanddikte").unwrap_or(0.0).max(0.0) / 1000.0;
+                let (a, b) = (pts[0], pts[pts.len() - 1]);
+                let pa = self.step.add("IFCCARTESIANPOINT", &format!("({},{},{})", coord(a[0]), coord(a[1]), coord(b0 + d / 2.0)))?;
+                let pb = self.step.add("IFCCARTESIANPOINT", &format!("({},{},{})", coord(b[0]), coord(b[1]), coord(b1 + d / 2.0)))?;
+                let line = self.step.add("IFCPOLYLINE", &format!("({pa},{pb})"))?;
+                let inner_r = if t > 0.0 { real(d / 2.0) } else { "$".into() };
+                self.step.add("IFCSWEPTDISKSOLID", &format!("{line},{},{inner_r},$,$", real(d / 2.0 + t)))?
+            }
+            (_, EntityType::Circle(c)) => {
+                let top = num("maaiveld").or_else(|| num("maaiveldhoogte"));
+                // A GWSW manhole has its height instead of its bottom.
+                let bottom = num("bob_laagst").or_else(|| top.zip(num("hoogte_put")).map(|(t, h)| t - h / 1000.0));
+                let (Some(top), Some(bottom)) = (top, bottom) else { return Ok(None) };
+                if top <= bottom {
+                    return Ok(None);
+                }
+                let at = self.fr.p(c.center.x, c.center.y, 0.0);
+                // A GWSW manhole is drawn as a marker: its width gives the size.
+                let r = num("breedte_put").filter(|w| *w > 100.0).map(|w| w / 2000.0).unwrap_or(c.radius / self.fr.f);
+                let o = self.step.add("IFCCARTESIANPOINT", &format!("({},{},{})", coord(at[0]), coord(at[1]), coord(bottom)))?;
+                let place = self.step.add("IFCAXIS2PLACEMENT3D", &format!("{o},$,$"))?;
+                let profile = self.step.add("IFCCIRCLEPROFILEDEF", &format!(".AREA.,$,$,{}", real(r)))?;
+                self.step.add("IFCEXTRUDEDAREASOLID", &format!("{profile},{place},{},{}", self.c.z_axis, real(top - bottom)))?
+            }
+            _ => return Ok(None),
+        };
+        let rgb = self.colour(e);
+        let s = self.surface_style(rgb, 0)?;
+        self.style(item, s)?;
+        self.layer_items.entry(e.common().layer.clone()).or_default().push(item);
+        Ok(Some(item))
+    }
+
     fn psets(&mut self, key: &str, owner: Id, layer: &str, ln: Option<&LayerName>, data: &Data) -> io::Result<()> {
         let mut nlcs_props: Data = vec![("Laag".into(), layer.to_string())];
         if let Some(ln) = ln {
@@ -1053,6 +1130,9 @@ impl<'a, W: Write> Exporter<'a, W> {
                         Role::Stratum => get(&data, "grondsoort").or_else(|| get(&data, "grondsoort_nen")).map(str::to_string).unwrap_or_else(|| cl.object_type.clone().unwrap_or_default()),
                         _ => get(&data, "naam")
                             .or_else(|| get(&data, "name"))
+                            // A designed sewer (CIV_RIOOL): manhole number, pipe "from-to".
+                            .or_else(|| get(&data, "put"))
+                            .or_else(|| get(&data, "leiding"))
                             .map(str::to_string)
                             .or_else(|| match &geo {
                                 Geo::Text { value, .. } => Some(value.clone()),
@@ -1090,6 +1170,11 @@ impl<'a, W: Write> Exporter<'a, W> {
             let element = groups[gi].class.ifc != "IfcAnnotation";
             for (k, item) in self.items(e, &geo, element, true)? {
                 groups[gi].reps.entry(k).or_default().push(item);
+            }
+            if matches!(groups[gi].class.ifc, "IfcPipeSegment" | "IfcDistributionChamberElement") {
+                if let Some(item) = self.sewer_body(e, &geo, &data)? {
+                    groups[gi].reps.entry(("Body", "SweptSolid")).or_default().push(item);
+                }
             }
         }
 
@@ -1236,6 +1321,10 @@ impl<'a, W: Write> Exporter<'a, W> {
             *report.classes.entry(if gr.class.role == Role::Building { "IfcBuilding".into() } else { gr.class.ifc.to_string() }).or_insert(0) += 1;
             let (layer, ln, data) = (gr.layer.clone(), gr.ln.clone(), std::mem::take(&mut gr.data));
             self.psets(&key, id, &layer, ln.as_ref(), &data)?;
+            let sewer = sewer_props(&data);
+            if !sewer.is_empty() {
+                self.pset(&format!("{key}:riool"), "OpenInfra_Sewer", &sewer, id)?;
+            }
         }
         if let Some(ground) = ground {
             for (i, cut) in cuts.iter().enumerate() {
@@ -1916,6 +2005,38 @@ pub mod tests {
         assert_eq!(n("IfcRoad"), 2, "the corridor and the junction");
         assert_eq!(r.skipped.get("profieltype"), Some(&1), "{:?}", r.skipped);
         assert!(out.contains(".PAVEMENT.") && out.contains("'menggranulaat (fundering)'"), "courses: surfacing and a named foundation");
+    }
+
+    /// A designed sewer (CIV_RIOOL): pipes as hollow tubes at their invert
+    /// levels, manholes as shafts, the BOB as properties, flow arrows as symbols.
+    #[test]
+    fn a_designed_sewer_becomes_pipes_and_manholes() {
+        let mut doc = CadDocument::new();
+        let pipe = nl("RI", "DWA_RIOOLLEIDING_PVC_250", Element::G, Status::N);
+        let put = nl("RI", "DWA_RIOOLPUT_INSPECTIEPUT", Element::G, Status::N);
+        doc.add_entity(on(
+            lw(&[[0.0, 0.0], [40.0, 0.0]], false, 0.0),
+            &pipe,
+            &[("riool", "DWA1"), ("rol", "leiding"), ("leiding", "P101-P102"), ("van", "P101"), ("naar", "P102"), ("diameter", "250"), ("binnendiameter", "235.4"), ("wanddikte", "7.3"), ("materiaal", "PVC"), ("bob_van", "1.2000"), ("bob_naar", "1.0400"), ("verhang", "0.004000")],
+        ))
+        .unwrap();
+        for (x, name, low) in [(0.0, "P101", "1.200"), (40.0, "P102", "1.040")] {
+            let c = EntityType::Circle(ocs_plugin_api::host::codec::Circle::from_center_radius(Vector3::new(x, 0.0, 0.0), 0.4));
+            doc.add_entity(on(c, &put, &[("riool", "DWA1"), ("rol", "put"), ("put", name), ("maaiveld", "2.900"), ("bob_laagst", low), ("afmeting", "800")])).unwrap();
+        }
+        doc.add_entity(on(lw(&[[19.0, 0.5], [20.0, 0.0], [19.0, -0.5]], false, 0.0), &nl("RI", "DWA_STROMINGSRICHTING", Element::G, Status::N), &[("riool", "DWA1"), ("rol", "label")])).unwrap();
+        let site = sample_site();
+        let src = Source { doc: &doc, f: 1.0, site: Some(&site), name: "riool.dwg".into() };
+        let mut r = Report::default();
+        let ifc = String::from_utf8(export(&src, &Options::default(), Vec::new(), &mut r).unwrap()).unwrap();
+        assert_eq!(r.classes.get("IfcPipeSegment"), Some(&1), "{:?}", r.classes);
+        assert_eq!(r.classes.get("IfcDistributionChamberElement"), Some(&2), "{:?}", r.classes);
+        assert_eq!(r.classes.get("IfcAnnotation"), Some(&1), "the flow arrow: {:?}", r.classes);
+        assert!(ifc.contains("IFCSWEPTDISKSOLID") && ifc.contains("IFCEXTRUDEDAREASOLID"), "3D bodies");
+        assert!(ifc.contains("'OpenInfra_Sewer'") && ifc.contains("'InvertLevelStart'") && ifc.contains("'GroundLevel'"));
+        assert!(ifc.contains("'P101-P102'") && ifc.contains("'P101'"), "names");
+        // The tube's axis runs at the invert plus half the inner diameter.
+        assert!(ifc.contains(&format!("{})", coord(1.2 + 0.1177))), "axis height");
     }
 
     #[test]

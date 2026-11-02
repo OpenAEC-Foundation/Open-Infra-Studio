@@ -11,6 +11,7 @@ pub mod landmeten;
 pub mod landxml;
 pub mod model3d;
 pub mod ondergrond;
+pub mod riool;
 pub mod terrein;
 // Plan production: sheets and labels.
 pub mod bladen;
