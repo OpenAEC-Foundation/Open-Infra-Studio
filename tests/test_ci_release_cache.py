@@ -25,6 +25,8 @@ class ReleaseDependencyCacheTest(unittest.TestCase):
         self.assertEqual(len(cargo_steps), 3, 'behoud tests en de twee afzonderlijke pluginbuilds')
         for i in cargo_steps:
             self.assertLess(cache, i)
+            self.assertNotRegex(steps[i], r'(?m)^\s+if:',
+                                'release-tests en beide pluginbuilds moeten onvoorwaardelijk draaien')
 
 
     def test_default_branch_prepares_the_cache_for_future_tags(self):
