@@ -177,14 +177,9 @@ impl App {
     /// Keep a copy among the user's own servers (with the chosen layer).
     fn add_service_to_mine(&mut self) {
         let Some(s) = self.svc.selected.clone() else { return };
-        let mut user = servers::load_user();
         let layer = self.svc.layer.clone().unwrap_or_else(|| s.default_layer.clone());
-        if user.iter().any(|u| u.url == s.url && u.kind == s.kind && u.default_layer == layer) {
-            self.message = Some((true, tr("Deze dienst staat al bij uw servers.", "This service is already among your servers.").into()));
-            return;
-        }
         let id = if s.source == Source::User && !s.id.starts_with("url-") { s.id.clone() } else { format!("user-{}", s.id.trim_start_matches("url-")) };
-        user.push(MapServer {
+        let server = MapServer {
             id,
             kind: s.kind,
             name: s.name.clone(),
@@ -195,9 +190,17 @@ impl App {
             max_zoom: (s.kind == ServerKind::Xyz).then_some(19),
             min_zoom: None,
             builtin: false,
+        };
+        let saved = servers::update_user(|user| {
+            if user.iter().any(|u| u.url == server.url && u.kind == server.kind && u.default_layer == server.default_layer) {
+                return false;
+            }
+            user.push(server);
+            true
         });
-        match servers::save_user(&user) {
-            Ok(()) => {
+        match saved {
+            Ok(false) => self.message = Some((true, tr("Deze dienst staat al bij uw servers.", "This service is already among your servers.").into())),
+            Ok(true) => {
                 self.servers = servers::all();
                 self.svc.catalogue = catalog::all();
                 self.svc.cache = None;

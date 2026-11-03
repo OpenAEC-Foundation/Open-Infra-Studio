@@ -2462,10 +2462,9 @@ impl App {
             match r {
                 Ok(title) => {
                     let kind = self.srv.kind.unwrap_or(ServerKind::Wms);
-                    let mut user = servers::load_user();
                     let name = if self.srv.name.trim().is_empty() { title } else { self.srv.name.trim().to_string() };
                     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-                    user.push(MapServer {
+                    let server = MapServer {
                         id: format!("user-{stamp}"),
                         kind,
                         name: name.clone(),
@@ -2476,8 +2475,8 @@ impl App {
                         max_zoom: (kind == ServerKind::Xyz).then_some(19),
                         min_zoom: None,
                         builtin: false,
-                    });
-                    match servers::save_user(&user) {
+                    };
+                    match servers::update_user(|user| user.push(server)) {
                         Ok(()) => {
                             self.servers = servers::all();
                             self.svc.refresh();
@@ -2551,8 +2550,7 @@ impl App {
             });
         });
         if let Some(id) = remove {
-            let user: Vec<MapServer> = servers::load_user().into_iter().filter(|s| s.id != id).collect();
-            match servers::save_user(&user) {
+            match servers::update_user(|user| user.retain(|s| s.id != id)) {
                 Ok(()) => {
                     self.servers = servers::all();
                     self.svc.refresh();
@@ -2632,9 +2630,10 @@ impl App {
         if add {
             let chosen: Vec<&qgis::Connection> = self.srv.qgis.iter().filter(|(c, on)| *on && c.importable()).map(|(c, _)| c).collect();
             let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-            let saved = servers::try_load_user().and_then(|user| {
-                let (list, added) = qgis::merge(&user, &chosen, stamp);
-                servers::save_user(&list).map(|()| added)
+            let saved = servers::update_user(|user| {
+                let (list, added) = qgis::merge(user, &chosen, stamp);
+                *user = list;
+                added
             });
             match saved {
                 Ok(added) => {

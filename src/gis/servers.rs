@@ -1,7 +1,9 @@
 //! Map server catalogue: presets for the Netherlands (PDOK), Flanders and
 //! worldwide sources, plus servers the user adds (stored in the config dir).
 
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
@@ -200,24 +202,64 @@ pub fn load_user() -> Vec<MapServer> {
 /// The user's servers, or an error when the file exists but cannot be read:
 /// callers that write the list back must not replace a file they could not parse.
 pub fn try_load_user() -> Result<Vec<MapServer>, String> {
-    match std::fs::read_to_string(user_file()) {
-        Ok(s) => serde_json::from_str(&s).map_err(|e| format!("{}: {e}", user_file().display())),
+    read_user(&user_file())
+}
+
+fn read_user(path: &Path) -> Result<Vec<MapServer>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(s) => serde_json::from_str(&s).map_err(|e| format!("{}: {e}", path.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(e) => Err(format!("{}: {e}", user_file().display())),
+        Err(e) => Err(format!("{}: {e}", path.display())),
     }
 }
 
+/// Change the current list while holding a lock shared by both plugin
+/// processes. Read, merge and save must all happen within this operation.
+pub fn update_user<T>(change: impl FnOnce(&mut Vec<MapServer>) -> T) -> Result<T, String> {
+    let path = user_file();
+    let dir = path.parent().unwrap();
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let lock = std::fs::OpenOptions::new().create(true).truncate(false).read(true).write(true)
+        .open(dir.join("servers.json.lock")).map_err(|e| e.to_string())?;
+    lock.lock().map_err(|e| e.to_string())?;
+    let mut servers = read_user(&path)?;
+    let result = change(&mut servers);
+    write_user(&path, &servers)?;
+    // Closing the lock file releases the lock, including on error paths.
+    Ok(result)
+}
+
+/// Replace the list; callers adding or removing servers use `update_user`
+/// so they do not write a snapshot read before another writer's change.
 pub fn save_user(servers: &[MapServer]) -> Result<(), String> {
-    let dir = config_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    update_user(|user| *user = servers.to_vec())
+}
+
+fn write_user(path: &Path, servers: &[MapServer]) -> Result<(), String> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let dir = path.parent().unwrap();
     let json = serde_json::to_string_pretty(servers).map_err(|e| e.to_string())?;
-    // Write beside and rename: a failed save never leaves a half file.
-    let tmp = dir.join("servers.json.tmp");
-    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, user_file()).map_err(|e| {
+    let (tmp, mut file) = loop {
+        let tmp = dir.join(format!(".servers-{}-{}.tmp", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+            Ok(file) => break (tmp, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.to_string()),
+        }
+    };
+    let result = (|| -> std::io::Result<()> {
+        file.write_all(json.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&tmp, path)?;
+        #[cfg(unix)]
+        std::fs::File::open(dir)?.sync_all()?;
+        Ok(())
+    })();
+    if result.is_err() {
         let _ = std::fs::remove_file(&tmp);
-        e.to_string()
-    })
+    }
+    result.map_err(|e| e.to_string())
 }
 
 pub fn all() -> Vec<MapServer> {

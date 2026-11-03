@@ -3,8 +3,7 @@ use std::sync::{Arc, Barrier};
 
 use crate::gis::servers::{self, MapServer};
 
-#[test]
-fn overlapping_saves_keep_complete_json() {
+fn directory() -> std::path::PathBuf {
     let directory = std::env::temp_dir().join(format!(
         "infra-server-saves-{}-{}",
         std::process::id(),
@@ -14,17 +13,27 @@ fn overlapping_saves_keep_complete_json() {
             .as_nanos()
     ));
     std::fs::create_dir_all(&directory).unwrap();
-    let result = std::process::Command::new(std::env::current_exe().unwrap())
+    directory
+}
+
+fn worker(directory: &std::path::Path, test: &str) -> std::process::Command {
+    let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+    command
         .args([
             "--exact",
-            "gis::servers::storage_tests::server_save_worker",
+            &format!("gis::servers::storage_tests::{test}"),
             "--nocapture",
         ])
         .env("INFRA_SERVER_SAVE_WORKER", "1")
-        .env("XDG_CONFIG_HOME", &directory)
-        .env("APPDATA", &directory)
-        .output()
-        .unwrap();
+        .env("XDG_CONFIG_HOME", directory)
+        .env("APPDATA", directory);
+    command
+}
+
+#[test]
+fn overlapping_saves_keep_complete_json() {
+    let directory = directory();
+    let result = worker(&directory, "server_save_worker").output().unwrap();
     std::fs::remove_dir_all(directory).unwrap();
     assert!(
         result.status.success(),
@@ -72,4 +81,62 @@ fn server_save_worker() {
     });
     println!("256 overlappende saves: {failed} opslagfouten, {invalid} onvolledige of ongeldige JSON-controles");
     assert_eq!((failed, invalid), (0, 0));
+
+    let path = servers::config_dir().join("servers.json");
+    std::fs::write(&path, b"{invalid").unwrap();
+    assert!(servers::update_user(|user| user.clear()).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), b"{invalid");
+}
+
+#[test]
+fn concurrent_process_imports_preserve_all_servers() {
+    let directory = directory();
+    let spawn = |name| {
+        worker(&directory, "server_update_worker")
+            .env("INFRA_SERVER_UPDATE_WORKER", name)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap()
+    };
+    let a = spawn("a");
+    let b = spawn("b");
+    for child in [a, b] {
+        let result = child.wait_with_output().unwrap();
+        assert!(
+            result.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    let json =
+        std::fs::read_to_string(directory.join("OpenCADStudio/open-infra/servers.json")).unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+    let list: Vec<MapServer> = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+        list.len(),
+        32,
+        "geen van beide processen mag toevoegingen verliezen"
+    );
+    let ids: std::collections::HashSet<_> =
+        list.iter().map(|s| s.id.to_ascii_lowercase()).collect();
+    assert_eq!(ids.len(), list.len());
+}
+
+#[test]
+fn server_update_worker() {
+    let Ok(name) = std::env::var("INFRA_SERVER_UPDATE_WORKER") else {
+        return;
+    };
+    for i in 0..16 {
+        let connections = crate::gis::qgis::parse(&format!(r#"<qgsWMSConnections><wms name="Openbaar" url="https://{name}.invalid/wms?map={i}"/></qgsWMSConnections>"#)).unwrap();
+        let added = servers::update_user(|user| {
+            let (list, added) = crate::gis::qgis::merge(user, &[&connections[0]], 888);
+            *user = list;
+            added
+        })
+        .unwrap();
+        assert_eq!(added, 1);
+    }
 }
