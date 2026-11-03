@@ -129,15 +129,9 @@ fn url_needs_auth(url: &str) -> bool {
     }
     let host = authority.split(':').next().unwrap_or("").trim_end_matches('.').to_ascii_lowercase();
     let in_domain = |domain: &str| host == domain || host.strip_suffix(domain).is_some_and(|prefix| prefix.ends_with('.'));
-    // `key` can be a public selector (for example, an OSM tag in Taginfo).
-    // Only the documented map API hosts give it an authentication role.
-    let aws_maps = ["maps.geo.", "maps.geo-fips."].iter().any(|&prefix| {
-        host.strip_prefix(prefix).is_some_and(|rest| [".amazonaws.com", ".api.aws"].iter().any(|&suffix| {
-            rest.strip_suffix(suffix).is_some_and(|region| !region.is_empty() && region.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
-        }))
-    });
-    let key_auth = matches!(host.as_str(), "api.maptiler.com" | "maps.googleapis.com" | "tile.googleapis.com" | "dev.ditu.live.com")
-        || ["api.tomtom.com", "basemaps.cartocdn.com", "virtualearth.net"].iter().any(|&domain| in_domain(domain)) || aws_maps;
+    // Treat `key` as authentication by default. Only this documented public
+    // Taginfo host uses it as an OSM tag selector rather than a credential.
+    let key_auth = host != "taginfo.openstreetmap.org";
     // OpenWeather calls its API key `appid`; HERE's app_id is an identifier.
     let appid_auth = in_domain("openweathermap.org");
     let Some((_, query)) = url.split_once('?') else { return false };
