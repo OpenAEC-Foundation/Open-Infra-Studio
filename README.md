@@ -79,7 +79,7 @@ Features you will not easily find together in one tool, let alone a free one:
 | **NLCS linetypes** | 543 (107 plain dash patterns, 436 with symbols or text) |
 | **BGT → NLCS** | 719 rules from the official NLCS-BGT 5.0 mapping; designs go back to the BGT as IMGeo-GML 2.1.1 |
 | **BGT** | 42 PDOK collections in 11 groups, current objects only |
-| **KLIC** | 13 IMKL 2.0 themes: electricity (LS/MS/HS), data, gas (LD/HD), water, district heating, sewer, chemicals |
+| **KLIC** | 13 IMKL 2.0 themes: electricity (LS/MS/HS), data, gas (LD/HD), water, district heating, sewer, chemicals; areas with an *eis voorzorgsmaatregel* hatched, extra detailinfo marked, and the attachments (letters, conditions, sketches) to open from the window |
 | **AHN** | AHN4 DTM/DSM at 0.5 m (PDOK WCS); AHN4/AHN5 point clouds (COPC), only the octree nodes of the project area are downloaded |
 | **3D BAG** | every building in LoD 1.2, 1.3 or 2.2, with BAG id, year of construction and height as object data |
 | **KLIC in 3D** | cables and pipes as tubes at their (assumed) depth under a see-through ground |
@@ -410,7 +410,7 @@ Beside the drawing, unless the command is given a path.
 | **Point cloud** | `.rcs`, attached to the drawing | `GIS_PUNTENWOLK`, LAS/LAZ import |
 | **Survey points** | CSV as PENZD (default), PNEZD, NEZD or ENZD: `punten.csv` | `CIV_PUNTEN_EXPORT` |
 | **Mass balance** | CSV per corridor: `corridor_<name>.csv` | `CIV_CORRIDOR` |
-| **Quantities** | CSV: `hoeveelheden.csv`, or a table in the drawing | `GIS_HOEVEELHEDEN_CSV`, `GIS_HOEVEELHEDEN_TABEL` |
+| **Quantities** | CSV: `hoeveelheden.csv`, or a table in the drawing. Double-drawn elements (the same shape on the same layer to the millimetre, either direction, with the same object data) count once and are listed; the window can select the copies. | `GIS_HOEVEELHEDEN_CSV`, `GIS_HOEVEELHEDEN_TABEL` |
 | **NLCS check** | Markdown report: `nlcs-controle.md` | `GIS_NLCS_RAPPORT` |
 | **BGT mutation** | IMGeo-GML 2.1.1 (`bgt-mutatie.gml`) with a Markdown report (`bgt-mutatie.md`) | `GIS_BGT_MUTATIE` |
 | **IFC 4.3** | IFC4X3_ADD2: `<drawing>_IFC4X3.ifc` (see [IFC 4.3 export](#ifc-43-export)) | `GIS_IFC`, `CIV_IFC` |

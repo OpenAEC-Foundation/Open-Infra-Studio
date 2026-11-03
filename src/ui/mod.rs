@@ -97,6 +97,23 @@ pub fn send(msg: UiMsg) -> bool {
     ok
 }
 
+/// Test builds only, with the bridge-trace marker in the config folder: let a
+/// debugger attach to this plugin process (Linux restricts ptrace to parents),
+/// to see where a window hangs.
+pub(crate) fn allow_debugger() {
+    #[cfg(all(target_os = "linux", any(feature = "ui-test", debug_assertions)))]
+    if crate::gis::servers::config_dir().join("bridge-trace").exists() {
+        extern "C" {
+            fn prctl(option: i32, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> i32;
+        }
+        const PR_SET_PTRACER: i32 = 0x5961_6d61;
+        // SAFETY: prctl with PR_SET_PTRACER only changes who may trace this process.
+        unsafe {
+            prctl(PR_SET_PTRACER, u64::MAX, 0, 0, 0);
+        }
+    }
+}
+
 /// Show the workbench on `tab`, creating the window on first use.
 pub fn open(tab: Tab) -> Result<(), String> {
     if send(UiMsg::Show(tab)) {
@@ -108,6 +125,7 @@ pub fn open(tab: Tab) -> Result<(), String> {
     let (tx, rx) = channel();
     tx.send(UiMsg::Show(tab)).ok();
     *handle().lock().unwrap() = Some(Handle { tx });
+    allow_debugger();
     std::thread::Builder::new()
         .name("open-infra-ui".into())
         .spawn(move || {

@@ -336,9 +336,86 @@ pub fn klic_place(site: &Site, lev: &klic::Levering, opt: &KlicOptions) -> Resul
             batch.push(&spec, emit::markers(&points, &spec.name, o.paper(0.6, f), d.as_ref()), d.as_ref());
         }
     }
+    let (ev, details) = klic_extras(site, lev, opt, &*to_site, &mut batch);
+    drawn += ev + details;
     let (n, layers) = batch.write(&format!("KLIC {}", lev.meldnummer))?;
     bridge::note_source(&format!("KLIC-levering {} (Kadaster)", lev.meldnummer));
-    Ok(format!("KLIC {}: {drawn} objecten → {n} elementen op {layers} NLCS-lagen ({} netbeheerders).", lev.meldnummer, lev.operators.len()))
+    let mut extra = String::new();
+    if ev > 0 {
+        extra.push_str(&format!(" {ev} {}.", crate::lang::tr("gebieden met een eis voorzorgsmaatregel (gearceerd op ZZ-GRENS)", "areas with a precaution requirement (hatched on ZZ-GRENS)")));
+    }
+    if !lev.extras.attachments.is_empty() {
+        extra.push_str(&format!(" {} {}.", lev.extras.attachments.len(), crate::lang::tr("bijlagen: open ze op de pagina BGT · Kadaster · KLIC", "attachments: open them on the BGT · Kadaster · KLIC page")));
+    }
+    Ok(format!("KLIC {}: {drawn} objecten → {n} elementen op {layers} NLCS-lagen ({} netbeheerders).{extra}", lev.meldnummer, lev.operators.len()))
+}
+
+/// The areas with an eis voorzorgsmaatregel (outline and a diagonal hatch on
+/// ZZ-GRENS) and the extra detailinfo (outline or marker on ZZ-DETAIL1 with
+/// the attachment's name), each with its object data. Returns how many of each.
+fn klic_extras(site: &Site, lev: &klic::Levering, opt: &KlicOptions, to_site: &dyn Fn(XY) -> Option<XY>, batch: &mut Batch) -> (usize, usize) {
+    use crate::gis::klic_extra::{THEME_DETAIL, THEME_EV};
+    let Ok(t) = target() else { return (0, 0) };
+    let f = t.unit_factor;
+    let o = &opt.nlcs;
+    let want = |theme: &str| opt.themes.is_empty() || opt.themes.iter().any(|x| x == theme);
+    let (mut ev, mut details) = (0, 0);
+    for a in &lev.extras.areas {
+        let is_ev = a.kind == "eis_voorzorgsmaatregel";
+        if !want(if is_ev { THEME_EV } else { THEME_DETAIL }) {
+            continue;
+        }
+        let Some(obj) = nlcs::object_by_name("ZZ", if is_ev { "GRENS" } else { "DETAIL1" }) else { continue };
+        let file = a.file.as_deref().map(|p| p.rsplit('/').next().unwrap_or(p).to_string());
+        let mut pairs: Vec<(&str, String)> = vec![("bron", "KLIC".into()), ("meldnummer", lev.meldnummer.clone()), ("soort", a.kind.into())];
+        for (k, v) in [(if is_ev { "eis" } else { "type" }, &a.value), ("thema", &a.thema), ("netbeheerder", &a.operator), ("id", &a.id)] {
+            if !v.is_empty() {
+                pairs.push((k, v.clone()));
+            }
+        }
+        if let Some(p) = &a.file {
+            pairs.push(("bijlage", p.clone()));
+        }
+        let d = record(o.object_data, pairs);
+        let feat = Feature { lines: a.polygons.iter().flatten().map(|r| (r.clone(), true)).collect(), points: a.points.clone(), props: Default::default() };
+        let (lines, points) = vector::feature_to_drawing(site, &feat, to_site, f, o.clip);
+        if lines.is_empty() && points.is_empty() {
+            continue;
+        }
+        let paint = |mut spec: LayerSpec| {
+            if is_ev {
+                spec.true_color = Some((220, 40, 40));
+            }
+            spec
+        };
+        let outline = paint(nlcs::layer(obj, o.status, &o.discipline, Element::G));
+        batch.push(&outline, emit::polylines(&lines, &outline.name, o.scale / 1000.0 * f, d.as_ref()), d.as_ref());
+        if is_ev && !lines.is_empty() {
+            let fill = paint(nlcs::layer(obj, o.status, &o.discipline, Element::A));
+            let rings: Vec<Vec<XY>> = lines.iter().map(|(r, _)| r.clone()).collect();
+            let mut h = ocs_plugin_api::host::codec::EntityType::Hatch(Box::new(crate::plannen::hatch(&rings, true, f)));
+            h.common_mut().layer = fill.name.clone();
+            if let Some(d) = &d {
+                h.common_mut().extended_data.add_record(d.clone());
+            }
+            batch.push(&fill, vec![h], d.as_ref());
+            ev += 1;
+        } else {
+            details += 1;
+        }
+        // The attachment's name at the detail, so it can be found among the attachments.
+        if let (false, Some(name)) = (is_ev, &file) {
+            let at = points.first().copied().or_else(|| lines.first().map(|(r, _)| [r.iter().map(|p| p[0]).sum::<f64>() / r.len() as f64, r.iter().map(|p| p[1]).sum::<f64>() / r.len() as f64]));
+            if let Some(at) = at {
+                let spec = nlcs::layer(obj, o.status, &o.discipline, Element::T);
+                batch.push(&spec, vec![emit::text(at, &format!("{} {name}", crate::lang::tr("Detail:", "Detail:")), o.paper(1.8, f), 0.0, &spec.name, d.as_ref())], d.as_ref());
+            }
+            if !points.is_empty() {
+                batch.push(&outline, emit::markers(&points, &outline.name, o.paper(1.2, f), d.as_ref()), d.as_ref());
+            }
+        }
+    }
+    (ev, details)
 }
 
 fn length(pts: &[XY]) -> f64 {

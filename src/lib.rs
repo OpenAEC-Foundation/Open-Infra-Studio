@@ -513,7 +513,7 @@ fn nlcs_command(host: &mut dyn HostApi, verb: &str) {
     let verb = verb.to_string();
     host.push_info(&format!("[Open Infra] {verb} …"));
     std::thread::spawn(move || {
-        let result = (|| -> Result<String, String> {
+        let result = || -> Result<String, String> {
             let t = bridge::target().ok_or("geen tekening actief")?;
             let doc = bridge::snapshot()?;
             let opt = nlcs_check::Options { unit_factor: t.unit_factor, layer_props: !bridge::partial(), ..Default::default() };
@@ -531,7 +531,8 @@ fn nlcs_command(host: &mut dyn HostApi, verb: &str) {
                         let (v, u) = r.main();
                         format!("{} ({}) {v:.1} {u}", r.object_label(), hoeveelheden::status_label(&r.status))
                     }).collect();
-                    Ok(format!("Hoeveelheden van {} elementen in {}: {}{}", q.entities, path.display(), top.join("; "), if rows.len() > 6 { " …" } else { "" }))
+                    let note = q.duplicates_note().map(|n| format!(" — {n}")).unwrap_or_default();
+                    Ok(format!("Hoeveelheden van {} elementen in {}: {}{}{note}", q.entities, path.display(), top.join("; "), if rows.len() > 6 { " …" } else { "" }))
                 }
                 _ => {
                     let r = nlcs_check::check(&doc, &opt);
@@ -547,12 +548,20 @@ fn nlcs_command(host: &mut dyn HostApi, verb: &str) {
                     ))
                 }
             }
-        })();
+        };
+        // A panic in a worker thread would leave the command without an answer.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(result)).unwrap_or_else(|p| Err(panic_text(p.as_ref())));
         match result {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("{verb}: {e}")),
         }
     });
+}
+
+/// The message of a caught panic, for the command line.
+pub(crate) fn panic_text(p: &(dyn std::any::Any + Send)) -> String {
+    let msg = p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_default();
+    format!("{} {msg}", lang::tr("interne fout:", "internal error:"))
 }
 
 struct OpenInfra;
@@ -1027,9 +1036,10 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_BGT" | "GIS_NLCS" => open(host, ui::Tab::Nlcs),
             "GIS_AHN" => open(host, ui::Tab::Ahn),
             "GIS_NLCS_CONTROLE" | "GIS_HOEVEELHEDEN" => {
-                // The window shows the result; without it, the command line.
+                // The window shows the result; without it, or for a script
+                // waiting for the answer (ID=), the command line.
                 let tab = if verb == "GIS_HOEVEELHEDEN" { ui::Tab::Hoeveelheden } else { ui::Tab::Controle };
-                if ui::open(tab).is_ok() {
+                if !bridge::scripted() && ui::open(tab).is_ok() {
                     ui::send(ui::UiMsg::Run(tab));
                 } else {
                     nlcs_command(host, &verb);
