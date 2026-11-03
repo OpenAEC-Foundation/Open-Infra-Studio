@@ -122,28 +122,50 @@ pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
 /// Credentials in userinfo or query parameters are not supported. Decode
 /// parameter names only: query values retain their original meaning.
 fn url_needs_auth(url: &str) -> bool {
-    let authority = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url).split(['/', '?', '#']).next().unwrap_or("");
-    if authority.contains('@') {
+    let raw_authority = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url).split(['/', '?', '#']).next().unwrap_or("");
+    let authority = decode_url_component(raw_authority).unwrap_or_default();
+    if raw_authority.contains('@') || authority.contains('@') {
         return true;
     }
+    let host = authority.split(':').next().unwrap_or("").trim_end_matches('.').to_ascii_lowercase();
+    let in_domain = |domain: &str| host == domain || host.strip_suffix(domain).is_some_and(|prefix| prefix.ends_with('.'));
+    // `key` can be a public selector (for example, an OSM tag in Taginfo).
+    // Only the documented map API hosts give it an authentication role.
+    let aws_maps = ["maps.geo.", "maps.geo-fips."].iter().any(|&prefix| {
+        host.strip_prefix(prefix).is_some_and(|rest| [".amazonaws.com", ".api.aws"].iter().any(|&suffix| {
+            rest.strip_suffix(suffix).is_some_and(|region| !region.is_empty() && region.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+        }))
+    });
+    let key_auth = matches!(host.as_str(), "api.maptiler.com" | "maps.googleapis.com" | "tile.googleapis.com" | "dev.ditu.live.com")
+        || ["api.tomtom.com", "basemaps.cartocdn.com", "virtualearth.net"].iter().any(|&domain| in_domain(domain)) || aws_maps;
+    // OpenWeather calls its API key `appid`; HERE's app_id is an identifier.
+    let appid_auth = in_domain("openweathermap.org");
     let Some((_, query)) = url.split_once('?') else { return false };
     query.split(['&', ';']).any(|parameter| {
-        let mut bytes = parameter.split('=').next().unwrap_or("").bytes();
-        let mut key = String::new();
-        while let Some(b) = bytes.next() {
-            let b = if b == b'%' {
-                let Some(hi) = bytes.next().and_then(|b| (b as char).to_digit(16)) else { return false };
-                let Some(lo) = bytes.next().and_then(|b| (b as char).to_digit(16)) else { return false };
-                (hi * 16 + lo) as u8
-            } else { b };
-            if !matches!(b, b'_' | b'-') {
-                key.push((b as char).to_ascii_lowercase());
-            }
-        }
+        let Some(decoded) = decode_url_component(parameter.split('=').next().unwrap_or("")) else { return false };
+        let key: String = decoded.chars().filter(|&c| !matches!(c, '_' | '-')).map(|c| c.to_ascii_lowercase()).collect();
         matches!(key.as_str(), "user" | "username" | "password" | "passwd" | "pwd" | "auth" | "authcfg" | "authorization"
-            | "token" | "accesstoken" | "refreshtoken" | "idtoken" | "apikey" | "xapikey" | "subscriptionkey" | "key" | "secret" | "clientsecret"
+            | "authkey" | "appcode" | "jwt" | "sessionid" | "jsessionid" | "phpsessid" | "asp.netsessionid"
+            | "accesskey" | "rapidapikey" | "xrapidapikey" | "oauthtoken" | "oauthtokensecret" | "oauthsignature"
+            | "token" | "accesstoken" | "refreshtoken" | "idtoken" | "apikey" | "xapikey" | "subscriptionkey" | "secret" | "clientsecret"
             | "signature" | "sig" | "awsaccesskeyid" | "xamzcredential" | "xamzsecuritytoken" | "xamzsignature" | "xgoogcredential" | "xgoogsignature")
+            || (key == "key" && key_auth) || (key == "appid" && appid_auth)
     })
+}
+
+/// Decode names/authority once; never decode or rewrite the query values.
+fn decode_url_component(value: &str) -> Option<String> {
+    let mut bytes = value.bytes();
+    let mut out = Vec::with_capacity(value.len());
+    while let Some(b) = bytes.next() {
+        let b = if b == b'%' {
+            let hi = (bytes.next()? as char).to_digit(16)?;
+            let lo = (bytes.next()? as char).to_digit(16)?;
+            (hi * 16 + lo) as u8
+        } else { b };
+        out.push(b);
+    }
+    String::from_utf8(out).ok()
 }
 
 /// Placeholders the tile client fills in; anything else in braces is not supported.

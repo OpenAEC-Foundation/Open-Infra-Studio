@@ -6,7 +6,7 @@ De tests maken geen netwerkverbinding. De URL's zijn invoer voor de authenticati
 
 De onderstaande keuzes vormen het testcontract voor deze reparatie. De CI op de uiteindelijke reparatiehead moet bevestigen dat de code eraan voldoet.
 
-## Toe te voegen herkenning
+## Herkenning
 
 Namen worden net als voorheen percentgedecodeerd, hoofdletterongevoelig gemaakt en zonder streepjes of underscores vergeleken. De oorspronkelijke querywaarden worden niet veranderd.
 
