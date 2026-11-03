@@ -13,6 +13,12 @@ Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v20
 
 The libraries are signed: Authenticode with a timestamp on Windows (publisher Impertio Studio B.V.), Developer ID and notarized by Apple on macOS, and a detached OpenPGP signature of the OpenAEC Foundation (`.asc`) per Linux file. Check those with `gpg --verify <file>.asc <file>` against `openaec-signing-public-key.asc` (fingerprint `13F6D414ADEE4ED4CD09AC60601D86C93C504D29`).
 
+**Fixed in 2026.45.3**
+
+- **Quantities:** arcs are always counted again. In 2026.45.2 two different arcs on the same layer could be taken for one double-drawn line, so a length could drop out of the total (with a 1000 m radius, two arcs 40 mm apart counted as one).
+- **KLIC attachments:** a file now opens from its own place in the delivery. In 2026.45.2 two attachments with the same name (for example `voorwaarden.pdf` from two network operators) both opened the first one. Each delivery keeps its own folder, and attachments always stay inside it.
+- **KLIC extra detailinfo:** details drawn as a line are shown as a line on ZZ-DETAIL1, and the file of a line or point detail is listed with the attachments. In 2026.45.2 a line detail gave no outline and no attachment.
+
 **New in 2026.45.2 — terrain with its photo anywhere in the world**
 
 - **Terrain + aerial photo worldwide** (Civiel → Output and 3D → View, `CIV_FOTOTERREIN`): the ground of any project location as a 3D surface coloured by its photo. Heights from AHN in the Netherlands and from the Terrain Tiles mosaic elsewhere (NASA SRTM, USGS 3DEP, GMTED2010, NOAA ETOPO). The photo is PDOK in the Netherlands, the USGS National Map imagery in the United States and Sentinel-2 cloudless (2016, CC BY 4.0) in the rest of the world; `FOTO=` chooses another one or a later Sentinel-2 year (non-commercial licence, stated in the result).
