@@ -1,10 +1,10 @@
-Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.43** (plugin API 13), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab. New in this release: the whole drawing as **IFC 4.3**.
+Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.44** (plugin API 14), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab. New in this release: the whole drawing as **IFC 4.3**.
 
-**Note:** this release is built for Open CAD Studio **v2026.43**. A plugin for v2026.42 does not load in v2026.43, and the other way round. So update Open Infra together with Open CAD Studio.
+**Note:** this release is built for Open CAD Studio **v2026.44** (plugin API 14). Open Infra 2026.45.0 and earlier do not load in v2026.44, and this release does not load in v2026.43. So update Open Infra together with Open CAD Studio. From API 14 on, the host no longer ties a plugin to its own compiler and codec commit, so later host updates should break the plugin far less often.
 
 **Installing**
 
-1. Update Open CAD Studio to [v2026.43](https://github.com/HakanSeven12/OpenCADStudio/releases/tag/v2026.43).
+1. Update Open CAD Studio to [v2026.44](https://github.com/HakanSeven12/OpenCADStudio/releases/tag/v2026.44).
 2. **GIS plugin:** in Open CAD Studio, run `PLUGINS` (Plugin Manager), pick **Open Infra Studio** from the list (or choose *Add a repository* and enter `OpenAEC-Foundation/Open-Infra-Studio`), pick this release and click *Install*. By hand: put `openaec.open-infra-<platform>` and `plugin.toml` from this release in `<config>/OpenCADStudio/plugins/openaec.open-infra/`.
 3. **Civiel plugin:** unzip `open-infra-civiel-<platform>.zip` into `<config>/OpenCADStudio/plugins/`. That gives the folder `openaec.open-infra-civiel` with its library and `plugin.toml`.
 4. Restart Open CAD Studio. The ribbon shows the tabs **GIS** and **Civiel**.
@@ -13,8 +13,9 @@ Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v20
 
 The libraries are signed: Authenticode with a timestamp on Windows (publisher Impertio Studio B.V.), Developer ID and notarized by Apple on macOS, and a detached OpenPGP signature of the OpenAEC Foundation (`.asc`) per Linux file. Check those with `gpg --verify <file>.asc <file>` against `openaec-signing-public-key.asc` (fingerprint `13F6D414ADEE4ED4CD09AC60601D86C93C504D29`).
 
-**New in 2026.45.1 — QGIS connections**
+**New in 2026.45.1 — Open CAD Studio v2026.44 and QGIS connections**
 
+- **Open CAD Studio v2026.44** (plugin API 14): both plugins are built for the new host. The project location and units are read on the first command, because the host answers requests only after loading.
 - **Import QGIS connections** (Server management): read a WMS, WFS or XYZ connections file exported from QGIS, or drop it on the window, check the preview and add the chosen connections in one save. They appear in the service browser under *QGIS*. Connections that need a password, own HTTP headers, a different axis order or tiles Open Infra cannot draw are shown with the reason and not added; passwords are never read. Importing the same file again adds nothing.
 - **Tile addresses** with `{-y}` (TMS row order) and `{q}` (quadkey) now work, and a tile server's minimum zoom is respected.
 - Saving your own servers is atomic: a failed save leaves the previous list intact, and an unreadable server list is never overwritten.

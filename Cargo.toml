@@ -24,10 +24,9 @@ ui-test = ["eframe/accesskit"]
 members = [".", "civiel"]
 
 [dependencies]
-# Stable host contract, pinned to the Open CAD Studio v2026.43 release (API 13).
-# Pin the commit of the Open CAD Studio release you target:
-# it also pins the opencadcodec revision, and the host only loads a plugin built
-# against the same opencadcodec commit and rustc.
+# Stable host contract, pinned to the Open CAD Studio v2026.44 release tag (API 14).
+# From API 14 the plugin runs its own runner loop: the host no longer compares
+# compiler and opencadcodec commit, only the shape of the types on the wire.
 ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "537ab37095b681cab899c1cf48b2927d06e194b9", features = ["host"] }
 
 # GIS engine

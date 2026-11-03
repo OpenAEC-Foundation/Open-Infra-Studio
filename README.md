@@ -1,7 +1,7 @@
 # Open Infra Studio — GIS, NLCS and civil design for Open CAD Studio
 
 [![Release](https://img.shields.io/github/v/release/OpenAEC-Foundation/Open-Infra-Studio?label=release)](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/latest)
-[![Open CAD Studio](https://img.shields.io/badge/Open%20CAD%20Studio-v2026.43-2196dc)](https://github.com/HakanSeven12/OpenCADStudio)
+[![Open CAD Studio](https://img.shields.io/badge/Open%20CAD%20Studio-v2026.44-2196dc)](https://github.com/HakanSeven12/OpenCADStudio)
 [![Plugin API](https://img.shields.io/badge/plugin%20API-13-6db7ed)](https://github.com/HakanSeven12/OpenCADStudio/tree/master/crates/ocs_plugin_api)
 [![NLCS](https://img.shields.io/badge/NLCS-5.02-98c379)](https://www.nlcs.nl)
 [![Licence](https://img.shields.io/badge/licence-GPL--3.0--only-lightgrey)](LICENSE)
@@ -515,7 +515,7 @@ Or install by hand:
 
 The Civiel plugin comes as `open-infra-civiel-<platform>.zip` in the same release: unzip it into `<config>/OpenCADStudio/plugins/` (it holds the folder `openaec.open-infra-civiel`) and restart. `<config>` is `%APPDATA%` on Windows, `~/.config` on Linux and `~/Library/Application Support` on macOS.
 
-Release numbers follow Open CAD Studio's calendar numbering. The current code is built for **Open CAD Studio v2026.43** (plugin API 13, opencadcodec `24b037a`, rustc 1.99.1), from release 2026.44.3 on; 2026.44.2 and earlier were for v2026.42. The host only loads a plugin built against its own opencadcodec revision and rustc, so update the plugin together with Open CAD Studio.
+Release numbers follow Open CAD Studio's calendar numbering. The current code is built for **Open CAD Studio v2026.44** (plugin API 14), from release 2026.45.1 on; 2026.44.3 to 2026.45.0 were for v2026.43 and 2026.44.2 and earlier for v2026.42. From API 14 the host no longer requires the plugin's compiler and opencadcodec commit to match its own, only the shape of the data it exchanges, so a plugin usually keeps loading after a host update. A plugin for v2026.43 (API 13) does not load in v2026.44.
 
 ## Building
 
@@ -539,7 +539,7 @@ The test set ([`tests/`](tests/README.md)) covers 16 locations: Dutch cities, a 
 
 It also lists the host issues still open in Open CAD Studio.
 
-`Cargo.toml` and `civiel/Cargo.toml` pin `ocs_plugin_api` to the Open CAD Studio v2026.43 release. For a newer Open CAD Studio, move the `rev` to the commit of that release, and update the rustc version in `.github/workflows/release.yml` to match.
+`Cargo.toml` and `civiel/Cargo.toml` pin `ocs_plugin_api` to the Open CAD Studio v2026.44 release tag. For a newer Open CAD Studio, move the `rev` to that release's tag.
 
 For development against a local Open CAD Studio checkout, add a `.cargo/config.toml` (not committed):
 
