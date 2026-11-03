@@ -10,7 +10,7 @@
 //! with a location a detail area, line or point, any `Bijlage` with a
 //! `bestandLocatie` an attachment.
 
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use super::crs::XY;
@@ -217,15 +217,66 @@ pub fn read(path: &Path) -> Result<Extras, String> {
     parse(&gi_xml(path)?)
 }
 
+fn invalid_attachment_path(rel: &str) -> String {
+    format!("{} {rel}", tr("ongeldig bijlagepad", "invalid attachment path"))
+}
+
+/// Controleer ook bestaande mapdelen en een eventueel al uitgepakt bestand.
+/// Een ontbrekend eindbestand is toegestaan; links worden nooit gevolgd.
+fn attachment_target(root: &Path, relative: &Path, rel: &str, create_parents: bool) -> Result<PathBuf, String> {
+    let root = if root.as_os_str().is_empty() { Path::new(".") } else { root };
+    if std::fs::symlink_metadata(root).map_err(|e| e.to_string())?.file_type().is_symlink() {
+        return Err(invalid_attachment_path(rel));
+    }
+    let root = root.canonicalize().map_err(|e| format!("{}: {e}", root.display()))?;
+    let mut target = root.clone();
+    let mut parts = relative.components().peekable();
+    while let Some(part) = parts.next() {
+        if !matches!(part, std::path::Component::Normal(_)) {
+            return Err(invalid_attachment_path(rel));
+        }
+        target.push(part.as_os_str());
+        let parent = parts.peek().is_some();
+        let meta = match std::fs::symlink_metadata(&target) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                if !parent || !create_parents {
+                    // Het eerste ontbrekende deel kan geen bestaande link zijn.
+                    target.extend(parts);
+                    return Ok(target);
+                }
+                match std::fs::create_dir(&target) {
+                    Ok(()) => {},
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {},
+                    Err(e) => return Err(format!("{}: {e}", target.display())),
+                }
+                std::fs::symlink_metadata(&target).map_err(|e| e.to_string())?
+            }
+            Err(e) => return Err(format!("{}: {e}", target.display())),
+        };
+        if meta.file_type().is_symlink() || (parent && !meta.is_dir()) || (!parent && !meta.is_file()) {
+            return Err(invalid_attachment_path(rel));
+        }
+        let resolved = target.canonicalize().map_err(|e| e.to_string())?;
+        if !resolved.starts_with(&root) {
+            return Err(invalid_attachment_path(rel));
+        }
+        target = resolved;
+    }
+    Ok(target)
+}
+
 /// An attachment as a file on disk: next to an extracted GI-xml it is already
 /// there; from a zip it is extracted to `out_dir` (once).
 pub fn attachment_file(delivery: &Path, rel: &str, out_dir: &Path) -> Result<PathBuf, String> {
-    if rel.contains("..") {
-        return Err(format!("{} {rel}", tr("ongeldig bijlagepad", "invalid attachment path")));
+    // ZIP-paden gebruiken '/'. Weiger ook Windows-prefixen op Unix, zodat
+    // dezelfde levering op elk platform binnen de bedoelde map blijft.
+    if rel.contains("..") || rel.contains(['\\', ':']) || rel.split('/').any(|part| part.is_empty() || part == ".") {
+        return Err(invalid_attachment_path(rel));
     }
     let ext = delivery.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
     if matches!(ext.as_deref(), Some("xml") | Some("gml")) {
-        let p = delivery.parent().unwrap_or(Path::new(".")).join(rel);
+        let p = attachment_target(delivery.parent().unwrap_or(Path::new(".")), Path::new(rel), rel, false)?;
         return if p.exists() { Ok(p) } else { Err(format!("{} {}", tr("bijlage niet gevonden:", "attachment not found:"), p.display())) };
     }
     // Het bronpad en de bestandsstaat scheiden ook gelijknamige leveringen
@@ -238,7 +289,9 @@ pub fn attachment_file(delivery: &Path, rel: &str, out_dir: &Path) -> Result<Pat
     source.hash(&mut key);
     meta.len().hash(&mut key);
     meta.modified().ok().hash(&mut key);
-    let target = out_dir.join(format!("{:016x}", key.finish())).join(rel);
+    std::fs::create_dir_all(out_dir).map_err(|e| e.to_string())?;
+    let relative = PathBuf::from(format!("{:016x}", key.finish())).join(rel);
+    let target = attachment_target(out_dir, &relative, rel, false)?;
     if target.exists() {
         return Ok(target);
     }
@@ -247,10 +300,11 @@ pub fn attachment_file(delivery: &Path, rel: &str, out_dir: &Path) -> Result<Pat
         .filter_map(|i| zip.by_index(i).ok().map(|f| f.name().to_string()))
         .find(|n| n.ends_with(rel))
         .ok_or_else(|| format!("{} {rel}", tr("bijlage niet in de zip:", "attachment not in the zip:")))?;
-    std::fs::create_dir_all(target.parent().unwrap()).map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
     zip.by_name(&name).map_err(|e| e.to_string())?.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-    std::fs::write(&target, bytes).map_err(|e| format!("{}: {e}", target.display()))?;
+    let target = attachment_target(out_dir, &relative, rel, true)?;
+    let mut output = std::fs::OpenOptions::new().write(true).create_new(true).open(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+    output.write_all(&bytes).map_err(|e| format!("{}: {e}", target.display()))?;
     Ok(target)
 }
 
