@@ -481,10 +481,9 @@ mod qgis_preview_tests {
             <wms name="Openbaar" url="https://public.invalid/wms"/>
         </qgsWMSConnections>"#).unwrap();
         app.srv.qgis = connections.into_iter().map(|c| (c, true)).collect();
-        let output = context.run(egui::RawInput::default(), |context| {
-            egui::CentralPanel::default().show(context, |ui| app.qgis_import(ui));
-        });
+        let output = context.run_ui(egui::RawInput::default(), |ui| app.qgis_import(ui));
         let rendered = format!("{:?}", output.shapes);
+        output.drop_without_applying_deltas();
         assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
         assert!(!rendered.contains("SYNTHETIC_VALUE"));
     }
