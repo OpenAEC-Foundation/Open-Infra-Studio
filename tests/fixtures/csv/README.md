@@ -40,6 +40,13 @@ De letterlijke kapotte notitie uit Sols vervolgreview wordt met zowel
 beide gevallen behouden blijven. Alleen de rij met onbruikbare coördinaten
 telt als overgeslagen; de variant met `105,210` houdt alle vier punten.
 
+De vervolgreproductie zet een meerregelig goed record direct achter de
+kapotte notitie. De tests controleren zowel `note,x,y` als `x,y,note`,
+met komma, puntkomma of tab en met LF of CRLF. De drie goede punten en de
+volledige notitie `put\nwest` blijven behouden, met precies één overgeslagen
+rij. Herstel verwerkt alleen de eerste fysieke regel; het volgende record
+gaat weer door de normale decoder, zodat zijn regeleinde behouden blijft.
+
 CSV- en IMRO-leesdetails blijven in het resultaat. De bestandenpagina en
 de algemene importopdracht gebruiken weer precies hun bestaande meldingen
 van vóór de CSV-wijziging. Twee tests openen echte tijdelijke bestanden

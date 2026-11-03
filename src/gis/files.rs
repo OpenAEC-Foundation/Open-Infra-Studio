@@ -796,20 +796,12 @@ fn csv_records(text: &str, sep: char, warnings: &mut Vec<String>) -> Vec<(usize,
         warnings.push(format!("CSV: {} {line}; {}",
             crate::lang::tr("niet afgesloten aangehaald veld vanaf regel", "unterminated quoted field starting on line"),
             crate::lang::tr("resterende regels afzonderlijk gelezen", "remaining lines read separately")));
-        // Include the entire physical line with the invalid closing quote;
-        // its opening quote may belong to the next otherwise valid record.
-        let recovery_end = tail[record.end..].find(['\r', '\n']).map(|n| {
-            let i = record.end + n;
-            i + if tail[i..].starts_with("\r\n") { 2 } else { 1 }
-        }).unwrap_or(tail.len());
-        let mut offset = 0;
-        while offset < recovery_end {
-            let physical = csv_record(&tail[offset..recovery_end], sep, true);
-            if !tail[offset..offset + physical.end].trim().is_empty() { records.push((line, physical.fields)); }
-            line += physical.lines;
-            offset += physical.end;
-        }
-        start += recovery_end;
+        // Recover only the first physical line. The following record may
+        // contain valid quoted newlines and must use normal decoding again.
+        let physical = csv_record(tail, sep, true);
+        if !tail[..physical.end].trim().is_empty() { records.push((line, physical.fields)); }
+        line += physical.lines;
+        start += physical.end;
     }
     records
 }
