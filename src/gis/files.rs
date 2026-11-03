@@ -843,6 +843,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sol_csv_broken_note_with_bad_coordinates_keeps_both_later_rows() {
+        let text = "x,y,note\n100,200,goed\nbad,210,\"onaf\n110,220,\"normaal\"\n120,240,goed";
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(),
+            vec![[100.0, 200.0], [110.0, 220.0], [120.0, 240.0]]);
+        assert_eq!(data.skipped, 1);
+        assert_eq!(data.features[1].props["note"], "normaal");
+        assert!(!data.warnings.is_empty());
+    }
+
+    #[test]
+    fn sol_csv_broken_note_with_valid_coordinates_keeps_every_point() {
+        let text = "x,y,note\n100,200,goed\n105,210,\"onaf\n110,220,\"normaal\"\n120,240,goed";
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(),
+            vec![[100.0, 200.0], [105.0, 210.0], [110.0, 220.0], [120.0, 240.0]]);
+        assert_eq!(data.skipped, 0);
+        assert_eq!(data.features[1].props["note"], "onaf");
+        assert_eq!(data.features[2].props["note"], "normaal");
+        assert!(!data.warnings.is_empty());
+    }
+
+    #[test]
     fn sol_csv_multiline_note_preserves_both_points_full_text_and_no_warnings() {
         let text = "x,y,note\n100,200,\"put\nwest\"\n110,220,normaal";
         let data = csv(text).unwrap();
