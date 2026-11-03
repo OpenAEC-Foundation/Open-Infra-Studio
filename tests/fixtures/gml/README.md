@@ -38,3 +38,16 @@ in de CI over zijn stack. De geometrieverwerking gebruikt een expliciete
 werklijst; de werkstack voor de recursieve XML-bibliotheek groeit mee met
 de vooraf gemeten XML-diepte. De testgevallen volgen de geneste typen uit
 `geometryAggregates.xsd` en `geometryComplexes.xsd`.
+
+`malformed.gml` is een zelfgemaakt bestand met een verkeerde sluittag,
+onder dezelfde GPL-3.0-only-licentie. Het legt de bestaande fout uit Sols
+reproductie vast, inclusief de verwachte tag en de positie `1:75`. De
+algemene bestandsroute moet dezelfde oorspronkelijke XML-fout teruggeven.
+
+`tests/gml_safety.rs` maakt twee vaste diepe varianten met 256 geneste
+`MultiGeometry`/`geometryMember`-paren: een verkeerde sluittag en een
+onbekende entiteit. De Linux-procesproef begrenst het kindproces op tien
+seconden wandtijd, vijf seconden CPU en 1 GiB virtueel geheugen; core dumps
+staan uit. Alleen het kindproces krijgt deze grenzen. Een abort, hang,
+overschreden grens of ontbrekende XML-foutdetails laat de proef falen. De
+normale offline CI voert deze proef uit, zonder live dienst of schemaopvraag.
