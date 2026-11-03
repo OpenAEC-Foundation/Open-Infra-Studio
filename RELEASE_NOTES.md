@@ -13,6 +13,25 @@ Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v20
 
 The libraries are signed: Authenticode with a timestamp on Windows (publisher Impertio Studio B.V.), Developer ID and notarized by Apple on macOS, and a detached OpenPGP signature of the OpenAEC Foundation (`.asc`) per Linux file. Check those with `gpg --verify <file>.asc <file>` against `openaec-signing-public-key.asc` (fingerprint `13F6D414ADEE4ED4CD09AC60601D86C93C504D29`).
 
+**New in 2026.45.0 — civil design closes the gaps**
+
+- **Point clouds** (Civiel → Terrain): a TIN from a point cloud (the AHN points of the project area, or a LAS, LAZ, COPC, E57, PLY, PTS or XYZ file), ground lines along an axis from a strip of points, a ground filter for unclassified scans, and a 3D mesh of an object such as a bridge or quay wall.
+- **Sewer design** (Civiel → Sewers): manholes and pipes along a polyline with invert levels from minimum cover and slope, length profile, checks (cover, slope, velocity, KLIC crossings), update after changes, and export to GWSW-OroX and CSV. In the Netherlands also the GWSW sewer data of the municipality as a starting point.
+- **LandXML 1.2 export** of points, TINs, alignments with ground and design profiles, and corridor feature lines, checked against the schema. The **IFC 4.3 export** now also writes a corridor as road parts with pavement courses and earthwork bodies, sewers with their invert levels, point-cloud meshes and survey symbols.
+- **Plan production**: sheet sets along an alignment, each a paper-space layout with the plan strip and length profile; every sheet to PDF; labels (stationing, curve data, PVIs, grades, spot heights) that update when their source changes.
+- **Alignments**: clothoids (computed exactly), design criteria per guideline, an alignment check, sight distance, and rail tracks with cant and turnouts.
+- **Corridors**: a parts library (kerbs, footways, cycle paths, ditches, pavement layers), your own assemblies as JSON, junctions and roundabouts.
+- **Grading**: feature lines, plateaus and slopes into one design surface, exact TIN-to-TIN volumes and a mass haul diagram.
+- **Survey and site**: survey point codes become linework and symbols, plots are divided into parcels, water drops, catchments and ponds on the terrain, reverse swept paths and parking bays.
+- **Calmer ribbon**: the Civiel tab has seven groups (Points, Terrain, Alignment and profile, Corridor, Grading, Sewers, Output and 3D) plus the Netherlands group on the right; related tools share a menu.
+
+**New in 2026.45.0 — regions, plans and objects**
+
+- **Regional profiles**: the Netherlands, the United States and International, each with its own data menu; the region is stored per drawing and is independent of the interface language. Twenty more countries are researched in `docs/localisations-20-landen.md`.
+- **Spatial plans (NL)**: search the plans at a location through the Ruimtelijke Plannen API (with your own key) or read a local IMRO GML, drawn with the official map styles.
+- **Infra library**: 94 parametric NLCS objects (pavements, kerbs, sewer and pressure pipes, drainage, cables and ducts, manholes, cabinets, lighting, green, street furniture) with smart connections.
+- **Service catalogue**: 612 checked services; `docs/servers-onderzoek-2026-11.md` lists 170 more checked on 2 November 2026 (3D Tiles, I3S, COPC, EPT, WCS, STAC and download services, including France's LiDAR HD, Japan's PLATEAU and Singapore's land parcels) for readers still to come.
+
 **New — IFC 4.3 export**
 
 - **GIS → Output → IFC 4x3** and **Civiel → 3D model → IFC 4x3** (`GIS_IFC`, `CIV_IFC [BESTAND=] [SELECTIE] [TEKST=nee]`, MCP tool `ifc_export`) write the whole drawing as IFC 4.3 (IFC4X3_ADD2) beside it.

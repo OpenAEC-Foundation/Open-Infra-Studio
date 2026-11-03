@@ -1,0 +1,12 @@
+{
+  "naam": "2x2-middenberm",
+  "omschrijving": "Weg 2×2 met een middenberm van 4,00 m (verdiept), rijstroken 3,50 m en bermen 2,50 m",
+  "bronnen": ["Alle maten zijn schattingen; toets ze aan CROW Handboek wegontwerp of de ROA"],
+  "talud": 3, "ingraving": 2, "reikwijdte": 60, "verkanting": 4, "uitrol": 40,
+  "beide": [
+    {"type": "middenberm", "breedte": 4.00, "helling": 4.0},
+    {"type": "rijstrook", "breedte": 3.50, "helling": -2.5, "lagen": "asfalt-gow"},
+    {"type": "rijstrook", "breedte": 3.50, "helling": -2.5, "lagen": "asfalt-gow"},
+    {"type": "berm", "breedte": 2.50, "helling": -4.0}
+  ]
+}

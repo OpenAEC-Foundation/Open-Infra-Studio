@@ -161,7 +161,7 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
     coordinate_crosses(&mut s, site, opt.scale, f, &ma);
     north_arrow(&mut s, ma.x1 - 18.0, ma.y1 - 26.0);
     scale_bar(&mut s, ma.x0 + 10.0, ma.y0 + 10.0, opt.scale);
-    title_block(&mut s, sx, pw - 10.0, info, opt, paper, site);
+    title_block(&mut s, sx, pw - 10.0, info, opt, paper, &site.crs, &site.label);
     let shown = legend(&mut s, sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
 
     let mut ents = Vec::new();
@@ -258,7 +258,8 @@ fn fmt_m(v: f64) -> String {
     if (v - v.round()).abs() < 1e-9 { format!("{v:.0}") } else { format!("{v}") }
 }
 
-fn title_block(s: &mut Sheet, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOptions, paper: &str, site: &Site) {
+#[allow(clippy::too_many_arguments)]
+fn title_block(s: &mut Sheet, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOptions, paper: &str, crs: &str, place: &str) {
     let y0 = 10.0;
     let rows = [0.0, 14.0, 26.0, 38.0, 54.0, 70.0, TITLE_H];
     for r in &rows[1..rows.len() - 1] {
@@ -277,7 +278,7 @@ fn title_block(s: &mut Sheet, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOpti
     label(s, x0, y0 + rows[1], "bronnen");
     value(s, x0, y0 + 4.5, if sources.is_empty() { "—" } else { &sources }, 1.8);
     // Number / status / CRS / format.
-    let cells = [("tekeningnummer", info.number.clone()), ("tekenstatus", opt.status.label().to_string()), ("coördinatenstelsel", site.crs.clone()), ("formaat", format!("{paper} liggend"))];
+    let cells = [("tekeningnummer", info.number.clone()), ("tekenstatus", opt.status.label().to_string()), ("coördinatenstelsel", crs.to_string()), ("formaat", format!("{paper} liggend"))];
     for (i, (l, v)) in cells.iter().enumerate() {
         let x = x0 + w * 0.25 * i as f64;
         label(s, x, y0 + rows[2], l);
@@ -292,7 +293,7 @@ fn title_block(s: &mut Sheet, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOpti
     label(s, x0, y0 + rows[4], "onderwerp");
     value(s, x0, y0 + rows[3] + 6.0, &info.subject, 3.5);
     label(s, x0, y0 + rows[5], "project");
-    value(s, x0, y0 + rows[4] + 6.0, if info.project.is_empty() { &site.label } else { &info.project }, 3.5);
+    value(s, x0, y0 + rows[4] + 6.0, if info.project.is_empty() { place } else { &info.project }, 3.5);
     value(s, x0, y0 + rows[5] + 9.5, "OPEN INFRA", 5.0);
     s.text("TEKENBLAD_TITELBLOK", x1 - 2.0 - 40.0, y0 + rows[5] + 9.5, "NLCS 5.02", 2.5, true);
     s.text("TEKENBLAD_TITELBLOK", x0 + 2.0, y0 + rows[5] + 3.5, "OpenAEC Foundation — Open CAD Studio", 1.8, true);
@@ -349,4 +350,60 @@ fn legend(s: &mut Sheet, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
         shown += 1;
     }
     shown
+}
+
+/// The parts of an NLCS sheet for a sheet laid out elsewhere (the plan and
+/// profile sheets of `civiel::bladen`, in a paper-space layout): the same
+/// frame, title block, legend and scale bar as [`draw`], in paper
+/// millimetres from `origin` at `k` drawing units per millimetre.
+pub struct Parts(Sheet);
+
+impl Parts {
+    pub fn new(origin: XY, k: f64, opt: &NlcsOptions) -> Parts {
+        Parts(Sheet { origin, k, out: Vec::new(), status: nlcs::Status::B, discipline: opt.discipline.clone() })
+    }
+
+    /// Trim line and drawing frame of a `w` × `h` mm sheet: a 20 mm binding
+    /// margin on the left, 10 mm elsewhere.
+    pub fn frame(&mut self, w: f64, h: f64) {
+        self.0.rect("TEKENBLAD_KADER_AFSNIJMARKERING", 0.0, 0.0, w, h);
+        self.0.rect("TEKENBLAD_KADER", 20.0, 10.0, w - 10.0, h - 10.0);
+    }
+
+    pub fn rect(&mut self, layer: &str, x0: f64, y0: f64, x1: f64, y1: f64) {
+        self.0.rect(layer, x0, y0, x1, y1);
+    }
+
+    pub fn line(&mut self, layer: &str, pts: &[(f64, f64)]) {
+        self.0.poly(layer, pts, false);
+    }
+
+    /// Text on an AL layer; `left` aligns left instead of centred.
+    pub fn text(&mut self, layer: &str, x: f64, y: f64, value: &str, mm: f64, left: bool) {
+        self.0.text(layer, x, y, value, mm, left);
+    }
+
+    /// The title block between `x0` and `x1`, 88 mm high from the frame's foot.
+    #[allow(clippy::too_many_arguments)]
+    pub fn title_block(&mut self, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOptions, paper: &str, crs: &str, place: &str) {
+        title_block(&mut self.0, x0, x1, info, opt, paper, crs, place);
+    }
+
+    /// Height of the title block (mm).
+    pub const TITLE_H: f64 = TITLE_H;
+
+    /// Legend of the NLCS layers drawn in this session; the number shown.
+    pub fn legend(&mut self, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
+        legend(&mut self.0, x0, x1, y0, y1)
+    }
+
+    /// A scale bar of about 100 mm from (`x`, `y`), labelled "schaal 1:n".
+    pub fn scale_bar(&mut self, x: f64, y: f64, scale: f64) {
+        scale_bar(&mut self.0, x, y, scale);
+    }
+
+    /// The entities per NLCS layer.
+    pub fn finish(self) -> Vec<(LayerSpec, Vec<EntityType>)> {
+        self.0.out
+    }
 }

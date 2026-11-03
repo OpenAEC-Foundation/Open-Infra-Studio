@@ -1,12 +1,12 @@
 //! The layout of an IfcAlignment: horizontal segments from an Open Infra
-//! axis (lines and arcs), vertical segments from its design profile (grades
+//! axis (lines, arcs and clothoids), vertical segments from its design profile (grades
 //! and parabolic curves), and the transition codes between them. Lengths in
 //! metres; the mapping to curve segments follows IFC 4.3 ADD2 as
 //! IfcOpenShell evaluates it.
 
 use std::f64::consts::{FRAC_PI_2, TAU};
 
-use crate::civiel::as_profiel::{design_z, Alignment, Pvi, Seg};
+use crate::civiel::as_profiel::{clothoid_local, design_z, Alignment, Pvi, Seg};
 
 /// One horizontal segment (IfcAlignmentHorizontalSegment).
 #[derive(Clone, Debug, PartialEq)]
@@ -16,24 +16,67 @@ pub struct HSeg {
     pub dir: f64,
     /// Signed radius: > 0 turns left (counter-clockwise), 0 for a line.
     pub radius: f64,
+    /// Signed radius at the end: the same as `radius` for a line or an
+    /// arc, another for a clothoid (0 = straight).
+    pub end_radius: f64,
     pub length: f64,
 }
 
 impl HSeg {
+    /// A straight or circular segment of this radius and length.
+    pub fn new(start: [f64; 2], dir: f64, radius: f64, length: f64) -> HSeg {
+        HSeg { start, dir, radius, end_radius: radius, length }
+    }
+
     pub fn is_line(&self) -> bool {
-        self.radius == 0.0
+        self.radius == 0.0 && self.end_radius == 0.0
+    }
+
+    pub fn is_clothoid(&self) -> bool {
+        self.radius != self.end_radius
     }
 
     pub fn kind(&self) -> &'static str {
-        if self.is_line() { "LINE" } else { "CIRCULARARC" }
+        if self.is_clothoid() {
+            "CLOTHOID"
+        } else if self.is_line() {
+            "LINE"
+        } else {
+            "CIRCULARARC"
+        }
     }
 
-    fn curvature(&self) -> f64 {
-        if self.is_line() { 0.0 } else { 1.0 / self.radius }
+    fn curvature_of(radius: f64) -> f64 {
+        if radius == 0.0 { 0.0 } else { 1.0 / radius }
+    }
+
+    /// Signed curvature at the start and at the end.
+    pub fn start_curvature(&self) -> f64 {
+        HSeg::curvature_of(self.radius)
+    }
+
+    pub fn end_curvature(&self) -> f64 {
+        HSeg::curvature_of(self.end_radius)
+    }
+
+    /// A clothoid as the part of an IfcClothoid: its constant A (negative
+    /// turns clockwise, κ(t) = sign(A)·t/A²) and the parameter at the
+    /// segment's start.
+    pub fn clothoid(&self) -> Option<(f64, f64)> {
+        let (k0, k1) = (self.start_curvature(), self.end_curvature());
+        let c = (k1 - k0) / self.length.max(1e-300);
+        (self.is_clothoid() && c != 0.0).then(|| (c.signum() / c.abs().sqrt(), k0 / c))
     }
 
     /// End point and direction.
     pub fn end(&self) -> ([f64; 2], f64) {
+        if self.is_clothoid() {
+            let (k0, k1) = (self.start_curvature(), self.end_curvature());
+            let c = (k1 - k0) / self.length.max(1e-300);
+            let l = clothoid_local(k0, c, self.length);
+            let (sn, cs) = self.dir.sin_cos();
+            return ([self.start[0] + cs * l[0] - sn * l[1], self.start[1] + sn * l[0] + cs * l[1]], self.dir + k0 * self.length + c * self.length * self.length / 2.0);
+        }
         if self.is_line() {
             ([self.start[0] + self.length * self.dir.cos(), self.start[1] + self.length * self.dir.sin()], self.dir)
         } else {
@@ -47,28 +90,54 @@ impl HSeg {
 
 /// The horizontal layout of an axis in drawing units, in metres from the
 /// drawing origin (`f` drawing units per metre).
+///
+/// ── CLOTHOID: the place for `Seg::Spiral` (as-spoor branch) ──────────────
+/// A clothoid has a start and an end radius, so `HSeg` needs an end radius
+/// next to `radius` (start), and `kind()` returns "CLOTHOID" for it. Then:
+/// - here, the `Seg::Spiral` arm: start point and direction, the signed
+///   start and end radii (left > 0, 0 for straight) and the length, all
+///   divided by `f` where they are lengths;
+/// - `end()` and `curvature()`: from the spiral's own end (`Seg::at`);
+/// - in `mod.rs` (`Exporter::alignment`): the parent curve is an
+///   `IFCCLOTHOID(<identity2>,A)` and the curve segment starts at
+///   `SegmentStart`, both from [`clothoid`] below; the
+///   IfcAlignmentHorizontalSegment gets StartRadiusOfCurvature and
+///   EndRadiusOfCurvature from the two radii, PredefinedType .CLOTHOID.;
+/// - the match below stays exhaustive (no wildcard), so the merge points here.
 pub fn horizontal(al: &Alignment, f: f64) -> Vec<HSeg> {
     al.segs
         .iter()
         .map(|s| match s {
-            Seg::Line { a, b } => HSeg {
-                start: [a[0] / f, a[1] / f],
-                dir: (b[1] - a[1]).atan2(b[0] - a[0]),
-                radius: 0.0,
-                length: (b[0] - a[0]).hypot(b[1] - a[1]) / f,
-            },
+            Seg::Line { a, b } => HSeg::new([a[0] / f, a[1] / f], (b[1] - a[1]).atan2(b[0] - a[0]), 0.0, (b[0] - a[0]).hypot(b[1] - a[1]) / f),
             Seg::Arc { c, r, a0, sweep } => {
                 let sign = sweep.signum();
-                HSeg {
-                    start: [(c[0] + r * a0.cos()) / f, (c[1] + r * a0.sin()) / f],
-                    dir: a0 + sign * FRAC_PI_2,
-                    radius: sign * r / f,
-                    length: r * sweep.abs() / f,
-                }
+                HSeg::new([(c[0] + r * a0.cos()) / f, (c[1] + r * a0.sin()) / f], a0 + sign * FRAC_PI_2, sign * r / f, r * sweep.abs() / f)
+            }
+            // Curvature per drawing unit → radius in metres (0 = straight).
+            Seg::Spiral { a, dir, len, k0, k1 } => {
+                let radius = |k: f64| if k.abs() < 1e-300 { 0.0 } else { 1.0 / k / f };
+                HSeg { start: [a[0] / f, a[1] / f], dir: *dir, radius: radius(*k0), end_radius: radius(*k1), length: len / f }
             }
         })
         .filter(|s| s.length > 1e-9)
         .collect()
+}
+
+/// The IfcClothoid parent curve of a spiral from signed radius `r0` to `r1`
+/// (0 = straight) over `len` (m): the clothoid constant A and where the
+/// segment starts on it (SegmentStart). After ifcopenshell's `_map_clothoid`
+/// (IfcOpenShell alignment API, LGPL-3.0-or-later). For `Seg::Spiral`.
+pub fn clothoid(r0: f64, r1: f64, len: f64) -> (f64, f64) {
+    let f = (if r1 == 0.0 { 0.0 } else { len / r1 }) - (if r0 == 0.0 { 0.0 } else { len / r0 });
+    let a = len / f.abs().sqrt() * f.signum();
+    let start = if (r0.abs() < r1.abs() && r0 != 0.0) || r1 == 0.0 {
+        -len - if r1 != 0.0 { len * r0 / (r1 - r0) } else { 0.0 }
+    } else if r0 != 0.0 {
+        len * r1 / (r0 - r1)
+    } else {
+        0.0
+    };
+    (a, start)
 }
 
 /// How segment `a` runs into segment `b` (IfcTransitionCode).
@@ -81,7 +150,7 @@ pub fn transition(a: &HSeg, b: &HSeg) -> &'static str {
     if turn.min(TAU - turn) > 1e-5 {
         return "CONTINUOUS";
     }
-    if (a.curvature() - b.curvature()).abs() < 1e-9 { "CONTSAMEGRADIENTSAMECURVATURE" } else { "CONTSAMEGRADIENT" }
+    if (a.end_curvature() - b.start_curvature()).abs() < 1e-9 { "CONTSAMEGRADIENTSAMECURVATURE" } else { "CONTSAMEGRADIENT" }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -204,6 +273,16 @@ mod tests {
     }
 
     #[test]
+    fn clothoid_parent_curves() {
+        // Straight into R 200 to the left over 60 m: A = sqrt(R L), from the origin.
+        let (a, start) = clothoid(0.0, 200.0, 60.0);
+        assert!((a - (200.0f64 * 60.0).sqrt()).abs() < 1e-9 && start.abs() < 1e-9);
+        // From R 200 out to straight: the 60 m before the origin, mirrored.
+        let (a, start) = clothoid(200.0, 0.0, 60.0);
+        assert!(a < 0.0 && (start + 60.0).abs() < 1e-9, "{a} {start}");
+    }
+
+    #[test]
     fn millimetre_drawings_scale_to_metres() {
         let al = Alignment { name: "A".into(), start: 0.0, segs: vec![Seg::Line { a: [0.0, 0.0], b: [5000.0, 0.0] }] };
         assert!((horizontal(&al, 1000.0)[0].length - 5.0).abs() < 1e-12);
@@ -211,10 +290,10 @@ mod tests {
 
     #[test]
     fn a_kink_is_continuous_only() {
-        let a = HSeg { start: [0.0, 0.0], dir: 0.0, radius: 0.0, length: 10.0 };
-        let b = HSeg { start: [10.0, 0.0], dir: 0.3, radius: 0.0, length: 10.0 };
+        let a = HSeg::new([0.0, 0.0], 0.0, 0.0, 10.0);
+        let b = HSeg::new([10.0, 0.0], 0.3, 0.0, 10.0);
         assert_eq!(transition(&a, &b), "CONTINUOUS");
-        let c = HSeg { start: [10.0, 0.0], dir: 0.0, radius: 0.0, length: 10.0 };
+        let c = HSeg::new([10.0, 0.0], 0.0, 0.0, 10.0);
         assert_eq!(transition(&a, &c), "CONTSAMEGRADIENTSAMECURVATURE");
     }
 
@@ -245,5 +324,31 @@ mod tests {
             sum += (1.0 + (b + 2.0 * c * x).powi(2)).sqrt() * l / n as f64;
         }
         assert!((parabola_length(b, c, l) - sum).abs() < 1e-6);
+    }
+
+    #[test]
+    fn clothoids_become_clothoid_segments() {
+        use crate::civiel::as_profiel::Transition;
+        let pi2 = [300.0 + 300.0 * (std::f64::consts::PI / 3.0).cos(), 300.0 * (std::f64::consts::PI / 3.0).sin()];
+        let al = Alignment::from_layout(&[[0.0, 0.0], [300.0, 0.0], pi2], &[200.0], &[Transition::Length(60.0)]).unwrap();
+        let h = horizontal(&al, 1.0);
+        assert_eq!(h.iter().map(|s| s.kind()).collect::<Vec<_>>(), ["LINE", "CLOTHOID", "CIRCULARARC", "CLOTHOID", "LINE"]);
+        assert_eq!((h[1].radius, h[1].end_radius, h[3].radius, h[3].end_radius), (0.0, 200.0, 200.0, 0.0));
+        // Each segment ends where the next starts, with the same direction and curvature.
+        for w in h.windows(2) {
+            let (p, d) = w[0].end();
+            assert!((p[0] - w[1].start[0]).hypot(p[1] - w[1].start[1]) < 1e-9 && (d - w[1].dir).abs() < 1e-12);
+            assert_eq!(transition(&w[0], &w[1]), "CONTSAMEGRADIENTSAMECURVATURE");
+        }
+        // A = √(R L) = √12000. Into the curve the parent runs from its origin
+        // (t 0 → 60); out of it the clothoid turns the other way (A < 0) and
+        // runs from t = −60 to its origin.
+        let (a, t0) = h[1].clothoid().unwrap();
+        assert!((a - 12_000f64.sqrt()).abs() < 1e-9 && t0.abs() < 1e-12);
+        let (a, t0) = h[3].clothoid().unwrap();
+        assert!((a + 12_000f64.sqrt()).abs() < 1e-9 && (t0 + 60.0).abs() < 1e-9, "{a} {t0}");
+        // A right-hand clothoid from straight: negative A.
+        let right = HSeg { start: [0.0, 0.0], dir: 0.0, radius: 0.0, end_radius: -100.0, length: 50.0 };
+        assert!(right.clothoid().unwrap().0 < 0.0 && right.end().0[1] < 0.0);
     }
 }

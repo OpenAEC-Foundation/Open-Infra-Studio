@@ -1,0 +1,26 @@
+{
+  "naam": "stadsstraat",
+  "omschrijving": "Stadsstraat 50 km/u: rijbaan 2 × 3,00 m asfalt met goten en trottoirbanden; links een trottoir, rechts een scheidingsberm, een vrijliggend fietspad en een sloot",
+  "bronnen": [
+    "CROW ASVV 2021 (inrichting binnen de bebouwde kom); rijstrookbreedte, gootbreedte, bandopstand en trottoirbreedte zijn schattingen",
+    "CROW Ontwerpwijzer fietsverkeer (publicatie 351): eenrichtingsfietspad 2,00 m bij 0–150 fietsers per spitsuur",
+    "Trottoirband 13/15×25 cm: NLCS-object KANTOPSLUITING_TROTTOIRBAND_130X150, NEN-EN 1340",
+    "Verhardingsopbouw: opbouw.json (schattingen)"
+  ],
+  "talud": 2, "ingraving": 2, "reikwijdte": 30, "verkanting": 0, "uitrol": 30,
+  "links": [
+    {"type": "rijstrook", "breedte": 3.00, "helling": -2.5, "lagen": "asfalt-stad"},
+    {"type": "goot", "breedte": 0.30, "helling": -2.5, "lagen": "goot"},
+    {"type": "band", "naam": "trottoirband 13/15x25", "breedte": 0.15, "opstand": 0.12, "hoogte": 0.25, "schuinte": 0.02, "lagen": "band"},
+    {"type": "trottoir", "breedte": 1.80, "helling": 2.0, "lagen": "tegels"}
+  ],
+  "rechts": [
+    {"type": "rijstrook", "breedte": 3.00, "helling": -2.5, "lagen": "asfalt-stad"},
+    {"type": "goot", "breedte": 0.30, "helling": -2.5, "lagen": "goot"},
+    {"type": "band", "naam": "trottoirband 13/15x25", "breedte": 0.15, "opstand": 0.12, "hoogte": 0.25, "schuinte": 0.02, "lagen": "band"},
+    {"type": "scheidingsberm", "breedte": 1.50, "helling": -2.0},
+    {"type": "fietspad", "breedte": 2.00, "helling": -2.0, "lagen": "fietspad-asfalt"},
+    {"type": "berm", "breedte": 1.00, "helling": -4.0},
+    {"type": "sloot", "bodembreedte": 0.50, "diepte": 0.80, "talud_binnen": 1.5, "talud_buiten": 1.5}
+  ]
+}
