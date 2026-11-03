@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 @unittest.skipUnless(os.name == 'posix' and shutil.which('bash') and shutil.which('dirname'),
                      'Deze shellcontrole vereist POSIX met Bash en dirname')
 class CachedBuildTest(unittest.TestCase):
-    def invoke(self, with_cache, explicit_wrapper=None, client=None, fallback=None, exit_code=0):
+    def invoke(self, with_cache, explicit_wrapper=None, client=None, fallback=None, exit_code=0,
+               with_cdpath=False, release=False):
         with tempfile.TemporaryDirectory(prefix='ois-build-script-') as directory:
             temp = Path(directory)
             bindir = temp / 'bin'
@@ -46,8 +47,19 @@ raise SystemExit(int(os.environ['BUILD_EXIT']))
                 env['SCCACHE_CLIENT_SIDE'] = client
             if fallback is not None:
                 env['SCCACHE_IGNORE_SERVER_IO_ERROR'] = fallback
-            process = subprocess.run([shutil.which('bash'), str(ROOT/'scripts/build.sh'), '--locked', '-p', 'open-infra', '--target-dir', 'target met spaties'],
-                                     cwd=temp, env=env, capture_output=True, text=True)
+            script = str(ROOT / 'scripts/build.sh')
+            cwd = temp
+            if with_cdpath:
+                other = temp / 'andere-checkout'
+                (other / 'scripts').mkdir(parents=True)
+                env['CDPATH'] = str(other)
+                script = 'scripts/build.sh'
+                cwd = ROOT
+            args = ['--locked', '-p', 'open-infra', '--target-dir', 'target met spaties']
+            if release:
+                args.insert(0, '--release')
+            process = subprocess.run([shutil.which('bash'), script, *args],
+                                     cwd=cwd, env=env, capture_output=True, text=True)
             self.assertTrue(capture.exists(), process.stderr)
             return process.returncode, json.loads(capture.read_text())
 
@@ -62,6 +74,20 @@ raise SystemExit(int(os.environ['BUILD_EXIT']))
         code, result = self.invoke(True)
         self.assertEqual(code, 0)
         self.assertEqual((result['wrapper'], result['client'], result['fallback']), ('sccache', '1', '1'))
+
+    def test_cdpath_cannot_redirect_a_relative_script_invocation(self):
+        code, result = self.invoke(False, with_cdpath=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(result['cwd'], str(ROOT))
+
+    def test_release_builds_use_the_cache_and_respect_the_explicit_opt_out(self):
+        for wrapper, expected in [(None, 'sccache'), ('', '')]:
+            with self.subTest(wrapper=wrapper):
+                code, result = self.invoke(True, explicit_wrapper=wrapper, release=True)
+                self.assertEqual(code, 0)
+                self.assertEqual(result['args'], ['build', '--release', '--locked', '-p', 'open-infra',
+                                                 '--target-dir', 'target met spaties'])
+                self.assertEqual(result['wrapper'], expected)
 
     def test_an_explicit_wrapper_or_opt_out_is_preserved(self):
         for wrapper in ['', '/opt/compiler-wrapper']:
