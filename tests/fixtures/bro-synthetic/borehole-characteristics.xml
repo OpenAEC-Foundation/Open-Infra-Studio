@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Zelfgemaakte leesfixture; bron en licentie staan in README.md. -->
+<dispatchCharacteristicsResponse xmlns="http://www.broservices.nl/xsd/dsbhr-gt/2.1"
+    xmlns:brocom="http://www.broservices.nl/xsd/brocommon/3.0"
+    xmlns:gml="http://www.opengis.net/gml/3.2">
+  <dispatchDocument><BHR_GT_C>
+    <brocom:broId>BHR000000000101</brocom:broId>
+    <brocom:deregistered>nee</brocom:deregistered>
+    <brocom:qualityRegime>IMBRO</brocom:qualityRegime>
+    <brocom:deliveredLocation><gml:Point srsName="EPSG:28992"><gml:pos>100 200</gml:pos></gml:Point></brocom:deliveredLocation>
+    <brocom:standardizedLocation><gml:Point srsName="EPSG:4258"><gml:pos>51.1 4.1</gml:pos></gml:Point></brocom:standardizedLocation>
+    <localVerticalReferencePoint>maaiveld</localVerticalReferencePoint>
+    <offset uom="m">1.25</offset><verticalDatum>NAP</verticalDatum>
+    <boringStartDate><brocom:date>2026-01-02</brocom:date></boringStartDate>
+    <finalDepthBoring uom="m">5.5</finalDepthBoring>
+  </BHR_GT_C></dispatchDocument>
+  <dispatchDocument><BHR_GT_C>
+    <brocom:broId>BHR000000000102</brocom:broId>
+    <brocom:deregistered>nee</brocom:deregistered>
+    <brocom:qualityRegime>IMBRO</brocom:qualityRegime>
+    <brocom:deliveredLocation><gml:Point srsName="EPSG:28992"><gml:pos>110 210</gml:pos></gml:Point></brocom:deliveredLocation>
+    <brocom:standardizedLocation><gml:Point srsName="EPSG:4258"><gml:pos>51.2 4.2</gml:pos></gml:Point></brocom:standardizedLocation>
+    <localVerticalReferencePoint>maaiveld</localVerticalReferencePoint>
+    <offset uom="m">2.5</offset><verticalDatum>NAP</verticalDatum>
+    <boringStartDate><brocom:date>2026-01-03</brocom:date></boringStartDate>
+    <finalDepthBoring uom="m">6.5</finalDepthBoring>
+  </BHR_GT_C></dispatchDocument>
+  <dispatchDocument><BHR_GT_C>
+    <brocom:broId>BHR000000000103</brocom:broId>
+    <brocom:deregistered>nee</brocom:deregistered>
+    <brocom:qualityRegime>IMBRO/A</brocom:qualityRegime>
+    <brocom:deliveredLocation><gml:Point srsName="EPSG:28992"><gml:pos>120 220</gml:pos></gml:Point></brocom:deliveredLocation>
+    <brocom:standardizedLocation><gml:Point srsName="EPSG:4258"><gml:pos>51.3 4.3</gml:pos></gml:Point></brocom:standardizedLocation>
+    <localVerticalReferencePoint>waterbodem</localVerticalReferencePoint>
+    <offset uom="m">-0.75</offset><verticalDatum>NAP</verticalDatum>
+    <boringStartDate><brocom:date>2026-01-04</brocom:date></boringStartDate>
+    <finalDepthBoring uom="m">7.5</finalDepthBoring>
+  </BHR_GT_C></dispatchDocument>
+</dispatchCharacteristicsResponse>

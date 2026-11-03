@@ -1,6 +1,6 @@
 # Zelfgemaakte BRO-testinvoer
 
-Deze twee kleine XML-bestanden zijn specifiek voor de bestaande BRO-lezer
+Deze kleine XML-bestanden zijn specifiek voor de bestaande BRO-lezer
 gemaakt. Ze zijn vereenvoudigde leesvoorbeelden, geen officiële BRO-XSD-
 validatiebestanden en geen gegevens uit het register. Alle ids, locaties en
 metingen zijn verzonnen. Bron: OpenAEC Foundation, Open Infra Studio, 2026.
@@ -21,3 +21,12 @@ Ethans besluit niet aan voortgang of eindtekst toegevoegd. De lijst in het
 zoekresultaat telt de overgeslagen objecten. Een onleesbaar afzonderlijk
 CPT/BHR-object gebruikt de bestaande foutmelding voor een ontbrekend
 bruikbaar object.
+
+`borehole-characteristics.xml` bevat drie verzonnen BHR-zoekobjecten met
+verschillende locaties, hoogtes, einddieptes, datums en kwaliteitsregimes.
+De buurtest vervangt alleen de `offset` of `finalDepthBoring` van het
+middelste object door `broken`. De volledige metadata en volgorde van de
+twee gezonde buren moeten behouden blijven, met precies één intern
+leesdetail dat het middelste BRO-id noemt. De onbeschadigde fixture moet
+alle drie de objecten zonder leesdetails opleveren. Ook deze fixture is
+een vereenvoudigd leesvoorbeeld, geen volledig BRO-XSD-validatiebestand.

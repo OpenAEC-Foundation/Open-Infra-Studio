@@ -651,10 +651,12 @@ pub fn gml(text: &str) -> Result<FileData, String> {
     let mut reader = quick_xml::Reader::from_str(text);
     let (mut depth, mut deepest) = (0usize, 0usize);
     loop {
-        match reader.read_event().map_err(|_| invalid())? {
-            quick_xml::events::Event::Start(_) => { depth += 1; deepest = deepest.max(depth); }
-            quick_xml::events::Event::End(_) => depth = depth.checked_sub(1).ok_or_else(invalid)?,
-            quick_xml::events::Event::Eof => break,
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(_)) => { depth += 1; deepest = deepest.max(depth); }
+            Ok(quick_xml::events::Event::End(_)) => depth = depth.saturating_sub(1),
+            // Let the original XML parser report syntax errors, on the stack
+            // needed for the prefix already measured, preserving its details.
+            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
             _ => {}
         }
     }

@@ -1,17 +1,21 @@
-# Een compiler-cache voor herhaalde schone ontwikkelbuilds
+# Een compiler-cache voor lokale builds
 
 `scripts/build.sh` bouwt vanuit deze checkout en gebruikt een beschikbare
 `sccache` als `RUSTC_WRAPPER` nog niet in de omgeving is ingesteld. Een bestaande
 waarde, ook een lege waarde, houdt voorrang. Alle argumenten gaan ongewijzigd
 naar `cargo build` en de exitcode van Cargo blijft de exitcode van het script.
+Dezelfde cachekeuze geldt ook voor builds met `--release`.
 
 ```sh
 ./scripts/build.sh --locked -p open-infra
 ./scripts/build.sh --locked -p open-infra-civiel
 RUSTC_WRAPPER= ./scripts/build.sh --locked -p open-infra
+./scripts/build.sh --release -p open-infra
+RUSTC_WRAPPER= ./scripts/build.sh --release
 ```
 
-De derde aanroep kiest expliciet de gewone compilerroute. Zonder `sccache` op
+Een lege `RUSTC_WRAPPER` kiest expliciet de gewone compilerroute, ook bij
+`--release`. Zonder `sccache` op
 `PATH` gebruikt het script eveneens gewoon Cargo. De gemeten versie is 0.19.0.
 Er wordt geen programma geïnstalleerd en geen globale Cargo-configuratie
 gewijzigd. Bij automatisch gekozen sccache gebruikt het script standaard de
@@ -19,7 +23,8 @@ clientmodus en de fallback bij server-I/O-fouten; bestaande waarden voor die
 twee opties blijven behouden. Een wrapper uit een lokale Cargo-configuratie
 kan via `RUSTC_WRAPPER` expliciet worden gekozen.
 
-Incrementele compilatie van de eigen crates blijft ingeschakeld. De cache
+Het script behoudt de Cargo-profielinstellingen. In ontwikkelbuilds blijft
+incrementele compilatie van de eigen crates ingeschakeld. De cache
 hergebruikt vooral externe dependencies na het legen van de Cargo-doelmap.
 Een bestaande, actuele doelmap blijft de snelste route. Het script verandert
 de bestaande installatiescripts en CI-workflows niet.
@@ -98,11 +103,14 @@ shellcheck scripts/build.sh
 
 Met een script dat uitsluitend `cargo build` uitvoert faalt de cachekeuzetest,
 exit 1: de beschikbare cache wordt niet doorgegeven. Na de cachekeuze slagen
-alle vijf tests, exit 0. De tests starten het echte shellscript vanuit een andere
+de cachecontroles, exit 0. De tests starten het echte shellscript vanuit een andere
 map met gecontroleerde programma's op `PATH`; er wordt geen Rust-compiler gestart.
 Ze controleren het ontbreken van sccache, aanwezige sccache, expliciete wrappers
 en opt-out, bestaande cacheopties, argumenten met spaties en een Cargo-fout met
-exitcode 42. Deze shellcontrole vraagt POSIX met Bash en dirname; op andere
+exitcode 42. Ze bewaken ook dat een geëxporteerde `CDPATH` de relatieve aanroep
+`bash scripts/build.sh` naar de juiste checkout laat gaan en dat `--release`
+dezelfde cachekeuze en expliciete opt-out gebruikt. Deze shellcontrole vraagt
+POSIX met Bash en dirname; op andere
 omgevingen wordt hij expliciet overgeslagen.
 
 De echte scriptversie op head `d16802095ab49c71162c29e78bd8d6fb0c371ca3`
