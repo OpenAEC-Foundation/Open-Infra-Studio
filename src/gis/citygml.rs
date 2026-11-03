@@ -330,7 +330,7 @@ fn members(xml: &str) -> Result<(Vec<(usize, usize)>, &str, usize), String> {
                 }
                 depth = depth.checked_sub(1).ok_or("CityGML: onverwachte XML-eindtag")?;
             }
-            Event::Text(text) if depth == 0 && !text.as_ref().iter().all(u8::is_ascii_whitespace) => return Err("CityGML: tekst buiten XML-hoofdelement".into()),
+            Event::Text(text) if depth == 0 && !text.iter().all(u8::is_ascii_whitespace) => return Err("CityGML: tekst buiten XML-hoofdelement".into()),
             Event::CData(_) | Event::GeneralRef(_) if depth == 0 => return Err("CityGML: inhoud buiten XML-hoofdelement".into()),
             Event::Eof => break,
             _ => {}

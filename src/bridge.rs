@@ -166,11 +166,11 @@ pub fn save_site(site: &Site) -> Result<(), String> {
     let entries = vec![XRecordEntry::string(1, json)];
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
     let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: SITE_RECORD.into(), entries: entries.clone() };
-    if let Ok(PluginResponse::XRecordUpdateResult(Ok(_))) = t.sender.request(update) {
+    if let Ok(PluginResponse::XRecordUpdateResult(Ok(_))) = traced(trace_on().then(|| "UpdateXRecord SITE".into()), || t.sender.request(update)) {
         return Ok(());
     }
     // Not there yet: create it (and the OPENINFRA dictionary).
-    match t.sender.request(PluginRequest::CreateXRecord { dictionary_path: path, name: SITE_RECORD.into(), entries }) {
+    match traced(trace_on().then(|| "CreateXRecord SITE".into()), || t.sender.request(PluginRequest::CreateXRecord { dictionary_path: path, name: SITE_RECORD.into(), entries })) {
         Ok(PluginResponse::XRecordCreateResult(Ok(_))) => Ok(()),
         Ok(PluginResponse::XRecordCreateResult(Err(e))) | Ok(PluginResponse::Error(e)) => Err(e),
         Ok(other) => Err(format!("onverwacht antwoord: {other:?}")),
@@ -178,9 +178,52 @@ pub fn save_site(site: &Site) -> Result<(), String> {
     }
 }
 
+/// Request tracing for diagnosis: on with `OI_BRIDGE_TRACE` or a file
+/// `<config>/OpenCADStudio/open-infra/bridge-trace`; every host request is
+/// written before and after, with its thread, to `bridge-trace.log` beside it.
+fn trace_on() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| {
+        let on = std::env::var_os("OI_BRIDGE_TRACE").is_some() || crate::gis::servers::config_dir().join("bridge-trace").exists();
+        if on {
+            crate::ui::allow_debugger();
+        }
+        on
+    })
+}
+
+fn trace_line(line: &str) {
+    use std::io::Write;
+    static FILE: OnceLock<Option<Mutex<std::fs::File>>> = OnceLock::new();
+    let file = FILE.get_or_init(|| {
+        let path = crate::gis::servers::config_dir().join("bridge-trace.log");
+        std::fs::OpenOptions::new().create(true).append(true).open(path).ok().map(Mutex::new)
+    });
+    if let Some(f) = file {
+        let _ = writeln!(f.lock().unwrap_or_else(|e| e.into_inner()), "{line}");
+    }
+}
+
+fn traced<R>(what: Option<String>, f: impl FnOnce() -> R) -> R {
+    let Some(what) = what else { return f() };
+    let th = std::thread::current();
+    let name = th.name().unwrap_or("?").to_string();
+    let t0 = std::time::Instant::now();
+    trace_line(&format!("{:?} {name} → {what}", std::time::SystemTime::now()));
+    let r = f();
+    trace_line(&format!("{:?} {name} ← {what} ({} ms)", std::time::SystemTime::now(), t0.elapsed().as_millis()));
+    r
+}
+
+/// The variant name of a request (its Debug output up to the first field).
+fn kind(req: &PluginRequest) -> String {
+    let d = format!("{req:?}");
+    d[..d.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(d.len())].to_string()
+}
+
 pub(crate) fn request(req: PluginRequest) -> Result<PluginResponse, String> {
     let t = target().ok_or("geen tekening actief — klik eerst in Open CAD Studio op het GIS-tabblad")?;
-    match t.sender.request(req) {
+    match traced(trace_on().then(|| kind(&req)), || t.sender.request(req)) {
         Ok(PluginResponse::Error(e)) => Err(e),
         Ok(r) => Ok(r),
         Err(e) => Err(e.to_string()),
@@ -207,6 +250,11 @@ fn pending_reply() -> &'static Mutex<Option<String>> {
 /// One command at a time, as a script runs them.
 pub fn expect_reply(id: Option<String>) {
     *pending_reply().lock().unwrap() = id;
+}
+
+/// A script waits for this command's answer (it carried `ID=`).
+pub fn scripted() -> bool {
+    COMMAND_CONTEXT.with(|c| c.borrow().as_ref().is_some_and(|v| v.reply.is_some())) || pending_reply().lock().unwrap().is_some()
 }
 
 /// Answer the waiting script now (argument errors, commands that finish at once).

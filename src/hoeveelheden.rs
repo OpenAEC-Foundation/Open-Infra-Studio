@@ -28,6 +28,11 @@ pub struct Row {
     pub area: f64,
     /// Closed figures among `count`.
     pub closed: usize,
+    /// Copies of an element already counted on this layer (same shape, either
+    /// direction, and the same object data): not in `count`, `length` and `area`.
+    pub duplicates: usize,
+    /// Their length, in m.
+    pub duplicate_length: f64,
 }
 
 impl Row {
@@ -67,6 +72,83 @@ pub struct Quantities {
     pub rows: Vec<Row>,
     pub entities: usize,
     pub from_selection: bool,
+    /// Double-drawn elements: (layer, the element counted, its copy).
+    pub duplicates: Vec<(String, Handle, Handle)>,
+}
+
+impl Quantities {
+    /// "3 dubbel getekende elementen (12,5 m) niet meegeteld, op N-WE-…": for messages.
+    pub fn duplicates_note(&self) -> Option<String> {
+        if self.duplicates.is_empty() {
+            return None;
+        }
+        let len: f64 = self.rows.iter().map(|r| r.duplicate_length).sum();
+        let mut layers: Vec<&str> = self.rows.iter().filter(|r| r.duplicates > 0).map(|r| r.layer.as_str()).collect();
+        let more = layers.len().saturating_sub(3);
+        layers.truncate(3);
+        Some(format!(
+            "{} {} ({} m) {} {}{}",
+            self.duplicates.len(),
+            crate::lang::tr("dubbel getekende elementen", "double-drawn elements"),
+            format!("{len:.1}").replace('.', ","),
+            crate::lang::tr("niet meegeteld, op", "not counted, on"),
+            layers.join(", "),
+            if more > 0 { format!(" (+{more})") } else { String::new() }
+        ))
+    }
+}
+
+/// The shape of a line-like element in whole millimetres, the same for a
+/// copy drawn the other way round or (closed) from another vertex, with a tag
+/// per kind. `None` for elements that are not compared (texts, hatches, …).
+fn shape_key(e: &EntityType, f: f64) -> Option<Vec<i64>> {
+    let mm = |v: f64| (v / f * 1000.0).round() as i64;
+    let b = |v: f64| (v * 1e4).round() as i64;
+    // Points as [x, y, z, bulge-to-next], then canonical for direction and start.
+    let poly = |tag: i64, pts: Vec<[i64; 4]>, closed: bool| -> Vec<i64> {
+        let n = pts.len();
+        let reversed: Vec<[i64; 4]> = (0..n)
+            .rev()
+            .map(|i| {
+                let bulge = if closed { pts[(i + n - 1) % n][3] } else if i > 0 { pts[i - 1][3] } else { 0 };
+                [pts[i][0], pts[i][1], pts[i][2], -bulge]
+            })
+            .collect();
+        let mut options = vec![pts.clone(), reversed];
+        if closed && n > 0 {
+            options = options
+                .into_iter()
+                .map(|v| {
+                    let start = (0..n).min_by_key(|&i| (v[i][0], v[i][1], v[i][2])).unwrap_or(0);
+                    v[start..].iter().chain(v[..start].iter()).copied().collect()
+                })
+                .collect();
+        }
+        let best = options.into_iter().min().unwrap_or_default();
+        let mut key = vec![tag, closed as i64];
+        key.extend(best.iter().flatten());
+        key
+    };
+    match e {
+        EntityType::Line(l) => Some(poly(1, vec![[mm(l.start.x), mm(l.start.y), mm(l.start.z), 0], [mm(l.end.x), mm(l.end.y), mm(l.end.z), 0]], false)),
+        // A line is a two-point polyline: an open polyline copy of a line is a duplicate too.
+        EntityType::LwPolyline(p) if p.vertices.len() >= 2 => {
+            let tag = if p.vertices.len() == 2 && !p.is_closed && p.vertices[0].bulge == 0.0 { 1 } else { 2 };
+            Some(poly(tag, p.vertices.iter().map(|v| [mm(v.location.x), mm(v.location.y), mm(p.elevation), b(v.bulge)]).collect(), p.is_closed))
+        }
+        EntityType::Polyline2D(p) if p.vertices.len() >= 2 => {
+            Some(poly(2, p.vertices.iter().map(|v| [mm(v.location.x), mm(v.location.y), mm(v.location.z), b(v.bulge)]).collect(), p.flags.is_closed()))
+        }
+        EntityType::Polyline3D(p) if p.vertices.len() >= 2 => {
+            Some(poly(3, p.vertices.iter().map(|v| [mm(v.position.x), mm(v.position.y), mm(v.position.z), 0]).collect(), p.flags.closed))
+        }
+        EntityType::Arc(a) => {
+            let ang = |t: f64| (t.rem_euclid(2.0 * PI) * 1e4).round() as i64;
+            Some(vec![4, mm(a.center.x), mm(a.center.y), mm(a.center.z), mm(a.radius), ang(a.start_angle), ang(a.end_angle)])
+        }
+        EntityType::Circle(c) => Some(vec![5, mm(c.center.x), mm(c.center.y), mm(c.center.z), mm(c.radius)]),
+        _ => None,
+    }
 }
 
 /// Measure one element in drawing units: (length, area, closed).
@@ -248,6 +330,10 @@ pub fn compute(doc: &CadDocument, unit_factor: f64, selection: Option<&HashSet<H
     let mut rows: BTreeMap<String, Row> = BTreeMap::new();
     let mut q = Quantities { from_selection: selection.is_some(), ..Default::default() };
     let f = unit_factor.max(1e-9);
+    // Shapes seen per layer, to tell double-drawn copies. The object data
+    // counts too: a copy carries the same, while two cables of a KLIC delivery
+    // in one trench share the route but not their identifiers.
+    let mut seen: std::collections::HashMap<(String, Vec<i64>, u64), Handle> = std::collections::HashMap::new();
     for e in doc.model_space_entities() {
         if matches!(e, EntityType::Viewport(_) | EntityType::AttributeDefinition(_) | EntityType::RasterImage(_)) {
             continue;
@@ -271,6 +357,25 @@ pub fn compute(doc: &CadDocument, unit_factor: f64, selection: Option<&HashSet<H
             r
         });
         let (len, area, closed) = measure(e);
+        if let Some(key) = shape_key(e, f) {
+            let data = {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                format!("{:?}", c.extended_data).hash(&mut h);
+                h.finish()
+            };
+            match seen.entry((c.layer.clone(), key, data)) {
+                std::collections::hash_map::Entry::Occupied(first) => {
+                    row.duplicates += 1;
+                    row.duplicate_length += len / f;
+                    q.duplicates.push((c.layer.clone(), *first.get(), c.handle));
+                    continue;
+                }
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(c.handle);
+                }
+            }
+        }
         if infra.get("infra_primary").is_some_and(|v| v == "1") {
             let unit = infra.get("infra_unit").map(String::as_str).unwrap_or("");
             let quantity = infra.get("infra_quantity").and_then(|v| v.parse::<f64>().ok()).filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(0.0);
@@ -313,6 +418,8 @@ pub fn per_object(q: &Quantities) -> Vec<Row> {
         e.length += r.length;
         e.area += r.area;
         e.closed += r.closed;
+        e.duplicates += r.duplicates;
+        e.duplicate_length += r.duplicate_length;
         if r.element == "A" {
             e.element = "A".into();
         }
@@ -323,9 +430,9 @@ pub fn per_object(q: &Quantities) -> Vec<Row> {
 /// CSV for Dutch spreadsheets: semicolons, decimal commas.
 pub fn csv(q: &Quantities) -> String {
     let n = |v: f64| format!("{v:.2}").replace('.', ",");
-    let mut out = String::from("Laag;Status;Discipline;Hoofdgroep;Object;Element;Aantal;Gesloten;Lengte (m);Oppervlakte (m2)\n");
+    let mut out = String::from("Laag;Status;Discipline;Hoofdgroep;Object;Element;Aantal;Gesloten;Lengte (m);Oppervlakte (m2);Dubbel getekend (niet meegeteld);Dubbel (m)\n");
     for r in q.rows.iter().filter(|r| !r.annotation()) {
-        out.push_str(&format!("{};{};{};{};{};{};{};{};{};{}\n", r.layer, r.status, r.discipline, r.group, r.object_label(), r.element, r.count, r.closed, n(r.length), n(r.area)));
+        out.push_str(&format!("{};{};{};{};{};{};{};{};{};{};{};{}\n", r.layer, r.status, r.discipline, r.group, r.object_label(), r.element, r.count, r.closed, n(r.length), n(r.area), r.duplicates, n(r.duplicate_length)));
     }
     out
 }
@@ -434,7 +541,12 @@ mod tests {
     #[test]
     fn grouped_by_layer_in_metres() {
         let mut doc = CadDocument::new();
-        for (layer, e) in [("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", square(0.0)), ("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", square(0.0)), ("RANDOM", square(0.0))] {
+        // Two squares side by side (the same square twice would be a double-drawn copy).
+        let mut beside = square(0.0);
+        if let EntityType::LwPolyline(p) = &mut beside {
+            p.vertices.iter_mut().for_each(|v| v.location.x += 20.0);
+        }
+        for (layer, e) in [("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", square(0.0)), ("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", beside), ("RANDOM", square(0.0))] {
             let mut e = e;
             e.common_mut().layer = layer.into();
             let _ = doc.add_entity(e);
@@ -449,5 +561,58 @@ mod tests {
         assert!(!q.rows[1].nlcs());
         assert!(csv(&q).lines().nth(1).unwrap().starts_with("N-WE-VH-GESLOTENVERHARDING_ASFALT-G;N;WE;VH;Geslotenverharding asfalt;G;2;2;"));
         assert_eq!(per_object(&q).len(), 1);
+    }
+
+    fn line(a: (f64, f64), b: (f64, f64), layer: &str) -> EntityType {
+        let mut l = ocs_plugin_api::host::codec::Line::from_points(Vector3::new(a.0, a.1, 0.0), Vector3::new(b.0, b.1, 0.0));
+        l.common.layer = layer.into();
+        EntityType::Line(l)
+    }
+
+    #[test]
+    fn double_drawn_lines_are_found_and_not_counted() {
+        const L: &str = "N-WE-VH-BANDEN-G";
+        let mut doc = CadDocument::new();
+        let mut ring = square(0.0);
+        ring.common_mut().layer = L.into();
+        // The same square from another vertex and the other way round.
+        let mut copy = LwPolyline::new();
+        for (x, y) in [(10.0, 10.0), (10.0, 0.0), (0.0, 0.0), (0.0, 10.0)] {
+            copy.add_point_with_bulge(Vector2::new(x, y), 0.0);
+        }
+        copy.is_closed = true;
+        copy.common.layer = L.into();
+        let mut open = LwPolyline::new();
+        for (x, y) in [(30.0, 0.0), (20.0, 0.0)] {
+            open.add_point_with_bulge(Vector2::new(x, y), 0.0);
+        }
+        open.common.layer = L.into();
+        for e in [
+            ring,
+            EntityType::LwPolyline(copy),
+            line((20.0, 0.0), (30.0, 0.0), L),
+            line((30.0, 0.0), (20.0, 0.0), L),      // reversed copy
+            EntityType::LwPolyline(open),            // the same line as a polyline
+            line((20.0, 0.0), (30.0004, 0.0), L),   // within a millimetre
+            line((20.0, 0.0), (30.0, 0.0), "OTHER"), // other layer: not a duplicate
+            line((20.0, 0.0), (31.0, 0.0), L),      // another line
+        ] {
+            let _ = doc.add_entity(e);
+        }
+        // Two cables on one route with their own identifiers: both count.
+        for id in ["KL1010.kabel_1", "KL1010.kabel_2"] {
+            let mut cable = line((0.0, 50.0), (10.0, 50.0), L);
+            cable.common_mut().extended_data.add_record(crate::bridge::object_data([("id", id.to_string())]));
+            let _ = doc.add_entity(cable);
+        }
+        let q = compute(&doc, 1.0, None);
+        let r = q.rows.iter().find(|r| r.layer == L).unwrap();
+        assert_eq!((r.count, r.duplicates, q.duplicates.len()), (5, 4, 4), "{r:?}");
+        assert!((r.length - (40.0 + 10.0 + 11.0 + 20.0)).abs() < 1e-6, "{}", r.length);
+        assert!((r.duplicate_length - (40.0 + 10.0 + 10.0 + 10.0004)).abs() < 1e-3, "{}", r.duplicate_length);
+        assert!((r.area - 100.0).abs() < 1e-9);
+        assert!(q.duplicates_note().unwrap().contains(L));
+        assert!(csv(&q).lines().find(|l| l.starts_with(L)).unwrap().ends_with(";4;70,00"));
+        assert_eq!(per_object(&q)[0].duplicates, 4);
     }
 }

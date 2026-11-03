@@ -35,7 +35,8 @@ from ocs_e2e import DATA, default_ocs
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "target" / "e2e" / "ui"
-LIB = ROOT / "target" / "ui-test" / "release"
+# `--profile ui-test` (release with line tables, for backtraces) when built so, else release.
+LIB = next((d for d in (ROOT / "target" / "ui-test" / "ui-test", ROOT / "target" / "ui-test" / "release") if (d / "libopen_infra.so").exists()), ROOT / "target" / "ui-test" / "release")
 
 # Small import area in Dordrecht, so import buttons finish quickly.
 SITE = "GIS_SITE RD 104900 425350 250 200 UI-test"
@@ -58,8 +59,9 @@ def prepare(a):
     shutil.rmtree(cfg, ignore_errors=True)
     rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     lock = (ROOT / "Cargo.lock").read_text()
-    # The host's opencadcodec (git); pointcloud-core brings a crates.io acadrust too.
-    acad = next(b.split('source = "', 1)[1].split('"', 1)[0] for b in lock.split("[[package]]") if 'name = "acadrust"' in b and "opencadcodec" in b)
+    # The host's opencadcodec (git) up to plugin API 13; from API 14 the host
+    # no longer compares it, and the lock may not hold a git acadrust at all.
+    acad = next((b.split('source = "', 1)[1].split('"', 1)[0] for b in lock.split("[[package]]") if 'name = "acadrust"' in b and "opencadcodec" in b), "")
     for pid, lib, toml in (("openaec.open-infra", "libopen_infra.so", ROOT / "plugin.toml"),
                            ("openaec.open-infra-civiel", "libopen_infra_civiel.so", ROOT / "civiel" / "plugin.toml")):
         src = LIB / lib
@@ -69,6 +71,10 @@ def prepare(a):
         dest.mkdir(parents=True)
         shutil.copy2(src, dest / lib)
         (dest / "plugin.toml").write_text(toml.read_text().replace("__RUSTC_VERSION__", rustc).replace("__ACADRUST_SOURCE__", acad))
+    if os.environ.get("OI_BRIDGE_TRACE"):
+        # Host requests of the plugins to open-infra/bridge-trace.log (stderr of a plugin is not kept).
+        (cfg / "OpenCADStudio" / "open-infra").mkdir(parents=True, exist_ok=True)
+        (cfg / "OpenCADStudio" / "open-infra" / "bridge-trace").touch()
     drawing = OUT / "ui-test.dwg"
     shutil.copy2(a.tekening or DATA / "leeg-m.dwg", drawing)
     return cfg, drawing
@@ -118,13 +124,26 @@ class Ocs:
     """Our Open CAD Studio: the process group and the automation session."""
 
     def __init__(self, a):
+        self.a = a
         self.log = OUT / "ocs.log"
-        self.p = subprocess.Popen([str(a.ocs or default_ocs()), a.drawing], stdout=open(self.log, "w"), stderr=subprocess.STDOUT, start_new_session=True)
+        self.start()
+
+    def restart(self):
+        self.stop()
+        time.sleep(3)
+        self.start()
+        time.sleep(3)
+        self.mcp.run(SITE, timeout=60)
+
+    def start(self):
+        a = self.a
+        self.p = subprocess.Popen([str(a.ocs or default_ocs()), a.drawing], stdout=open(self.log, "a"), stderr=subprocess.STDOUT, start_new_session=True)
         import open_infra_mcp as mcp  # after XDG_CONFIG_HOME is set
         self.mcp = mcp.OCS
         t0 = time.time()
         while time.time() - t0 < 90:
             try:
+                self.mcp.session = None  # after a restart: the new session, not the old one
                 self.mcp.pick()
                 self.mcp.document_id()
                 return
@@ -285,6 +304,7 @@ class Tester:
     def __init__(self, a, ocs, ui):
         self.a, self.ocs, self.ui = a, ocs, ui
         self.results = []
+        self.restarts = 0
 
     def window(self, key, timeout=3):
         title, marker, cmd = WINDOWS[key]
@@ -338,7 +358,31 @@ class Tester:
         for page in pages:
             if self.a.pagina and self.a.pagina.lower() not in page.lower():
                 continue
-            self.run_page(key, page, pages)
+            for attempt in range(3):
+                start = len(self.results)
+                self.run_page(key, page, pages)
+                # A window that no longer reacts (the accessibility layer of the
+                # test build can lock up): its results are void; restart and redo.
+                if not self.frozen(key, pages, page):
+                    break
+                del self.results[start:]
+                print(f"  (venster reageert niet meer: Open CAD Studio herstart, {page} opnieuw)", flush=True)
+                self.restarts += 1
+                self.ocs.restart()
+            else:
+                self.add(key, page, page, "navigatie", False, "VASTGELOPEN (ook na herstart)")
+
+    def frozen(self, key, pages, page):
+        """Does the window still switch to another page? A frozen window keeps
+        showing the page it hung on, so the probe goes elsewhere."""
+        target = next((p for p in pages if p != page), None)
+        if target is None:
+            return False
+        try:
+            w = self.goto(key, target)
+        except RuntimeError:
+            return True
+        return current_page(self.ui.nodes(w), pages) != target
 
     def run_page(self, key, page, pages):
         title = WINDOWS[key][0]
@@ -535,6 +579,8 @@ def inner(a):
         for key in ([a.venster] if a.venster else list(WINDOWS)):
             t.run_window(key)
     finally:
+        if t.restarts:
+            print(f"Open CAD Studio {t.restarts}× herstart na een vastgelopen venster.", flush=True)
         report(t.results)
         ocs.stop()
         launcher.terminate()

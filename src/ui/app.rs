@@ -1836,6 +1836,29 @@ impl App {
                         }
                     }
                 });
+                // The letters, conditions and sketches of the operators, folded away.
+                if !lev.extras.attachments.is_empty() {
+                    egui::CollapsingHeader::new(format!("Bijlagen ({})", lev.extras.attachments.len())).id_salt("klic_bijlagen").show(ui, |ui| {
+                        egui::Grid::new("klic_attachments").num_columns(3).striped(true).spacing([12.0, 3.0]).show(ui, |ui| {
+                            for a in &lev.extras.attachments {
+                                let name = a.path.rsplit('/').next().unwrap_or(&a.path).to_string();
+                                ui.label(RichText::new(format!("{} · {}", a.operator, a.kind)).small().weak());
+                                ui.label(RichText::new(&name).small()).on_hover_text(&a.path);
+                                if ui.small_button("Openen").clicked() {
+                                    let (src, rel) = (lev.source.clone(), a.path.clone());
+                                    let dir = crate::gis::servers::config_dir().join("klic-bijlagen").join(&lev.meldnummer);
+                                    std::thread::spawn(move || {
+                                        let r = crate::gis::klic_extra::attachment_file(&src, &rel, &dir).and_then(|p| crate::gis::klic_extra::open_file(&p));
+                                        if let Err(e) = r {
+                                            crate::bridge::error(&e);
+                                        }
+                                    });
+                                }
+                                ui.end_row();
+                            }
+                        });
+                    });
+                }
             }
         });
     }
@@ -2281,7 +2304,11 @@ impl App {
         if let Some(r) = poll(&mut self.hoev.job) {
             match r {
                 Ok(q) => {
-                    self.message = Some((true, format!("Hoeveelheden van {} elementen op {} lagen.", q.entities, q.rows.len())));
+                    let mut m = format!("Hoeveelheden van {} elementen op {} lagen.", q.entities, q.rows.len());
+                    if let Some(note) = q.duplicates_note() {
+                        m.push_str(&format!(" {note}."));
+                    }
+                    self.message = Some((true, m));
                     self.hoev.result = Some(q);
                 }
                 Err(e) => self.err(e),
@@ -2339,7 +2366,20 @@ impl App {
                     ui.end_row();
                 });
             });
-            ui.label(RichText::new("Oppervlakte: gesloten polylijnen (met bogen), cirkels, ellipsen en arceringen (met eilanden). Lengte: lijnen, bogen, polylijnen, splines. Een hoeveelhedenstaat in de tekening: lintknop Hoeveelhedenstaat of GIS_HOEVEELHEDEN_TABEL.").small().weak());
+            if let Some(note) = q.duplicates_note() {
+                ui.horizontal(|ui| {
+                    ui.colored_label(WARN, format!("⚠ {note}."));
+                    if ui.small_button("Kopieën selecteren").on_hover_text("Selecteer de dubbel getekende kopieën in de tekening, om ze te controleren of te verwijderen").clicked() {
+                        let copies: Vec<_> = q.duplicates.iter().map(|d| d.2).collect();
+                        std::thread::spawn(move || {
+                            if let Err(e) = crate::bridge::select(&copies) {
+                                crate::bridge::error(&e);
+                            }
+                        });
+                    }
+                });
+            }
+            ui.label(RichText::new("Oppervlakte: gesloten polylijnen (met bogen), cirkels, ellipsen en arceringen (met eilanden). Lengte: lijnen, bogen, polylijnen, splines. Een element dat op dezelfde laag dubbel getekend is (zelfde vorm op de millimeter, ook omgekeerd), telt één keer. Een hoeveelhedenstaat in de tekening: lintknop Hoeveelhedenstaat of GIS_HOEVEELHEDEN_TABEL.").small().weak());
         });
     }
 
@@ -2723,6 +2763,8 @@ fn kind_colour(kind: &str) -> Color32 {
 /// the source on the right. Long texts end in "…".
 fn hit_row(ui: &mut egui::Ui, h: &Hit, highlighted: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 40.0), egui::Sense::click());
+    // Painted by hand: give screen readers (and the UI test) its text.
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} — {} ({})", h.name, h.place, h.kind)));
     let painter = ui.painter_at(rect);
     let visuals = ui.visuals();
     if highlighted || resp.hovered() {

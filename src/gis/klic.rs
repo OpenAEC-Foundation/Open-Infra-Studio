@@ -18,6 +18,10 @@ pub struct Levering {
     /// Converted features omitted here because they have no drawable geometry.
     /// Empty source elements already omitted by klic2geo are not included.
     pub skipped: usize,
+    /// Areas with an eis voorzorgsmaatregel, extra detailinfo and attachments.
+    pub extras: super::klic_extra::Extras,
+    /// The file it was read from (to open its attachments).
+    pub source: std::path::PathBuf,
 }
 
 /// Read a delivery: the Kadaster zip, or an extracted `GI_gebiedsinformatielevering_*.xml`.
@@ -58,7 +62,16 @@ pub fn read(path: &Path) -> Result<Levering, String> {
         }
     }
     operators.sort();
-    Ok(Levering { meldnummer: lev.meldnummer, features, themes, operators, skipped })
+    // The extras come from our own pass over the GI-xml: a delivery without
+    // them, or one they cannot be read from, still imports its networks.
+    let extras = super::klic_extra::read(path).unwrap_or_default();
+    for (theme, kind) in [(super::klic_extra::THEME_EV, "eis_voorzorgsmaatregel"), (super::klic_extra::THEME_DETAIL, "extra_detailinfo")] {
+        let n = extras.count(kind);
+        if n > 0 {
+            themes.insert(theme.to_string(), n);
+        }
+    }
+    Ok(Levering { meldnummer: lev.meldnummer, features, themes, operators, skipped, extras, source: path.to_path_buf() })
 }
 
 pub fn thema(f: &Feature) -> &str {
@@ -186,6 +199,8 @@ pub fn theme_label(thema: &str) -> &str {
         "petrochemie" => "(Petro)chemie",
         "buisleidingGevaarlijkeInhoud" => "Buisleiding gevaarlijke inhoud",
         "graafpolygoon" => "Graafpolygoon",
+        "eisVoorzorgsmaatregel" => "Eis voorzorgsmaatregel (gebieden)",
+        "extraDetailinfo" => "Extra detailinfo",
         other => other,
     }
 }

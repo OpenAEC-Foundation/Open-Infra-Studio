@@ -13,6 +13,16 @@ Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v20
 
 The libraries are signed: Authenticode with a timestamp on Windows (publisher Impertio Studio B.V.), Developer ID and notarized by Apple on macOS, and a detached OpenPGP signature of the OpenAEC Foundation (`.asc`) per Linux file. Check those with `gpg --verify <file>.asc <file>` against `openaec-signing-public-key.asc` (fingerprint `13F6D414ADEE4ED4CD09AC60601D86C93C504D29`).
 
+**New in 2026.45.2 — terrain with its photo anywhere in the world**
+
+- **Terrain + aerial photo worldwide** (Civiel → Output and 3D → View, `CIV_FOTOTERREIN`): the ground of any project location as a 3D surface coloured by its photo. Heights from AHN in the Netherlands and from the Terrain Tiles mosaic elsewhere (NASA SRTM, USGS 3DEP, GMTED2010, NOAA ETOPO). The photo is PDOK in the Netherlands, the USGS National Map imagery in the United States and Sentinel-2 cloudless (2016, CC BY 4.0) in the rest of the world; `FOTO=` chooses another one or a later Sentinel-2 year (non-commercial licence, stated in the result).
+- The command moved from the Dutch 3D menu to the View menu, so it is there without the Dutch modules too.
+- An automated GUI scenario (`tests/e2e/ui_wereld.py`) searches a place in the location window, saves it and lays the terrain with its photo; the button test (`tests/e2e/ui_knoppen.py`) runs on Open CAD Studio v2026.44.
+- **KLIC: eis voorzorgsmaatregel, detailinfo and attachments** (roadmap #1). Areas where an operator requires a precaution before digging are drawn with a red diagonal hatch on ZZ-GRENS, extra detailinfo as an outline or marker on ZZ-DETAIL1 with the name of its sketch; both carry their requirement or type, theme and operator as object data, and both can be switched off in the theme list. The delivery's attachments (letters, conditions, sketches) are listed on the BGT · Kadaster · KLIC page and open in the system viewer, straight from the Kadaster zip.
+- **Double-drawn lines in the quantities** (roadmap #1): an element drawn twice on the same layer (same shape to the millimetre, either direction or another start vertex, same object data) counts once. The result names them, the CSV has two extra columns, and *Select copies* selects them in the drawing for checking. Cables of a KLIC delivery that share a trench keep their own identifiers and all count.
+- `GIS_HOEVEELHEDEN` and `GIS_NLCS_CONTROLE` from a script (with `ID=`) answer on the command line instead of opening the window, so the MCP server gets the result.
+- Fix: the plugin built with `--features ui-test` compiles again.
+
 **New in 2026.45.1 — Open CAD Studio v2026.44 and QGIS connections**
 
 - **Open CAD Studio v2026.44** (plugin API 14): both plugins are built for the new host. The project location and units are read on the first command, because the host answers requests only after loading.

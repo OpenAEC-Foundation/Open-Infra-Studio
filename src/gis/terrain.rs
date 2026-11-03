@@ -68,7 +68,7 @@ impl Source {
     pub fn label(&self) -> String {
         match self.kind {
             Kind::Ahn => format!("AHN4 {}", self.model.coverage()),
-            Kind::Terrarium => "Terrain Tiles (AWS)".into(),
+            Kind::Terrarium => "Terrain Tiles (SRTM/NASA, USGS 3DEP)".into(),
         }
     }
 

@@ -109,6 +109,10 @@ python3 tests/e2e/ui_knoppen.py                 # beide vensters; --venster gis|
 
 Het rapport staat in `target/e2e/ui/knoppen.md`. Nodig: `wmctrl`, `python3-xlib` en de AT-SPI-bindings (`gir1.2-atspi-2.0`).
 
+Met `--profile ui-test` in plaats van `--release` komen er regelnummers in backtraces; de test neemt die build als die er is. De toegankelijkheidslaag van de testbuild (accesskit) kan het GIS-venster af en toe laten vastlopen: alle host-aanvragen zijn dan beantwoord, maar het venster reageert niet meer. Gewone builds hebben die laag niet. De test merkt het (het venster wisselt niet meer van pagina), herstart Open CAD Studio en doet die pagina opnieuw. Om zo'n geval te onderzoeken: met `OI_BRIDGE_TRACE=1` schrijft de plugin elke host-aanvraag naar `open-infra/bridge-trace.log` in de testconfiguratie, en mag gdb zich aan het pluginproces koppelen.
+
+`tests/e2e/ui_wereld.py` is een scenario zoals een gebruiker het doet: een plaatsnaam typen in het zoekveld van het GIS-venster (met echte toetsaanslagen; alleen als het testvenster de focus heeft), op Zoeken klikken, de plaats kiezen, OK, en dan `CIV_FOTOTERREIN` met een 3D-beeld. Standaard Half Dome (Verenigde Staten: USGS-luchtfoto); `--plaats Matterhorn --verwacht sentinel --hoogte 3900:4500` voor de Alpen. Rapport en beeld: `target/e2e/ui/wereld.md` en `wereld-3d.png`.
+
 ## 6. BGT-mutatie
 
 `tests/e2e/bgt_mutatie_e2e.py` importeert de BGT rond de Grote Kerk en maakt een ontwerp: een wegdeel krijgt nieuw asfalt (oud object op V, nieuw vlak op R), een tweede wegdeel is gewijzigd (R) en een fietspad is gepland (N). `GIS_BGT_MUTATIE` moet dan 2 nieuwe, 1 gewijzigd en 1 beëindigd object geven. Met `--xsd` wordt de GML ook getoetst aan het IMGeo 2.1.1-schema (lxml).

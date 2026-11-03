@@ -1,6 +1,6 @@
 [package]
 name = "open-infra"
-version = "2026.45.1"
+version = "2026.45.2"
 edition = "2021"
 description = "Open Infra — GIS-workbench voor Open CAD Studio (infra en civiele techniek, NL en wereldwijd)."
 license = "GPL-3.0-only"
@@ -77,3 +77,9 @@ debug = "line-tables-only"
 
 [profile.release]
 opt-level = 3
+
+# The ui-test builds (CARGO_TARGET_DIR=target/ui-test … --profile ui-test):
+# release speed with function names in backtraces.
+[profile.ui-test]
+inherits = "release"
+debug = "line-tables-only"
