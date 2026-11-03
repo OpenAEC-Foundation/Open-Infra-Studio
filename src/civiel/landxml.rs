@@ -27,12 +27,6 @@ pub struct LandXml {
     pub warnings: Vec<String>,
 }
 
-impl LandXml {
-    fn report(&self, message: String) -> String {
-        if self.warnings.is_empty() { message } else { format!("{message} {}", self.warnings.join(" ")) }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct XmlAlignment {
     pub name: String,
@@ -252,7 +246,7 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
         if let Err(error) = parsed { out.warnings.push(format!("LandXML: Alignment {} overgeslagen: {error}", al.attribute("name").unwrap_or("zonder naam"))); }
     }
     if out.points.is_empty() && out.surfaces.is_empty() && out.alignments.is_empty() {
-        return Err(out.report("geen punten, oppervlakken of assen in dit LandXML-bestand".into()));
+        return Err("geen punten, oppervlakken of assen in dit LandXML-bestand".into());
     }
     Ok(out)
 }
@@ -335,7 +329,7 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
     }
     super::api::note("assen", x.alignments.iter().zip(axes).map(|(a, h)| serde_json::json!({"naam": a.name, "handle": super::api::handle_text(*h), "beginstation": a.start})).collect::<Vec<_>>());
     let hint = if x.alignments.is_empty() { "" } else { " Selecteer een as en klik op As voor de stationering." };
-    Ok(x.report(format!("{file}: {} — {n} elementen.{hint}", parts.join(", "))))
+    Ok(format!("{file}: {} — {n} elementen.{hint}", parts.join(", ")))
 }
 
 // ── Export: LandXML 1.2 ─────────────────────────────────────────────────────
@@ -668,6 +662,12 @@ mod tests {
     const SITE: &str = include_str!("../../tests/fixtures/landxml/site.xml");
 
     #[test]
+    fn sol_unreadable_landxml_returns_the_complete_original_error() {
+        let text = "<LandXML><CgPoints><CgPoint name=\"bad\">bad</CgPoint></CgPoints></LandXML>";
+        assert_eq!(parse(text).unwrap_err(), "geen punten, oppervlakken of assen in dit LandXML-bestand");
+    }
+
+    #[test]
     fn sol_start_coordinate_text_overrides_pntref() {
         let text = SITE.replace("<Start>200 100</Start>", "<Start pntRef=\"1\">205 105</Start>");
         assert_ne!(text, SITE);
@@ -724,7 +724,7 @@ mod tests {
             let data = parse(&text).unwrap();
             assert_eq!((data.points.len(), data.surfaces.len(), data.alignments.len()), expected);
             assert_eq!(data.warnings.len(), 1);
-            assert!(data.report("LandXML gelezen".into()).contains("overgeslagen"));
+            assert!(data.warnings[0].contains("overgeslagen"));
         }
     }
 
