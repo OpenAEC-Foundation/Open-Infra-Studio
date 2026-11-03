@@ -531,8 +531,9 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
         }
         // A corridor's formation and subgrade surfaces.
         "VH" | "GW" if is_mesh && get(data, "oppervlak").is_some() => Class { role: Role::Terrain, ..class("IfcGeographicElement", Some("USERDEFINED"), get(data, "oppervlak").map(str::to_string)) },
-        // A ditch or watercourse body; its lines (water line, toe) stay annotation.
-        "GW" if o.starts_with("WATERGANG") && is_mesh => class("IfcGeographicElement", Some("USERDEFINED"), ot),
+        // A ditch or watercourse body, or a ditch line of a corridor; a loose
+        // water line (an infra library object) stays annotation.
+        "GW" if o.starts_with("WATERGANG") && (is_mesh || road_of(data).is_some()) => class("IfcGeographicElement", Some("USERDEFINED"), ot),
         "VH" => match o {
             _ if o.starts_with("ONVERHARD") => class("IfcGeographicElement", Some("TERRAIN"), ot),
             _ if o.starts_with("KANTOPSLUITING") => class("IfcKerb", Some("NOTDEFINED"), ot),
@@ -2045,7 +2046,7 @@ pub mod tests {
         add(on(block(20.0, 1.1), &nl("VH", "KANTOPSLUITING_TROTTOIRBAND", Element::G, Status::N), &with(&[("band", "trottoirband 13/15x25")])));
         add(on(block(40.0, 0.2), &nl("GW", "WATERGANG_SLOOT", Element::G, Status::N), &with(&[("onderdeel", "sloot")])));
         add(on(block(60.0, 0.3), &nl("GW", "CUNET_BODEM", Element::G, Status::N), &with(&[("oppervlak", "onderkant verhardingsconstructie (subgrade)")])));
-        add(on(line3(&[[0.0, 5.0, 1.0], [100.0, 5.0, 1.0]]), &nl("GW", "WATERGANG_SLOOT_BODEM", Element::G, Status::N), &[]));
+        add(on(line3(&[[0.0, 5.0, 1.0], [100.0, 5.0, 1.0]]), &nl("GW", "WATERGANG_SLOOT_BODEM", Element::G, Status::N), &with(&[])));
         add(on(block(80.0, 1.0), &nl("OG", "TRIANGULATIE", Element::G, Status::N), &[("kruispunt", "Kruispunt A1 / B1")]));
         add(on(lw(&[[500.0, 0.0], [510.0, 0.0]], false, 0.0), &nl("VH", "GESLOTENVERHARDING_ASFALT_DEKLAAG", Element::G, Status::N), &[("profieltype", "stadsstraat")]));
         let src = Source { doc: &doc, f: 1.0, site: None, name: "corridor.dwg".into() };
