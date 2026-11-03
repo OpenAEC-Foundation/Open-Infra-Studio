@@ -3,7 +3,7 @@
     "min_producten": 31,
     "klassen": {
       "IfcProject": 1,
-      "IfcAlignment": 1,
+      "IfcAlignment": 2,
       "IfcAnnotation": 6,
       "IfcPavement": 1,
       "IfcPipeSegment": 1
