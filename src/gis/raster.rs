@@ -215,6 +215,41 @@ pub fn import_wms(
 const ORIGIN: f64 = std::f64::consts::PI * 6_378_137.0;
 const MAX_TILES: u32 = 64;
 
+/// A tile URL from a template: `{z}`, `{x}`, `{y}`, `{-y}` (TMS row order)
+/// and `{q}` (Bing quadkey), the placeholders QGIS writes for XYZ connections.
+pub fn tile_url(template: &str, z: i32, x: i64, y: i64) -> String {
+    let quadkey = || {
+        (1..=z)
+            .rev()
+            .map(|i| {
+                let m = 1i64 << (i - 1);
+                char::from(b'0' + ((x & m != 0) as u8) + 2 * ((y & m != 0) as u8))
+            })
+            .collect::<String>()
+    };
+    let mut url = template.replace("{z}", &z.to_string()).replace("{x}", &x.to_string());
+    if url.contains("{-y}") {
+        url = url.replace("{-y}", &((1i64 << z) - 1 - y).to_string());
+    }
+    if url.contains("{q}") {
+        url = url.replace("{q}", &quadkey());
+    }
+    url.replace("{y}", &y.to_string())
+}
+
+/// The zoom level is below what the server provides (QGIS `zmin`).
+fn below_min_zoom(server: &MapServer, z: i32) -> Result<(), String> {
+    match server.min_zoom {
+        Some(min) if z < min as i32 => Err(format!(
+            "{} {min}; {} {z}. {}",
+            crate::lang::tr("Deze tegelserver levert pas tegels vanaf zoomniveau", "This tile server only provides tiles from zoom level"),
+            crate::lang::tr("dit gebied vraagt zoomniveau", "this area needs zoom level"),
+            crate::lang::tr("Kies een kleiner gebied of een grotere resolutie.", "Choose a smaller area or a finer resolution."),
+        )),
+        _ => Ok(()),
+    }
+}
+
 pub fn import_xyz(site: &Site, server: &MapServer, opt: &Options, out_dir: &Path, progress: &dyn Fn(String)) -> Result<Vec<PlacedImage>, String> {
     std::fs::create_dir_all(out_dir).map_err(|e| format!("{}: {e}", out_dir.display()))?;
     let bbox = site.bbox();
@@ -231,7 +266,8 @@ pub fn import_xyz(site: &Site, server: &MapServer, opt: &Options, out_dir: &Path
     let merc = envelope(bbox, &Transformer::new(&site.crs, "EPSG:3857")?)?;
     let max_zoom = server.max_zoom.unwrap_or(19) as i32;
     let z_ideal = (2.0 * ORIGIN * site.lat.to_radians().cos() / (256.0 * opt.resolution)).log2();
-    let mut z = (z_ideal.ceil() as i32).clamp(0, max_zoom);
+    let min_zoom = (server.min_zoom.unwrap_or(0) as i32).min(max_zoom);
+    let mut z = (z_ideal.ceil() as i32).clamp(min_zoom, max_zoom);
     let range = |z: i32| {
         let size = 2.0 * ORIGIN / 2f64.powi(z);
         let x0 = ((merc[0] + ORIGIN) / size).floor() as i64;
@@ -245,6 +281,7 @@ pub fn import_xyz(site: &Site, server: &MapServer, opt: &Options, out_dir: &Path
         z -= 1;
         r = range(z);
     }
+    below_min_zoom(server, z)?;
     let (size, x0, x1, y0, y1) = r;
     let (nx, ny) = ((x1 - x0 + 1) as u32, (y1 - y0 + 1) as u32);
     let mut canvas = RgbaImage::new(nx * 256, ny * 256);
@@ -254,7 +291,7 @@ pub fn import_xyz(site: &Site, server: &MapServer, opt: &Options, out_dir: &Path
         for tx in x0..=x1 {
             done += 1;
             progress(format!("Tegels ophalen {done}/{total} (zoom {z})…"));
-            let url = server.url.replace("{z}", &z.to_string()).replace("{x}", &tx.to_string()).replace("{y}", &ty.to_string());
+            let url = tile_url(&server.url, z, tx, ty);
             let tile = decode(&http::get_image(&url)?)?;
             image::imageops::overlay(&mut canvas, &tile, (tx - x0) * 256, (ty - y0) * 256);
             // Tile servers ask for modest request rates.
@@ -350,11 +387,12 @@ pub fn preview_xyz(site: &Site, server: &MapServer) -> Result<Preview, String> {
         z -= 1;
         r = range(z);
     }
+    below_min_zoom(server, z)?;
     let (size, x0, x1, y0, y1) = r;
     let mut canvas = RgbaImage::new(((x1 - x0 + 1) * 256) as u32, ((y1 - y0 + 1) * 256) as u32);
     for ty in y0..=y1 {
         for tx in x0..=x1 {
-            let url = server.url.replace("{z}", &z.to_string()).replace("{x}", &tx.to_string()).replace("{y}", &ty.to_string());
+            let url = tile_url(&server.url, z, tx, ty);
             let tile = decode(&http::get_image(&url)?)?;
             image::imageops::overlay(&mut canvas, &tile, (tx - x0) * 256, (ty - y0) * 256);
         }

@@ -1,0 +1,271 @@
+//! Connections exported from QGIS (Data Source Manager ▸ Save connections):
+//! `qgsWMSConnections`, `qgsWFSConnections` and `qgsXYZTilesConnections`.
+//!
+//! The XML is read without QGIS and without network. Settings Open Infra
+//! cannot honour (authentication, own HTTP headers, a different axis order,
+//! placeholders the tile client does not know) make a connection
+//! non-importable instead of importing it as if it worked. Secrets are never
+//! copied, logged or shown: a message names the setting, not its value.
+
+use std::path::Path;
+
+use crate::lang::tr;
+
+use super::http::clean_service_url;
+use super::servers::{MapServer, ServerKind};
+
+/// One connection from the export, with what stands in the way of importing it.
+#[derive(Clone, Debug)]
+pub struct Connection {
+    pub server: MapServer,
+    /// Settings Open Infra cannot honour; any of them blocks the import.
+    pub blocking: Vec<String>,
+    /// Already among the user's servers or the built-in presets, or earlier in this file.
+    pub duplicate: bool,
+}
+
+impl Connection {
+    pub fn importable(&self) -> bool {
+        self.blocking.is_empty() && !self.duplicate
+    }
+}
+
+/// Reads a QGIS connections export from disk.
+pub fn read(path: &Path) -> Result<Vec<Connection>, String> {
+    let xml = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    parse(&xml)
+}
+
+/// Parses a QGIS connections export (WMS, WFS or XYZ).
+pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
+    // QGIS writes headers as `http-header:<name>` attributes without declaring
+    // that prefix, which a namespace-aware parser rejects.
+    let xml = [' ', '\n', '\r', '\t'].iter().fold(xml.to_string(), |x, c| x.replace(&format!("{c}http-header:"), &format!("{c}http-header_")));
+    let opt = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
+    let doc = roxmltree::Document::parse_with_options(&xml, opt)
+        .map_err(|e| format!("{}: {e}", tr("Geen geldige XML", "Not valid XML")))?;
+    let root = doc.root_element();
+    let (kind, element) = match root.tag_name().name() {
+        "qgsWMSConnections" => (ServerKind::Wms, "wms"),
+        "qgsWFSConnections" => (ServerKind::Wfs, "wfs"),
+        "qgsXYZTilesConnections" => (ServerKind::Xyz, "xyztiles"),
+        other => {
+            return Err(format!(
+                "{} <{other}>. {}",
+                tr("Geen QGIS-export van WMS-, WFS- of XYZ-verbindingen:", "Not a QGIS export of WMS, WFS or XYZ connections:"),
+                tr("Exporteer in QGIS via Databronbeheer ▸ Verbindingen opslaan.", "Export in QGIS via Data Source Manager ▸ Save connections."),
+            ))
+        }
+    };
+    let mut out: Vec<Connection> = Vec::new();
+    for (i, n) in root.children().filter(|n| n.is_element() && n.has_tag_name(element)).enumerate() {
+        let attr = |k: &str| n.attribute(k).unwrap_or("").trim();
+        let flag = |k: &str| matches!(attr(k), "1" | "true");
+        let raw_url = attr("url");
+        let mut blocking = Vec::new();
+        if !(raw_url.starts_with("http://") || raw_url.starts_with("https://")) {
+            blocking.push(tr("geen http(s)-adres", "not an http(s) address").to_string());
+        }
+        if !attr("username").is_empty() || !attr("password").is_empty() || !attr("authcfg").is_empty() {
+            blocking.push(tr("vraagt authenticatie", "needs authentication").to_string());
+        }
+        let headers = n.attributes().any(|a| a.name().starts_with("http-header_") && !a.value().trim().is_empty());
+        if headers || !attr("referer").is_empty() {
+            blocking.push(tr("eigen HTTP-headers of referer", "own HTTP headers or referer").to_string());
+        }
+        if kind != ServerKind::Xyz && (flag("invertAxisOrientation") || flag("ignoreAxisOrientation")) {
+            blocking.push(tr("afwijkende asvolgorde", "different axis order").to_string());
+        }
+        let mut server = MapServer {
+            id: String::new(),
+            kind,
+            name: String::new(),
+            region: "QGIS".into(),
+            url: if kind == ServerKind::Xyz { raw_url.to_string() } else { clean_service_url(raw_url) },
+            attribution: String::new(),
+            default_layer: String::new(),
+            max_zoom: None,
+            min_zoom: None,
+            builtin: false,
+        };
+        if kind == ServerKind::Xyz {
+            blocking.extend(xyz_problems(raw_url));
+            if !matches!(attr("tilePixelRatio"), "" | "0" | "1") {
+                blocking.push(tr("tegels van hoge resolutie (512 px)", "high-resolution tiles (512 px)").to_string());
+            }
+            if !attr("interpretation").is_empty() {
+                blocking.push(tr("hoogtetegels (geen kaartbeeld)", "elevation tiles (not a map image)").to_string());
+            }
+            let zoom = |k: &str| attr(k).parse::<u32>().ok().filter(|z| *z <= 30);
+            server.max_zoom = Some(zoom("zmax").unwrap_or(19));
+            server.min_zoom = zoom("zmin").filter(|z| *z > 0);
+            if server.min_zoom > server.max_zoom {
+                blocking.push(tr("minimumzoom boven maximumzoom", "minimum zoom above maximum zoom").to_string());
+            }
+        }
+        server.name = match attr("name") {
+            "" => host(raw_url).unwrap_or_else(|| format!("{} {}", kind.label(), i + 1)),
+            name => name.to_string(),
+        };
+        let duplicate = out.iter().any(|c| same(&c.server, &server));
+        out.push(Connection { server, blocking, duplicate });
+    }
+    if out.is_empty() {
+        return Err(tr("Het bestand bevat geen verbindingen.", "The file contains no connections.").into());
+    }
+    Ok(out)
+}
+
+/// Placeholders the tile client fills in; anything else in braces is not supported.
+fn xyz_problems(url: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let has_y = url.contains("{y}") || url.contains("{-y}");
+    if !(url.contains("{q}") || (url.contains("{z}") && url.contains("{x}") && has_y)) {
+        out.push(tr("tegel-URL zonder {z}, {x} en {y}", "tile URL without {z}, {x} and {y}").to_string());
+    }
+    let mut rest = url;
+    while let Some(start) = rest.find('{') {
+        let Some(len) = rest[start..].find('}') else { break };
+        let token = &rest[start..start + len + 1];
+        if !matches!(token, "{z}" | "{x}" | "{y}" | "{-y}" | "{q}") {
+            out.push(format!("{} {token}", tr("onbekende plaatshouder", "unknown placeholder")));
+        }
+        rest = &rest[start + len + 1..];
+    }
+    out
+}
+
+fn host(url: &str) -> Option<String> {
+    let rest = url.split_once("://")?.1;
+    let host = rest.split(['/', '?', ':']).next()?;
+    (!host.is_empty()).then(|| host.to_string())
+}
+
+/// The same service: kind and address, ignoring case of scheme and host and a trailing `/` or `?`.
+fn same(a: &MapServer, b: &MapServer) -> bool {
+    a.kind == b.kind && key(&a.url) == key(&b.url)
+}
+
+fn key(url: &str) -> String {
+    let url = url.trim().trim_end_matches(['/', '?']);
+    match url.split_once("://") {
+        Some((scheme, rest)) => {
+            let (host, path) = rest.split_at(rest.find(['/', '?']).unwrap_or(rest.len()));
+            format!("{}://{}{path}", scheme.to_ascii_lowercase(), host.to_ascii_lowercase())
+        }
+        None => url.to_string(),
+    }
+}
+
+/// Marks connections already present among `existing` (user servers and presets).
+pub fn mark_duplicates(conns: &mut [Connection], existing: &[MapServer]) {
+    for c in conns.iter_mut() {
+        if existing.iter().any(|e| same(e, &c.server)) {
+            c.duplicate = true;
+        }
+    }
+}
+
+/// The user's servers with the chosen connections added (non-importable and
+/// duplicate ones are skipped). Returns the new list and how many were added.
+pub fn merge(user: &[MapServer], chosen: &[&Connection], stamp: u64) -> (Vec<MapServer>, usize) {
+    let mut out = user.to_vec();
+    let mut added = 0;
+    for c in chosen.iter().filter(|c| c.blocking.is_empty()) {
+        if out.iter().any(|e| same(e, &c.server)) {
+            continue;
+        }
+        let mut s = c.server.clone();
+        s.id = format!("qgis-{stamp}-{added}");
+        out.push(s);
+        added += 1;
+    }
+    (out, added)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(name: &str) -> String {
+        std::fs::read_to_string(format!("{}/tests/fixtures/qgis/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+    }
+
+    #[test]
+    fn wms_export_with_entities_and_unsupported_settings() {
+        let c = parse(&fixture("wms.xml")).unwrap();
+        assert_eq!(c.len(), 4);
+        assert_eq!(c[0].server.kind, ServerKind::Wms);
+        assert_eq!(c[0].server.name, "PDOK Luchtfoto");
+        assert_eq!(c[0].server.url, "https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0");
+        assert!(c[0].importable());
+        // &amp; in the attribute is an ampersand; GetCapabilities parameters go.
+        assert_eq!(c[1].server.url, "https://example.org/cgi-bin/mapserv?map=/data/a.map&lang=nl");
+        assert!(c[1].importable());
+        assert!(!c[2].importable());
+        assert!(c[2].blocking.iter().any(|b| b.contains("authenticat")));
+        assert!(c[3].blocking.iter().any(|b| b.contains("axis") || b.contains("asvolgorde")));
+    }
+
+    #[test]
+    fn secrets_never_reach_the_server_or_the_messages() {
+        let c = parse(&fixture("wms.xml")).unwrap();
+        let text = format!("{c:?}");
+        assert!(!text.contains("geheim-wachtwoord"));
+        assert!(!text.contains("jan.jansen"));
+    }
+
+    #[test]
+    fn wfs_export() {
+        let c = parse(&fixture("wfs.xml")).unwrap();
+        assert_eq!(c.len(), 2);
+        assert!(c.iter().all(|c| c.server.kind == ServerKind::Wfs));
+        assert_eq!(c[0].server.url, "https://service.pdok.nl/kadaster/kadastralekaart/wfs/v5_0");
+        assert!(c[0].importable());
+        assert!(c[1].blocking.iter().any(|b| b.contains("headers")));
+    }
+
+    #[test]
+    fn xyz_export_with_zoom_limits_and_placeholders() {
+        let c = parse(&fixture("xyz.xml")).unwrap();
+        assert_eq!(c.len(), 6);
+        assert_eq!((c[0].server.min_zoom, c[0].server.max_zoom), (None, Some(19)));
+        assert!(c[0].importable());
+        assert_eq!((c[1].server.min_zoom, c[1].server.max_zoom), (Some(6), Some(16)));
+        assert!(c[1].importable(), "{{-y}} is supported");
+        assert!(c[2].blocking.iter().any(|b| b.contains("{s}")));
+        assert!(!c[3].importable(), "512 px tiles");
+        assert!(!c[4].importable(), "elevation tiles");
+        assert!(c[5].duplicate, "same URL as the first, other case and a trailing slash");
+    }
+
+    #[test]
+    fn duplicates_against_existing_servers_and_repeated_import() {
+        let mut c = parse(&fixture("xyz.xml")).unwrap();
+        let existing = vec![c[1].server.clone()];
+        mark_duplicates(&mut c, &existing);
+        assert!(c[1].duplicate && !c[0].duplicate);
+        let chosen: Vec<&Connection> = c.iter().collect();
+        let (once, added) = merge(&[], &chosen, 7);
+        assert_eq!(added, 2, "the first and second; the rest is blocked or a duplicate in the file");
+        let (twice, again) = merge(&once, &chosen, 8);
+        assert_eq!((again, twice.len()), (0, once.len()));
+        assert!(once.iter().all(|s| s.id.starts_with("qgis-7-")));
+    }
+
+    #[test]
+    fn invalid_or_foreign_xml_is_an_error() {
+        assert!(parse(&fixture("kapot.xml")).is_err());
+        assert!(parse("<qgsArcGisMapServerConnections/>").unwrap_err().contains("qgsArcGisMapServerConnections"));
+        assert!(parse("<qgsWMSConnections version=\"1.0\"/>").is_err());
+    }
+
+    #[test]
+    fn tile_url_placeholders() {
+        use crate::gis::raster::tile_url;
+        assert_eq!(tile_url("https://t/{z}/{x}/{y}.png", 3, 4, 2), "https://t/3/4/2.png");
+        assert_eq!(tile_url("https://t/{z}/{x}/{-y}.png", 3, 4, 2), "https://t/3/4/5.png");
+        // Bing's documentation example: tile 3,5 at level 3 is quadkey 213.
+        assert_eq!(tile_url("https://t/{q}.jpeg", 3, 3, 5), "https://t/213.jpeg");
+    }
+}

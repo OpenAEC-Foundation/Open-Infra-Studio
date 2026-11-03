@@ -992,9 +992,10 @@ impl BuiltinPlugin for OpenInfra {
         Box::new(GisModule)
     }
 
-    fn on_load(&mut self, host: &mut dyn HostApi) {
-        bridge::attach(host);
-    }
+    // Nothing from the drawing at load: since API 14 the host answers
+    // requests only after loading, so the site and units are read on the
+    // first command (dispatch attaches).
+    fn on_load(&mut self, _host: &mut dyn HostApi) {}
 
     fn dispatch(&self, host: &mut dyn HostApi, cmd: &str) -> bool {
         let verb = cmd.split_whitespace().next().unwrap_or("").to_ascii_uppercase();

@@ -426,6 +426,9 @@ struct ServersPage {
     name: String,
     region: String,
     test: Option<Job<String>>,
+    /// QGIS connections export: path and the connections read from it, with their checkbox.
+    qgis_path: String,
+    qgis: Vec<(crate::gis::qgis::Connection, bool)>,
 }
 
 struct CoordsPage {
@@ -2448,6 +2451,7 @@ impl App {
                         attribution: String::new(),
                         default_layer: String::new(),
                         max_zoom: (kind == ServerKind::Xyz).then_some(19),
+                        min_zoom: None,
                         builtin: false,
                     });
                     match servers::save_user(&user) {
@@ -2496,6 +2500,7 @@ impl App {
                 }
             });
         });
+        self.qgis_import(ui);
         let mut remove = None;
         group(ui, "Servers", |ui| {
             let mut regions: Vec<String> = Vec::new();
@@ -2530,6 +2535,89 @@ impl App {
                     self.svc.refresh();
                 }
                 Err(e) => self.err(e),
+            }
+        }
+    }
+}
+
+impl App {
+    /// Connections exported from QGIS: read the XML, show what can be added,
+    /// add the chosen ones in one save.
+    fn qgis_import(&mut self, ui: &mut egui::Ui) {
+        use crate::gis::qgis;
+        use crate::lang::tr;
+        let mut read = ui.ctx().input(|i| {
+            i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("xml")))
+        });
+        let mut add = false;
+        group(ui, tr("QGIS-verbindingen importeren", "Import QGIS connections"), |ui| {
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.srv.qgis_path)
+                        .hint_text(tr("XML uit QGIS (Verbindingen opslaan) — of sleep het bestand op dit venster", "XML from QGIS (Save connections) — or drop the file on this window"))
+                        .desired_width(ui.available_width() - 90.0),
+                );
+                if ui.add_enabled(!self.srv.qgis_path.trim().is_empty(), egui::Button::new(tr("Lezen", "Read"))).clicked() {
+                    read = Some(std::path::PathBuf::from(self.srv.qgis_path.trim().trim_matches('"')));
+                }
+            });
+            if self.srv.qgis.is_empty() {
+                ui.label(RichText::new(tr("WMS-, WFS- en XYZ-verbindingen. Verbindingen met een wachtwoord, eigen headers of een afwijkende asvolgorde worden getoond maar niet toegevoegd.", "WMS, WFS and XYZ connections. Connections with a password, own headers or a different axis order are shown but not added.")).small().weak());
+                return;
+            }
+            egui::Grid::new("qgis_import").num_columns(4).striped(true).spacing([10.0, 3.0]).show(ui, |ui| {
+                for (c, on) in self.srv.qgis.iter_mut() {
+                    ui.add_enabled(c.importable(), egui::Checkbox::without_text(on));
+                    ui.label(RichText::new(c.server.kind.label()).monospace().small());
+                    ui.label(&c.server.name).on_hover_text(&c.server.url);
+                    if c.duplicate {
+                        ui.label(RichText::new(tr("staat er al", "already there")).small().weak());
+                    } else if c.blocking.is_empty() {
+                        ui.label(RichText::new(c.server.url.as_str()).small().weak());
+                    } else {
+                        ui.colored_label(WARN, RichText::new(c.blocking.join(" · ")).small());
+                    }
+                    ui.end_row();
+                }
+            });
+            let n = self.srv.qgis.iter().filter(|(c, on)| *on && c.importable()).count();
+            ui.horizontal(|ui| {
+                if ui.add_enabled(n > 0, primary_button(&format!("{} ({n})", tr("Toevoegen", "Add")))).clicked() {
+                    add = true;
+                }
+                if ui.small_button(tr("Sluiten", "Close")).clicked() {
+                    self.srv.qgis.clear();
+                }
+            });
+        });
+        if let Some(path) = read {
+            self.srv.qgis_path = path.to_string_lossy().into_owned();
+            match qgis::read(&path) {
+                Ok(mut conns) => {
+                    qgis::mark_duplicates(&mut conns, &servers::all());
+                    self.srv.qgis = conns.into_iter().map(|c| { let on = c.importable(); (c, on) }).collect();
+                }
+                Err(e) => {
+                    self.srv.qgis.clear();
+                    self.err(e);
+                }
+            }
+        }
+        if add {
+            let chosen: Vec<&qgis::Connection> = self.srv.qgis.iter().filter(|(c, on)| *on && c.importable()).map(|(c, _)| c).collect();
+            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            let saved = servers::try_load_user().and_then(|user| {
+                let (list, added) = qgis::merge(&user, &chosen, stamp);
+                servers::save_user(&list).map(|()| added)
+            });
+            match saved {
+                Ok(added) => {
+                    self.servers = servers::all();
+                    self.svc.refresh();
+                    self.srv.qgis.clear();
+                    self.ok(format!("{added} {}", tr("QGIS-verbindingen toegevoegd. Kies ze in Services wereldwijd om ze te testen.", "QGIS connections added. Choose them in Services worldwide to test them.")));
+                }
+                Err(e) => self.err(format!("{}: {e}", tr("Niets toegevoegd", "Nothing added"))),
             }
         }
     }

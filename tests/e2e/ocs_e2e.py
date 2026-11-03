@@ -412,10 +412,10 @@ def scenario_verhuizen(ocs, rap, van, naar):
 
 
 def default_ocs():
-    """The Open CAD Studio this plugin is built for (v2026.43): the AppImage of
+    """The Open CAD Studio this plugin is built for (v2026.44): the AppImage of
     the OpenAEC installer, else one on the PATH."""
     import glob
-    found = sorted(glob.glob(str(Path.home() / ".local/share/openaec-installer/apps/open-cad-studio/OpenCADStudio-v2026.43*.AppImage")))
+    found = sorted(glob.glob(str(Path.home() / ".local/share/openaec-installer/apps/open-cad-studio/OpenCADStudio-v2026.44*.AppImage")))
     if found:
         return found[-1]
     import shutil

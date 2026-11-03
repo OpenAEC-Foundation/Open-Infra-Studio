@@ -39,6 +39,9 @@ pub struct MapServer {
     /// XYZ only: highest zoom level the server provides.
     #[serde(default)]
     pub max_zoom: Option<u32>,
+    /// XYZ only: lowest zoom level the server provides (QGIS `zmin`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_zoom: Option<u32>,
     #[serde(skip)]
     pub builtin: bool,
 }
@@ -53,6 +56,7 @@ fn preset(id: &str, kind: ServerKind, region: &str, name: &str, url: &str, layer
         attribution: attribution.into(),
         default_layer: layer.into(),
         max_zoom: if kind == ServerKind::Xyz { Some(19) } else { None },
+        min_zoom: None,
         builtin: true,
     }
 }
@@ -115,6 +119,7 @@ pub fn presets() -> Vec<MapServer> {
         attribution: w.attribution.clone(),
         default_layer: w.default_layer.clone(),
         max_zoom: if w.kind == Xyz { Some(19) } else { None },
+        min_zoom: None,
         builtin: true,
     }));
     v
@@ -188,11 +193,27 @@ pub fn load_user() -> Vec<MapServer> {
         .unwrap_or_default()
 }
 
+/// The user's servers, or an error when the file exists but cannot be read:
+/// callers that write the list back must not replace a file they could not parse.
+pub fn try_load_user() -> Result<Vec<MapServer>, String> {
+    match std::fs::read_to_string(user_file()) {
+        Ok(s) => serde_json::from_str(&s).map_err(|e| format!("{}: {e}", user_file().display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(format!("{}: {e}", user_file().display())),
+    }
+}
+
 pub fn save_user(servers: &[MapServer]) -> Result<(), String> {
     let dir = config_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let json = serde_json::to_string_pretty(servers).map_err(|e| e.to_string())?;
-    std::fs::write(user_file(), json).map_err(|e| e.to_string())
+    // Write beside and rename: a failed save never leaves a half file.
+    let tmp = dir.join("servers.json.tmp");
+    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, user_file()).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        e.to_string()
+    })
 }
 
 pub fn all() -> Vec<MapServer> {

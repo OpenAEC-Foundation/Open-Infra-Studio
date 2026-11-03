@@ -15,20 +15,38 @@ pub struct Levering {
     pub themes: BTreeMap<String, usize>,
     /// Network operators (netbeheerders) in the delivery.
     pub operators: Vec<String>,
+    /// Converted features omitted here because they have no drawable geometry.
+    /// Empty source elements already omitted by klic2geo are not included.
+    pub skipped: usize,
 }
 
 /// Read a delivery: the Kadaster zip, or an extracted `GI_gebiedsinformatielevering_*.xml`.
 pub fn read(path: &Path) -> Result<Levering, String> {
-    let lev = match path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref() {
+    let unreadable = || crate::lang::tr("geen tekenbare objecten in het bestand", "no drawable features in the file").to_string();
+    // A panic in the shared converter must not take down the plugin process.
+    let lev = std::panic::catch_unwind(|| match path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref() {
         Some("xml") | Some("gml") => {
             let xml = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-            let meld = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").rsplit('_').nth(1).unwrap_or("").to_string();
-            klic2geo::parse_gi_xml(&xml, &meld)?
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let meld = match stem.strip_prefix("GI_gebiedsinformatielevering_") {
+                Some(rest) => rest.split('_').next().unwrap_or(""),
+                None => stem.rsplit('_').nth(1).unwrap_or(""),
+            };
+            klic2geo::parse_gi_xml(&xml, meld)
         }
-        _ => klic2geo::convert_zip(path)?,
-    };
+        _ => klic2geo::convert_zip(path),
+    }).map_err(|_| unreadable())??;
     let fc = serde_json::json!({ "type": "FeatureCollection", "features": lev.features });
-    let features = parse_geojson(&fc);
+    let mut features = parse_geojson(&fc);
+    // Keep readable neighbours and remove only geometry that cannot be drawn.
+    // A valid point needs no line; empty geometry does not invalidate neighbours.
+    for feature in &mut features { feature.lines.retain(|(line, _)| line.len() >= 2); }
+    let seen = features.len();
+    features.retain(|feature| !feature.lines.is_empty() || !feature.points.is_empty());
+    let skipped = seen - features.len();
+    // Preserve the converter's existing empty success result. Only reject
+    // converted objects whose geometry turns out to be wholly unreadable.
+    if seen > 0 && features.is_empty() { return Err(unreadable()); }
     let mut themes = BTreeMap::new();
     let mut operators: Vec<String> = Vec::new();
     for f in &features {
@@ -40,7 +58,7 @@ pub fn read(path: &Path) -> Result<Levering, String> {
         }
     }
     operators.sort();
-    Ok(Levering { meldnummer: lev.meldnummer, features, themes, operators })
+    Ok(Levering { meldnummer: lev.meldnummer, features, themes, operators, skipped })
 }
 
 pub fn thema(f: &Feature) -> &str {
@@ -175,6 +193,188 @@ pub fn theme_label(thema: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const XML_NAME: &str = "GI_gebiedsinformatielevering_SYNTHETIC_1_V2.xml";
+    const XML: &str = include_str!("../../tests/fixtures/klic/GI_gebiedsinformatielevering_SYNTHETIC_1_V2.xml");
+
+    #[test]
+    fn sol_empty_klic_xml_keeps_the_complete_existing_success_message() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-empty-message-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("GI_gebiedsinformatielevering_1_1_V2.xml");
+        for text in ["<Other/>", "", "not xml"] {
+            std::fs::write(&path, text).unwrap();
+            let result = read(&path);
+            std::fs::remove_file(&path).unwrap();
+            let delivery = result.unwrap();
+            assert_eq!(delivery.meldnummer, "1");
+            assert!(delivery.features.is_empty() && delivery.themes.is_empty() && delivery.operators.is_empty());
+            assert_eq!(delivery.skipped, 0);
+            // The app's success formatter is unchanged. Check the complete
+            // message produced by its inputs, including the zero counts.
+            assert_eq!(format!("KLIC {}: {} objecten van {} netbeheerders.",
+                delivery.meldnummer, delivery.features.len(), delivery.operators.len()),
+                "KLIC 1: 0 objecten van 0 netbeheerders.");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn klic_counts_only_wholly_unreadable_features_and_keeps_the_neighbour() {
+        let doc = roxmltree::Document::parse(XML).unwrap();
+        let member = doc.descendants().find(|n| n.has_tag_name("featureMember")).unwrap();
+        let dir = std::env::temp_dir().join(format!("oi-klic-skipped-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        // klic2geo omits empty/one-position source lines before returning GeoJSON.
+        // Nonfinite pairs reach the adapter as null coordinates and are counted here.
+        for (coordinates, skipped) in [("NaN NaN NaN NaN", 1), ("100 200 NaN NaN", 1), ("100 200", 0), ("", 0)] {
+            let broken = XML[member.range()].replace("nl.imkl-KL9999.synthetic", "nl.imkl-KL9999.broken").replace("100 200 110 210", coordinates);
+            let text = XML.replace("</gml:FeatureCollection>", &format!("{broken}</gml:FeatureCollection>"));
+            std::fs::write(&path, text).unwrap();
+            let delivery = read(&path).unwrap();
+            assert_eq!(delivery.features.len(), 1, "{coordinates}");
+            assert_eq!(delivery.skipped, skipped, "{coordinates}");
+            assert_eq!(delivery.themes.get("water"), Some(&1));
+            assert_eq!(delivery.features[0].lines[0].0, vec![[100.0, 200.0], [110.0, 210.0]]);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn klic_unreadable_geometry_and_panics_reuse_the_existing_import_error() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-existing-error-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        let expected = crate::lang::tr("geen tekenbare objecten in het bestand", "no drawable features in the file");
+        for text in [XML.replace("100 200 110 210", "NaN NaN NaN NaN"), XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")] {
+            std::fs::write(&path, text).unwrap();
+            assert_eq!(read(&path).err().unwrap(), expected);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn renamed_klic_xml_keeps_the_legacy_notification_number() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-renamed-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["copy_SYNTHETIC_V2.xml", "copy_SYNTHETIC_V2.gml"] {
+            let path = dir.join(name);
+            std::fs::write(&path, XML).unwrap();
+            let delivery = read(&path).unwrap();
+            assert_eq!(delivery.meldnummer, "SYNTHETIC", "{name}");
+            assert_eq!(delivery.features[0].props["melding"], "SYNTHETIC", "{name}");
+            assert_eq!(delivery.features[0].lines[0].0, vec![[100.0, 200.0], [110.0, 210.0]]);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn klic_distinguishes_unreadable_lines_from_already_empty_deliveries() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-undrawable-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        for (coordinates, rejected) in [("NaN NaN NaN NaN", true), ("100 200 NaN NaN", true), ("100 200", false), ("", false)] {
+            let text = XML.replace("100 200 110 210", coordinates);
+            assert_ne!(text, XML);
+            std::fs::write(&path, text).unwrap();
+            let result = read(&path);
+            if rejected {
+                assert!(result.is_err(), "{coordinates}");
+            } else {
+                let delivery = result.unwrap();
+                assert!(delivery.features.is_empty());
+                assert_eq!(delivery.skipped, 0);
+            }
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn klic_reader_errors_leave_the_ui_prefix_to_the_caller() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-prefix-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        for text in [XML.replace("100 200 110 210", "NaN NaN NaN NaN"), XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")] {
+            std::fs::write(&path, text).unwrap();
+            let error = read(&path).err().expect("read error");
+            assert!(!error.starts_with("KLIC: "), "{error}");
+            assert!(!error.is_empty());
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn an_empty_klic_line_does_not_hide_a_valid_neighbour() {
+        let doc = roxmltree::Document::parse(XML).unwrap();
+        let member = doc.descendants().find(|n| n.has_tag_name("featureMember")).unwrap();
+        for coordinates in ["NaN NaN NaN NaN", "100 200 NaN NaN", ""] {
+            let broken = XML[member.range()].replace("nl.imkl-KL9999.synthetic", "nl.imkl-KL9999.broken").replace("100 200 110 210", coordinates);
+            let text = XML.replace("</gml:FeatureCollection>", &format!("{broken}</gml:FeatureCollection>"));
+            let dir = std::env::temp_dir().join(format!("oi-klic-neighbour-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join(XML_NAME);
+            std::fs::write(&path, text).unwrap();
+            let delivery = read(&path).unwrap();
+            assert_eq!(delivery.meldnummer, "SYNTHETIC");
+            assert!(delivery.features.iter().flat_map(|f| &f.lines).any(|(line, _)| line == &vec![[100.0, 200.0], [110.0, 210.0]]));
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn klic_accepts_a_single_drawable_point_without_a_line() {
+        let text = XML.replace("Waterleiding", "Appurtenance").replace("LineString", "Point")
+            .replace("posList", "pos").replace("100 200 110 210", "100 200");
+        let dir = std::env::temp_dir().join(format!("oi-klic-point-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        std::fs::write(&path, text).unwrap();
+        let delivery = read(&path).unwrap();
+        assert_eq!(delivery.features.len(), 1);
+        assert_eq!(delivery.features[0].points, vec![[100.0, 200.0]]);
+        assert!(delivery.features[0].lines.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn fixed_klic_xml_and_zip_preserve_the_same_delivery_and_geometry() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/klic");
+        for path in [dir.join(XML_NAME), dir.join("delivery.zip")] {
+            let delivery = read(&path).unwrap();
+            assert_eq!(delivery.meldnummer, "SYNTHETIC", "{}", path.display());
+            assert_eq!(delivery.features.len(), 1);
+            assert_eq!(delivery.features[0].lines[0].0, vec![[100.0, 200.0], [110.0, 210.0]]);
+            assert_eq!(delivery.themes.get("water"), Some(&1));
+        }
+    }
+
+    #[test]
+    fn klic_preserves_converter_errors_for_broken_xml_zip_and_missing_files() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-invalid-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for (index, text) in ["<root></different>", "<root><child></root>"].iter().enumerate() {
+            let path = dir.join(format!("invalid-{index}.xml"));
+            std::fs::write(&path, text).unwrap();
+            assert!(read(&path).is_err(), "{text}");
+        }
+        let zip = dir.join("broken.zip");
+        std::fs::write(&zip, b"not a zip").unwrap();
+        assert!(read(&zip).is_err());
+        assert!(read(&dir.join("missing.xml")).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn klic_dependency_panics_become_errors_at_the_file_boundary() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-unicode-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(XML_NAME);
+        std::fs::write(&path, XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")).unwrap();
+        let result = read(&path);
+        assert!(result.is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     /// The Dordrecht sample delivery from GIS2BIM (Lange Geldersekade 2).
     #[test]
