@@ -6,6 +6,24 @@ pub struct Case {
     pub blocked: bool,
 }
 
+pub fn contains_test_secret(value: &str) -> bool {
+    ["SYNTHETIC_VALUE", "REVIEW_SECRET_55"]
+        .iter()
+        .any(|&secret| value.contains(secret))
+}
+
+pub fn os_cases() -> Vec<Case> {
+    let connections = qgis::parse(include_str!("../fixtures/qgis/ordnance-survey.xml")).unwrap();
+    assert_eq!(connections.len(), 3);
+    connections
+        .into_iter()
+        .map(|connection| Case {
+            connection,
+            blocked: true,
+        })
+        .collect()
+}
+
 pub fn review_cases() -> Vec<Case> {
     let cases: Vec<_> = [
         include_str!("../fixtures/qgis/geoserver-authkey.xml"),
@@ -32,7 +50,7 @@ pub fn audited_cases() -> Vec<Case> {
     }
     let inputs: Vec<Input> =
         serde_json::from_str(include_str!("../fixtures/qgis/auth-parameters.json")).unwrap();
-    assert_eq!(inputs.len(), 50);
+    assert_eq!(inputs.len(), 58);
     inputs
         .into_iter()
         .map(|input| {
@@ -64,10 +82,8 @@ fn check(cases: Vec<Case>) {
         let auth = c.blocking.iter().any(|reason| {
             reason == crate::lang::tr("vraagt authenticatie", "needs authentication")
         });
-        let leaked = format!("{c:?}").contains("SYNTHETIC_VALUE")
-            || serde_json::to_string(&list)
-                .unwrap()
-                .contains("SYNTHETIC_VALUE");
+        let leaked = contains_test_secret(&format!("{c:?}"))
+            || contains_test_secret(&serde_json::to_string(&list).unwrap());
         let valid = if case.blocked {
             !c.importable()
                 && auth
@@ -93,6 +109,11 @@ fn check(cases: Vec<Case>) {
         "Onjuiste behandeling: {}",
         failures.join(", ")
     );
+}
+
+#[test]
+fn ordnance_survey_keys_are_blocked() {
+    check(os_cases());
 }
 
 #[test]

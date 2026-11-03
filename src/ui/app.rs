@@ -520,12 +520,17 @@ mod qgis_preview_tests {
             let url = case.connection.server.url.clone();
             let rendered = render(vec![case.connection, public.clone()]);
             assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
-            let leaked = rendered.contains("SYNTHETIC_VALUE");
+            let leaked = crate::gis::qgis::auth_test_support::contains_test_secret(&rendered);
             let public_visible = !url.is_empty() && rendered.contains(&url);
             println!("{name}: verwacht blokkade={}, gevoelige waarde zichtbaar={leaked}, publieke URL zichtbaar={public_visible}", case.blocked);
             if leaked || (!case.blocked && !public_visible) { failures.push(name); }
         }
         assert!(failures.is_empty(), "Onjuiste voorvertoning: {}", failures.join(", "));
+    }
+
+    #[test]
+    fn ordnance_survey_keys_do_not_render() {
+        check_auth_cases(crate::gis::qgis::auth_test_support::os_cases());
     }
 
     #[test]

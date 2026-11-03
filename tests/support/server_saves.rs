@@ -205,6 +205,11 @@ fn check_auth_storage(group: &str) {
 }
 
 #[test]
+fn ordnance_survey_keys_do_not_reach_servers_json() {
+    check_auth_storage("os");
+}
+
+#[test]
 fn geoserver_and_here_credentials_do_not_reach_servers_json() {
     check_auth_storage("review");
 }
@@ -220,6 +225,7 @@ fn auth_credentials_storage_worker() {
         return;
     };
     let cases = match group.as_str() {
+        "os" => crate::gis::qgis::auth_test_support::os_cases(),
         "review" => crate::gis::qgis::auth_test_support::review_cases(),
         "audit" => crate::gis::qgis::auth_test_support::audited_cases(),
         _ => panic!("onbekende groep testinvoer"),
@@ -238,7 +244,7 @@ fn auth_credentials_storage_worker() {
         .unwrap();
         let json = std::fs::read_to_string(servers::config_dir().join("servers.json")).unwrap();
         let list: Vec<MapServer> = serde_json::from_str(&json).unwrap();
-        let leaked = json.contains("SYNTHETIC_VALUE");
+        let leaked = crate::gis::qgis::auth_test_support::contains_test_secret(&json);
         let valid = if case.blocked {
             added == 0 && list.is_empty() && !leaked
         } else {
