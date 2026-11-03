@@ -241,7 +241,14 @@ fn write_user(path: &Path, servers: &[MapServer]) -> Result<(), String> {
     let json = serde_json::to_string_pretty(servers).map_err(|e| e.to_string())?;
     let (tmp, mut file) = loop {
         let tmp = dir.join(format!(".servers-{}-{}.tmp", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
-        match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
             Ok(file) => break (tmp, file),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(e.to_string()),
