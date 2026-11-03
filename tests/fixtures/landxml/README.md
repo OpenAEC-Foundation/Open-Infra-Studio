@@ -28,3 +28,10 @@ aanwezig is. De documentatie van `Spiral` noemt zowel `INF` als `-INF`.
 Die schematekst is ook opgenomen in de [officiële publicatie van het
 Japanse onderzoeksinstituut NILIM](https://www.nilim.go.jp/lab/qbg/researchfields/pdf/h30_basedLandXML1.2.v1.2.pdf).
 De tests downloaden deze publicatie niet. Er is geen invoer uit overgenomen.
+
+`partial.xml` is eveneens zelfgemaakt en valt onder dezelfde bron en
+GPL-3.0-only-licentie. Eén punt is bruikbaar en één punt bevat kapotte tekst.
+`tests/landxml_import.rs` voert de echte import uit met een lokale testhost:
+één punt met twee kruisarmen, één undo-stap en de volledige bestaande
+succesmelding. De waarschuwing blijft intern. Er is geen CAD-installatie of
+live dienst nodig en de productielogica wordt niet gewijzigd.
