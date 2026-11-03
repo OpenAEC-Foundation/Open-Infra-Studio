@@ -1,0 +1,12 @@
+{
+  "naam": "polderweg",
+  "omschrijving": "Polderweg 60 km/u, 2 × 2,50 m asfalt met bermen; in ingraving een sloot langs de berm, in ophoging een bredere berm en een talud",
+  "bronnen": ["Rijbaan- en bermbreedte: schatting (CROW Handboek wegontwerp, erftoegangsweg buiten de bebouwde kom)", "Slootmaten: schatting, volg de legger van het waterschap", "Verhardingsopbouw: opbouw.json (schattingen)"],
+  "talud": 3, "ingraving": 2, "reikwijdte": 40, "verkanting": 0, "uitrol": 30,
+  "beide": [
+    {"type": "rijstrook", "breedte": 2.50, "helling": -2.5, "lagen": "asfalt-etw"},
+    {"type": "berm", "breedte": 1.50, "helling": -4.0},
+    {"type": "sloot", "als": "ingraving", "bodembreedte": 0.50, "diepte": 0.80, "talud_binnen": 1.5, "talud_buiten": 1.5},
+    {"type": "berm", "naam": "berm ophoging", "als": "ophoging", "breedte": 1.00, "helling": -4.0}
+  ]
+}

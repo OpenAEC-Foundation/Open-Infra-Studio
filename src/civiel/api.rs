@@ -108,6 +108,13 @@ impl Args {
         self.words.is_empty() && self.kv.is_empty()
     }
 
+    /// The arguments without these keys: for a command whose own key shares
+    /// a name with a setting (`FORMAAT=A1` of the sheets is not the point
+    /// file format).
+    pub fn without(&self, keys: &[&str]) -> Args {
+        Args { words: self.words.clone(), kv: self.kv.iter().filter(|(k, _)| !keys.contains(&k.as_str())).map(|(k, v)| (k.clone(), v.clone())).collect() }
+    }
+
     pub fn str(&self, k: &str) -> Option<&str> {
         self.kv.get(k).map(String::as_str)
     }

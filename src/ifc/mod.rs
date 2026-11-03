@@ -12,6 +12,8 @@
 //! IfcPresentationLayerAssignment, colours as styles.
 
 pub mod alignment;
+// A corridor's surface as road parts and earthworks (stream uitwisseling).
+pub mod corridor;
 pub mod step;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -352,6 +354,9 @@ fn geometry(e: &EntityType, fr: &Frame) -> Result<Geo, &'static str> {
         }
         EntityType::RasterImage(_) => Err("kaartbeeld (raster)"),
         EntityType::Hatch(_) => Err("arcering"),
+        // A survey symbol (placed from a point code) stands for its object at
+        // the measured point; other blocks (vehicles, sheets) stay out.
+        EntityType::Insert(i) if crate::civiel::data_value(e, "code").is_some() => Ok(Geo::Point(p(&i.insert_point))),
         EntityType::Insert(_) => Err("blokverwijzing"),
         EntityType::Viewport(_) => Err("viewport"),
         EntityType::Dimension(_) => Err("maatvoering"),
@@ -408,9 +413,53 @@ fn get<'a>(d: &'a Data, key: &str) -> Option<&'a str> {
     d.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str()).filter(|v| !v.is_empty())
 }
 
+/// The road (IfcRoad) an object belongs to: its corridor, junction or roundabout.
+fn road_of(d: &Data) -> Option<&str> {
+    get(d, "corridor").or_else(|| get(d, "kruispunt")).or_else(|| get(d, "rotonde"))
+}
+
+/// The sewer values of a pipe or manhole (CIV_RIOOL, GWSW), under English
+/// names: invert levels (BOB) in m above the datum (NAP), sizes in mm.
+fn sewer_props(d: &Data) -> Data {
+    let pick = |keys: &[&str]| keys.iter().find_map(|k| get(d, k)).map(str::to_string);
+    let mut out = Data::new();
+    for (name, keys) in [
+        ("InvertLevelStart", &["bob_van", "bob_beginpunt_leiding"][..]),
+        ("InvertLevelEnd", &["bob_naar", "bob_eindpunt_leiding"]),
+        ("NominalDiameter", &["diameter", "breedte_leiding"]),
+        ("InnerDiameter", &["binnendiameter"]),
+        ("WallThickness", &["wanddikte"]),
+        ("Material", &["materiaal", "materiaal_leiding"]),
+        ("Length", &["lengte", "lengte_leiding"]),
+        ("Slope", &["verhang"]),
+        ("System", &["stelsel", "stelseltype"]),
+        ("FromManhole", &["van", "beginpunt"]),
+        ("ToManhole", &["naar", "eindpunt"]),
+        ("ManholeNumber", &["put"]),
+        ("GroundLevel", &["maaiveld", "maaiveldhoogte"]),
+        ("BottomLevel", &["bob_laagst"]),
+        ("Depth", &["diepte"]),
+        ("ManholeSize", &["afmeting", "breedte_put"]),
+    ] {
+        if let Some(v) = pick(keys) {
+            out.push((name.to_string(), v));
+        }
+    }
+    // Only sewer objects: something with an invert level or a manhole bottom.
+    if out.iter().any(|(k, _)| k.starts_with("InvertLevel") || k == "BottomLevel" || (k == "GroundLevel" && get(d, "rol") == Some("put"))) { out } else { Data::new() }
+}
+
 /// KLIC cables and pipes, after the NLCS objects of `nlcs::klic_object`.
-fn klic(o: &str, ot: Option<String>) -> Class {
+/// `symbol`: the NLCS symbol element (S), e.g. the hydrant itself rather
+/// than the fire main that leads to it.
+fn klic(o: &str, ot: Option<String>, symbol: bool) -> Class {
     let electric = o.starts_with("ET_") || o.starts_with("DATA_");
+    if o.contains("BRANDHYDRANT") && symbol {
+        return class("IfcFireSuppressionTerminal", Some("FIREHYDRANT"), ot);
+    }
+    if o.contains("STRAATPOT") {
+        return class("IfcPipeFitting", Some("NOTDEFINED"), ot);
+    }
     if o.contains("MANTELBUIS") || o.contains("KABELBED") {
         return class("IfcCableCarrierSegment", Some("CONDUITSEGMENT"), ot);
     }
@@ -430,6 +479,12 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
     }
     if get(data, "bron") == Some("waterpeil") {
         return Ok(Class { role: Role::Terrain, ..class("IfcGeographicElement", Some("USERDEFINED"), Some("Waterpeil".into())) });
+    }
+    // Civil analyses without an NLCS object, by their object data.
+    for (key, what) in [("stroomgebied", "Stroomgebied"), ("plas", "Plas"), ("waterdruppel", "Waterdruppel"), ("vak", "Parkeervak")] {
+        if get(data, key).is_some() && ln.is_none() {
+            return Ok(annotation("USERDEFINED", Some(what.into())));
+        }
     }
     let Some(ln) = ln else {
         // Not an NLCS layer: GIS imports (OpenStreetMap, WFS, files) and the rest.
@@ -470,6 +525,15 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
             _ if is_mesh => class("IfcGeographicElement", Some("USERDEFINED"), ot),
             _ => annotation("USERDEFINED", ot),
         },
+        // A corridor's pavement layers as bodies: one course per material.
+        "VH" if is_mesh && get(data, "laag").is_some() => {
+            class("IfcCourse", Some(if get(data, "rol") == Some("verharding") { "PAVEMENT" } else { "USERDEFINED" }), get(data, "laag").map(str::to_string))
+        }
+        // A corridor's formation and subgrade surfaces.
+        "VH" | "GW" if is_mesh && get(data, "oppervlak").is_some() => Class { role: Role::Terrain, ..class("IfcGeographicElement", Some("USERDEFINED"), get(data, "oppervlak").map(str::to_string)) },
+        // A ditch or watercourse body, or a ditch line of a corridor; a loose
+        // water line (an infra library object) stays annotation.
+        "GW" if o.starts_with("WATERGANG") && (is_mesh || road_of(data).is_some()) => class("IfcGeographicElement", Some("USERDEFINED"), ot),
         "VH" => match o {
             _ if o.starts_with("ONVERHARD") => class("IfcGeographicElement", Some("TERRAIN"), ot),
             _ if o.starts_with("KANTOPSLUITING") => class("IfcKerb", Some("NOTDEFINED"), ot),
@@ -480,14 +544,19 @@ fn classify(ln: Option<&LayerName>, layer: &str, data: &Data, geo: &Geo) -> Resu
         },
         "GR" => class("IfcGeographicElement", Some("VEGETATION"), ot),
         "WH" | "OB" => class("IfcGeographicElement", Some("USERDEFINED"), ot),
-        "KL" => klic(o, ot),
+        "KL" => klic(o, ot, ln.element == "S"),
         "RI" => match o {
+            // Flow arrows of a sewer design are symbols, not pipes.
+            _ if o.contains("STROMINGSRICHTING") => annotation("SYMBOL", ot),
             _ if o.contains("PUT") => class("IfcDistributionChamberElement", Some("MANHOLE"), ot),
+            _ if o.contains("KOLK") => class("IfcDistributionChamberElement", Some("SUMP"), ot),
             _ if o.contains("GOOT") => class("IfcPipeSegment", Some("GUTTER"), ot),
             _ => class("IfcPipeSegment", Some("NOTDEFINED"), ot),
         },
         "MO" if o.starts_with("ONDERZOEK_") && is_mesh => Class { role: Role::Stratum, ..class("IfcGeotechnicalStratum", Some("SOLID"), ot) },
         "MO" => annotation(if ln.element == "S" { "SYMBOL" } else { "USERDEFINED" }, ot),
+        // Sight lines of the sight distance check: drawing aids, not structures.
+        "KW" if o == "ZICHTRUIMTE" => annotation("USERDEFINED", ot),
         "KW" => class("IfcCivilElement", None, ot),
         "GW" => match o {
             _ if o.starts_with("ONTGRAVING") => class("IfcEarthworksCut", Some("EXCAVATION"), ot),
@@ -849,6 +918,50 @@ impl<'a, W: Write> Exporter<'a, W> {
         Ok(format!("{}", self.step.add("IFCPRODUCTDEFINITIONSHAPE", &format!("$,$,{}", refs(&ids)))?))
     }
 
+    /// A sewer pipe or manhole in 3D from its object data (CIV_RIOOL or a
+    /// GWSW import): the pipe as a hollow tube along its invert levels, the
+    /// manhole as a shaft from its bottom to the ground. `None` without the
+    /// levels.
+    fn sewer_body(&mut self, e: &EntityType, geo: &Geo, data: &Data) -> io::Result<Option<Id>> {
+        let num = |k: &str| get(data, k).and_then(|v| v.replace(',', ".").parse::<f64>().ok()).filter(|v| v.is_finite());
+        let item = match (geo, e) {
+            (Geo::Curve { pts, closed: false, .. }, _) if pts.len() >= 2 => {
+                let (Some(b0), Some(b1)) = (num("bob_van").or_else(|| num("bob_beginpunt_leiding")), num("bob_eindpunt_leiding").or_else(|| num("bob_naar"))) else { return Ok(None) };
+                let inner = num("binnendiameter").or_else(|| num("breedte_leiding")).filter(|d| *d > 10.0).map(|d| d / 1000.0);
+                let Some(d) = inner else { return Ok(None) };
+                let t = num("wanddikte").unwrap_or(0.0).max(0.0) / 1000.0;
+                let (a, b) = (pts[0], pts[pts.len() - 1]);
+                let pa = self.step.add("IFCCARTESIANPOINT", &format!("({},{},{})", coord(a[0]), coord(a[1]), coord(b0 + d / 2.0)))?;
+                let pb = self.step.add("IFCCARTESIANPOINT", &format!("({},{},{})", coord(b[0]), coord(b[1]), coord(b1 + d / 2.0)))?;
+                let line = self.step.add("IFCPOLYLINE", &format!("({pa},{pb})"))?;
+                let inner_r = if t > 0.0 { real(d / 2.0) } else { "$".into() };
+                self.step.add("IFCSWEPTDISKSOLID", &format!("{line},{},{inner_r},$,$", real(d / 2.0 + t)))?
+            }
+            (_, EntityType::Circle(c)) => {
+                let top = num("maaiveld").or_else(|| num("maaiveldhoogte"));
+                // A GWSW manhole has its height instead of its bottom.
+                let bottom = num("bob_laagst").or_else(|| top.zip(num("hoogte_put")).map(|(t, h)| t - h / 1000.0));
+                let (Some(top), Some(bottom)) = (top, bottom) else { return Ok(None) };
+                if top <= bottom {
+                    return Ok(None);
+                }
+                let at = self.fr.p(c.center.x, c.center.y, 0.0);
+                // A GWSW manhole is drawn as a marker: its width gives the size.
+                let r = num("breedte_put").filter(|w| *w > 100.0).map(|w| w / 2000.0).unwrap_or(c.radius / self.fr.f);
+                let o = self.step.add("IFCCARTESIANPOINT", &format!("({},{},{})", coord(at[0]), coord(at[1]), coord(bottom)))?;
+                let place = self.step.add("IFCAXIS2PLACEMENT3D", &format!("{o},$,$"))?;
+                let profile = self.step.add("IFCCIRCLEPROFILEDEF", &format!(".AREA.,$,$,{}", real(r)))?;
+                self.step.add("IFCEXTRUDEDAREASOLID", &format!("{profile},{place},{},{}", self.c.z_axis, real(top - bottom)))?
+            }
+            _ => return Ok(None),
+        };
+        let rgb = self.colour(e);
+        let s = self.surface_style(rgb, 0)?;
+        self.style(item, s)?;
+        self.layer_items.entry(e.common().layer.clone()).or_default().push(item);
+        Ok(Some(item))
+    }
+
     fn psets(&mut self, key: &str, owner: Id, layer: &str, ln: Option<&LayerName>, data: &Data) -> io::Result<()> {
         let mut nlcs_props: Data = vec![("Laag".into(), layer.to_string())];
         if let Some(ln) = ln {
@@ -965,6 +1078,23 @@ impl<'a, W: Write> Exporter<'a, W> {
                 skip("profiel- en dwarsprofielweergave");
                 continue;
             }
+            // Sheet sets (`civiel::bladen`): view frames, match lines, sheet
+            // profiles and paper space are drawing sheets, not objects.
+            if get(&data, "bladen").is_some() {
+                skip("tekenblad en profielkader");
+                continue;
+            }
+            // Labels (`civiel::labels`) are annotation as a whole: without
+            // texts their ticks, crosses and arrows go too.
+            if opt.no_texts && get(&data, "label").is_some() && get(&data, "vingerafdruk").is_some() {
+                skip("tekst");
+                continue;
+            }
+            // An assembly drawn as a template section is no object.
+            if get(&data, "profieltype").is_some() {
+                skip("profieltype");
+                continue;
+            }
             let mut cl = match classify(ln.as_ref(), &layer, &data, &geo) {
                 Ok(c) => c,
                 Err(r) => {
@@ -991,8 +1121,10 @@ impl<'a, W: Write> Exporter<'a, W> {
             let id = get(&data, "identificatie").or_else(|| get(&data, "lokaal_id")).map(str::to_string);
             let bro = get(&data, "bro_id").map(str::to_string);
             let key = match cl.role {
-                Role::Terrain => format!("terrain:{layer}:{}", get(&data, "bron").unwrap_or("")),
+                Role::Terrain => format!("terrain:{layer}:{}:{}", get(&data, "bron").unwrap_or(""), road_of(&data).unwrap_or("")),
                 Role::Building => format!("building:{}", id.clone().unwrap_or_else(|| format!("{h:?}"))),
+                // A point cloud mesh (CIV_MESH) can span several MESH entities: one object.
+                _ if cl.ifc != "IfcAnnotation" && get(&data, "mesh").is_some() => format!("mesh:{layer}:{}", get(&data, "mesh").unwrap_or("")),
                 _ if cl.ifc != "IfcAnnotation" && id.is_some() => format!("{}:{}", cl.ifc, id.clone().unwrap_or_default()),
                 _ => format!("entity:{}", handle_text(h)),
             };
@@ -1004,6 +1136,9 @@ impl<'a, W: Write> Exporter<'a, W> {
                         Role::Stratum => get(&data, "grondsoort").or_else(|| get(&data, "grondsoort_nen")).map(str::to_string).unwrap_or_else(|| cl.object_type.clone().unwrap_or_default()),
                         _ => get(&data, "naam")
                             .or_else(|| get(&data, "name"))
+                            // A designed sewer (CIV_RIOOL): manhole number, pipe "from-to".
+                            .or_else(|| get(&data, "put"))
+                            .or_else(|| get(&data, "leiding"))
                             .map(str::to_string)
                             .or_else(|| match &geo {
                                 Geo::Text { value, .. } => Some(value.clone()),
@@ -1011,7 +1146,7 @@ impl<'a, W: Write> Exporter<'a, W> {
                             })
                             .unwrap_or_else(|| cl.object_type.clone().unwrap_or_else(|| layer.clone())),
                     };
-                    let road = get(&data, "corridor").map(str::to_string);
+                    let road = road_of(&data).map(str::to_string);
                     groups.push(Group {
                         class: cl.clone(),
                         name,
@@ -1042,15 +1177,22 @@ impl<'a, W: Write> Exporter<'a, W> {
             for (k, item) in self.items(e, &geo, element, true)? {
                 groups[gi].reps.entry(k).or_default().push(item);
             }
+            if matches!(groups[gi].class.ifc, "IfcPipeSegment" | "IfcDistributionChamberElement") {
+                if let Some(item) = self.sewer_body(e, &geo, &data)? {
+                    groups[gi].reps.entry(("Body", "SweptSolid")).or_default().push(item);
+                }
+            }
         }
 
         // Axes, each with its design profile.
         let mut alignments = Vec::new();
+        let mut alignment_ids: HashMap<String, Id> = HashMap::new();
         for (e, data) in &axes {
             let Some(al) = Alignment::from_entity(e) else { continue };
             let pvis = if al.name.is_empty() { None } else { crate::civiel::corridor::profile_of(doc, &al.name) };
             if let Some(id) = self.alignment(e, &al, data, pvis.as_deref())? {
                 alignments.push(id);
+                alignment_ids.insert(al.name.clone(), id);
             }
         }
         report.alignments = alignments.len();
@@ -1101,7 +1243,41 @@ impl<'a, W: Write> Exporter<'a, W> {
         let mut buildings: Vec<Id> = Vec::new();
         let mut strata: BTreeMap<String, (Vec<Id>, String)> = BTreeMap::new();
         let mut roads: BTreeMap<String, Vec<Id>> = BTreeMap::new();
+        // A corridor's design surface split into road parts and earthworks.
+        // Feature lines that run through a corridor's design surface belong
+        // to its road (the corridor gives only its axis line object data).
+        let mut joins: Vec<(usize, String)> = Vec::new();
+        for (gi, g) in groups.iter().enumerate() {
+            if g.road.is_some() || g.handles.len() != 1 {
+                continue;
+            }
+            let Some(EntityType::Polyline3D(p)) = doc.get_entity(g.handles[0]) else { continue };
+            let Some(v) = p.vertices.first() else { continue };
+            let q = fr.p(v.position.x, v.position.y, v.position.z);
+            let key = ((q[0] * 1000.0).round() as i64, (q[1] * 1000.0).round() as i64, (q[2] * 1000.0).round() as i64);
+            let on = groups.iter().find(|s| s.class.role == Role::Terrain && s.road.is_some() && s.merged.as_ref().is_some_and(|m| m.index.contains_key(&key)));
+            if let Some(r) = on.and_then(|s| s.road.clone()) {
+                joins.push((gi, r));
+            }
+        }
+        for (gi, r) in joins {
+            groups[gi].road = Some(r);
+        }
+        // The cut voids the existing ground: only with a ground surface in the file.
+        let ground_tin = groups
+            .iter()
+            .any(|g| g.class.role == Role::Terrain && g.class.predefined == Some("TERRAIN") && g.road.is_none())
+            .then(|| crate::civiel::terrein::Tin::of_status(doc, 'B'))
+            .flatten();
+        let mut road_parts: BTreeMap<String, RoadParts> = BTreeMap::new();
         for (gi, gr) in groups.iter_mut().enumerate() {
+            if let (Role::Terrain, Some(road), Some(m)) = (gr.class.role, gr.road.clone(), gr.merged.as_ref()) {
+                if let Some(rp) = self.corridor_parts(gr, m, ground_tin.as_ref(), report)? {
+                    cuts.extend(rp.cut);
+                    road_parts.insert(road, rp);
+                    continue;
+                }
+            }
             if let Some(m) = gr.merged.take() {
                 if m.tris.is_empty() {
                     continue;
@@ -1156,6 +1332,10 @@ impl<'a, W: Write> Exporter<'a, W> {
             *report.classes.entry(if gr.class.role == Role::Building { "IfcBuilding".into() } else { gr.class.ifc.to_string() }).or_insert(0) += 1;
             let (layer, ln, data) = (gr.layer.clone(), gr.ln.clone(), std::mem::take(&mut gr.data));
             self.psets(&key, id, &layer, ln.as_ref(), &data)?;
+            let sewer = sewer_props(&data);
+            if !sewer.is_empty() {
+                self.pset(&format!("{key}:riool"), "OpenInfra_Sewer", &sewer, id)?;
+            }
         }
         if let Some(ground) = ground {
             for (i, cut) in cuts.iter().enumerate() {
@@ -1183,11 +1363,21 @@ impl<'a, W: Write> Exporter<'a, W> {
             *report.classes.entry("IfcBorehole".into()).or_insert(0) += 1;
         }
         let mut facilities = buildings.clone();
-        for (name, members) in &roads {
+        let mut names: Vec<&String> = roads.keys().chain(road_parts.keys()).collect();
+        names.sort();
+        names.dedup();
+        for name in names {
             let g = self.guid(&format!("road:{name}"));
             let road = self.step.add("IFCROAD", &format!("{g},$,{},$,$,{},$,$,.ELEMENT.,$", text(name), self.c.placement))?;
-            let g = self.guid(&format!("rel:road:{name}"));
-            self.contain(&g, members, road)?;
+            let mut members = roads.get(name).cloned().unwrap_or_default();
+            if let Some(rp) = road_parts.get(name) {
+                members.extend(&rp.members);
+                self.road_parts(name, road, rp, &alignment_ids, report)?;
+            }
+            if !members.is_empty() {
+                let g = self.guid(&format!("rel:road:{name}"));
+                self.contain(&g, &members, road)?;
+            }
             facilities.push(road);
             *report.classes.entry("IfcRoad".into()).or_insert(0) += 1;
         }
@@ -1256,9 +1446,18 @@ impl<'a, W: Write> Exporter<'a, W> {
         for (i, s) in h.iter().enumerate() {
             let next = h.get(i + 1).cloned().unwrap_or_else(|| {
                 let (p, d) = s.end();
-                HSeg { start: p, dir: d, radius: 0.0, length: 0.0 }
+                HSeg::new(p, d, 0.0, 0.0)
             });
             let place = self.placement2(s.start, s.dir)?;
+            if let Some((a, t0)) = s.clothoid() {
+                // A clothoid: the part of an IfcClothoid from parameter t0 on.
+                let parent = self.step.add("IFCCLOTHOID", &format!("{},{}", self.c.identity2, real(a)))?;
+                segs.push(self.step.add(
+                    "IFCCURVESEGMENT",
+                    &format!(".{}.,{place},IFCLENGTHMEASURE({}),IFCLENGTHMEASURE({}),{parent}", alignment::transition(s, &next), real(t0), real(s.length)),
+                )?);
+                continue;
+            }
             let (parent, length) = if s.is_line() {
                 (self.c.line2, s.length)
             } else {
@@ -1308,11 +1507,11 @@ impl<'a, W: Write> Exporter<'a, W> {
         let horizontal = self.step.add("IFCALIGNMENTHORIZONTAL", &format!("{g},$,$,$,$,$,$"))?;
         let mut layouts = vec![horizontal];
         let mut hs = Vec::new();
-        for (i, s) in h.iter().chain(std::iter::once(&HSeg { start: end, dir: end_dir, radius: 0.0, length: 0.0 })).enumerate() {
+        for (i, s) in h.iter().chain(std::iter::once(&HSeg::new(end, end_dir, 0.0, 0.0))).enumerate() {
             let p = self.point2(s.start)?;
             let dp = self.step.add(
                 "IFCALIGNMENTHORIZONTALSEGMENT",
-                &format!("$,$,{p},{},{},{},{},$,.{}.", real(s.dir.rem_euclid(std::f64::consts::TAU)), real(s.radius), real(s.radius), real(s.length), s.kind()),
+                &format!("$,$,{p},{},{},{},{},$,.{}.", real(s.dir.rem_euclid(std::f64::consts::TAU)), real(s.radius), real(s.end_radius), real(s.length), s.kind()),
             )?;
             let g = self.guid(&format!("{key}:h{i}"));
             hs.push(self.step.add("IFCALIGNMENTSEGMENT", &format!("{g},$,$,$,$,$,$,{dp}"))?);
@@ -1337,6 +1536,31 @@ impl<'a, W: Write> Exporter<'a, W> {
             }
             let g = self.guid(&format!("{key}:vnest"));
             self.step.add("IFCRELNESTS", &format!("{g},$,$,$,{vertical},{}", refs(&vs)))?;
+        }
+        // The cant of a rail track (IfcAlignmentCant), from its object data:
+        // the outer rail raised, constant in curves, linear along clothoids.
+        let cant = get(data, "verkanting_mm").map(|c| crate::civiel::spoor::cant_segments(al, self.fr.f, c)).unwrap_or_default();
+        if let Some(last) = cant.last().cloned() {
+            let g = self.guid(&format!("{key}:cant"));
+            let layout = self.step.add("IFCALIGNMENTCANT", &format!("{g},$,$,$,$,$,$,{}", real(crate::civiel::spoor::RAIL_HEAD_DISTANCE)))?;
+            layouts.push(layout);
+            let end_seg = crate::civiel::spoor::CantSeg { s0: last.s0 + last.len, len: 0.0, d0: last.d1, d1: last.d1, side: last.side };
+            let mut cs = Vec::new();
+            for (i, c) in cant.iter().chain(std::iter::once(&end_seg)).enumerate() {
+                // Left and right rail (m): the rail on the outside of the curve goes up.
+                let rails = |d: f64| if c.side > 0.0 { (0.0, d / 1000.0) } else if c.side < 0.0 { (d / 1000.0, 0.0) } else { (0.0, 0.0) };
+                let ((l0, r0), (l1, r1)) = (rails(c.d0), rails(c.d1));
+                let linear = (c.d1 - c.d0).abs() > 1e-9;
+                let ends = if linear { (real(l1), real(r1)) } else { ("$".to_string(), "$".to_string()) };
+                let dp = self.step.add(
+                    "IFCALIGNMENTCANTSEGMENT",
+                    &format!("$,$,{},{},{},{},{},{},.{}.", real(c.s0), real(c.len), real(l0), ends.0, real(r0), ends.1, if linear { "LINEARTRANSITION" } else { "CONSTANTCANT" }),
+                )?;
+                let g = self.guid(&format!("{key}:c{i}"));
+                cs.push(self.step.add("IFCALIGNMENTSEGMENT", &format!("{g},$,$,$,$,$,$,{dp}"))?);
+            }
+            let g = self.guid(&format!("{key}:cnest"));
+            self.step.add("IFCRELNESTS", &format!("{g},$,$,$,{layout},{}", refs(&cs)))?;
         }
         let g = self.guid(&format!("{key}:layouts"));
         self.step.add("IFCRELNESTS", &format!("{g},$,$,$,{alignment},{}", refs(&layouts)))?;
@@ -1365,6 +1589,183 @@ impl<'a, W: Write> Exporter<'a, W> {
         self.psets(&key, alignment, &layer, ln.as_ref(), data)?;
         self.layer_items.entry(layer).or_default().push(composite);
         Ok(Some(alignment))
+    }
+}
+
+// ── Corridors: road parts and earthworks (stream uitwisseling) ───────────────
+
+/// What a corridor's design surface became.
+struct RoadParts {
+    /// Road parts: name, IfcRoadPartTypeEnum, the elements they contain.
+    parts: Vec<(String, &'static str, Vec<Id>)>,
+    /// Elements of the road itself (the fill body; for a dike everything).
+    members: Vec<Id>,
+    /// The cut body: it voids the existing ground.
+    cut: Option<Id>,
+    /// The corridor's axis, which positions the road.
+    axis: String,
+}
+
+impl<W: Write> Exporter<'_, W> {
+    /// The corridor's design surface as road parts and earthworks: each
+    /// triangle by the offset of its centre from the axis (pavement up to the
+    /// asphalt edge, then the shoulder or crest, then the slopes), and the
+    /// fill and cut bodies against the existing ground (`ground`, drawing
+    /// units). `None` when the corridor's axis is not in the drawing.
+    fn corridor_parts(&mut self, gr: &Group, m: &Merged, ground: Option<&crate::civiel::terrein::Tin>, report: &mut Report) -> io::Result<Option<RoadParts>> {
+        use corridor::{Edges, Part};
+        let tr = crate::lang::tr;
+        let (doc, fr) = (self.src.doc, self.fr);
+        let Some(axis_name) = get(&gr.data, "as").map(str::to_string) else { return Ok(None) };
+        let road = gr.road.clone().unwrap_or_default();
+        let al = doc
+            .model_space_entities()
+            .filter(|e| matches!(e, EntityType::LwPolyline(_)) && e.common().layer.contains("-AM-AS-"))
+            .filter(|e| {
+                let d = data_of(e);
+                get(&d, "as") == Some(axis_name.as_str()) && ["verschuiving_m", "corridor", "ontwerpprofiel", "lengteprofiel"].iter().all(|k| get(&d, k).is_none())
+            })
+            .find_map(Alignment::from_entity);
+        let Some(al) = al else { return Ok(None) };
+        let to_drawing = |p: &[f64; 3]| [(p[0] - fr.dx) * fr.f, (p[1] - fr.dy) * fr.f];
+        // The parts' edges: the feature lines that run through this surface.
+        let mut edges = Edges::default();
+        for e in doc.model_space_entities() {
+            let EntityType::Polyline3D(p) = e else { continue };
+            let Some(v) = p.vertices.first() else { continue };
+            let q = fr.p(v.position.x, v.position.y, v.position.z);
+            let key = ((q[0] * 1000.0).round() as i64, (q[1] * 1000.0).round() as i64, (q[2] * 1000.0).round() as i64);
+            if m.index.contains_key(&key) {
+                edges.add(&e.common().layer, al.station_offset([v.position.x, v.position.y]).1 / fr.f);
+            }
+        }
+        let mut tris = m.tris.clone();
+        corridor::upward(&m.verts, &mut tris);
+        let parts: Vec<Part> = tris
+            .iter()
+            .map(|t| {
+                let c = t.iter().fold([0.0; 3], |s, i| [s[0] + m.verts[*i][0] / 3.0, s[1] + m.verts[*i][1] / 3.0, 0.0]);
+                edges.part(al.station_offset(to_drawing(&c)).1 / fr.f)
+            })
+            .collect();
+        let is_road = edges.pavement.is_some();
+        let key = format!("corridor:{road}");
+        let layer = gr.layer.clone();
+        let mut out = RoadParts { parts: Vec::new(), members: Vec::new(), cut: None, axis: axis_name };
+        // A triangulated body as a product shape, styled and on the corridor's layer.
+        let body = |x: &mut Self, pts: &[[f64; 3]], tris: &[[usize; 3]], closed: Option<bool>, rgb: (u8, u8, u8), transparency: u8| -> io::Result<String> {
+            let list = x.step.add("IFCCARTESIANPOINTLIST3D", &format!("{},$", coord_list(pts)))?;
+            let closed = closed.map(|c| if c { ".T." } else { ".F." }).unwrap_or("$");
+            let item = x.step.add("IFCTRIANGULATEDFACESET", &format!("{list},$,{closed},{},$", index_list(tris)))?;
+            let s = x.surface_style(rgb, transparency)?;
+            x.style(item, s)?;
+            x.layer_items.entry(layer.clone()).or_default().push(item);
+            let mut reps = BTreeMap::new();
+            reps.insert(("Body", "Tessellation"), vec![item]);
+            x.shape(&reps)
+        };
+        // The surface parts as courses: parts, key, name, course type, colour, road part.
+        struct Course {
+            want: &'static [Part],
+            id: &'static str,
+            name: &'static str,
+            kind: &'static str,
+            rgb: (u8, u8, u8),
+            part_kind: &'static str,
+        }
+        let courses = [
+            Course { want: &[Part::Pavement], id: "deklaag", name: tr("Verharding bovenvlak", "Pavement surface"), kind: "PAVEMENT", rgb: (72, 72, 78), part_kind: "CARRIAGEWAY" },
+            Course {
+                want: &[Part::Shoulder, Part::Crest],
+                id: "berm",
+                name: if is_road { tr("Berm", "Shoulder") } else { tr("Kruin", "Crest") },
+                kind: "PROTECTION",
+                rgb: (112, 158, 82),
+                part_kind: "SOFTSHOULDER",
+            },
+            Course { want: &[Part::Slope], id: "talud", name: tr("Talud", "Slope"), kind: "PROTECTION", rgb: (136, 176, 96), part_kind: "ROADSIDE" },
+        ];
+        for Course { want, id, name, kind, rgb, part_kind } in courses {
+            let (pts, t) = corridor::part_mesh(&m.verts, &tris, &parts, want);
+            if t.is_empty() {
+                continue;
+            }
+            let shape = body(self, &pts, &t, Some(false), rgb, 0)?;
+            let course = self.element(&format!("{key}:{id}"), &class("IfcCourse", Some(kind), None), name, &road, None, &shape)?;
+            *report.classes.entry("IfcCourse".into()).or_insert(0) += 1;
+            let element = if kind == "PAVEMENT" {
+                // The course is the pavement's top: the assembly has no build-up.
+                let desc = tr("rijstroken (alleen het bovenvlak; het sjabloon heeft geen opbouw)", "lanes (top surface only; the assembly has no layer build-up)");
+                let pavement = self.element(&format!("{key}:verharding"), &class("IfcPavement", Some("FLEXIBLE"), None), tr("Verharding", "Pavement"), desc, None, "$")?;
+                let g = self.guid(&format!("rel:{key}:verharding"));
+                self.step.add("IFCRELAGGREGATES", &format!("{g},$,$,$,{pavement},({course})"))?;
+                *report.classes.entry("IfcPavement".into()).or_insert(0) += 1;
+                self.psets(&format!("{key}:verharding"), pavement, &gr.layer, gr.ln.as_ref(), &gr.data)?;
+                pavement
+            } else {
+                course
+            };
+            if is_road {
+                let part_name = match part_kind {
+                    "CARRIAGEWAY" => tr("Rijbaan", "Carriageway"),
+                    "SOFTSHOULDER" => tr("Berm", "Shoulder"),
+                    _ => tr("Talud", "Slope"),
+                };
+                out.parts.push((part_name.to_string(), part_kind, vec![element]));
+            } else {
+                out.members.push(element);
+            }
+        }
+        // Earthworks between the design and the existing ground.
+        if let Some(tin) = ground {
+            let under: Vec<Option<f64>> = m.verts.iter().map(|p| tin.height(to_drawing(p)).map(|z| z / fr.f)).collect();
+            for fill in [true, false] {
+                let b = corridor::earth_body(&m.verts, &under, &tris, fill);
+                if b.triangles.is_empty() {
+                    continue;
+                }
+                let (id, name, ifc, kind, rgb) = if fill {
+                    ("ophoging", if is_road { tr("Ophoging", "Fill") } else { tr("Dijklichaam", "Dike body") }, "IfcEarthworksFill", "EMBANKMENT", (170, 128, 86))
+                } else {
+                    ("ontgraving", tr("Ontgraving", "Cut"), "IfcEarthworksCut", "CUT", (204, 120, 64))
+                };
+                let shape = body(self, &b.points, &b.triangles, Some(b.closed), rgb, 100)?;
+                let desc = tr("tussen het ontwerp en het bestaande maaiveld", "between the design and the existing ground");
+                let e = self.element(&format!("{key}:{id}"), &class(ifc, Some(kind), None), name, desc, None, &shape)?;
+                let props: Data = vec![("Volume".into(), format!("{:.3}", b.volume)), ("Closed".into(), if b.closed { "true".into() } else { "false".into() })];
+                self.pset(&format!("{key}:{id}:earthworks"), "OpenInfra_Earthworks", &props, e)?;
+                *report.classes.entry(ifc.into()).or_insert(0) += 1;
+                if fill {
+                    out.members.push(e);
+                } else {
+                    out.cut = Some(e);
+                }
+            }
+        }
+        Ok(Some(out))
+    }
+
+    /// The road's parts, each containing its element, and the alignment
+    /// that positions the road.
+    fn road_parts(&mut self, name: &str, road: Id, rp: &RoadParts, alignments: &HashMap<String, Id>, report: &mut Report) -> io::Result<()> {
+        let mut parts = Vec::new();
+        for (part_name, kind, members) in &rp.parts {
+            let g = self.guid(&format!("roadpart:{name}:{kind}"));
+            let part = self.step.add("IFCROADPART", &format!("{g},$,{},$,$,{},$,$,$,.LONGITUDINAL.,.{kind}.", text(part_name), self.c.placement))?;
+            let g = self.guid(&format!("rel:roadpart:{name}:{kind}"));
+            self.contain(&g, members, part)?;
+            parts.push(part);
+            *report.classes.entry("IfcRoadPart".into()).or_insert(0) += 1;
+        }
+        if !parts.is_empty() {
+            let g = self.guid(&format!("rel:road-parts:{name}"));
+            self.step.add("IFCRELAGGREGATES", &format!("{g},$,$,$,{road},{}", refs(&parts)))?;
+        }
+        if let Some(al) = alignments.get(&rp.axis) {
+            let g = self.guid(&format!("rel:positions:{name}"));
+            self.step.add("IFCRELPOSITIONS", &format!("{g},$,$,$,{al},({road})"))?;
+        }
+        Ok(())
     }
 }
 
@@ -1496,6 +1897,7 @@ pub fn command(path: Option<PathBuf>, selection: bool, texts: bool, progress: &d
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::civiel::as_profiel::Transition;
     use crate::nlcs::{Element, Status};
     use ocs_plugin_api::host::codec::entities::{Mesh, MeshFace, Polyline3D, RasterImage};
     use ocs_plugin_api::host::codec::{LwPolyline, Point, Text, Vector2, Vector3};
@@ -1547,8 +1949,18 @@ pub mod tests {
         let mut add = |e: EntityType| {
             doc.add_entity(e).unwrap();
         };
-        let al = Alignment::from_pis(&[[0.0, 0.0], [100.0, 0.0], [180.0, 80.0]], &[60.0]).unwrap();
-        add(on(EntityType::LwPolyline(al.to_polyline()), &nl("AM", "AS", Element::G, Status::N), &[("as", "A1"), ("beginstation", "0.000")]));
+        // Clothoids into and out of the curve; their records restore them exactly.
+        let al = Alignment::from_layout(&[[0.0, 0.0], [100.0, 0.0], [180.0, 80.0]], &[60.0], &[Transition::Length(20.0)]).unwrap();
+        let (poly, spirals) = al.to_polyline_data(0.001);
+        let mut d: Vec<(&str, &str)> = vec![("as", "A1"), ("beginstation", "0.000")];
+        d.extend(spirals.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        add(on(EntityType::LwPolyline(poly), &nl("AM", "AS", Element::G, Status::N), &d));
+        // A rail track with cant (IfcAlignmentCant).
+        let rail = Alignment::from_layout(&[[0.0, -200.0], [200.0, -200.0], [350.0, -120.0]], &[500.0], &[Transition::Length(40.0)]).unwrap();
+        let (poly, spirals) = rail.to_polyline_data(0.001);
+        let mut d: Vec<(&str, &str)> = vec![("as", "S1"), ("spoor", "S1"), ("snelheid_kmh", "80"), ("verkanting_mm", "100")];
+        d.extend(spirals.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+        add(on(EntityType::LwPolyline(poly), &nl("AM", "AS_SPOOR_TREIN", Element::G, Status::N), &d));
         // The length profile: a frame with the design profile and the ground inside.
         add(on(lw(&[[900.0, 990.0], [1200.0, 990.0], [1200.0, 1050.0], [900.0, 1050.0]], true, 0.0), &nl("AL", "PROFIELBALK", Element::G, Status::N), &[("lengteprofiel", "Lengteprofiel A1")]));
         add(on(
@@ -1619,11 +2031,73 @@ pub mod tests {
         (String::from_utf8(out).unwrap(), report)
     }
 
+    /// A corridor's bodies, a junction and an assembly drawing (corridor stream).
+    #[test]
+    fn corridor_parts_and_layers() {
+        let mut doc = CadDocument::new();
+        let mut add = |e: EntityType| {
+            doc.add_entity(e).unwrap();
+        };
+        let road = [("corridor", "Corridor A1"), ("as", "A1")];
+        let with = |extra: &[(&'static str, &'static str)]| -> Vec<(&'static str, &'static str)> { road.iter().chain(extra).copied().collect() };
+        let block = |x: f64, z: f64| mesh(&[[x, 0.0, z], [x + 10.0, 0.0, z], [x + 10.0, 3.0, z], [x, 3.0, z - 0.1]], &[&[0, 1, 2], &[0, 2, 3]], None);
+        add(on(block(0.0, 1.0), &nl("VH", "GESLOTENVERHARDING_ASFALT_DEKLAAG", Element::G, Status::N), &with(&[("laag", "AC 11 surf (deklaag)"), ("rol", "verharding")])));
+        add(on(block(0.0, 0.7), &nl("VH", "FUNDERING_GRANULAAT", Element::G, Status::N), &with(&[("laag", "menggranulaat (fundering)"), ("rol", "fundering")])));
+        add(on(block(20.0, 1.1), &nl("VH", "KANTOPSLUITING_TROTTOIRBAND", Element::G, Status::N), &with(&[("band", "trottoirband 13/15x25")])));
+        add(on(block(40.0, 0.2), &nl("GW", "WATERGANG_SLOOT", Element::G, Status::N), &with(&[("onderdeel", "sloot")])));
+        add(on(block(60.0, 0.3), &nl("GW", "CUNET_BODEM", Element::G, Status::N), &with(&[("oppervlak", "onderkant verhardingsconstructie (subgrade)")])));
+        add(on(line3(&[[0.0, 5.0, 1.0], [100.0, 5.0, 1.0]]), &nl("GW", "WATERGANG_SLOOT_BODEM", Element::G, Status::N), &with(&[])));
+        add(on(block(80.0, 1.0), &nl("OG", "TRIANGULATIE", Element::G, Status::N), &[("kruispunt", "Kruispunt A1 / B1")]));
+        add(on(lw(&[[500.0, 0.0], [510.0, 0.0]], false, 0.0), &nl("VH", "GESLOTENVERHARDING_ASFALT_DEKLAAG", Element::G, Status::N), &[("profieltype", "stadsstraat")]));
+        let src = Source { doc: &doc, f: 1.0, site: None, name: "corridor.dwg".into() };
+        let mut r = Report::default();
+        let out = String::from_utf8(export(&src, &Options::default(), Vec::new(), &mut r).unwrap()).unwrap();
+        let n = |k: &str| r.classes.get(k).copied().unwrap_or(0);
+        assert_eq!(n("IfcCourse"), 2, "{:?}", r.classes);
+        assert_eq!(n("IfcKerb"), 1);
+        assert_eq!(n("IfcGeographicElement"), 4, "ditch body and bottom line, subgrade, junction surface: {:?}", r.classes);
+        assert_eq!(n("IfcRoad"), 2, "the corridor and the junction");
+        assert_eq!(r.skipped.get("profieltype"), Some(&1), "{:?}", r.skipped);
+        assert!(out.contains(".PAVEMENT.") && out.contains("'menggranulaat (fundering)'"), "courses: surfacing and a named foundation");
+    }
+
+    /// A designed sewer (CIV_RIOOL): pipes as hollow tubes at their invert
+    /// levels, manholes as shafts, the BOB as properties, flow arrows as symbols.
+    #[test]
+    fn a_designed_sewer_becomes_pipes_and_manholes() {
+        let mut doc = CadDocument::new();
+        let pipe = nl("RI", "DWA_RIOOLLEIDING_PVC_250", Element::G, Status::N);
+        let put = nl("RI", "DWA_RIOOLPUT_INSPECTIEPUT", Element::G, Status::N);
+        doc.add_entity(on(
+            lw(&[[0.0, 0.0], [40.0, 0.0]], false, 0.0),
+            &pipe,
+            &[("riool", "DWA1"), ("rol", "leiding"), ("leiding", "P101-P102"), ("van", "P101"), ("naar", "P102"), ("diameter", "250"), ("binnendiameter", "235.4"), ("wanddikte", "7.3"), ("materiaal", "PVC"), ("bob_van", "1.2000"), ("bob_naar", "1.0400"), ("verhang", "0.004000")],
+        ))
+        .unwrap();
+        for (x, name, low) in [(0.0, "P101", "1.200"), (40.0, "P102", "1.040")] {
+            let c = EntityType::Circle(ocs_plugin_api::host::codec::Circle::from_center_radius(Vector3::new(x, 0.0, 0.0), 0.4));
+            doc.add_entity(on(c, &put, &[("riool", "DWA1"), ("rol", "put"), ("put", name), ("maaiveld", "2.900"), ("bob_laagst", low), ("afmeting", "800")])).unwrap();
+        }
+        doc.add_entity(on(lw(&[[19.0, 0.5], [20.0, 0.0], [19.0, -0.5]], false, 0.0), &nl("RI", "DWA_STROMINGSRICHTING", Element::G, Status::N), &[("riool", "DWA1"), ("rol", "label")])).unwrap();
+        let site = sample_site();
+        let src = Source { doc: &doc, f: 1.0, site: Some(&site), name: "riool.dwg".into() };
+        let mut r = Report::default();
+        let ifc = String::from_utf8(export(&src, &Options::default(), Vec::new(), &mut r).unwrap()).unwrap();
+        assert_eq!(r.classes.get("IfcPipeSegment"), Some(&1), "{:?}", r.classes);
+        assert_eq!(r.classes.get("IfcDistributionChamberElement"), Some(&2), "{:?}", r.classes);
+        assert_eq!(r.classes.get("IfcAnnotation"), Some(&1), "the flow arrow: {:?}", r.classes);
+        assert!(ifc.contains("IFCSWEPTDISKSOLID") && ifc.contains("IFCEXTRUDEDAREASOLID"), "3D bodies");
+        assert!(ifc.contains("'OpenInfra_Sewer'") && ifc.contains("'InvertLevelStart'") && ifc.contains("'GroundLevel'"));
+        assert!(ifc.contains("'P101-P102'") && ifc.contains("'P101'"), "names");
+        // The tube's axis runs at the invert plus half the inner diameter.
+        assert!(ifc.contains(&format!("{})", coord(1.2 + 0.1177))), "axis height");
+    }
+
     #[test]
     fn every_part_gets_its_ifc_class() {
         let (ifc, r) = export_sample();
         let n = |k: &str| r.classes.get(k).copied().unwrap_or(0);
-        assert_eq!(n("IfcAlignment"), 1, "{:?}", r.classes);
+        assert_eq!(n("IfcAlignment"), 2, "road and rail: {:?}", r.classes);
         assert_eq!(n("IfcBuilding"), 1, "two meshes of one BAG building");
         assert_eq!(n("IfcBorehole"), 1);
         assert_eq!(n("IfcGeotechnicalStratum"), 2);
@@ -1646,6 +2120,10 @@ pub mod tests {
             "IFCPROJECTEDCRS('EPSG:28992'",
             ".PARABOLICARC.",
             ".CIRCULARARC.",
+            ".CLOTHOID.",
+            "IFCCLOTHOID(",
+            "IFCALIGNMENTCANT(",
+            ".LINEARTRANSITION.",
             "IFCGRADIENTCURVE(",
             "IFCINDEXEDCOLOURMAP(",
             "IFCPAVEMENT(",
@@ -1662,12 +2140,41 @@ pub mod tests {
     }
 
     #[test]
+    fn survey_symbols_parcels_and_water_analyses() {
+        use ocs_plugin_api::host::codec::entities::Insert;
+        let mut doc = CadDocument::new();
+        let tree = on(EntityType::Insert(Insert::new("OI_SYMBOOL_BOOM", Vector3::new(10.0, 5.0, 1.5))), &nl("GR", "BOOM", Element::S, Status::B), &[("code", "SBM"), ("soort", "Eik")]);
+        let gully = on(EntityType::Insert(Insert::new("OI_SYMBOOL_KOLK", Vector3::new(12.0, 5.0, 1.5))), &nl("RI", "GWA_KOLK", Element::S, Status::B), &[("code", "SSK")]);
+        let hydrant = on(EntityType::Insert(Insert::new("OI_SYMBOOL_BRANDKRAAN", Vector3::new(14.0, 5.0, 1.5))), &nl("KL", "WATER_BRANDLEIDING_BRANDHYDRANT", Element::S, Status::B), &[("code", "SBKR")]);
+        let vehicle = on(EntityType::Insert(Insert::new("OI_CAR_TOP", Vector3::new(0.0, 0.0, 0.0))), "OI-VOERTUIGEN", &[("vehicle", "car")]);
+        let parcel = on(lw(&[[0.0, 0.0], [20.0, 0.0], [20.0, 20.0], [0.0, 20.0]], true, 0.0), &nl("KG", "GRENS_PERCEEL", Element::G, Status::N), &[("perceel", "P1"), ("oppervlakte_m2", "400.00")]);
+        let catchment = on(lw(&[[0.0, 0.0], [30.0, 0.0], [30.0, 30.0]], true, 0.0), "OI-STROOMGEBIED", &[("stroomgebied", "SG1"), ("oppervlakte_m2", "450.0")]);
+        let pond = on(lw(&[[1.0, 1.0], [3.0, 1.0], [3.0, 3.0]], true, 0.0), "OI-PLAS", &[("plas", "1"), ("volume_m3", "0.40")]);
+        let drop = on(line3(&[[0.0, 0.0, 2.0], [5.0, 0.0, 1.5]]), "OI-WATERDRUPPEL", &[("waterdruppel", "1")]);
+        for e in [tree, gully, hydrant, vehicle, parcel, catchment, pond, drop] {
+            doc.add_entity(e).unwrap();
+        }
+        let src = Source { doc: &doc, f: 1.0, site: None, name: "overig.dwg".into() };
+        let mut r = Report::default();
+        let out = String::from_utf8(export(&src, &Options::default(), Vec::new(), &mut r).unwrap()).unwrap();
+        let n = |k: &str| r.classes.get(k).copied().unwrap_or(0);
+        assert_eq!(n("IfcGeographicElement"), 1, "the tree: {:?}", r.classes);
+        assert_eq!(n("IfcDistributionChamberElement"), 1, "the gully");
+        assert_eq!(n("IfcFireSuppressionTerminal"), 1, "the hydrant");
+        assert_eq!(n("IfcAnnotation"), 4, "parcel, catchment, pond and drop: {:?}", r.classes);
+        assert_eq!(r.skipped.get("blokverwijzing"), Some(&1), "the vehicle stays out");
+        for needle in [".VEGETATION.", ".SUMP.", ".FIREHYDRANT.", "'Stroomgebied'", "'Plas'", "'Waterdruppel'", "IFCLABEL('P1')", "IFCLABEL('SG1')"] {
+            assert!(out.contains(needle), "missing {needle}");
+        }
+    }
+
+    #[test]
     fn the_same_drawing_gives_the_same_ids() {
         let ids = |s: &str| s.lines().filter(|l| l.contains("=IFCBUILDING(") || l.contains("=IFCALIGNMENT(")).map(|l| l.split('\'').nth(1).unwrap_or("").to_string()).collect::<Vec<_>>();
         let (a, _) = export_sample();
         let (b, _) = export_sample();
         assert_eq!(ids(&a), ids(&b));
-        assert_eq!(ids(&a).len(), 2);
+        assert_eq!(ids(&a).len(), 3);
     }
 
     fn check_excavation_without_exported_ground(terrain: EntityType, name: &str) {
@@ -1713,6 +2220,114 @@ pub mod tests {
         assert_eq!(compound(51.5), "(51,30,0,0)");
         assert_eq!(compound(-4.25), "(-4,-15,0,0)");
         assert_eq!(plain("{\\fArial|b1;Grote}\\PKerk"), "Grote Kerk");
+    }
+
+    #[test]
+    fn sheets_stay_out_and_labels_follow_the_text_switch() {
+        let mut doc = CadDocument::new();
+        let sheet = [("bladen", "A1 A1")];
+        let label = [("label", "stationering"), ("bron", "1A"), ("vingerafdruk", "0123456789abcdef")];
+        let frame = lw(&[[0.0, 0.0], [600.0, 0.0], [600.0, 300.0], [0.0, 300.0]], true, 0.0);
+        doc.add_entity(on(frame, &nl("AL", "TEKENBLADGRENS", Element::G, Status::N), &sheet)).unwrap();
+        doc.add_entity(on(EntityType::Text(Text::with_value("BLAD 1 VAN 2".to_string(), Vector3::new(5.0, 290.0, 0.0))), &nl("AL", "TEKENBLADGRENS", Element::T, Status::N), &sheet)).unwrap();
+        doc.add_entity(on(EntityType::Text(Text::with_value("AANSLUITLIJN 0+500".to_string(), Vector3::new(500.0, 50.0, 0.0))), &nl("AL", "BLADVERWIJZING_AS", Element::T, Status::N), &sheet)).unwrap();
+        doc.add_entity(on(lw(&[[100.0, -2.5], [100.0, 2.5]], false, 0.0), &nl("AM", "KILOMETRERING", Element::G, Status::N), &label)).unwrap();
+        doc.add_entity(on(EntityType::Text(Text::with_value("0+100".to_string(), Vector3::new(100.0, 4.0, 0.0))), &nl("AM", "KILOMETRERING", Element::T, Status::N), &label)).unwrap();
+        let site = sample_site();
+        let src = Source { doc: &doc, f: 1.0, site: Some(&site), name: "bladen.dwg".into() };
+        let run = |opt: &Options| {
+            let mut r = Report::default();
+            export(&src, opt, Vec::new(), &mut r).unwrap();
+            r
+        };
+        let r = run(&Options::default());
+        assert_eq!(r.skipped.get("tekenblad en profielkader"), Some(&3), "{:?}", r.skipped);
+        assert_eq!(r.classes.get("IfcAnnotation"), Some(&2), "{:?}", r.classes);
+        let r = run(&Options { no_texts: true, ..Options::default() });
+        // The three texts and the label's tick; the sheet frame stays a sheet part.
+        assert_eq!(r.skipped.get("tekst"), Some(&4), "{:?}", r.skipped);
+        assert_eq!(r.skipped.get("tekenblad en profielkader"), Some(&1), "{:?}", r.skipped);
+        assert_eq!(r.classes.get("IfcAnnotation"), None, "{:?}", r.classes);
+    }
+
+    /// A road corridor over flat ground: the alignment, the existing TIN,
+    /// the corridor's design surface and its feature lines.
+    pub fn corridor_sample() -> CadDocument {
+        let mut doc = CadDocument::new();
+        let mut add = |e: EntityType| {
+            doc.add_entity(e).unwrap();
+        };
+        let al = Alignment::from_pis(&[[0.0, 0.0], [100.0, 0.0]], &[]).unwrap();
+        add(on(EntityType::LwPolyline(al.to_polyline()), &nl("AM", "AS", Element::G, Status::N), &[("as", "A2"), ("beginstation", "0.000")]));
+        add(on(mesh(&[[-10.0, -20.0, 1.0], [110.0, -20.0, 1.0], [110.0, 20.0, 1.0], [-10.0, 20.0, 1.0]], &[&[0, 1, 2], &[0, 2, 3]], None), &nl("OG", "TRIANGULATIE", Element::G, Status::B), &[("terrein", "Terrein 1"), ("bron", "AHN")]));
+        // The "weg" assembly 1 m above the ground, right of the axis is -y:
+        // toe, shoulder, lane, axis, lane, shoulder, toe.
+        let profile = [(-8.0, 1.0), (-4.75, 1.86), (-3.25, 1.92), (0.0, 2.0), (3.25, 1.92), (4.75, 1.86), (8.0, 1.0)];
+        let mut verts = Vec::new();
+        for x in [0.0, 50.0, 100.0] {
+            for (o, z) in profile {
+                verts.push([x, -o, z]);
+            }
+        }
+        let n = profile.len();
+        let mut faces: Vec<Vec<usize>> = Vec::new();
+        for s in 0..2 {
+            for j in 0..n - 1 {
+                let (a, b) = (s * n + j, (s + 1) * n + j);
+                faces.push(vec![a, a + 1, b + 1]);
+                faces.push(vec![a, b + 1, b]);
+            }
+        }
+        let faces: Vec<&[usize]> = faces.iter().map(|f| f.as_slice()).collect();
+        let data = [("corridor", "Corridor A2"), ("as", "A2"), ("sjabloon", "weg")];
+        add(on(mesh(&verts, &faces, None), &nl("OG", "TRIANGULATIE", Element::G, Status::N), &data));
+        for (j, (o, z)) in profile.iter().enumerate() {
+            let (group, object) = match j {
+                0 | 6 => ("GW", "TALUD_TEEN"),
+                1 | 5 => ("GR", "GRAS_BERM"),
+                2 | 4 => ("VH", "GESLOTENVERHARDING_ASFALT"),
+                _ => ("AM", "AS"),
+            };
+            let line = line3(&[[0.0, -o, *z], [50.0, -o, *z], [100.0, -o, *z]]);
+            add(on(line, &nl(group, object, Element::G, Status::N), if j == 3 { &data[..] } else { &[] }));
+        }
+        doc
+    }
+
+    #[test]
+    fn a_corridor_becomes_road_parts_and_earthworks() {
+        let doc = corridor_sample();
+        let site = sample_site();
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/ifc-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = Source { doc: &doc, f: 1.0, site: Some(&site), name: "corridor.dwg".into() };
+        let r = write(&src, &Options::default(), &dir.join("corridor.ifc")).unwrap();
+        let n = |k: &str| r.classes.get(k).copied().unwrap_or(0);
+        assert_eq!(n("IfcRoad"), 1, "{:?}", r.classes);
+        assert_eq!(n("IfcRoadPart"), 3, "carriageway, shoulder, slope");
+        assert_eq!(n("IfcCourse"), 3);
+        assert_eq!(n("IfcEarthworksFill"), 1);
+        assert_eq!(n("IfcEarthworksCut"), 0, "the road lies above the ground everywhere");
+        let ifc = std::fs::read_to_string(dir.join("corridor.ifc")).unwrap();
+        assert_eq!(ifc.matches(".TERRAIN.").count(), 1, "only the existing ground; the design surface became the road");
+        // The road holds its parts and the feature lines that run through it.
+        let road_rel = ifc.lines().find(|l| l.contains("=IFCRELCONTAINEDINSPATIALSTRUCTURE(") && l.contains(&format!(",{});", ifc.lines().find(|l| l.contains("=IFCROAD(")).unwrap().split('=').next().unwrap()))).unwrap();
+        assert!(road_rel.matches('#').count() >= 7, "fill and six edge lines in the road: {road_rel}");
+        for needle in [".CARRIAGEWAY.", ".SOFTSHOULDER.", ".ROADSIDE.", ".PAVEMENT.", ".EMBANKMENT.", "IFCRELPOSITIONS(", "'OpenInfra_Earthworks'"] {
+            assert!(ifc.contains(needle), "missing {needle}");
+        }
+        // The fill: the cross section's area (trapezoids from the axis out)
+        // over 100 m, as a closed body.
+        let half = (1.0 + 0.92) / 2.0 * 3.25 + (0.92 + 0.86) / 2.0 * 1.5 + 0.86 / 2.0 * 3.25;
+        let volume: f64 = ifc
+            .lines()
+            .find(|l| l.contains("'Volume'"))
+            .and_then(|l| l.split("IFCREAL(").nth(1))
+            .and_then(|v| v.split(')').next())
+            .and_then(|v| v.parse().ok())
+            .unwrap();
+        assert!((volume - 2.0 * half * 100.0).abs() < 0.01, "{volume} vs {}", 2.0 * half * 100.0);
+        assert!(ifc.contains("IFCREAL(1.)") || ifc.contains("IFCLABEL('true')"), "closed");
     }
 
     /// Writes target/ifc-test/voorbeeld.ifc for tests/ifc_validate.py.

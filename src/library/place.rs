@@ -319,17 +319,56 @@ impl InteractiveCommand for CatalogueCmd {
 
 // ── Swept paths ─────────────────────────────────────────────────────────
 
+/// A message in the interface language (Dutch or English).
+macro_rules! t {
+    ($nl:literal, $en:literal $(, $arg:expr)* $(,)?) => {
+        if crate::lang::current() == crate::lang::Lang::Nl { format!($nl $(, $arg)*) } else { format!($en $(, $arg)*) }
+    };
+}
+
 pub fn swept_layers() -> (&'static str, &'static str, &'static str) {
     (tr("OI-VEEGPAD", "OI-SWEPT-PATH"), tr("OI-VEEGPAD-WIELEN", "OI-SWEPT-PATH-WHEELS"), tr("OI-VEEGPAD-VOERTUIG", "OI-SWEPT-PATH-VEHICLE"))
 }
 
-/// Drive `v` along `path` (drawing units) and draw the body and wheel traces
-/// and the vehicle every `every` metres.
-pub fn swept_path(v: &Vehicle, path: &[[f64; 2]], every: f64) -> Result<String, String> {
-    let t = bridge::target().ok_or_else(|| tr("geen tekening actief", "no drawing active").to_string())?;
-    let u = t.unit_factor;
-    let metres: Vec<[f64; 2]> = path.iter().map(|p| [p[0] / u, p[1] / u]).collect();
-    let s = super::swept::drive(v, &metres, 0.05, every)?;
+/// How a swept path is driven.
+#[derive(Clone, Copy, Debug)]
+pub struct SweptOptions {
+    /// Distance between the drawn vehicle positions (m).
+    pub every: f64,
+    /// Reverse: the rear axle of the last unit follows the path backwards.
+    pub reverse: bool,
+    /// Articulation limit (degrees); reversing without one, the vehicle's
+    /// jackknife angle, else 70° (an estimate, see docs/civiel-overig.md).
+    pub limit: Option<f64>,
+}
+
+impl Default for SweptOptions {
+    fn default() -> Self {
+        SweptOptions { every: 10.0, reverse: false, limit: None }
+    }
+}
+
+/// The articulation limit a swept path is checked against, and where it comes from.
+pub fn articulation_limit(v: &Vehicle, o: &SweptOptions) -> (f64, String) {
+    match (o.limit, o.reverse.then(|| super::swept::jackknife_angle(v)).flatten()) {
+        (Some(l), _) => (l, tr("opgegeven", "given").to_string()),
+        (None, Some(j)) => (j, tr("scharenhoek bij volle stuuruitslag", "jackknife angle at full lock").to_string()),
+        (None, None) => (70.0, tr("standaard, schatting", "default, an estimate").to_string()),
+    }
+}
+
+/// Drive `v` along `path` (metres) forward or in reverse.
+pub fn simulate(v: &Vehicle, metres: &[[f64; 2]], o: &SweptOptions) -> Result<super::swept::Swept, String> {
+    if o.reverse {
+        super::swept::drive_reverse(v, metres, 0.05, o.every)
+    } else {
+        super::swept::drive(v, metres, 0.05, o.every)
+    }
+}
+
+/// The traces and vehicle positions of a computed swept path as entities
+/// (drawing units `u` per metre), the first one with the object data.
+pub fn swept_entities(v: &Vehicle, s: &super::swept::Swept, u: f64, data: &ocs_plugin_api::host::ExtendedDataRecord) -> Result<Vec<EntityType>, String> {
     let (body_l, wheel_l, ghost_l) = swept_layers();
     bridge::ensure_layer(body_l, Color::from_index(1));
     bridge::ensure_layer(wheel_l, Color::from_index(3));
@@ -357,39 +396,78 @@ pub fn swept_path(v: &Vehicle, path: &[[f64; 2]], every: f64) -> Result<String, 
             out.push(e);
         }
     }
-    let data = bridge::object_data([
+    if let Some(first) = out.first_mut() {
+        first.common_mut().extended_data.add_record(data.clone());
+    }
+    Ok(out)
+}
+
+/// The object data of a swept path.
+fn swept_data(v: &Vehicle, s: &super::swept::Swept) -> ocs_plugin_api::host::ExtendedDataRecord {
+    bridge::object_data([
         ("vehicle", v.id.clone()),
         ("length_m", format!("{:.2}", s.length)),
         ("max_steer_deg", format!("{:.1}", s.max_steer_deg)),
         ("min_outer_radius_m", s.min_outer_radius.map(|r| format!("{r:.2}")).unwrap_or_default()),
-    ]);
-    if let Some(first) = out.first_mut() {
-        first.common_mut().extended_data.add_record(data.clone());
-    }
-    let handles = bridge::add_entities_handles(&format!("{} {}", tr("Veegpad", "Swept path"), v.name_en), out)?;
-    if let Some(h) = handles.first() {
-        bridge::register_object_data(*h, data);
-    }
-    let mut msg = format!(
-        "{} {} — {:.1} m, {} {:.1}°",
-        tr("Veegpad van", "Swept path of"),
-        v.name(),
-        s.length,
-        tr("grootste stuurhoek", "largest steering angle"),
-        s.max_steer_deg
-    );
+        ("max_articulation_deg", if v.units.len() > 1 { format!("{:.1}", s.max_articulation_deg) } else { String::new() }),
+        ("reverse", if s.reverse { "yes".into() } else { String::new() }),
+    ])
+}
+
+/// The message of a swept path: length, steering, radius, articulation and warnings.
+pub fn swept_message(v: &Vehicle, s: &super::swept::Swept, o: &SweptOptions) -> String {
+    let mut msg = if s.reverse {
+        t!("Veegpad (achteruit) van {} — {:.1} m, grootste stuurhoek {:.1}°", "Swept path (reversing) of {} — {:.1} m, largest steering angle {:.1}°", v.name(), s.length, s.max_steer_deg)
+    } else {
+        t!("Veegpad van {} — {:.1} m, grootste stuurhoek {:.1}°", "Swept path of {} — {:.1} m, largest steering angle {:.1}°", v.name(), s.length, s.max_steer_deg)
+    };
     if let Some(r) = s.min_outer_radius {
-        msg.push_str(&format!(", {} {:.1} m", tr("kleinste buitenstraal", "smallest outer radius"), r));
+        msg.push_str(&t!(", kleinste buitenstraal {:.1} m", ", smallest outer radius {:.1} m", r));
+    }
+    if v.units.len() > 1 {
+        msg.push_str(&t!(", grootste knikhoek {:.1}° (na {:.0} m)", ", largest articulation {:.1}° (after {:.0} m)", s.max_articulation_deg, s.articulation_at));
+        let (limit, why) = articulation_limit(v, o);
+        if (s.reverse || o.limit.is_some()) && s.max_articulation_deg > limit {
+            msg.push_str(&if s.reverse {
+                t!(" — SCHAREN: knikhoek boven {:.0}° ({why}), achteruit niet te houden", " — JACKKNIFE: articulation above {:.0}° ({why}), not controllable in reverse", limit)
+            } else {
+                t!(" — knikhoek boven {:.0}° ({why})", " — articulation above {:.0}° ({why})", limit)
+            });
+        }
     }
     if let Some(design) = v.turning_radius_outer {
-        if s.min_outer_radius.is_some_and(|r| r < design - 0.05) {
+        if !s.reverse && s.min_outer_radius.is_some_and(|r| r < design - 0.05) {
             msg.push_str(&format!(" — {} {:.1} m: {}", tr("krapper dan de ontwerpdraaicirkel van", "tighter than the design turning radius of"), design, tr("niet haalbaar", "not drivable")));
         }
     }
     if s.max_steer_deg > 45.0 {
         msg.push_str(&format!(" — {}", tr("stuurhoek boven 45°: controleer de rijlijn", "steering angle above 45°: check the path")));
     }
-    Ok(msg + ".")
+    msg + "."
+}
+
+/// Drive `v` along `path` (drawing units) and draw the body and wheel traces
+/// and the vehicle every `o.every` metres.
+pub fn swept_path(v: &Vehicle, path: &[[f64; 2]], o: &SweptOptions) -> Result<String, String> {
+    let t = bridge::target().ok_or_else(|| tr("geen tekening actief", "no drawing active").to_string())?;
+    let u = t.unit_factor;
+    let metres: Vec<[f64; 2]> = path.iter().map(|p| [p[0] / u, p[1] / u]).collect();
+    let s = simulate(v, &metres, o)?;
+    let data = swept_data(v, &s);
+    let out = swept_entities(v, &s, u, &data)?;
+    let handles = bridge::add_entities_handles(&format!("{} {}", tr("Veegpad", "Swept path"), v.name_en), out)?;
+    if let Some(h) = handles.first() {
+        bridge::register_object_data(*h, data);
+    }
+    let (limit, _) = articulation_limit(v, o);
+    crate::civiel::api::note("lengte_m", (s.length * 100.0).round() / 100.0);
+    crate::civiel::api::note("stuurhoek_max_graden", (s.max_steer_deg * 10.0).round() / 10.0);
+    crate::civiel::api::note("knikhoek_max_graden", (s.max_articulation_deg * 10.0).round() / 10.0);
+    crate::civiel::api::note("knikhoek_grens_graden", (limit * 10.0).round() / 10.0);
+    crate::civiel::api::note("scharen", v.units.len() > 1 && (s.reverse || o.limit.is_some()) && s.max_articulation_deg > limit);
+    crate::civiel::api::note("achteruit", s.reverse);
+    crate::civiel::api::note("elementen", handles.len());
+    Ok(swept_message(v, &s, o))
 }
 
 /// `GIS_VEEGPAD <id> [interval]`: the path is a selected polyline, or picked
@@ -399,12 +477,18 @@ pub struct SweptCmd {
     pub every: f64,
     pub path: Vec<[f64; 2]>,
     pub unit: f64,
+    pub reverse: bool,
+    pub limit: Option<f64>,
 }
 
 impl SweptCmd {
+    fn options(&self) -> SweptOptions {
+        SweptOptions { every: self.every, reverse: self.reverse, limit: self.limit }
+    }
+
     fn run(&self) -> CommandStep {
-        let (v, path, every) = (self.vehicle, self.path.clone(), self.every);
-        std::thread::spawn(move || match swept_path(v, &path, every) {
+        let (v, path, o) = (self.vehicle, self.path.clone(), self.options());
+        std::thread::spawn(move || match swept_path(v, &path, &o) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("{}: {e}", tr("Veegpad", "Swept path"))),
         });
@@ -414,9 +498,10 @@ impl SweptCmd {
 
 impl InteractiveCommand for SweptCmd {
     fn prompt(&self) -> String {
-        match self.path.len() {
-            0 => tr("Veegpad: beginpunt van de rijlijn (vooras)", "Swept path: start of the path (front axle)").into(),
-            1 => tr("Veegpad: volgend punt", "Swept path: next point").into(),
+        match (self.path.len(), self.reverse) {
+            (0, false) => tr("Veegpad: beginpunt van de rijlijn (vooras)", "Swept path: start of the path (front axle)").into(),
+            (0, true) => tr("Veegpad achteruit: beginpunt van de rijlijn (achteras van de laatste eenheid)", "Swept path in reverse: start of the path (rear axle of the last unit)").into(),
+            (1, _) => tr("Veegpad: volgend punt", "Swept path: next point").into(),
             _ => tr("Veegpad: volgend punt [Enter = klaar]", "Swept path: next point [Enter = done]").into(),
         }
     }
@@ -444,4 +529,120 @@ impl InteractiveCommand for SweptCmd {
 /// Start a swept path straight away on a known path (a selected polyline).
 pub fn swept_now(cmd: &SweptCmd) {
     let _ = cmd.run();
+}
+
+/// The polyline or line of the selection, read by handle on a worker (the
+/// whole drawing may be too large to fetch), in drawing units.
+pub fn selected_line(handles: &[ocs_plugin_api::host::codec::Handle]) -> Result<Vec<[f64; 2]>, String> {
+    let e = bridge::entities(handles)?.into_iter().flatten().next().ok_or_else(|| tr("de selectie is leeg", "the selection is empty").to_string())?;
+    match e {
+        EntityType::LwPolyline(l) if l.vertices.len() >= 2 => {
+            let mut pts: Vec<[f64; 2]> = l.vertices.iter().map(|v| [v.location.x, v.location.y]).collect();
+            if l.is_closed {
+                pts.push(pts[0]);
+            }
+            Ok(pts)
+        }
+        EntityType::Polyline3D(p) if p.vertices.len() >= 2 => Ok(p.vertices.iter().map(|v| [v.position.x, v.position.y]).collect()),
+        EntityType::Line(l) => Ok(vec![[l.start.x, l.start.y], [l.end.x, l.end.y]]),
+        _ => Err(tr("selecteer een lijn of polylijn", "select a line or polyline").into()),
+    }
+}
+
+/// Points "x,y;x,y" in project coordinates → drawing units.
+pub fn project_points(text: &str) -> Result<Vec<[f64; 2]>, String> {
+    let u = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
+    let site = bridge::site();
+    text.split(';')
+        .filter(|t| !t.trim().is_empty())
+        .map(|t| {
+            let v: Vec<f64> = t.split(',').map(|n| n.trim().parse::<f64>()).collect::<Result<_, _>>().map_err(|_| t!("geen punt x,y: '{t}'", "not a point x,y: '{t}'"))?;
+            if v.len() < 2 {
+                return Err(t!("geen punt x,y: '{t}'", "not a point x,y: '{t}'"));
+            }
+            Ok(match &site {
+                Some(s) => s.to_drawing([v[0], v[1]], u),
+                None => [v[0] * u, v[1] * u],
+            })
+        })
+        .collect()
+}
+
+/// `GIS_VEEGPAD | GIS_SWEPT_PATH <id> [interval] [ACHTERUIT|REVERSE]
+/// [KNIK=<graden>] [PAD=x,y;x,y;…]`: along `PAD=` (project coordinates), the
+/// selected line, or picked points.
+pub fn swept_command(host: &mut dyn ocs_plugin_api::host::HostApi, cmd: &str) {
+    let words: Vec<&str> = cmd.split_whitespace().skip(1).collect();
+    let mut id = None;
+    let mut every = 10.0;
+    let mut reverse = false;
+    let mut limit = None;
+    let mut path_arg = None;
+    let mut bad = None;
+    for w in &words {
+        let up = w.to_ascii_uppercase();
+        if let Some((k, v)) = w.split_once('=') {
+            match k.to_ascii_uppercase().as_str() {
+                "KNIK" | "LIMIT" => match v.replace(',', ".").parse::<f64>() {
+                    Ok(x) => limit = Some(x),
+                    Err(_) => bad = Some(t!("KNIK: geen getal '{v}'", "LIMIT: not a number '{v}'")),
+                },
+                "PAD" | "PATH" => path_arg = Some(v.to_string()),
+                "INTERVAL" => every = v.replace(',', ".").parse::<f64>().unwrap_or(every),
+                other => bad = Some(t!("onbekend argument {other}=", "unknown argument {other}=")),
+            }
+        } else if up == "ACHTERUIT" || up == "REVERSE" {
+            reverse = true;
+        } else if w.contains(',') && w.split(',').all(|n| n.trim().parse::<f64>().is_ok()) {
+            // Coordinates answer the point prompts.
+        } else if let Ok(x) = w.replace(',', ".").parse::<f64>() {
+            every = x;
+        } else if id.is_none() {
+            id = Some(*w);
+        }
+    }
+    let usage = || format!("GIS_SWEPT_PATH <{}> [{}] [ACHTERUIT|REVERSE] [KNIK=<{}>] [PAD=x,y;x,y]", tr("voertuig", "vehicle"), tr("interval in m", "interval in m"), tr("graden", "degrees"));
+    if let Some(e) = bad {
+        host.push_error(&format!("[Open Infra] {e} — {}", usage()));
+        bridge::reply(false, &e);
+        return;
+    }
+    let Some(v) = id.and_then(super::find) else {
+        host.push_error(&format!("[Open Infra] {}", usage()));
+        bridge::reply(false, &usage());
+        let _ = crate::ui::open(crate::ui::Tab::Library);
+        return;
+    };
+    let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
+    let mut sc = SweptCmd { vehicle: v, every, path: Vec::new(), unit, reverse, limit };
+    if let Some(text) = path_arg {
+        match project_points(&text) {
+            Ok(p) if p.len() >= 2 => {
+                sc.path = p;
+                swept_now(&sc);
+            }
+            Ok(_) => {
+                host.push_error(&format!("[Open Infra] {}", tr("PAD= heeft minstens twee punten nodig", "PATH= needs at least two points")));
+                bridge::reply(false, "PAD");
+            }
+            Err(e) => {
+                host.push_error(&format!("[Open Infra] {e}"));
+                bridge::reply(false, &e);
+            }
+        }
+        return;
+    }
+    let sel = host.selection();
+    if sel.len() == 1 {
+        host.push_info(&format!("[Open Infra] {}", tr("Veegpad langs de geselecteerde lijn.", "Swept path along the selected line.")));
+        std::thread::spawn(move || match selected_line(&sel) {
+            Ok(p) => {
+                sc.path = p;
+                swept_now(&sc);
+            }
+            Err(e) => bridge::error(&format!("{}: {e}", tr("Veegpad", "Swept path"))),
+        });
+        return;
+    }
+    host.start_interactive(Box::new(sc));
 }

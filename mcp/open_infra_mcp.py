@@ -538,6 +538,108 @@ def t_corridor(a):
         REIKWIJDTE=a.get("reach"), FREQUENTIE=a.get("frequency"), DWARSPROFIELEN=views))
 
 
+# Grading: feature lines, plateaus, slopes, exact TIN volumes and mass haul.
+LINE = {"type": "string", "description": "Handle of a line, polyline or feature line (hex); empty = the selection or points"}
+
+
+@tool("civ_feature_line", "3D feature line (OG-BREUKLIJN, object data) from a line or points: heights from the ground (with grade breaks), "
+      "from a start level and grades per segment (%), or fixed levels at corners ('2.5;;3' or '1:2.5;4:3').",
+      {"line": LINE, "points": PTS, "heights": {"type": "string", "enum": ["MAAIVELD", "ONTWERP", "EIGEN"]}, "grade_breaks": {"type": "boolean"},
+       "start_level": NUM, "grades_pct": {"type": "array", "items": NUM}, "levels": STR, "closed": {"type": "boolean"}, "name": STR})
+def t_feature_line(a):
+    return OCS.run("CIV_KANTLIJN " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), HOOGTE=a.get("heights"),
+                                        TUSSENPUNTEN=a.get("grade_breaks"), START=a.get("start_level"), HELLING=_list(a.get("grades_pct") or []),
+                                        PEILEN=a.get("levels"), GESLOTEN=a.get("closed"), NAAM=a.get("name")))
+
+
+@tool("civ_feature_line_edit", "Edit a feature line in place: set a corner level (corner from 1, or the corner nearest 'at'), raise/lower all (dz), "
+      "insert a height point at 'at', or a constant grade between two corners.",
+      {"line": LINE, "action": {"type": "string", "enum": ["level", "raise", "point", "grade"]}, "corner": NUM, "at": PT, "z": NUM, "dz": NUM,
+       "from_corner": NUM, "to_corner": NUM, "grade_pct": NUM}, ["action"])
+def t_feature_edit(a):
+    verb = {"level": "PEIL", "raise": "VERHOOG", "point": "PUNT", "grade": "HELLING"}[a["action"]]
+    return OCS.run(f"CIV_KANTLIJN_{verb} " + _kv(KANTLIJN=a.get("line"), PUNT=a.get("corner"), BIJ=a.get("at") and _pt(a["at"]), Z=a.get("z"),
+                                                 DZ=a.get("dz"), VAN=a.get("from_corner"), TOT=a.get("to_corner"), HELLING=a.get("grade_pct")))
+
+
+@tool("civ_plateau", "Building plot plateau from a closed line or points at a level, optionally with a fall (% towards N/NE/E/…/NW or degrees), "
+      "sloping to the existing ground with separate cut and fill slopes (1:n); joins the combined design surface (N).",
+      {"line": LINE, "points": PTS, "level": NUM, "fall_pct": NUM, "fall_direction": STR, "level_point": PT, "cut_slope": NUM, "fill_slope": NUM,
+       "reach": NUM, "name": STR, "join": {"type": "boolean"}})
+def t_plateau(a):
+    return OCS.run("CIV_PLATEAU " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), PEIL=a.get("level"), AFSCHOT=a.get("fall_pct"),
+                                       RICHTING=a.get("fall_direction"), PEILPUNT=a.get("level_point") and _pt(a["level_point"]),
+                                       TALUD_AF=a.get("cut_slope"), TALUD_OP=a.get("fill_slope"), REIKWIJDTE=a.get("reach"), NAAM=a.get("name"),
+                                       SAMENVOEGEN=a.get("join")))
+
+
+@tool("civ_slope", "Slope from a (feature) line on one side: to the ground (cut/fill slopes), over a width, or to a level; joins the design surface.",
+      {"line": LINE, "points": PTS, "side": {"type": "string", "enum": ["LINKS", "RECHTS"]}, "to": {"type": "string", "enum": ["MAAIVELD", "AFSTAND", "PEIL"]},
+       "slope": NUM, "cut_slope": NUM, "fill_slope": NUM, "width": NUM, "level": NUM, "up": {"type": "boolean"}, "edge_level": NUM, "name": STR})
+def t_slope(a):
+    return OCS.run("CIV_TALUD " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), ZIJDE=a.get("side"), NAAR=a.get("to"),
+                                     TALUD=a.get("slope"), TALUD_AF=a.get("cut_slope"), TALUD_OP=a.get("fill_slope"), BREEDTE=a.get("width"),
+                                     PEIL=a.get("level"), RICHTING=("OP" if a.get("up") else None), RANDPEIL=a.get("edge_level"), NAAM=a.get("name")))
+
+
+@tool("civ_volume_tin", "Exact cut and fill (prismoidal, TIN against TIN) of the design against the existing ground, with bulking and compaction "
+      "factors and a cut/fill map in colour bands. design: BOUWRIJP (gradings only), PEIL (a level) or empty (selection / design surface N).",
+      {"design": {"type": "string", "enum": ["BOUWRIJP", "PEIL"]}, "level": NUM, "bulking": NUM, "compaction": NUM, "bands": NUM, "map": {"type": "boolean"},
+       "compare_grid_cell": NUM})
+def t_volume_tin(a):
+    return OCS.run("CIV_VOLUME_TIN " + _kv(ONTWERP=a.get("design"), PEIL=a.get("level"), LOSFACTOR=a.get("bulking"), VERDICHTING=a.get("compaction"),
+                                          BANDEN=a.get("bands"), KAART=a.get("map"), VERGELIJK=(True if a.get("compare_grid_cell") else None),
+                                          CEL=a.get("compare_grid_cell")))
+
+
+@tool("civ_mass_haul", "Mass haul diagram of an axis from its corridor's cut and fill per section (or measured on the TINs): balance points, "
+      "haul (m³·km), free haul and overhaul, surplus/shortage; drawn as a graph, returned per station.",
+      {"axis": AXIS, "source": {"type": "string", "enum": ["AUTO", "CORRIDOR", "TIN"]}, "factor": NUM, "reuse_pct": NUM, "free_haul": NUM, "at": PT})
+def t_mass_haul(a):
+    return OCS.run("CIV_GRONDBALANS " + _kv(AS=a.get("axis"), BRON=a.get("source"), FACTOR=a.get("factor"), HERGEBRUIK=a.get("reuse_pct"),
+                                           VRIJ=a.get("free_haul"), PLAATS=a.get("at") and _pt(a["at"])))
+
+
+# Corridor stream: assemblies (JSON), junctions and roundabouts.
+@tool("civ_assemblies", "The corridor assemblies (profieltypen): presets and the user's JSON files in <config>/OpenCADStudio/open-infra/assemblies/, "
+      "with their parts per side (lanes, gutters, kerbs, footways, cycle paths, parking, verges, central reserve, ditches), pavement layers, "
+      "conditions (cut/fill) and targets. With name: one in detail; copy_to copies it as a start for your own; at draws it as a template section.",
+      {"name": STR, "copy_to": STR, "at": PT})
+def t_assemblies(a):
+    if a.get("name"):
+        return OCS.run(f"CIV_PROFIELTYPE {_kv(NAAM=a['name'], KOPIE=a.get('copy_to'), PLAATS=a.get('at') and _pt(a['at']))}")
+    return OCS.run("CIV_PROFIELTYPEN")
+
+
+@tool("civ_corridor_range", "A corridor with any assembly (preset or own JSON) over a station range, e.g. from a junction's or roundabout's mouth "
+      "(their result gives 'VAN=…' or 'TOT=…' per arm); targets are named lines in the drawing for width or level targets.",
+      {"axis": AXIS, "assembly": STR, "from_station": NUM, "to_station": NUM, "targets": {"type": "object", "additionalProperties": STR, "description": "name → handle"},
+       "level": NUM, "frequency": NUM, "sections": {"type": "boolean"}}, ["assembly"])
+def t_corridor_range(a):
+    targets = ";".join(f"{k}:{v}" for k, v in (a.get("targets") or {}).items())
+    return OCS.run("CIV_CORRIDOR " + _kv(AS=a.get("axis"), PROFIELTYPE=a["assembly"], VAN=a.get("from_station"), TOT=a.get("to_station"), DOELEN=targets,
+                                         NIVEAU=a.get("level"), FREQUENTIE=a.get("frequency"), DWARSPROFIELEN=True if a.get("sections") else None))
+
+
+@tool("civ_junction", "A T or X junction of a main road and a side road (axes with design profiles): corner radii per corner (CROW-based default 8 m, an estimate), "
+      "kerb returns, the side road tied in to the main road's cross slope, a TIN patch; the result gives each arm's mouth station for its corridor.",
+      {"main": AXIS, "side": AXIS, "radii": {"type": "array", "items": NUM}, "assembly": STR, "main_assembly": STR, "side_assembly": STR, "level": NUM},
+      ["main", "side"])
+def t_junction(a):
+    radii = ";".join(_num(r) for r in a.get("radii") or [])
+    return OCS.run("CIV_KRUISPUNT " + _kv(HOOFD=a["main"], ZIJ=a["side"], R=radii, PROFIELTYPE=a.get("assembly"), PROFIELTYPE_HOOFD=a.get("main_assembly"),
+                                           PROFIELTYPE_ZIJ=a.get("side_assembly"), NIVEAU=a.get("level")))
+
+
+@tool("civ_roundabout", "A single-lane roundabout after CROW publication 126 on 2+ axes (3–6 arms): outer diameter, carriageway, overrunnable strip, "
+      "entry and exit radii and splitter islands; 2D layout and a 3D surface falling outward. The result gives each arm's mouth station.",
+      {"axes": {"type": "array", "items": STR}, "centre": PT, "kind": {"type": "string", "enum": ["binnen", "buiten"]}, "diameter": NUM, "assembly": STR, "level": NUM},
+      ["axes"])
+def t_roundabout(a):
+    return OCS.run("CIV_ROTONDE " + _kv(ASSEN=";".join(a["axes"]), MIDDEN=a.get("centre") and _pt(a["centre"]), TYPE=a.get("kind"), D=a.get("diameter"),
+                                         PROFIELTYPE=a.get("assembly"), NIVEAU=a.get("level")))
+
+
 @tool("civ_bag3d", "3D BAG buildings of the project area (LoD 1.2, 1.3 or 2.2): roof and wall meshes per building. "
       "style: mooi (roof colours from the aerial photo, walls by building year, windows per storey, crisp planes), "
       "maquette (white architectural model), realistisch (two plain colours) or nlcs (layer colours).",
@@ -613,6 +715,17 @@ def t_subsurface(a):
     if a.get("plan_only"):
         return OCS.run(f"GIS_Q_SONDERINGEN {_kv(BRON=a.get('source'))}", 600)
     return OCS.run(f"CIV_SONDERINGEN3D {_kv(BRON=a.get('source'), MAX=a.get('max'), STRAAL=a.get('radius'), MINLAAG=a.get('min_layer'), QC=a.get('graphs'), LABELS=a.get('labels'))}", 1800)
+
+
+# Exchange: LandXML 1.2 export (stream uitwisseling).
+EXPORT = {"path": {"type": "string", "description": "Output file; empty = beside the drawing"},
+          "all": {"type": "boolean", "description": "Everything (default); false = only the objects in the selection"}}
+
+
+@tool("civ_landxml_export", "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.", EXPORT)
+def t_landxml_export(a):
+    return OCS.run(f"CIV_LANDXML_EXPORT {_kv(BESTAND=a.get('path'))}{' ALLES' if a.get('all', True) else ''}")
+
 
 
 @tool("oi_view", "Set the view: preset (TOP, SWISO, SEISO, NEISO, NWISO, FRONT…), visual style (GOURAUDSHADED, FLATSHADED, WIREFRAME2D, HIDDENLINE…) and zoom to extents.",

@@ -1,0 +1,10 @@
+{
+  "naam": "weg",
+  "omschrijving": "Weg 2×1 buiten de bebouwde kom: rijstroken 3,25 m, bermen 1,50 m, taluds 1:3 (ophoging) en 1:2 (ingraving), verkanting 4 % in bogen",
+  "bronnen": ["Het sjabloon 'weg' van Open Infra (2026.44); maten zijn schattingen, toets ze aan CROW Handboek wegontwerp"],
+  "talud": 3, "ingraving": 2, "reikwijdte": 60, "verkanting": 4, "uitrol": 30,
+  "beide": [
+    {"type": "rijstrook", "breedte": 3.25, "helling": -2.5, "lagen": "asfalt-gow"},
+    {"type": "berm", "breedte": 1.50, "helling": -4.0}
+  ]
+}

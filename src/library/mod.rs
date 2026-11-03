@@ -8,6 +8,7 @@
 //! line work; [`place`] makes the blocks and inserts them.
 
 pub mod draw;
+pub mod parking;
 pub mod place;
 pub mod swept;
 pub mod infra;
