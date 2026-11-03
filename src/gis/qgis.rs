@@ -43,7 +43,7 @@ pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
     let xml = [' ', '\n', '\r', '\t'].iter().fold(xml.to_string(), |x, c| x.replace(&format!("{c}http-header:"), &format!("{c}http-header_")));
     let opt = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
     let doc = roxmltree::Document::parse_with_options(&xml, opt)
-        .map_err(|e| format!("{}: {e}", tr("Geen geldige XML", "Not valid XML")))?;
+        .map_err(|_| tr("Geen geldige XML", "Not valid XML").to_string())?;
     let root = doc.root_element();
     let (kind, element) = match root.tag_name().name() {
         "qgsWMSConnections" => (ServerKind::Wms, "wms"),
@@ -62,11 +62,12 @@ pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
         let attr = |k: &str| n.attribute(k).unwrap_or("").trim();
         let flag = |k: &str| matches!(attr(k), "1" | "true");
         let raw_url = attr("url");
+        let url_auth = url_needs_auth(raw_url);
         let mut blocking = Vec::new();
-        if !(raw_url.starts_with("http://") || raw_url.starts_with("https://")) {
+        if !raw_url.split_once("://").is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")) {
             blocking.push(tr("geen http(s)-adres", "not an http(s) address").to_string());
         }
-        if !attr("username").is_empty() || !attr("password").is_empty() || !attr("authcfg").is_empty() {
+        if url_auth || !attr("username").is_empty() || !attr("password").is_empty() || !attr("authcfg").is_empty() {
             blocking.push(tr("vraagt authenticatie", "needs authentication").to_string());
         }
         let headers = n.attributes().any(|a| a.name().starts_with("http-header_") && !a.value().trim().is_empty());
@@ -81,7 +82,7 @@ pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
             kind,
             name: String::new(),
             region: "QGIS".into(),
-            url: if kind == ServerKind::Xyz { raw_url.to_string() } else { clean_service_url(raw_url) },
+            url: if url_auth { String::new() } else if kind == ServerKind::Xyz { raw_url.to_string() } else { clean_service_url(raw_url) },
             attribution: String::new(),
             default_layer: String::new(),
             max_zoom: None,
@@ -89,7 +90,9 @@ pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
             builtin: false,
         };
         if kind == ServerKind::Xyz {
-            blocking.extend(xyz_problems(raw_url));
+            if !url_auth {
+                blocking.extend(xyz_problems(raw_url));
+            }
             if !matches!(attr("tilePixelRatio"), "" | "0" | "1") {
                 blocking.push(tr("tegels van hoge resolutie (512 px)", "high-resolution tiles (512 px)").to_string());
             }
@@ -104,16 +107,59 @@ pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
             }
         }
         server.name = match attr("name") {
-            "" => host(raw_url).unwrap_or_else(|| format!("{} {}", kind.label(), i + 1)),
+            "" => host(&server.url).unwrap_or_else(|| format!("{} {}", kind.label(), i + 1)),
             name => name.to_string(),
         };
-        let duplicate = out.iter().any(|c| same(&c.server, &server));
+        let duplicate = blocking.is_empty() && out.iter().any(|c| c.importable() && same(&c.server, &server));
         out.push(Connection { server, blocking, duplicate });
     }
     if out.is_empty() {
         return Err(tr("Het bestand bevat geen verbindingen.", "The file contains no connections.").into());
     }
     Ok(out)
+}
+
+/// Credentials in userinfo or query parameters are not supported. Decode
+/// parameter names only: query values retain their original meaning.
+fn url_needs_auth(url: &str) -> bool {
+    let raw_authority = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url).split(['/', '?', '#']).next().unwrap_or("");
+    let authority = decode_url_component(raw_authority).unwrap_or_default();
+    if raw_authority.contains('@') || authority.contains('@') {
+        return true;
+    }
+    let host = authority.split(':').next().unwrap_or("").trim_end_matches('.').to_ascii_lowercase();
+    let in_domain = |domain: &str| host == domain || host.strip_suffix(domain).is_some_and(|prefix| prefix.ends_with('.'));
+    // Treat `key` as authentication by default. Only this documented public
+    // Taginfo host uses it as an OSM tag selector rather than a credential.
+    let key_auth = host != "taginfo.openstreetmap.org";
+    // OpenWeather calls its API key `appid`; HERE's app_id is an identifier.
+    let appid_auth = in_domain("openweathermap.org");
+    let Some((_, query)) = url.split_once('?') else { return false };
+    query.split(['&', ';']).any(|parameter| {
+        let Some(decoded) = decode_url_component(parameter.split('=').next().unwrap_or("")) else { return false };
+        let key: String = decoded.chars().filter(|&c| !matches!(c, '_' | '-')).map(|c| c.to_ascii_lowercase()).collect();
+        matches!(key.as_str(), "user" | "username" | "password" | "passwd" | "pwd" | "auth" | "authcfg" | "authorization"
+            | "authkey" | "appcode" | "jwt" | "sessionid" | "jsessionid" | "phpsessid" | "asp.netsessionid"
+            | "accesskey" | "rapidapikey" | "xrapidapikey" | "oauthtoken" | "oauthtokensecret" | "oauthsignature"
+            | "token" | "accesstoken" | "refreshtoken" | "idtoken" | "apikey" | "xapikey" | "subscriptionkey" | "secret" | "clientsecret"
+            | "signature" | "sig" | "awsaccesskeyid" | "xamzcredential" | "xamzsecuritytoken" | "xamzsignature" | "xgoogcredential" | "xgoogsignature")
+            || (key == "key" && key_auth) || (key == "appid" && appid_auth)
+    })
+}
+
+/// Decode names/authority once; never decode or rewrite the query values.
+fn decode_url_component(value: &str) -> Option<String> {
+    let mut bytes = value.bytes();
+    let mut out = Vec::with_capacity(value.len());
+    while let Some(b) = bytes.next() {
+        let b = if b == b'%' {
+            let hi = (bytes.next()? as char).to_digit(16)?;
+            let lo = (bytes.next()? as char).to_digit(16)?;
+            (hi * 16 + lo) as u8
+        } else { b };
+        out.push(b);
+    }
+    String::from_utf8(out).ok()
 }
 
 /// Placeholders the tile client fills in; anything else in braces is not supported.
@@ -141,26 +187,33 @@ fn host(url: &str) -> Option<String> {
     (!host.is_empty()).then(|| host.to_string())
 }
 
-/// The same service: kind and address, ignoring case of scheme and host and a trailing `/` or `?`.
+/// The same service: kind and address, ignoring case of scheme and host,
+/// a trailing path slash and an empty query. Query values stay unchanged.
 fn same(a: &MapServer, b: &MapServer) -> bool {
     a.kind == b.kind && key(&a.url) == key(&b.url)
 }
 
 fn key(url: &str) -> String {
-    let url = url.trim().trim_end_matches(['/', '?']);
-    match url.split_once("://") {
+    let (path, query) = url.trim().split_once('?').unwrap_or((url.trim(), ""));
+    let path = path.trim_end_matches('/');
+    let mut key = match path.split_once("://") {
         Some((scheme, rest)) => {
-            let (host, path) = rest.split_at(rest.find(['/', '?']).unwrap_or(rest.len()));
+            let (host, path) = rest.split_at(rest.find('/').unwrap_or(rest.len()));
             format!("{}://{}{path}", scheme.to_ascii_lowercase(), host.to_ascii_lowercase())
         }
-        None => url.to_string(),
+        None => path.to_string(),
+    };
+    if !query.is_empty() {
+        key.push('?');
+        key.push_str(query);
     }
+    key
 }
 
 /// Marks connections already present among `existing` (user servers and presets).
 pub fn mark_duplicates(conns: &mut [Connection], existing: &[MapServer]) {
     for c in conns.iter_mut() {
-        if existing.iter().any(|e| same(e, &c.server)) {
+        if c.blocking.is_empty() && existing.iter().any(|e| same(e, &c.server)) {
             c.duplicate = true;
         }
     }
@@ -171,12 +224,19 @@ pub fn mark_duplicates(conns: &mut [Connection], existing: &[MapServer]) {
 pub fn merge(user: &[MapServer], chosen: &[&Connection], stamp: u64) -> (Vec<MapServer>, usize) {
     let mut out = user.to_vec();
     let mut added = 0;
-    for c in chosen.iter().filter(|c| c.blocking.is_empty()) {
+    let mut next = 0;
+    for c in chosen.iter().filter(|c| c.blocking.is_empty() && !url_needs_auth(&c.server.url)) {
         if out.iter().any(|e| same(e, &c.server)) {
             continue;
         }
         let mut s = c.server.clone();
-        s.id = format!("qgis-{stamp}-{added}");
+        loop {
+            s.id = format!("qgis-{stamp}-{next}");
+            next += 1;
+            if !out.iter().any(|e| e.id.eq_ignore_ascii_case(&s.id)) {
+                break;
+            }
+        }
         out.push(s);
         added += 1;
     }
@@ -268,4 +328,101 @@ mod tests {
         // Bing's documentation example: tile 3,5 at level 3 is quadkey 213.
         assert_eq!(tile_url("https://t/{q}.jpeg", 3, 3, 5), "https://t/213.jpeg");
     }
+
+    #[test]
+    fn url_credentials_are_blocked_and_not_kept_for_preview() {
+        let mut failures = Vec::new();
+        for (root, element, suffix) in [("qgsWMSConnections", "wms", "/wms"), ("qgsWFSConnections", "wfs", "/wfs"), ("qgsXYZTilesConnections", "xyztiles", "/{z}/{x}/{y}.png")] {
+            for credential in ["userinfo", "username", "password", "token", "apikey", "api_key", "access_token", "authcfg", "authorization", "PASS%57ORD", "X-Api-Key", "client_secret"] {
+                let url = if credential == "userinfo" {
+                    format!("https://user:SYNTHETIC_VALUE@example.invalid{suffix}")
+                } else {
+                    format!("https://example.invalid{suffix}?{credential}=SYNTHETIC_VALUE")
+                };
+                let xml = format!("<{root}><{element} url=\"{url}\"/></{root}>");
+                let connections = parse(&xml).unwrap();
+                let c = &connections[0];
+                if c.importable() || format!("{c:?}").contains("SYNTHETIC_VALUE") || c.server.name == "user" {
+                    failures.push(format!("{element}/{credential}"));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "Niet veilig geblokkeerd: {}", failures.join(", "));
+    }
+
+    #[test]
+    fn url_credentials_do_not_enter_the_saved_server_list() {
+        let connections = parse(r#"<qgsWMSConnections><wms name="Besloten" url="https://example.invalid/wms?username=user&amp;password=SYNTHETIC_VALUE"/></qgsWMSConnections>"#).unwrap();
+        let chosen: Vec<_> = connections.iter().collect();
+        let (servers, added) = merge(&[], &chosen, 888);
+        assert_eq!(added, 0);
+        assert!(!serde_json::to_string(&servers).unwrap().contains("SYNTHETIC_VALUE"));
+    }
+
+    #[test]
+    fn azure_maps_subscription_keys_are_blocked_and_discarded() {
+        let connections = parse(&fixture("azure-maps.xml")).unwrap();
+        assert_eq!(connections.len(), 3);
+        let mut failures = Vec::new();
+        for c in &connections {
+            let (servers, added) = merge(&[], &[c], 888);
+            let blocked = c.blocking.iter().any(|reason| reason == tr("vraagt authenticatie", "needs authentication"));
+            println!("{}: importeerbaar={}, authenticatieblokkade={blocked}, lege URL={}, toegevoegd={added}", c.server.name, c.importable(), c.server.url.is_empty());
+            if c.importable() || !blocked || !c.server.url.is_empty() || added != 0 || !servers.is_empty() {
+                failures.push(c.server.name.clone());
+            }
+        }
+        assert!(failures.is_empty(), "Niet veilig geblokkeerd: {}", failures.join(", "));
+    }
+
+    #[test]
+    fn a_blocked_connection_does_not_disable_the_public_connection() {
+        let connections = parse(r#"<qgsWMSConnections>
+            <wms name="Besloten" url="https://example.invalid/wms" username="user"/>
+            <wms name="Openbaar" url="https://example.invalid/wms"/>
+        </qgsWMSConnections>"#).unwrap();
+        assert!(!connections[0].importable());
+        assert!(connections[1].importable());
+        let (servers, added) = merge(&[], &[&connections[1]], 888);
+        assert_eq!((servers.len(), added), (1, 1));
+    }
+
+    #[test]
+    fn duplicate_detection_preserves_query_values() {
+        let mut connections = parse(r#"<qgsWMSConnections>
+            <wms name="Zonder slash" url="https://example.invalid/wms?map=/data/a"/>
+            <wms name="Met slash" url="https://example.invalid/wms?map=/data/a/"/>
+            <wms name="Met vraagteken" url="https://example.invalid/wms?map=/data/a?"/>
+        </qgsWMSConnections>"#).unwrap();
+        assert!(connections.iter().all(Connection::importable));
+        let existing = vec![connections[0].server.clone()];
+        mark_duplicates(&mut connections, &existing);
+        assert!(connections[0].duplicate);
+        assert!(connections[1].importable() && connections[2].importable());
+        let (servers, added) = merge(&[], &connections.iter().collect::<Vec<_>>(), 888);
+        assert_eq!((servers.len(), added), (3, 3));
+    }
+
+    #[test]
+    fn two_imports_in_one_second_have_unique_ids() {
+        let a = parse(r#"<qgsWMSConnections><wms name="A" url="https://a.invalid/wms"/></qgsWMSConnections>"#).unwrap();
+        let b = parse(r#"<qgsWMSConnections><wms name="B" url="https://b.invalid/wms"/></qgsWMSConnections>"#).unwrap();
+        let (mut user, _) = merge(&[], &[&a[0]], 888);
+        user[0].id.make_ascii_uppercase();
+        let (user, added) = merge(&user, &[&b[0]], 888);
+        assert_eq!(added, 1);
+        assert_ne!(user[0].id.to_ascii_lowercase(), user[1].id.to_ascii_lowercase());
+        assert_eq!(user[1].url, b[0].server.url);
+    }
+
+    #[test]
+    fn xml_parser_errors_do_not_echo_input() {
+        let error = parse(r#"<qgsWMSConnections><wms password="&SYNTHETIC_VALUE;"/></qgsWMSConnections>"#).unwrap_err();
+        assert!(!error.contains("SYNTHETIC_VALUE"));
+        assert_eq!(error, tr("Geen geldige XML", "Not valid XML"));
+    }
 }
+
+#[cfg(test)]
+#[path = "../../tests/support/qgis_auth.rs"]
+pub(crate) mod auth_test_support;

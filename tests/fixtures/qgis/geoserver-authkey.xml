@@ -1,0 +1,6 @@
+<!DOCTYPE connections>
+<qgsWMSConnections version="1.0">
+  <wms name="GeoServer authkey" url="https://geoserver.example.invalid/geoserver/topp/wms?service=WMS&amp;version=1.3.0&amp;request=GetCapabilities&amp;authkey=SYNTHETIC_VALUE"/>
+  <wms name="GeoServer AUTHKEY" url="https://geoserver.example.invalid/geoserver/topp/wms?service=WMS&amp;version=1.3.0&amp;request=GetCapabilities&amp;AUTHKEY=SYNTHETIC_VALUE"/>
+  <wms name="GeoServer auth%6Bey" url="https://geoserver.example.invalid/geoserver/topp/wms?service=WMS&amp;version=1.3.0&amp;request=GetCapabilities&amp;auth%6Bey=SYNTHETIC_VALUE"/>
+</qgsWMSConnections>

@@ -1,0 +1,6 @@
+<!DOCTYPE connections>
+<qgsXYZTilesConnections version="1.0">
+  <xyztiles name="HERE app_code" url="https://1.base.maps.api.here.com/maptile/2.1/maptile/newest/normal.day/{z}/{x}/{y}/256/png8?app_id=SYNTHETIC_APP&amp;app_code=SYNTHETIC_VALUE"/>
+  <xyztiles name="HERE APP_CODE" url="https://1.base.maps.api.here.com/maptile/2.1/maptile/newest/normal.day/{z}/{x}/{y}/256/png8?app_id=SYNTHETIC_APP&amp;APP_CODE=SYNTHETIC_VALUE"/>
+  <xyztiles name="HERE app%5Fcode" url="https://1.base.maps.api.here.com/maptile/2.1/maptile/newest/normal.day/{z}/{x}/{y}/256/png8?app_id=SYNTHETIC_APP&amp;app%5Fcode=SYNTHETIC_VALUE"/>
+</qgsXYZTilesConnections>

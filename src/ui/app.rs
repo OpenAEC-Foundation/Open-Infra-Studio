@@ -466,6 +466,84 @@ pub struct App {
     planning: super::planning::PlanningPage,
 }
 
+#[cfg(test)]
+mod qgis_preview_tests {
+    use super::*;
+
+    fn render(connections: Vec<crate::gis::qgis::Connection>) -> String {
+        let context = egui::Context::default();
+        let creation = eframe::CreationContext::_new_kittest(context.clone());
+        let (_, receiver) = std::sync::mpsc::channel();
+        let mut app = App::new(&creation, receiver);
+        app.srv.qgis = connections.into_iter().map(|c| (c, true)).collect();
+        let output = context.run_ui(egui::RawInput::default(), |ui| app.qgis_import(ui));
+        let rendered = format!("{:?}", output.shapes);
+        output.drop_without_applying_deltas();
+        rendered
+    }
+
+    #[test]
+    fn qgis_preview_does_not_render_url_credentials() {
+        let connections = crate::gis::qgis::parse(r#"<qgsWMSConnections>
+            <wms name="Besloten" url="https://example.invalid/wms?password=SYNTHETIC_VALUE"/>
+            <wms name="Openbaar" url="https://public.invalid/wms"/>
+        </qgsWMSConnections>"#).unwrap();
+        let rendered = render(connections);
+        assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
+        assert!(!rendered.contains("SYNTHETIC_VALUE"));
+    }
+
+    #[test]
+    fn azure_maps_subscription_keys_do_not_render() {
+        let connections = crate::gis::qgis::parse(include_str!("../../tests/fixtures/qgis/azure-maps.xml")).unwrap();
+        assert_eq!(connections.len(), 3);
+        let public = crate::gis::qgis::parse(r#"<qgsXYZTilesConnections><xyztiles name="Openbaar" url="https://public.invalid/{z}/{x}/{y}.png"/></qgsXYZTilesConnections>"#).unwrap().remove(0);
+        let mut failures = Vec::new();
+        for c in connections {
+            let name = c.server.name.clone();
+            let rendered = render(vec![c, public.clone()]);
+            assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
+            let leaked = rendered.contains("SYNTHETIC_VALUE");
+            println!("{name}: gevoelige waarde in voorvertoning={leaked}");
+            if leaked {
+                failures.push(name);
+            }
+        }
+        assert!(failures.is_empty(), "Zichtbaar in de voorvertoning: {}", failures.join(", "));
+    }
+
+    fn check_auth_cases(cases: Vec<crate::gis::qgis::auth_test_support::Case>) {
+        let public = crate::gis::qgis::parse(r#"<qgsWMSConnections><wms name="Openbaar" url="https://public.invalid/wms"/></qgsWMSConnections>"#).unwrap().remove(0);
+        let mut failures = Vec::new();
+        for case in cases {
+            let name = case.connection.server.name.clone();
+            let url = case.connection.server.url.clone();
+            let rendered = render(vec![case.connection, public.clone()]);
+            assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
+            let leaked = crate::gis::qgis::auth_test_support::contains_test_secret(&rendered);
+            let public_visible = !url.is_empty() && rendered.contains(&url);
+            println!("{name}: verwacht blokkade={}, gevoelige waarde zichtbaar={leaked}, publieke URL zichtbaar={public_visible}", case.blocked);
+            if leaked || (!case.blocked && !public_visible) { failures.push(name); }
+        }
+        assert!(failures.is_empty(), "Onjuiste voorvertoning: {}", failures.join(", "));
+    }
+
+    #[test]
+    fn ordnance_survey_keys_do_not_render() {
+        check_auth_cases(crate::gis::qgis::auth_test_support::os_cases());
+    }
+
+    #[test]
+    fn geoserver_and_here_credentials_do_not_render() {
+        check_auth_cases(crate::gis::qgis::auth_test_support::review_cases());
+    }
+
+    #[test]
+    fn audited_credentials_do_not_render_and_public_urls_stay_visible() {
+        check_auth_cases(crate::gis::qgis::auth_test_support::audited_cases());
+    }
+}
+
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, rx: Receiver<UiMsg>) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
@@ -2439,10 +2517,9 @@ impl App {
             match r {
                 Ok(title) => {
                     let kind = self.srv.kind.unwrap_or(ServerKind::Wms);
-                    let mut user = servers::load_user();
                     let name = if self.srv.name.trim().is_empty() { title } else { self.srv.name.trim().to_string() };
                     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-                    user.push(MapServer {
+                    let server = MapServer {
                         id: format!("user-{stamp}"),
                         kind,
                         name: name.clone(),
@@ -2453,8 +2530,8 @@ impl App {
                         max_zoom: (kind == ServerKind::Xyz).then_some(19),
                         min_zoom: None,
                         builtin: false,
-                    });
-                    match servers::save_user(&user) {
+                    };
+                    match servers::update_user(|user| user.push(server)) {
                         Ok(()) => {
                             self.servers = servers::all();
                             self.svc.refresh();
@@ -2528,8 +2605,7 @@ impl App {
             });
         });
         if let Some(id) = remove {
-            let user: Vec<MapServer> = servers::load_user().into_iter().filter(|s| s.id != id).collect();
-            match servers::save_user(&user) {
+            match servers::update_user(|user| user.retain(|s| s.id != id)) {
                 Ok(()) => {
                     self.servers = servers::all();
                     self.svc.refresh();
@@ -2569,7 +2645,10 @@ impl App {
                 for (c, on) in self.srv.qgis.iter_mut() {
                     ui.add_enabled(c.importable(), egui::Checkbox::without_text(on));
                     ui.label(RichText::new(c.server.kind.label()).monospace().small());
-                    ui.label(&c.server.name).on_hover_text(&c.server.url);
+                    let name = ui.label(&c.server.name);
+                    if c.blocking.is_empty() {
+                        name.on_hover_text(&c.server.url);
+                    }
                     if c.duplicate {
                         ui.label(RichText::new(tr("staat er al", "already there")).small().weak());
                     } else if c.blocking.is_empty() {
@@ -2606,9 +2685,10 @@ impl App {
         if add {
             let chosen: Vec<&qgis::Connection> = self.srv.qgis.iter().filter(|(c, on)| *on && c.importable()).map(|(c, _)| c).collect();
             let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-            let saved = servers::try_load_user().and_then(|user| {
-                let (list, added) = qgis::merge(&user, &chosen, stamp);
-                servers::save_user(&list).map(|()| added)
+            let saved = servers::update_user(|user| {
+                let (list, added) = qgis::merge(user, &chosen, stamp);
+                *user = list;
+                added
             });
             match saved {
                 Ok(added) => {
