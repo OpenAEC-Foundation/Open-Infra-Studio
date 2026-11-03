@@ -1,16 +1,16 @@
 //! What a KLIC delivery holds besides the cables and pipes (read by
 //! `klic2geo`): the areas with an *eis voorzorgsmaatregel* (a precaution the
 //! network operator requires before digging there), the *extra detailinfo*
-//! areas and points (a detail drawing or house-connection sketch for that
+//! areas, lines and points (a detail drawing or house-connection sketch for that
 //! spot) and the attachments (letters, conditions, sketches as PDF or image).
 //!
 //! Read with a generic pass over the IMKL 2.0 GML, so small differences
 //! between IMKL versions do not matter: any feature whose name holds
 //! `EisVoorzorgsmaatregel` with a surface is an EV area, any `ExtraDetailinfo`
-//! with a location a detail area or point, any `Bijlage` with a
+//! with a location a detail area, line or point, any `Bijlage` with a
 //! `bestandLocatie` an attachment.
 
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use super::crs::XY;
@@ -30,8 +30,9 @@ pub struct Area {
     pub thema: String,
     /// The network operator code (KL1031, …) from the identifier.
     pub operator: String,
-    /// Polygons in RD: outer ring first, then holes; empty for a point.
+    /// Polygons in RD: outer ring first, then holes; empty for a line or point.
     pub polygons: Vec<Vec<Vec<XY>>>,
+    pub lines: Vec<Vec<XY>>,
     pub points: Vec<XY>,
     /// Attachment of a detail, relative to the delivery root (`bronnen/…`).
     pub file: Option<String>,
@@ -115,6 +116,17 @@ fn points(n: roxmltree::Node) -> Vec<XY> {
         .collect()
 }
 
+fn lines(n: roxmltree::Node) -> Vec<Vec<XY>> {
+    n.descendants()
+        .filter(|d| d.is_element() && matches!(d.tag_name().name(), "LineString" | "LineStringSegment"))
+        .map(|line| line.descendants()
+            .filter(|d| d.is_element() && matches!(d.tag_name().name(), "posList" | "pos"))
+            .flat_map(|d| pos_list(d.text().unwrap_or(""), dimension(d)))
+            .collect::<Vec<_>>())
+        .filter(|line| line.len() >= 2)
+        .collect()
+}
+
 fn child_text<'a>(n: roxmltree::Node<'a, 'a>, name: &str) -> Option<&'a str> {
     n.children().find(|c| c.is_element() && c.tag_name().name() == name).and_then(|c| c.text()).map(str::trim)
 }
@@ -167,18 +179,17 @@ pub fn parse(xml: &str) -> Result<Extras, String> {
             thema: themes.get(network).cloned().unwrap_or_default(),
             operator: operator_of(&id),
             polygons: polygons(n),
+            lines: lines(n),
             points: points(n),
             file: child_text(n, "bestandLocatie").map(str::to_string),
             id,
         };
-        if !area.polygons.is_empty() || !area.points.is_empty() {
-            x.areas.push(area);
+        // Bestanden van details horen ook in de lijst die het venster opent.
+        if let Some(path) = &area.file {
+            x.attachments.push(Attachment { kind: if ev { THEME_EV } else { THEME_DETAIL }.into(), path: path.clone(), operator: area.operator.clone() });
         }
-        // An EV attachment named in the feature itself.
-        if ev {
-            if let Some(p) = child_text(n, "bestandLocatie") {
-                x.attachments.push(Attachment { kind: THEME_EV.into(), path: p.to_string(), operator: operator_of(&x.areas.last().map(|a| a.id.clone()).unwrap_or_default()) });
-            }
+        if !area.polygons.is_empty() || !area.lines.is_empty() || !area.points.is_empty() {
+            x.areas.push(area);
         }
     }
     Ok(x)
@@ -206,31 +217,94 @@ pub fn read(path: &Path) -> Result<Extras, String> {
     parse(&gi_xml(path)?)
 }
 
+fn invalid_attachment_path(rel: &str) -> String {
+    format!("{} {rel}", tr("ongeldig bijlagepad", "invalid attachment path"))
+}
+
+/// Controleer ook bestaande mapdelen en een eventueel al uitgepakt bestand.
+/// Een ontbrekend eindbestand is toegestaan; links worden nooit gevolgd.
+fn attachment_target(root: &Path, relative: &Path, rel: &str, create_parents: bool) -> Result<PathBuf, String> {
+    let root = if root.as_os_str().is_empty() { Path::new(".") } else { root };
+    if std::fs::symlink_metadata(root).map_err(|e| e.to_string())?.file_type().is_symlink() {
+        return Err(invalid_attachment_path(rel));
+    }
+    let root = root.canonicalize().map_err(|e| format!("{}: {e}", root.display()))?;
+    let mut target = root.clone();
+    let mut parts = relative.components().peekable();
+    while let Some(part) = parts.next() {
+        if !matches!(part, std::path::Component::Normal(_)) {
+            return Err(invalid_attachment_path(rel));
+        }
+        target.push(part.as_os_str());
+        let parent = parts.peek().is_some();
+        let meta = match std::fs::symlink_metadata(&target) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                if !parent || !create_parents {
+                    // Het eerste ontbrekende deel kan geen bestaande link zijn.
+                    target.extend(parts);
+                    return Ok(target);
+                }
+                match std::fs::create_dir(&target) {
+                    Ok(()) => {},
+                    Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {},
+                    Err(e) => return Err(format!("{}: {e}", target.display())),
+                }
+                std::fs::symlink_metadata(&target).map_err(|e| e.to_string())?
+            }
+            Err(e) => return Err(format!("{}: {e}", target.display())),
+        };
+        if meta.file_type().is_symlink() || (parent && !meta.is_dir()) || (!parent && !meta.is_file()) {
+            return Err(invalid_attachment_path(rel));
+        }
+        let resolved = target.canonicalize().map_err(|e| e.to_string())?;
+        if !resolved.starts_with(&root) {
+            return Err(invalid_attachment_path(rel));
+        }
+        target = resolved;
+    }
+    Ok(target)
+}
+
 /// An attachment as a file on disk: next to an extracted GI-xml it is already
 /// there; from a zip it is extracted to `out_dir` (once).
 pub fn attachment_file(delivery: &Path, rel: &str, out_dir: &Path) -> Result<PathBuf, String> {
-    if rel.contains("..") {
-        return Err(format!("{} {rel}", tr("ongeldig bijlagepad", "invalid attachment path")));
+    // ZIP-paden gebruiken '/'. Weiger ook Windows-prefixen op Unix, zodat
+    // dezelfde levering op elk platform binnen de bedoelde map blijft.
+    if rel.contains("..") || rel.contains(['\\', ':']) || rel.split('/').any(|part| part.is_empty() || part == ".") {
+        return Err(invalid_attachment_path(rel));
     }
     let ext = delivery.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
     if matches!(ext.as_deref(), Some("xml") | Some("gml")) {
-        let p = delivery.parent().unwrap_or(Path::new(".")).join(rel);
+        let p = attachment_target(delivery.parent().unwrap_or(Path::new(".")), Path::new(rel), rel, false)?;
         return if p.exists() { Ok(p) } else { Err(format!("{} {}", tr("bijlage niet gevonden:", "attachment not found:"), p.display())) };
     }
-    let target = out_dir.join(rel.rsplit('/').next().unwrap_or(rel));
+    // Het bronpad en de bestandsstaat scheiden ook gelijknamige leveringen
+    // en een opnieuw gedownloade levering van eerder uitgepakte bijlagen.
+    use std::hash::{Hash, Hasher};
+    let source = delivery.canonicalize().map_err(|e| format!("{}: {e}", delivery.display()))?;
+    let file = std::fs::File::open(&source).map_err(|e| format!("{}: {e}", delivery.display()))?;
+    let meta = file.metadata().map_err(|e| e.to_string())?;
+    let mut key = std::collections::hash_map::DefaultHasher::new();
+    source.hash(&mut key);
+    meta.len().hash(&mut key);
+    meta.modified().ok().hash(&mut key);
+    std::fs::create_dir_all(out_dir).map_err(|e| e.to_string())?;
+    let relative = PathBuf::from(format!("{:016x}", key.finish())).join(rel);
+    let target = attachment_target(out_dir, &relative, rel, false)?;
     if target.exists() {
         return Ok(target);
     }
-    let file = std::fs::File::open(delivery).map_err(|e| format!("{}: {e}", delivery.display()))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
     let name = (0..zip.len())
         .filter_map(|i| zip.by_index(i).ok().map(|f| f.name().to_string()))
         .find(|n| n.ends_with(rel))
         .ok_or_else(|| format!("{} {rel}", tr("bijlage niet in de zip:", "attachment not in the zip:")))?;
-    std::fs::create_dir_all(out_dir).map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
     zip.by_name(&name).map_err(|e| e.to_string())?.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-    std::fs::write(&target, bytes).map_err(|e| format!("{}: {e}", target.display()))?;
+    let target = attachment_target(out_dir, &relative, rel, true)?;
+    let mut output = std::fs::OpenOptions::new().write(true).create_new(true).open(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+    output.write_all(&bytes).map_err(|e| format!("{}: {e}", target.display()))?;
     Ok(target)
 }
 
@@ -287,7 +361,7 @@ mod tests {
     #[test]
     fn ev_areas_details_and_attachments() {
         let x = parse(XML).unwrap();
-        assert_eq!((x.count("eis_voorzorgsmaatregel"), x.count("extra_detailinfo"), x.attachments.len()), (1, 1, 1));
+        assert_eq!((x.count("eis_voorzorgsmaatregel"), x.count("extra_detailinfo"), x.attachments.len()), (1, 1, 2));
         let ev = &x.areas[0];
         assert_eq!((ev.value.as_str(), ev.thema.as_str(), ev.operator.as_str()), ("aanwezigheidNetbeheerder", "gasHogeDruk", "KL1031"));
         assert_eq!(ev.polygons.len(), 1);
@@ -295,7 +369,8 @@ mod tests {
         assert_eq!(ev.polygons[0][0][1], [140.0, 400.0]);
         let d = &x.areas[1];
         assert_eq!((d.value.as_str(), d.file.as_deref(), d.points.clone()), ("huisaansluiting", Some("bronnen/KL1104/schets.pdf"), vec![[105.0, 405.0]]));
-        assert_eq!((x.attachments[0].kind.as_str(), x.attachments[0].operator.as_str()), ("algemeen", "KL1081"));
+        assert_eq!((x.attachments[0].kind.as_str(), x.attachments[0].operator.as_str()), (THEME_DETAIL, "KL1104"));
+        assert_eq!((x.attachments[1].kind.as_str(), x.attachments[1].operator.as_str()), ("algemeen", "KL1081"));
     }
 
     #[test]
@@ -305,7 +380,7 @@ mod tests {
             return; // only on the development machine
         }
         let x = read(p).unwrap();
-        assert_eq!((x.attachments.len(), x.count("extra_detailinfo")), (14, 4));
+        assert_eq!((x.attachments.iter().filter(|a| a.kind != THEME_DETAIL).count(), x.count("extra_detailinfo")), (14, 4));
         let dir = std::env::temp_dir().join(format!("oi-klic-bijlage-{}", std::process::id()));
         let f = attachment_file(p, &x.attachments[0].path, &dir).unwrap();
         assert!(std::fs::read(&f).unwrap().starts_with(b"%PDF"));
