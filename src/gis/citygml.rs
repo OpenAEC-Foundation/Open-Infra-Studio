@@ -276,7 +276,7 @@ fn first_attribute(xml: &str, name: &str) -> Option<String> {
         match reader.read_event().ok()? {
             Event::Start(tag) | Event::Empty(tag) => {
                 for attr in tag.attributes() {
-                    let attr = attr.ok()?;
+                    let Ok(attr) = attr else { continue; };
                     if attr.key.as_ref() == name.as_bytes() {
                         return attr.decode_and_unescape_value(reader.decoder()).ok().map(|value| value.into_owned());
                     }
@@ -356,6 +356,9 @@ fn document(xml: &str, depth: usize) -> Result<Document<'_>, String> {
 /// not have to fit in memory as one XML tree. `keep` decides per object
 /// (e.g. only those in the project area).
 pub fn parse_with(xml: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn Fn(String)) -> Result<CityModel, String> {
+    // Preserve the original diagnostic when no complete XML opening tag exists.
+    let root_start = xml.match_indices('<').map(|(i, _)| i).find(|&i| !matches!(xml.as_bytes().get(i + 1), Some(b'?') | Some(b'!'))).ok_or("CityGML: geen XML")?;
+    xml[root_start..].find('>').ok_or("CityGML: geen XML")?;
     let mut model = CityModel { crs: crs_of(xml), ..Default::default() };
     // The namespace declarations of the root element, for every member.
     let unavailable = || "CityGML: geen stadsobjecten met geometrie gevonden".to_string();
@@ -432,6 +435,55 @@ mod tests {
     use super::*;
 
     const BUILDING: &str = include_str!("../../tests/fixtures/citygml/building.gml");
+
+    fn assert_local_crs_after_broken_first_member(label: &str, attribute: &str) {
+        let base = BUILDING.replace(" srsName=\"urn:ogc:def:crs:EPSG::2056\"", "");
+        let doc = Document::parse(&base).unwrap();
+        let member = doc.descendants().find(|n| n.is_element() && local(n) == "cityObjectMember").unwrap();
+        let range = member.range();
+        let bad = base[range.clone()].replace("gml:id=\"synthetic-building\"", attribute);
+        let good = base[range.clone()].replace("<gml:Polygon>", "<gml:Polygon srsName=\"urn:ogc:def:crs:EPSG::2056\">");
+        let mut text = base.clone();
+        text.replace_range(range, &format!("{bad}{good}"));
+        assert_eq!(text.matches("srsName=").count(), 1);
+
+        let scanned_crs = crs_of(&text);
+        let parsed = parse(&text).unwrap();
+        let path = std::env::temp_dir().join(format!("oi-citygml-crs-{label}-{}.gml", std::process::id()));
+        std::fs::write(&path, &text).unwrap();
+        let filter_crs = std::cell::RefCell::new(None);
+        let loaded = read_file(&path, &|crs| {
+            *filter_crs.borrow_mut() = crs.map(str::to_string);
+            Ok(Box::new(|_| true))
+        }, &|_| {}).unwrap();
+        std::fs::remove_file(path).unwrap();
+        let expected = parse(BUILDING).unwrap();
+        for model in [&parsed, &loaded] {
+            assert_eq!((model.objects.len(), model.warnings.len()), (1, 1));
+            assert_eq!(model.objects[0].id, "synthetic-building");
+            assert_eq!(model.objects[0].surfaces, expected.objects[0].surfaces);
+            assert_eq!(model.objects[0].surfaces[0].1[0].len(), 4);
+        }
+        assert_eq!(vec![scanned_crs, parsed.crs, filter_crs.into_inner(), loaded.crs],
+            vec![Some("EPSG:2056".to_string()); 4]);
+    }
+
+    #[test]
+    fn sol_duplicate_id_before_valid_building_preserves_local_crs_in_file_route() {
+        assert_local_crs_after_broken_first_member("duplicate", "gml:id=\"broken\" gml:id=\"duplicate\"");
+    }
+
+    #[test]
+    fn sol_missing_equals_before_valid_building_preserves_local_crs_in_file_route() {
+        assert_local_crs_after_broken_first_member("missing-equals", "gml:id \"broken\"");
+    }
+
+    #[test]
+    fn sol_non_xml_input_preserves_the_original_complete_error() {
+        for text in ["", "<", "gewone tekst"] {
+            assert_eq!(parse(text).unwrap_err(), "CityGML: geen XML", "{text:?}");
+        }
+    }
 
     fn with_coordinates(element: &str) -> String {
         let doc = Document::parse(BUILDING).unwrap();
