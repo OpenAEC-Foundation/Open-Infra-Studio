@@ -8,7 +8,7 @@ license = "GPL-3.0-only"
 repository = "OpenAEC-Foundation/Open-Infra-Studio"
 
 [opencad]
-api_version = 13
+api_version = 14
 # Filled at build time (scripts/install.sh, release workflow) from the
 # compiler that built the library and the opencadcodec source in Cargo.lock.
 # The host loads the plugin only when both match its own build.

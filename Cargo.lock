@@ -43,8 +43,8 @@ dependencies = [
 
 [[package]]
 name = "acadrust"
-version = "0.6.6"
-source = "git+https://github.com/HakanSeven12/opencadcodec.git?rev=24b037a#24b037af9d1490b83464e5d43b14a7f4d12744e8"
+version = "0.6.8"
+source = "git+https://github.com/HakanSeven12/acadrust.git?rev=53e6420#53e6420c4df4d207409798c2719d32fc6cf2811d"
 dependencies = [
  "anyhow",
  "bitflags 2.13.2",
@@ -54,6 +54,7 @@ dependencies = [
  "foldhash 0.2.0",
  "indexmap",
  "itoa",
+ "memchr",
  "memmap2",
  "nom 7.1.3",
  "oem_cp",
@@ -269,7 +270,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -1302,7 +1303,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2711,15 +2712,15 @@ dependencies = [
 [[package]]
 name = "ocs_plugin_api"
 version = "0.2.1"
-source = "git+https://github.com/HakanSeven12/OpenCADStudio?rev=ece627c662b98316f33d22cc09695ad16a1a6816#dbd50b20091cf6ce9cf61967ae0563df04014f5a"
+source = "git+https://github.com/HakanSeven12/OpenCADStudio?rev=537ab37095b681cab899c1cf48b2927d06e194b9#0e77cae652271d08c7619238e619f9b6668ae17c"
 dependencies = [
- "acadrust 0.6.6",
  "bincode",
  "cargo-lock",
  "getrandom 0.2.17",
  "interprocess",
  "libloading",
  "memmap2",
+ "opencaddocument",
  "rkyv",
  "serde",
  "serde-reflection",
@@ -2784,6 +2785,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opencaddocument"
+version = "0.1.0"
+source = "git+https://github.com/HakanSeven12/opencaddocument.git?rev=d657f94#d657f945f9d39e00548c76a8f52424881feeed1d"
+dependencies = [
+ "acadrust 0.6.8",
+ "serde",
+]
+
+[[package]]
 name = "orbclient"
 version = "0.3.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2810,7 +2820,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3460,7 +3470,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3891,10 +3901,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.5",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4664,7 +4674,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
