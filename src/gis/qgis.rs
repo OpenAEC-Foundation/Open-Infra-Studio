@@ -344,6 +344,22 @@ mod tests {
     }
 
     #[test]
+    fn azure_maps_subscription_keys_are_blocked_and_discarded() {
+        let connections = parse(&fixture("azure-maps.xml")).unwrap();
+        assert_eq!(connections.len(), 3);
+        let mut failures = Vec::new();
+        for c in &connections {
+            let (servers, added) = merge(&[], &[c], 888);
+            let blocked = c.blocking.iter().any(|reason| reason == tr("vraagt authenticatie", "needs authentication"));
+            println!("{}: importeerbaar={}, authenticatieblokkade={blocked}, lege URL={}, toegevoegd={added}", c.server.name, c.importable(), c.server.url.is_empty());
+            if c.importable() || !blocked || !c.server.url.is_empty() || added != 0 || !servers.is_empty() {
+                failures.push(c.server.name.clone());
+            }
+        }
+        assert!(failures.is_empty(), "Niet veilig geblokkeerd: {}", failures.join(", "));
+    }
+
+    #[test]
     fn a_blocked_connection_does_not_disable_the_public_connection() {
         let connections = parse(r#"<qgsWMSConnections>
             <wms name="Besloten" url="https://example.invalid/wms" username="user"/>

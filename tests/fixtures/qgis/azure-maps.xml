@@ -1,0 +1,6 @@
+<!DOCTYPE connections>
+<qgsXYZTilesConnections version="1.0">
+  <xyztiles name="Azure Maps subscription-key" url="https://atlas.microsoft.com/map/tile?subscription-key=SYNTHETIC_VALUE&amp;api-version=2024-04-01&amp;tilesetId=microsoft.base.road&amp;zoom={z}&amp;x={x}&amp;y={y}&amp;tileSize=256"/>
+  <xyztiles name="Azure Maps SUBSCRIPTION-KEY" url="https://atlas.microsoft.com/map/tile?SUBSCRIPTION-KEY=SYNTHETIC_VALUE&amp;api-version=2024-04-01&amp;tilesetId=microsoft.base.road&amp;zoom={z}&amp;x={x}&amp;y={y}&amp;tileSize=256"/>
+  <xyztiles name="Azure Maps subscription%2Dkey" url="https://atlas.microsoft.com/map/tile?subscription%2Dkey=SYNTHETIC_VALUE&amp;api-version=2024-04-01&amp;tilesetId=microsoft.base.road&amp;zoom={z}&amp;x={x}&amp;y={y}&amp;tileSize=256"/>
+</qgsXYZTilesConnections>

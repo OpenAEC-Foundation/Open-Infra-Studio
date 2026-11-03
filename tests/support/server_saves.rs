@@ -140,3 +140,51 @@ fn server_update_worker() {
         assert_eq!(added, 1);
     }
 }
+
+#[test]
+fn azure_maps_subscription_keys_do_not_reach_servers_json() {
+    let directory = directory();
+    let result = worker(&directory, "azure_maps_storage_worker")
+        .output()
+        .unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+    assert!(
+        result.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
+#[test]
+fn azure_maps_storage_worker() {
+    if std::env::var_os("INFRA_SERVER_SAVE_WORKER").is_none() {
+        return;
+    }
+    let connections =
+        crate::gis::qgis::parse(include_str!("../fixtures/qgis/azure-maps.xml")).unwrap();
+    assert_eq!(connections.len(), 3);
+    let mut failures = Vec::new();
+    for c in &connections {
+        let added = servers::update_user(|user| {
+            let (list, added) = crate::gis::qgis::merge(user, &[c], 888);
+            *user = list;
+            added
+        })
+        .unwrap();
+        let json = std::fs::read_to_string(servers::config_dir().join("servers.json")).unwrap();
+        let leaked = json.contains("SYNTHETIC_VALUE");
+        println!(
+            "{}: toegevoegd={added}, gevoelige waarde in servers.json={leaked}",
+            c.server.name
+        );
+        if added != 0 || leaked {
+            failures.push(c.server.name.clone());
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "Opgeslagen in servers.json: {}",
+        failures.join(", ")
+    );
+}

@@ -470,22 +470,46 @@ pub struct App {
 mod qgis_preview_tests {
     use super::*;
 
-    #[test]
-    fn qgis_preview_does_not_render_url_credentials() {
+    fn render(connections: Vec<crate::gis::qgis::Connection>) -> String {
         let context = egui::Context::default();
         let creation = eframe::CreationContext::_new_kittest(context.clone());
         let (_, receiver) = std::sync::mpsc::channel();
         let mut app = App::new(&creation, receiver);
-        let connections = crate::gis::qgis::parse(r#"<qgsWMSConnections>
-            <wms name="Besloten" url="https://example.invalid/wms?password=SYNTHETIC_VALUE"/>
-            <wms name="Openbaar" url="https://public.invalid/wms"/>
-        </qgsWMSConnections>"#).unwrap();
         app.srv.qgis = connections.into_iter().map(|c| (c, true)).collect();
         let output = context.run_ui(egui::RawInput::default(), |ui| app.qgis_import(ui));
         let rendered = format!("{:?}", output.shapes);
         output.drop_without_applying_deltas();
+        rendered
+    }
+
+    #[test]
+    fn qgis_preview_does_not_render_url_credentials() {
+        let connections = crate::gis::qgis::parse(r#"<qgsWMSConnections>
+            <wms name="Besloten" url="https://example.invalid/wms?password=SYNTHETIC_VALUE"/>
+            <wms name="Openbaar" url="https://public.invalid/wms"/>
+        </qgsWMSConnections>"#).unwrap();
+        let rendered = render(connections);
         assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
         assert!(!rendered.contains("SYNTHETIC_VALUE"));
+    }
+
+    #[test]
+    fn azure_maps_subscription_keys_do_not_render() {
+        let connections = crate::gis::qgis::parse(include_str!("../../tests/fixtures/qgis/azure-maps.xml")).unwrap();
+        assert_eq!(connections.len(), 3);
+        let public = crate::gis::qgis::parse(r#"<qgsXYZTilesConnections><xyztiles name="Openbaar" url="https://public.invalid/{z}/{x}/{y}.png"/></qgsXYZTilesConnections>"#).unwrap().remove(0);
+        let mut failures = Vec::new();
+        for c in connections {
+            let name = c.server.name.clone();
+            let rendered = render(vec![c, public.clone()]);
+            assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
+            let leaked = rendered.contains("SYNTHETIC_VALUE");
+            println!("{name}: gevoelige waarde in voorvertoning={leaked}");
+            if leaked {
+                failures.push(name);
+            }
+        }
+        assert!(failures.is_empty(), "Zichtbaar in de voorvertoning: {}", failures.join(", "));
     }
 }
 
