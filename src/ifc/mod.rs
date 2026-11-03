@@ -1718,9 +1718,7 @@ impl<W: Write> Exporter<'_, W> {
         }
         // Earthworks between the design and the existing ground.
         if let Some(tin) = ground {
-            let under: Vec<Option<f64>> = m.verts.iter().map(|p| tin.height(to_drawing(p)).map(|z| z / fr.f)).collect();
-            for fill in [true, false] {
-                let b = corridor::earth_body(&m.verts, &under, &tris, fill);
+            for (fill, b) in [true, false].into_iter().zip(corridor::earth_bodies(&m.verts, &tris, tin, fr)) {
                 if b.triangles.is_empty() {
                     continue;
                 }

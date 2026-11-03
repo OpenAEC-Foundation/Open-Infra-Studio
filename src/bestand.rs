@@ -72,7 +72,6 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         plans.crs = opt.crs.clone();
         return crate::plannen::place_with_text(site, &plans, source, opt.text_m, progress);
     }
-    for warning in data.import_warnings() { progress(warning.clone()); }
     let t = bridge::target().ok_or_else(|| tr("geen tekening actief — klik in Open CAD Studio op een knop van het GIS-tabblad", "no drawing active — click a button of the GIS tab in Open CAD Studio").to_string())?;
     let f = t.unit_factor;
     crate::gis::crs::ensure(&opt.crs)?;
@@ -118,11 +117,11 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         }
     }
     if out.is_empty() {
-        return Err(data.report(if opt.clip {
-            tr("geen objecten binnen het importgebied (zet 'bijsnijden' uit of controleer het coördinatenstelsel)", "no features inside the import area (turn clipping off or check the coordinate system)")
+        return Err(if opt.clip {
+            tr("geen objecten binnen het importgebied (zet 'bijsnijden' uit of controleer het coördinatenstelsel)", "no features inside the import area (turn clipping off or check the coordinate system)").into()
         } else {
-            tr("geen tekenbare objecten in het bestand", "no drawable features in the file")
-        }));
+            tr("geen tekenbare objecten in het bestand", "no drawable features in the file").into()
+        });
     }
     for l in &layers {
         bridge::ensure_layer(l, Color::from_index(opt.aci));
@@ -133,7 +132,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     }
     bridge::note_source(source);
     bridge::zoom_extents();
-    Ok(data.report(format!(
+    Ok(format!(
         "{} {n_features} {} ({}, {}) — {} {} {}.",
         data.format,
         tr("objecten", "features"),
@@ -142,5 +141,5 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         handles.len(),
         tr("elementen op", "entities on"),
         if layers.len() == 1 { layers[0].clone() } else { format!("{} {}", layers.len(), tr("lagen", "layers")) }
-    )))
+    ))
 }
