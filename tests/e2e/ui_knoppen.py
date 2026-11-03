@@ -363,7 +363,7 @@ class Tester:
                 self.run_page(key, page, pages)
                 # A window that no longer reacts (the accessibility layer of the
                 # test build can lock up): its results are void; restart and redo.
-                if not self.frozen(key, pages):
+                if not self.frozen(key, pages, page):
                     break
                 del self.results[start:]
                 print(f"  (venster reageert niet meer: Open CAD Studio herstart, {page} opnieuw)", flush=True)
@@ -372,17 +372,17 @@ class Tester:
             else:
                 self.add(key, page, page, "navigatie", False, "VASTGELOPEN (ook na herstart)")
 
-    def frozen(self, key, pages):
-        """Does the window still switch pages? Tried on two pages."""
-        targets = [p for p in pages[:2]]
-        for page in targets:
-            try:
-                w = self.goto(key, page)
-            except RuntimeError:
-                return True
-            if current_page(self.ui.nodes(w), pages) == page:
-                return False
-        return True
+    def frozen(self, key, pages, page):
+        """Does the window still switch to another page? A frozen window keeps
+        showing the page it hung on, so the probe goes elsewhere."""
+        target = next((p for p in pages if p != page), None)
+        if target is None:
+            return False
+        try:
+            w = self.goto(key, target)
+        except RuntimeError:
+            return True
+        return current_page(self.ui.nodes(w), pages) != target
 
     def run_page(self, key, page, pages):
         title = WINDOWS[key][0]

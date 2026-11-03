@@ -2763,6 +2763,8 @@ fn kind_colour(kind: &str) -> Color32 {
 /// the source on the right. Long texts end in "…".
 fn hit_row(ui: &mut egui::Ui, h: &Hit, highlighted: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 40.0), egui::Sense::click());
+    // Painted by hand: give screen readers (and the UI test) its text.
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} — {} ({})", h.name, h.place, h.kind)));
     let painter = ui.painter_at(rect);
     let visuals = ui.visuals();
     if highlighted || resp.hovered() {
