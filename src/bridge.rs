@@ -363,7 +363,7 @@ pub fn snapshot() -> Result<ocs_plugin_api::host::codec::CadDocument, String> {
         Some((_, _, size)) if size < SNAPSHOT_SAFE => {
             PARTIAL.store(false, std::sync::atomic::Ordering::Relaxed);
             match request(PluginRequest::DocumentSnapshot)? {
-                PluginResponse::Document(doc) => Ok(*doc),
+                PluginResponse::Document(doc) => Ok((*doc).into()),
                 other => Err(format!("onverwacht antwoord op de tekeningopvraag: {other:?}")),
             }
         }
