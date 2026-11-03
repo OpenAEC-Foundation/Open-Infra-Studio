@@ -2592,7 +2592,10 @@ impl App {
                 for (c, on) in self.srv.qgis.iter_mut() {
                     ui.add_enabled(c.importable(), egui::Checkbox::without_text(on));
                     ui.label(RichText::new(c.server.kind.label()).monospace().small());
-                    ui.label(&c.server.name).on_hover_text(&c.server.url);
+                    let name = ui.label(&c.server.name);
+                    if c.blocking.is_empty() {
+                        name.on_hover_text(&c.server.url);
+                    }
                     if c.duplicate {
                         ui.label(RichText::new(tr("staat er al", "already there")).small().weak());
                     } else if c.blocking.is_empty() {
