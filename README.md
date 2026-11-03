@@ -60,7 +60,7 @@ Features you will not easily find together in one tool, let alone a free one:
 | | |
 |---|---|
 | **Coordinate systems** | 14 built in, automatic UTM worldwide, any EPSG code via epsg.io |
-| **Service catalogue** | 600 checked public services (426 WMS, 131 WFS, 43 XYZ) in 45 countries, Europe, Africa and worldwide, searchable by place, theme and coordinate system, plus built-in presets and your own servers |
+| **Service catalogue** | 612 checked public services (430 WMS, 136 WFS, 46 XYZ) in 45 countries, Europe, Africa and worldwide, searchable by place, theme and coordinate system, plus built-in presets and your own servers |
 | **3D city models** | CityGML 1.0–3.0 and CityJSON 1.x/2.0 import, reprojected and filtered to the project area while reading |
 | **Historical maps** | Topotijdreis (every Dutch topographic map 1815–2014) and HisGIS 1832 cadastral maps, via map tile caches and XYZ tiles |
 | **Map backgrounds** | 5: OpenStreetMap, PDOK BRT (standard and grey), PDOK aerial photo, Sentinel-2 |
@@ -123,7 +123,7 @@ See the [library guide](docs/infra-bibliotheek.md), [complete item inventory](do
 
 The page **Services wereldwijd / Services worldwide** (ribbon button in *Kaarten & data*, command `GIS_SERVICES`) searches one catalogue:
 - the 19 built-in presets;
-- 600 checked public services without an API key from GIS2BIM's worldwide list ([`assets/servers/world.json`](assets/servers/world.json));
+- 612 checked public services without an API key from GIS2BIM's worldwide list ([`assets/servers/world.json`](assets/servers/world.json));
 - your own servers.
 
 What it offers:
@@ -135,6 +135,7 @@ What it offers:
 - **Coordinate systems side by side:** the project CRS next to the service's. Each service CRS is marked *built in*, *via epsg.io* or *cannot transform*, and a line says how the data will reach the project CRS. When none of the service's systems can be transformed, the page warns.
 - **Load into the drawing** for the project area, through the same code as the WMS and WFS pages. WMS and tiles become image underlays, reprojected when the server lacks the project CRS. WFS features come with their attributes as object data. **Add to my servers** keeps a copy among your own servers. **Open on the WMS/WFS page** gives all the import options.
 - **Other service (URL):** open any WMS, WFS or tile URL in the same view.
+- **QGIS connections:** on the page *Serverbeheer / Server management*, read a connections file exported from QGIS (Data Source Manager ▸ *Save connections*, for WMS/WMTS, WFS or XYZ tiles), or drop it on the window. A preview lists every connection with its type and address; tick the ones to add and they are stored in one save and appear in the service browser under *QGIS*. Names, addresses and the zoom range of XYZ tiles (`zmin`, `zmax`) come along; `{-y}` (TMS) and `{q}` (quadkey) tile addresses work. Connections that need a password, send their own HTTP headers or referer, invert the axis order, or use tiles Open Infra cannot draw (512 px, elevation tiles, other placeholders) are shown with the reason and are not added. Passwords are never read into Open Infra. Connections already among your servers or the presets are marked and skipped, so importing the same file twice adds nothing.
 
 Coverage is a bounding box in WGS 84 per service. `tools/import_gis2bim_servers.py` takes the state, province or city the coverage text names (German Länder, Austrian and Australian states, Flanders, Wallonia, Brussels, UK nations, Spanish and Italian regions, cities such as Vienna, Prague, Toronto and Cape Town), otherwise the country or region. A box is coarse: it can include a strip of a neighbouring country.
 

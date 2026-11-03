@@ -13,6 +13,12 @@ Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v20
 
 The libraries are signed: Authenticode with a timestamp on Windows (publisher Impertio Studio B.V.), Developer ID and notarized by Apple on macOS, and a detached OpenPGP signature of the OpenAEC Foundation (`.asc`) per Linux file. Check those with `gpg --verify <file>.asc <file>` against `openaec-signing-public-key.asc` (fingerprint `13F6D414ADEE4ED4CD09AC60601D86C93C504D29`).
 
+**New in 2026.45.1 — QGIS connections**
+
+- **Import QGIS connections** (Server management): read a WMS, WFS or XYZ connections file exported from QGIS, or drop it on the window, check the preview and add the chosen connections in one save. They appear in the service browser under *QGIS*. Connections that need a password, own HTTP headers, a different axis order or tiles Open Infra cannot draw are shown with the reason and not added; passwords are never read. Importing the same file again adds nothing.
+- **Tile addresses** with `{-y}` (TMS row order) and `{q}` (quadkey) now work, and a tile server's minimum zoom is respected.
+- Saving your own servers is atomic: a failed save leaves the previous list intact, and an unreadable server list is never overwritten.
+
 **New in 2026.45.0 — civil design closes the gaps**
 
 - **Point clouds** (Civiel → Terrain): a TIN from a point cloud (the AHN points of the project area, or a LAS, LAZ, COPC, E57, PLY, PTS or XYZ file), ground lines along an axis from a strip of points, a ground filter for unclassified scans, and a 3D mesh of an object such as a bridge or quay wall.
