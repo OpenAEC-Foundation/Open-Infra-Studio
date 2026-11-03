@@ -863,6 +863,41 @@ pub fn csv(text: &str) -> Result<FileData, String> {
 mod tests {
     use super::*;
 
+    fn assert_csv_recovery_keeps_a_multiline_successor(source: &str) {
+        let expected_points = vec![[100.0, 200.0], [110.0, 220.0], [120.0, 240.0]];
+        let mut failures = Vec::new();
+        for separator in [',', ';', '\t'] {
+            for newline in ["\n", "\r\n"] {
+                let text = source.replace(',', &separator.to_string()).replace('\n', newline);
+                let data = match csv(&text) {
+                    Ok(data) => data,
+                    Err(error) => { failures.push(format!("{separator:?}/{newline:?}: {error}")); continue; }
+                };
+                let points = data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>();
+                let note = data.features.get(1).and_then(|f| f.props.get("note")).and_then(Value::as_str);
+                let expected_note = format!("put{newline}west");
+                if points != expected_points || data.skipped != 1 || note != Some(expected_note.as_str()) {
+                    failures.push(format!("{separator:?}/{newline:?}: points={points:?}, skipped={}, note={note:?}", data.skipped));
+                }
+            }
+        }
+        // Collect every variant before failing, so the negative control
+        // proves both line endings and all three separators independently.
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn sol_csv_note_first_recovery_preserves_the_next_multiline_record() {
+        assert_csv_recovery_keeps_a_multiline_successor(
+            "note,x,y\ngoed,100,200\n\"onaf,bad,210\n\"put\nwest\",110,220\neind,120,240");
+    }
+
+    #[test]
+    fn sol_csv_coordinate_first_recovery_preserves_the_next_multiline_note() {
+        assert_csv_recovery_keeps_a_multiline_successor(
+            "x,y,note\n100,200,goed\nbad,210,\"onaf\n110,220,\"put\nwest\"\n120,240,eind");
+    }
+
     #[test]
     fn sol_csv_broken_note_with_bad_coordinates_keeps_both_later_rows() {
         let text = "x,y,note\n100,200,goed\nbad,210,\"onaf\n110,220,\"normaal\"\n120,240,goed";
