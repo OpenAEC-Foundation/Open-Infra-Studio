@@ -125,6 +125,38 @@ fn finish(points: Vec<P3>, triangles: Vec<[usize; 3]>) -> Body {
     Body { points, triangles, closed, volume }
 }
 
+/// Fill and cut on the common subdivision of both TINs. The design is in
+/// local IFC metres, the ground in drawing units. Keep every terrain edge
+/// before interpolating thickness, including ground inside a design face.
+pub(super) fn earth_bodies(points: &[P3], triangles: &[[usize; 3]], ground: &crate::civiel::terrein::Tin, fr: super::Frame) -> [Body; 2] {
+    use crate::civiel::terrein::{overlay, Plane, Tin};
+    let faces: Vec<_> = triangles.iter().map(|t| t.map(|i| {
+        let p = points[i];
+        [(p[0] - fr.dx) * fr.f, (p[1] - fr.dy) * fr.f, p[2] * fr.f]
+    })).collect();
+    let Some(design) = Tin::from_faces(&faces) else { return Default::default() };
+    let mut pts = Points::default();
+    let mut under = Vec::new();
+    let mut tris = Vec::new();
+    overlay(&design, ground, |poly, td, tg| {
+        let (pd, pg) = (Plane::of(design.corners(td)), Plane::of(ground.corners(tg)));
+        let ids: Vec<_> = poly.iter().map(|&xy| {
+            let i = pts.at(fr.p(xy[0], xy[1], pd.z(xy)));
+            if i == under.len() {
+                under.push(Some(pg.z(xy) / fr.f));
+            }
+            i
+        }).collect();
+        for k in 1..ids.len() - 1 {
+            let t = [ids[0], ids[k], ids[k + 1]];
+            if t[0] != t[1] && t[1] != t[2] && t[0] != t[2] {
+                tris.push(t);
+            }
+        }
+    });
+    [true, false].map(|fill| earth_body(&pts.points, &under, &tris, fill))
+}
+
 /// The earth between a design surface and the ground under it: where the
 /// design lies above the ground (`fill`) or below it (cut). Top and bottom
 /// are the two surfaces, clipped where they meet (there the body has no
@@ -270,6 +302,39 @@ mod tests {
         assert!((fill.volume - 25.0).abs() < 1e-9 && (cut.volume - 25.0).abs() < 1e-9, "{} {}", fill.volume, cut.volume);
         // No ground: no thickness.
         assert!(earth_body(&pts, &[None; 4], &tris, true).triangles.is_empty());
+    }
+
+    #[test]
+    fn earthworks_preserve_crossing_tin_edges() {
+        use crate::civiel::terrein::{volume_between, Tin};
+        let points = [[0.0, 0.0, 0.5], [10.0, 0.0, 0.5], [10.0, 10.0, 0.5], [0.0, 10.0, 0.5]];
+        let triangles = [[0, 1, 2], [0, 2, 3]];
+        let design = Tin::from_faces(&triangles.map(|t| t.map(|i| points[i]))).unwrap();
+        // The peak is off the design diagonal: their edges intersect at
+        // new points, and some overlay pieces have more than three corners.
+        let g = [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 10.0, 0.0], [0.0, 10.0, 0.0], [4.0, 6.0, 1.0]];
+        let ground = Tin::from_faces(&[[g[0], g[1], g[4]], [g[1], g[2], g[4]], [g[2], g[3], g[4]], [g[3], g[0], g[4]]]).unwrap();
+        let [fill, cut] = earth_bodies(&points, &triangles, &ground, super::super::Frame { f: 1.0, dx: 0.0, dy: 0.0 });
+        let expected = volume_between(&ground, &design, 1.0);
+        assert!(fill.closed && cut.closed);
+        assert!((fill.volume - 125.0 / 6.0).abs() < 1e-9, "{}", fill.volume);
+        assert!((cut.volume - 25.0 / 6.0).abs() < 1e-9, "{}", cut.volume);
+        assert!((fill.volume - expected.fill).abs() < 1e-9 && (cut.volume - expected.cut).abs() < 1e-9);
+    }
+
+    #[test]
+    fn earthworks_stop_at_the_ground_boundary() {
+        use crate::civiel::terrein::level_tin;
+        let points = [[0.0, 0.0, 2.0], [10.0, 0.0, 2.0], [10.0, 10.0, 2.0], [0.0, 10.0, 2.0]];
+        let triangles = [[0, 1, 2], [0, 2, 3]];
+        // Ground entirely inside the design; none of the design corners
+        // have a ground height. Only the common 6 × 6 m area has thickness.
+        let ground = level_tin([2.0, 2.0, 8.0, 8.0], 0.0).unwrap();
+        let [fill, cut] = earth_bodies(&points, &triangles, &ground, super::super::Frame { f: 1.0, dx: 0.0, dy: 0.0 });
+        assert!(fill.closed);
+        assert!((fill.volume - 72.0).abs() < 1e-9, "{}", fill.volume);
+        assert!(fill.points.iter().all(|p| p[0] >= 2.0 && p[0] <= 8.0 && p[1] >= 2.0 && p[1] <= 8.0));
+        assert!(cut.triangles.is_empty());
     }
 
     #[test]
