@@ -196,6 +196,28 @@ mod tests {
     const XML: &str = include_str!("../../tests/fixtures/klic/GI_gebiedsinformatielevering_SYNTHETIC_1_V2.xml");
 
     #[test]
+    fn sol_empty_klic_xml_keeps_the_complete_existing_success_message() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-empty-message-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("GI_gebiedsinformatielevering_1_1_V2.xml");
+        for text in ["<Other/>", "", "not xml"] {
+            std::fs::write(&path, text).unwrap();
+            let result = read(&path);
+            std::fs::remove_file(&path).unwrap();
+            let delivery = result.unwrap();
+            assert_eq!(delivery.meldnummer, "1");
+            assert!(delivery.features.is_empty() && delivery.themes.is_empty() && delivery.operators.is_empty());
+            assert_eq!(delivery.skipped, 0);
+            // The app's success formatter is unchanged. Check the complete
+            // message produced by its inputs, including the zero counts.
+            assert_eq!(format!("KLIC {}: {} objecten van {} netbeheerders.",
+                delivery.meldnummer, delivery.features.len(), delivery.operators.len()),
+                "KLIC 1: 0 objecten van 0 netbeheerders.");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn klic_counts_only_wholly_unreadable_features_and_keeps_the_neighbour() {
         let doc = roxmltree::Document::parse(XML).unwrap();
         let member = doc.descendants().find(|n| n.has_tag_name("featureMember")).unwrap();
