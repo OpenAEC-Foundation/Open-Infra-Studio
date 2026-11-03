@@ -226,3 +226,127 @@ fn pr57_point_detail_lists_its_pdf_as_an_openable_attachment() {
     assert_eq!(extras.areas[0].points, vec![[105.0, 405.0]]);
     assert_detail_attachment(&delivery, &extras, &dir.0.join("cache"));
 }
+
+fn assert_invalid_attachment_path(result: Result<PathBuf, String>, rel: &str) {
+    assert_eq!(
+        result.unwrap_err(),
+        format!(
+            "{} {rel}",
+            open_infra::lang::tr("ongeldig bijlagepad", "invalid attachment path")
+        )
+    );
+}
+
+#[test]
+fn pr58_absolute_attachment_path_cannot_write_outside_the_cache() {
+    let dir = TempDir::new("absolute-write");
+    let outside = dir.0.join("buiten-cache.pdf");
+    let rel = outside.to_str().unwrap();
+    let entry = format!("prefix{rel}");
+    let delivery = dir.zip("levering.zip", &[(&entry, b"%PDF-1.4 bijlage")]);
+    assert!(!outside.exists());
+    let result = klic_extra::attachment_file(&delivery, rel, &dir.0.join("cache"));
+    assert!(
+        !outside.exists(),
+        "de bijlage is buiten de cache geschreven"
+    );
+    assert_invalid_attachment_path(result, rel);
+}
+
+#[test]
+fn pr58_absolute_attachment_path_cannot_return_an_existing_local_file() {
+    let dir = TempDir::new("absolute-existing");
+    let outside = dir.0.join("lokaal-bestand.pdf");
+    std::fs::write(&outside, b"lokaal bestand, geen bijlage").unwrap();
+    let rel = outside.to_str().unwrap();
+    let entry = format!("prefix{rel}");
+    let delivery = dir.zip("levering.zip", &[(&entry, b"%PDF-1.4 echte bijlage")]);
+    let result = klic_extra::attachment_file(&delivery, rel, &dir.0.join("cache"));
+    assert_eq!(
+        std::fs::read(&outside).unwrap(),
+        b"lokaal bestand, geen bijlage"
+    );
+    assert_invalid_attachment_path(result, rel);
+}
+
+#[test]
+fn pr58_windows_attachment_prefixes_are_rejected_before_file_access() {
+    let dir = TempDir::new("windows-paths");
+    // Ook op Unix moeten leveringen met Windows-padnotaties worden geweigerd.
+    // Een ontbrekende bron voorkomt toegang tot echte drives of UNC-shares.
+    for rel in [
+        r"C:\bronnen\voorwaarden.pdf",
+        "C:/bronnen/voorwaarden.pdf",
+        "C:voorwaarden.pdf",
+        r"\\server\share\voorwaarden.pdf",
+        "//server/share/voorwaarden.pdf",
+        r"\bronnen\voorwaarden.pdf",
+        r"\\?\C:\bronnen\voorwaarden.pdf",
+        r"\\.\C:\bronnen\voorwaarden.pdf",
+    ] {
+        let result =
+            klic_extra::attachment_file(&dir.0.join("ontbreekt.zip"), rel, &dir.0.join("cache"));
+        assert_invalid_attachment_path(result, rel);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn pr58_cache_directory_symlink_cannot_write_outside_the_cache() {
+    let dir = TempDir::new("directory-symlink");
+    let seed = "bronnen/KL1001/seed.pdf";
+    let rel = "bronnen/KL1002/voorwaarden.pdf";
+    let delivery = dir.zip(
+        "levering.zip",
+        &[(seed, b"%PDF-1.4 seed"), (rel, b"%PDF-1.4 bijlage")],
+    );
+    let cache = dir.0.join("cache");
+    let first = klic_extra::attachment_file(&delivery, seed, &cache).unwrap();
+    let sources = first.parent().unwrap().parent().unwrap();
+    let outside = dir.0.join("buiten-cache");
+    std::fs::create_dir(&outside).unwrap();
+    std::os::unix::fs::symlink(&outside, sources.join("KL1002")).unwrap();
+    let result = klic_extra::attachment_file(&delivery, rel, &cache);
+    assert!(
+        !outside.join("voorwaarden.pdf").exists(),
+        "de cache volgt een maplink naar buiten"
+    );
+    assert_invalid_attachment_path(result, rel);
+}
+
+#[cfg(unix)]
+#[test]
+fn pr58_cached_file_symlink_cannot_write_or_return_an_outside_file() {
+    let dir = TempDir::new("file-symlink");
+    let seed = "bronnen/KL1001/seed.pdf";
+    let missing = "bronnen/KL1001/nieuw.pdf";
+    let existing = "bronnen/KL1001/bestaand.pdf";
+    let delivery = dir.zip(
+        "levering.zip",
+        &[
+            (seed, b"%PDF-1.4 seed"),
+            (missing, b"%PDF-1.4 nieuw"),
+            (existing, b"%PDF-1.4 bestaand"),
+        ],
+    );
+    let cache = dir.0.join("cache");
+    let first = klic_extra::attachment_file(&delivery, seed, &cache).unwrap();
+    for (rel, contents) in [
+        (missing, None),
+        (existing, Some(b"lokaal bestand".as_slice())),
+    ] {
+        let name = Path::new(rel).file_name().unwrap();
+        let outside = dir.0.join(name);
+        if let Some(bytes) = contents {
+            std::fs::write(&outside, bytes).unwrap();
+        }
+        std::os::unix::fs::symlink(&outside, first.parent().unwrap().join(name)).unwrap();
+        let result = klic_extra::attachment_file(&delivery, rel, &cache);
+        assert_eq!(
+            std::fs::read(&outside).ok().as_deref(),
+            contents,
+            "de cache schrijft via een bestandslink naar buiten"
+        );
+        assert_invalid_attachment_path(result, rel);
+    }
+}
