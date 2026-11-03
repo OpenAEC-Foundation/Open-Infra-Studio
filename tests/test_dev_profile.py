@@ -17,7 +17,11 @@ class DevelopmentProfileTest(unittest.TestCase):
     def assert_expected_profiles(self, manifest):
         profile = tomllib.loads(manifest).get('profile', {})
         # Geen eigen testprofiel: tests erven dev, inclusief Cargo's standaard
-        # voor assertions, overflowchecks en incrementeel compileren.
+        # voor assertions, overflowchecks en incrementeel compileren. Het
+        # profiel ui-test (release met regelnummers) is alleen voor de UI-test.
+        ui_test = profile.pop('ui-test', None)
+        if ui_test is not None:
+            self.assertEqual(ui_test, {'inherits': 'release', 'debug': 'line-tables-only'})
         self.assertEqual(profile, {'dev': {'debug': 'line-tables-only'},
                                    'release': {'opt-level': 3}})
         self.assertIs(type(profile['release']['opt-level']), int)
