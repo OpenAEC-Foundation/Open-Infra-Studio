@@ -188,3 +188,74 @@ fn azure_maps_storage_worker() {
         failures.join(", ")
     );
 }
+
+fn check_auth_storage(group: &str) {
+    let directory = directory();
+    let result = worker(&directory, "auth_credentials_storage_worker")
+        .env("INFRA_AUTH_CASE_GROUP", group)
+        .output()
+        .unwrap();
+    std::fs::remove_dir_all(directory).unwrap();
+    assert!(
+        result.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
+#[test]
+fn geoserver_and_here_credentials_do_not_reach_servers_json() {
+    check_auth_storage("review");
+}
+
+#[test]
+fn audited_credentials_and_public_urls_are_saved_correctly() {
+    check_auth_storage("audit");
+}
+
+#[test]
+fn auth_credentials_storage_worker() {
+    let Ok(group) = std::env::var("INFRA_AUTH_CASE_GROUP") else {
+        return;
+    };
+    let cases = match group.as_str() {
+        "review" => crate::gis::qgis::auth_test_support::review_cases(),
+        "audit" => crate::gis::qgis::auth_test_support::audited_cases(),
+        _ => panic!("onbekende groep testinvoer"),
+    };
+    let mut failures = Vec::new();
+    for case in cases {
+        // Iedere invoer begint met een eigen lege lijst, zodat een eerder
+        // gelekte waarde de uitkomst van de volgende invoer niet bepaalt.
+        servers::save_user(&[]).unwrap();
+        let c = case.connection;
+        let added = servers::update_user(|user| {
+            let (list, added) = crate::gis::qgis::merge(user, &[&c], 888);
+            *user = list;
+            added
+        })
+        .unwrap();
+        let json = std::fs::read_to_string(servers::config_dir().join("servers.json")).unwrap();
+        let list: Vec<MapServer> = serde_json::from_str(&json).unwrap();
+        let leaked = json.contains("SYNTHETIC_VALUE");
+        let valid = if case.blocked {
+            added == 0 && list.is_empty() && !leaked
+        } else {
+            added == 1
+                && list.len() == 1
+                && !c.server.url.is_empty()
+                && list[0].url == c.server.url
+                && !leaked
+        };
+        println!("{}: verwacht blokkade={}, toegevoegd={added}, gevoelige waarde in servers.json={leaked}", c.server.name, case.blocked);
+        if !valid {
+            failures.push(c.server.name);
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "Onjuiste opslag: {}",
+        failures.join(", ")
+    );
+}

@@ -511,6 +511,32 @@ mod qgis_preview_tests {
         }
         assert!(failures.is_empty(), "Zichtbaar in de voorvertoning: {}", failures.join(", "));
     }
+
+    fn check_auth_cases(cases: Vec<crate::gis::qgis::auth_test_support::Case>) {
+        let public = crate::gis::qgis::parse(r#"<qgsWMSConnections><wms name="Openbaar" url="https://public.invalid/wms"/></qgsWMSConnections>"#).unwrap().remove(0);
+        let mut failures = Vec::new();
+        for case in cases {
+            let name = case.connection.server.name.clone();
+            let url = case.connection.server.url.clone();
+            let rendered = render(vec![case.connection, public.clone()]);
+            assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
+            let leaked = rendered.contains("SYNTHETIC_VALUE");
+            let public_visible = !url.is_empty() && rendered.contains(&url);
+            println!("{name}: verwacht blokkade={}, gevoelige waarde zichtbaar={leaked}, publieke URL zichtbaar={public_visible}", case.blocked);
+            if leaked || (!case.blocked && !public_visible) { failures.push(name); }
+        }
+        assert!(failures.is_empty(), "Onjuiste voorvertoning: {}", failures.join(", "));
+    }
+
+    #[test]
+    fn geoserver_and_here_credentials_do_not_render() {
+        check_auth_cases(crate::gis::qgis::auth_test_support::review_cases());
+    }
+
+    #[test]
+    fn audited_credentials_do_not_render_and_public_urls_stay_visible() {
+        check_auth_cases(crate::gis::qgis::auth_test_support::audited_cases());
+    }
 }
 
 impl App {

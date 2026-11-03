@@ -406,3 +406,7 @@ mod tests {
         assert_eq!(error, tr("Geen geldige XML", "Not valid XML"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../tests/support/qgis_auth.rs"]
+pub(crate) mod auth_test_support;
