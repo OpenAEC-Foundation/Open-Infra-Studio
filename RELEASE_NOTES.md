@@ -13,6 +13,13 @@ Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v20
 
 The libraries are signed: Authenticode with a timestamp on Windows (publisher Impertio Studio B.V.), Developer ID and notarized by Apple on macOS, and a detached OpenPGP signature of the OpenAEC Foundation (`.asc`) per Linux file. Check those with `gpg --verify <file>.asc <file>` against `openaec-signing-public-key.asc` (fingerprint `13F6D414ADEE4ED4CD09AC60601D86C93C504D29`).
 
+**New in 2026.45.2 — terrain with its photo anywhere in the world**
+
+- **Terrain + aerial photo worldwide** (Civiel → Output and 3D → View, `CIV_FOTOTERREIN`): the ground of any project location as a 3D surface coloured by its photo. Heights from AHN in the Netherlands and from the Terrain Tiles mosaic elsewhere (NASA SRTM, USGS 3DEP, GMTED2010, NOAA ETOPO). The photo is PDOK in the Netherlands, the USGS National Map imagery in the United States and Sentinel-2 cloudless (2016, CC BY 4.0) in the rest of the world; `FOTO=` chooses another one or a later Sentinel-2 year (non-commercial licence, stated in the result).
+- The command moved from the Dutch 3D menu to the View menu, so it is there without the Dutch modules too.
+- An automated GUI scenario (`tests/e2e/ui_wereld.py`) searches a place in the location window, saves it and lays the terrain with its photo; the button test (`tests/e2e/ui_knoppen.py`) runs on Open CAD Studio v2026.44.
+- Fix: the plugin built with `--features ui-test` compiles again.
+
 **New in 2026.45.1 — Open CAD Studio v2026.44 and QGIS connections**
 
 - **Open CAD Studio v2026.44** (plugin API 14): both plugins are built for the new host. The project location and units are read on the first command, because the host answers requests only after loading.

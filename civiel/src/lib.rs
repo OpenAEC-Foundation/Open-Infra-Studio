@@ -269,10 +269,11 @@ impl CadModule for CivielModule {
                             ("CIV_LABELS_BIJWERKEN", tr("Labels bijwerken", "Update labels"), I_LABELS_UPDATE),
                         ], "CIV_BLADEN_PDF"),
                         file_tool("CIV_CITYGML", "CityGML/JSON", I_CITYGML, tr("CityGML of CityJSON openen", "Open CityGML or CityJSON"), "CityGML / CityJSON", &["gml", "xml", "citygml", "json", "jsonl"], false),
-                        menu("CIV_MENU_WEERGAVE", tr("Weergave", "View"), I_SEE, vec![
+                        menu("CIV_MENU_WEERGAVE", tr("Weergave", "View"), I_PHOTO, vec![
+                            ("CIV_FOTOTERREIN", tr("Terrein + luchtfoto", "Terrain + aerial photo"), I_PHOTO),
                             ("CIV_DOORZICHT", tr("Maaiveld doorzichtig", "See-through ground"), I_SEE),
                             ("CIV_WATERPEIL", tr("Waterpeil", "Water level"), I_WATER),
-                        ], "CIV_DOORZICHT"),
+                        ], "CIV_FOTOTERREIN"),
                         menu("CIV_MENU_EXPORT", tr("Exporteren", "Export"), I_IFC, vec![
                             ("CIV_IFC", "IFC 4x3", I_IFC),
                             ("CIV_LANDXML_EXPORT", "LandXML", I_LANDXML_EXPORT),
@@ -295,7 +296,6 @@ impl CadModule for CivielModule {
                         items: vec![
                             ("CIV_3DMODEL", tr("3D-model (alles)", "3D model (all)"), I_BAG3D),
                             ("CIV_BAG3D", "3D BAG", I_BAG3D),
-                            ("CIV_FOTOTERREIN", tr("Terrein + luchtfoto", "Terrain + aerial photo"), I_PHOTO),
                             ("CIV_BGT3D", tr("BGT naar 3D", "BGT to 3D"), I_BGT3D),
                             ("CIV_KLIC3D", tr("KLIC in 3D", "KLIC in 3D"), I_KLIC3D),
                             ("CIV_SONDERINGEN3D", tr("Sonderingen 3D (BRO)", "CPTs in 3D (BRO)"), I_CPT),
@@ -1395,9 +1395,10 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             job(host, "CityGML", id, move |p| civiel::model3d::citygml(&o, std::path::Path::new(&file), style, p));
         }
         "CIV_FOTOTERREIN" => {
-            let o = opt(&[])?;
-            let cell = args.f64("CEL")?.unwrap_or(2.0);
-            job(host, "Terrein met luchtfoto", id, move |p| civiel::model3d::photo_terrain(&o, cell, p));
+            let o = opt(&["FOTO"])?;
+            let cell = args.f64("CEL")?;
+            let foto = args.str("FOTO").map(str::to_string);
+            job(host, "Terrein met luchtfoto", id, move |p| civiel::model3d::photo_terrain(&o, cell, foto.as_deref(), p));
         }
         "CIV_WATERPEIL" => {
             let o = opt(&["PEIL"])?;
@@ -1424,9 +1425,9 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
                 None => open_infra::gis::bag3d::Lod::L22,
             };
             let max = args.f64("MAX")?.map(|m| m as usize).unwrap_or(25_000);
-            let cell = args.f64("CEL")?.unwrap_or(2.0);
+            let cell = args.f64("CEL")?;
             job(host, "3D-model", id, move |p| {
-                let mut parts = vec![civiel::model3d::photo_terrain(&o, cell, p)?];
+                let mut parts = vec![civiel::model3d::photo_terrain(&o, cell, None, p)?];
                 let groups: Vec<String> = civiel::model3d::default_groups().into_iter().map(str::to_string).collect();
                 parts.push(civiel::model3d::bgt3d(&o, &groups, false, real != civiel::model3d::BagStyle::Nlcs, p)?);
                 parts.push(civiel::model3d::bag3d(&o, lod, max, real, windows, p)?);
@@ -1798,7 +1799,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_TIN [BRON=AHN|PUNTEN|SELECTIE] [LAAG=] [STATUS=B|N] [AFSTAND=] [MAXRIBBE=]; CIV_HOOGTELIJNEN / CIV_ANALYSE [OPPERVLAK=B|N]; CIV_VOLUME [ONTWERP=PEIL] [PEIL=] [CEL=]; \
              CIV_AS AS=<handle> | PI=x,y;x,y;… R=r;… [LS=l;…|A=a;…] [NAAM=] [BEGIN=]; CIV_AS_OFFSET AS= VERSCHUIVING=-3.5;3.5; CIV_STATION AS= x,y; \
              CIV_LENGTEPROFIEL AS= [PLAATS=x,y]; CIV_ONTWERPPROFIEL AS= PVI=station:hoogte;… [BOOG=]; CIV_DWARSPROFIELEN AS= [PLAATS=] [OM=] [LINKS=] [RECHTS=]; \
-             3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs] [RAMEN=nee], CIV_FOTOTERREIN [CEL=2], CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>, CIV_CITYGML <pad> [STIJL=], CIV_KLIC3D [<levering>] [VERGROOT=], CIV_DOORZICHT [PCT=70] [ALLES] [UIT], CIV_SONDERINGEN3D [BRON=sonderingen|boringen|alles] [MAX=100] [STRAAL=0.4] [MINLAAG=0.2] [QC=nee] [LABELS=nee] (BRO: kolommen met grondsoorten); \
+             3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs] [RAMEN=nee], CIV_FOTOTERREIN [CEL=2|10] [FOTO=auto|pdok|usgs|sentinel2|sentinel2-<jaar>] (wereldwijd: AHN of Terrain Tiles met luchtfoto), CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>, CIV_CITYGML <pad> [STIJL=], CIV_KLIC3D [<levering>] [VERGROOT=], CIV_DOORZICHT [PCT=70] [ALLES] [UIT], CIV_SONDERINGEN3D [BRON=sonderingen|boringen|alles] [MAX=100] [STRAAL=0.4] [MINLAAG=0.2] [QC=nee] [LABELS=nee] (BRO: kolommen met grondsoorten); \
              CIV_CORRIDOR AS= [PROFIELTYPE=<naam>|<pad.json>] [NIVEAU=|BOVEN=] [VAN=] [TOT=] [DOELEN=naam:handle;…] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y] [KLEUR=nlcs]; \
              CIV_PROFIELTYPEN, CIV_PROFIELTYPE NAAM= [KOPIE=] [PLAATS=x,y]; CIV_KRUISPUNT HOOFD= ZIJ= [R=8;…] [PROFIELTYPE=] [NIVEAU=]; \
              CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_LANDXML_EXPORT [BESTAND=<pad>] [ALLES]; CIV_INFO; \

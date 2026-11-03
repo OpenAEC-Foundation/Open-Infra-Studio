@@ -58,8 +58,9 @@ def prepare(a):
     shutil.rmtree(cfg, ignore_errors=True)
     rustc = subprocess.run(["rustc", "--version"], capture_output=True, text=True).stdout.strip()
     lock = (ROOT / "Cargo.lock").read_text()
-    # The host's opencadcodec (git); pointcloud-core brings a crates.io acadrust too.
-    acad = next(b.split('source = "', 1)[1].split('"', 1)[0] for b in lock.split("[[package]]") if 'name = "acadrust"' in b and "opencadcodec" in b)
+    # The host's opencadcodec (git) up to plugin API 13; from API 14 the host
+    # no longer compares it, and the lock may not hold a git acadrust at all.
+    acad = next((b.split('source = "', 1)[1].split('"', 1)[0] for b in lock.split("[[package]]") if 'name = "acadrust"' in b and "opencadcodec" in b), "")
     for pid, lib, toml in (("openaec.open-infra", "libopen_infra.so", ROOT / "plugin.toml"),
                            ("openaec.open-infra-civiel", "libopen_infra_civiel.so", ROOT / "civiel" / "plugin.toml")):
         src = LIB / lib

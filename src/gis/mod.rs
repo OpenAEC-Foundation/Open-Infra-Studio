@@ -13,6 +13,7 @@ pub mod citygml;
 pub mod cityjson;
 pub mod crs;
 pub mod files;
+pub mod foto;
 pub mod geocode;
 pub mod geodata;
 pub mod gwsw;
