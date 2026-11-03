@@ -46,26 +46,25 @@ fn server_save_worker() {
     b.id = "save-b".into();
     b.attribution = "b".repeat(256 * 1024);
     let barrier = Arc::new(Barrier::new(2));
+    let run = |server: MapServer| {
+        let mut failed = 0;
+        let mut invalid = 0;
+        for _ in 0..128 {
+            barrier.wait();
+            failed += usize::from(servers::save_user(std::slice::from_ref(&server)).is_err());
+            barrier.wait();
+            let json = std::fs::read_to_string(servers::config_dir().join("servers.json")).unwrap();
+            let valid = serde_json::from_str::<Vec<MapServer>>(&json).is_ok_and(|list| {
+                list.len() == 1
+                    && ((list[0].id == "save-a" && list[0].attribution == a.attribution)
+                        || (list[0].id == "save-b" && list[0].attribution == b.attribution))
+            });
+            invalid += usize::from(!valid);
+            barrier.wait();
+        }
+        (failed, invalid)
+    };
     let (failed, invalid) = std::thread::scope(|scope| {
-        let run = |server: MapServer| {
-            let mut failed = 0;
-            let mut invalid = 0;
-            for _ in 0..128 {
-                barrier.wait();
-                failed += usize::from(servers::save_user(std::slice::from_ref(&server)).is_err());
-                barrier.wait();
-                let json =
-                    std::fs::read_to_string(servers::config_dir().join("servers.json")).unwrap();
-                let valid = serde_json::from_str::<Vec<MapServer>>(&json).is_ok_and(|list| {
-                    list.len() == 1
-                        && ((list[0].id == "save-a" && list[0].attribution == a.attribution)
-                            || (list[0].id == "save-b" && list[0].attribution == b.attribution))
-                });
-                invalid += usize::from(!valid);
-                barrier.wait();
-            }
-            (failed, invalid)
-        };
         let one = scope.spawn(|| run(a.clone()));
         let two = scope.spawn(|| run(b.clone()));
         let (a, b) = (one.join().unwrap(), two.join().unwrap());
