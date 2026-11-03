@@ -1,0 +1,130 @@
+{
+ "naam": "Spoor (normaalspoor 1435 mm): verkanting, spoorafstand en wissels",
+ "verkanting": {
+  "factor": {
+   "v": 11.8,
+   "bron": "powell2017",
+   "opmerking": "D = s·v²/(g·R) met s ≈ 1500 mm (afstand tussen de railkoppen), g = 9,81 m/s², v = V/3,6: 1500/(9,81·3,6²) = 11,8"
+  },
+  "d_max": {
+   "v": 160,
+   "bron": "tsi-inf-t7",
+   "opmerking": "ballastspoor, gemengd verkeer; 180 mm voor alleen reizigersverkeer; in Nederland mogelijk 150 mm (niet geverifieerd)"
+  },
+  "i_max": {
+   "v": 130,
+   "bron": "tsi-inf-t8",
+   "opmerking": "goederenwagens bij V ≤ 160 km/h; 153 mm voor reizigersmaterieel"
+  },
+  "e_max": {
+   "v": 110,
+   "bron": "en13803-nv",
+   "schatting": true,
+   "opmerking": "overschot bij de laagste snelheid"
+  },
+  "helling_max": {
+   "v": 1.67,
+   "bron": "tud-nl",
+   "schatting": true,
+   "opmerking": "1:600; EN 13803 noemt volgens secundaire bronnen 2,25 mm/m"
+  },
+  "dddt_max": {
+   "v": 50,
+   "bron": "kufver-en13803",
+   "opmerking": "normale grens bij lineaire verkantingsovergangen; in Nederland mogelijk 25 mm/s (niet geverifieerd)"
+  },
+  "afronding": 5
+ },
+ "spoorafstand": {
+  "v": 4.0,
+  "bron": "spoorafstand-nv",
+  "schatting": true,
+  "opmerking": "geef SPOORAFSTAND= op volgens het profiel van vrije ruimte"
+ },
+ "wissels": [
+  {
+   "id": "1:9",
+   "n": 9,
+   "r": {
+    "v": 260,
+    "bron": "wiki-wissel",
+    "opmerking": "ProRail-standaard"
+   },
+   "v_afbuigend": {
+    "v": 40,
+    "bron": "wiki-wissel",
+    "schatting": true,
+    "opmerking": "samengevoegde tabelcel"
+   }
+  },
+  {
+   "id": "1:9-195",
+   "n": 9,
+   "r": {
+    "v": 195,
+    "bron": "wiki-wissel",
+    "opmerking": "alleen waar R 260 niet past"
+   },
+   "v_afbuigend": {
+    "v": 40,
+    "bron": "wiki-wissel",
+    "schatting": true,
+    "opmerking": "samengevoegde tabelcel"
+   }
+  },
+  {
+   "id": "1:12",
+   "n": 12,
+   "r": {
+    "v": 465,
+    "bron": "wiki-wissel",
+    "opmerking": "ProRail-standaard"
+   },
+   "v_afbuigend": {
+    "v": 60,
+    "bron": "wiki-wissel"
+   }
+  },
+  {
+   "id": "1:15",
+   "n": 15,
+   "r": {
+    "v": 725,
+    "bron": "wiki-wissel",
+    "opmerking": "ProRail-standaard"
+   },
+   "v_afbuigend": {
+    "v": 80,
+    "bron": "wiki-wissel"
+   }
+  },
+  {
+   "id": "1:18.5",
+   "n": 18.5,
+   "r": {
+    "v": 760,
+    "bron": "wiki-wissel",
+    "opmerking": "Betuweroute"
+   }
+  },
+  {
+   "id": "1:34.7",
+   "n": 34.7,
+   "r": {
+    "v": 2300,
+    "bron": "wiki-wissel",
+    "opmerking": "beweegbaar puntstuk; wordt uitgefaseerd"
+   }
+  }
+ ],
+ "bronnen": {
+  "powell2017": "Powell, A.F. & Gräbe, P.J. (2017), Exploring the relationship between vertical and lateral forces, speed and superelevation in railway curves, J. S. Afr. Inst. Civ. Eng. 59(3):25-35, vgl. 1 (h_eq = 2a·v²/(g·R), 2a ≈ 1,500 m voor normaalspoor), naar Esveld (2001), Modern Railway Track",
+  "tsi-inf-t7": "Verordening (EU) nr. 1299/2014 (TSI Infrastructuur), §4.2.4.2, tabel 7: ontwerpverkanting",
+  "tsi-inf-t8": "Verordening (EU) nr. 1299/2014 (TSI Infrastructuur), §4.2.4.3, tabel 8: tekort aan verkanting",
+  "kufver-en13803": "B. Kufver (Ferroplan), EN standards 13803-1 and 13803-2 for track alignment (KTH, collegedia's), dia Transition curves: dD/dt 50 mm/s bij lineaire, 55 mm/s bij S-vormige overgangen",
+  "en13803-nv": "EN 13803 (niet ingezien; waarde uit secundaire vermeldingen)",
+  "tud-nl": "TU Delft-repositorium, zoekresultaat (document niet ingezien): verkantingshelling niet steiler dan 1:600",
+  "spoorafstand-nv": "ProRail-waarde niet gevonden; Verordening (EU) nr. 1299/2014 (TSI INF) §4.2.3.2 tabel 4 geeft minima vanaf 160 km/h: 3,80 m (160-200), 4,00 m (200-250), 4,20 m (250-300), 4,50 m (> 300 km/h)",
+  "wiki-wissel": "nl.wikipedia, Wissel (spoorweg), tabel Wissels in het Nederlandse spoorwegnet (geraadpleegd 29-10-2026), naar ProRail, Regels voor het functioneel ontwerp van railinfrastructuur (2016)"
+ }
+}

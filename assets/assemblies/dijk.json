@@ -1,0 +1,9 @@
+{
+  "naam": "dijk",
+  "omschrijving": "Dijk: kruin van 2 × 2,50 m met 2 % afschot, taluds 1:3",
+  "bronnen": ["Het sjabloon 'dijk' van Open Infra (2026.44); kruinbreedte en taluds volgen de legger van het waterschap"],
+  "talud": 3, "ingraving": 3, "reikwijdte": 60, "verkanting": 0, "uitrol": 30,
+  "beide": [
+    {"type": "kruin", "breedte": 2.50, "helling": -2.0}
+  ]
+}

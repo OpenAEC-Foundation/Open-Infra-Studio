@@ -1,6 +1,6 @@
 [package]
 name = "open-infra-civiel"
-version = "2026.44.5"
+version = "2026.45.0"
 edition = "2021"
 description = "Open Infra — Civiel: civiele ontwerptools voor Open CAD Studio (punten, oppervlakken, assen, profielen, grondverzet)."
 license = "GPL-3.0-only"

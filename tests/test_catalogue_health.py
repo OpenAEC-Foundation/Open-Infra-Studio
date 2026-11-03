@@ -194,8 +194,8 @@ class CatalogueHealthTest(unittest.TestCase):
     def test_builtins_are_read_from_current_source_including_historical_caches(self):
         entries = health.load_catalogue(ROOT / "assets/servers/world.json", ROOT / "src/gis/servers.rs")
         ids = {s["id"] for s in entries}
-        self.assertEqual(len(entries), 629)
-        self.assertEqual(len(ids), 629)
+        self.assertEqual(len(entries), 641)
+        self.assertEqual(len(ids), 641)
         self.assertIn("pdok-ruimtelijke-plannen-wms", ids)
         self.assertIn("topotijdreis-1900", ids)
 

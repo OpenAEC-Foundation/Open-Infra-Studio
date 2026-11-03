@@ -81,9 +81,11 @@ pub enum Kind {
 pub fn kind(path: &Path) -> Kind {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     match ext.as_str() {
+        // Bare coordinates without a header row: a point cloud (XYZ in .txt).
+        "txt" if super::pointcloud::txt_is_points(path) => Kind::PointCloud,
         e if EXTENSIONS.contains(&e) || e == "dbf" || e == "shx" || e == "xml" => Kind::Vector,
         "tif" | "tiff" | "asc" | "jpg" | "jpeg" | "png" | "jp2" => Kind::Raster,
-        "las" | "laz" | "e57" | "ply" => Kind::PointCloud,
+        "las" | "laz" | "e57" | "ply" | "pts" | "xyz" => Kind::PointCloud,
         _ => Kind::Unknown,
     }
 }

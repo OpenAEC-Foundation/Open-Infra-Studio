@@ -163,7 +163,21 @@ A second plugin, `openaec.open-infra-civiel`, adds the ribbon tab **"Open Infra 
 | Corridor | **Corridor** | An assembly swept along the alignment and its design profile (or a level). Assemblies: *weg*, *fietspad*, *snelweg*, *dijk* (road, cycle path, motorway, dike); lane and shoulder widths, cross slopes, fill/cut slopes, crest and superelevation in curves (with runoff) are all adjustable. The corridor builds: daylight to the ground; a design TIN (status N); 3D feature lines (asphalt edge, shoulder, toe and crest of slope); cut and fill per section with average-end-area volumes and a mass balance (CSV); optional section views with the design. |
 | 3D-model (3D model) | **3D BAG** · Terrein + luchtfoto (terrain + aerial photo) · BGT naar 3D (BGT to 3D) | See below. |
 
+**Grading** (feature lines, plateaus and slopes into one design surface, exact TIN-to-TIN volumes, mass haul): see [docs/civiel-grading.md](docs/civiel-grading.md).
+
+**Bladen** (sheets, plan production): sheet sets along an alignment with plan and profile in paper-space layouts, a PDF per sheet, and labels that follow their source — see [docs/civiel-bladen.md](docs/civiel-bladen.md).
+
+Corridor parts (kerbs, footways, cycle paths, ditches, pavement layers), your own assemblies as JSON, junctions and roundabouts: see [docs/civiel-corridor.md](docs/civiel-corridor.md).
+**Exchange:** `CIV_LANDXML_EXPORT` writes LandXML 1.2 (points, TINs, alignments with ground and design profiles, corridor feature lines), checked against the XSD and read back; see [docs/civiel-uitwisseling.md](docs/civiel-uitwisseling.md).
+
+
+Sewer design (group **Riolering**: runs of manholes and pipes with their invert levels, length profile, checks, GWSW-OroX and CSV export) is described in [docs/civiel-riolering.md](docs/civiel-riolering.md).
+
+Clothoids, design criteria checks (ROA, NOA, AASHTO), sight distance and rail (cant, turnouts): see [docs/civiel-as-spoor.md](docs/civiel-as-spoor.md).
+
 The window page **Civiel — instellingen** (settings) holds all settings, and they also apply to the ribbon buttons. Checked on a real road near Dordrecht: the corridor's average-end-area volumes and the independent TIN-to-TIN grid volume agree within 2 %.
+
+Survey codes to linework and symbols, parcels, water drops, catchments and ponds, swept paths in reverse and NEN 2443 parking bays: see [docs/civiel-overig.md](docs/civiel-overig.md).
 
 ## 3D city and landscape model
 
@@ -304,6 +318,7 @@ The NLCS tables and the official NLCS-BGT 5.0 mapping are built in from [`assets
   - It is saved as `.rcs` next to the drawing and attached with POINTCLOUDATTACH.
   - Example: 300 × 250 m at 0.25 m spacing is about 1.4 million points and a 29 MB file.
 - **Punt info** also reports the AHN ground and surface height of the picked point.
+- **Point clouds in the civil tools:** a TIN, length profiles and cross sections, a ground filter and 3D meshes from AHN or E57/PLY/PTS/XYZ/LAS files: see [docs/civiel-puntenwolk.md](docs/civiel-puntenwolk.md).
 
 Length profile across the Grotekerksplein: the ground line breaks at the harbour water and the buildings.
 
