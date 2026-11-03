@@ -142,10 +142,9 @@ fn shape_key(e: &EntityType, f: f64) -> Option<Vec<i64>> {
         EntityType::Polyline3D(p) if p.vertices.len() >= 2 => {
             Some(poly(3, p.vertices.iter().map(|v| [mm(v.position.x), mm(v.position.y), mm(v.position.z), 0]).collect(), p.flags.closed))
         }
-        EntityType::Arc(a) => {
-            let ang = |t: f64| (t.rem_euclid(2.0 * PI) * 1e4).round() as i64;
-            Some(vec![4, mm(a.center.x), mm(a.center.y), mm(a.center.z), mm(a.radius), ang(a.start_angle), ang(a.end_angle)])
-        }
+        // Hoekafronding geeft bij grote stralen geen millimetertolerantie.
+        // Bogen blijven meetellen totdat hun echte geometrie wordt vergeleken.
+        EntityType::Arc(_) => None,
         EntityType::Circle(c) => Some(vec![5, mm(c.center.x), mm(c.center.y), mm(c.center.z), mm(c.radius)]),
         _ => None,
     }

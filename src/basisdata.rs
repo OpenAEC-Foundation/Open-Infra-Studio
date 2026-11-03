@@ -377,7 +377,7 @@ fn klic_extras(site: &Site, lev: &klic::Levering, opt: &KlicOptions, to_site: &d
             pairs.push(("bijlage", p.clone()));
         }
         let d = record(o.object_data, pairs);
-        let feat = Feature { lines: a.polygons.iter().flatten().map(|r| (r.clone(), true)).collect(), points: a.points.clone(), props: Default::default() };
+        let feat = Feature { lines: a.polygons.iter().flatten().map(|r| (r.clone(), true)).chain(a.lines.iter().map(|r| (r.clone(), false))).collect(), points: a.points.clone(), props: Default::default() };
         let (lines, points) = vector::feature_to_drawing(site, &feat, to_site, f, o.clip);
         if lines.is_empty() && points.is_empty() {
             continue;
