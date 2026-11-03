@@ -329,9 +329,7 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
     }
     super::api::note("assen", x.alignments.iter().zip(axes).map(|(a, h)| serde_json::json!({"naam": a.name, "handle": super::api::handle_text(*h), "beginstation": a.start})).collect::<Vec<_>>());
     let hint = if x.alignments.is_empty() { "" } else { " Selecteer een as en klik op As voor de stationering." };
-    let message = format!("{file}: {} — {n} elementen.{hint}", parts.join(", "));
-    // Negative control: restore the former visible warning suffix.
-    Ok(if x.warnings.is_empty() { message } else { format!("{message} {}", x.warnings.join(" ")) })
+    Ok(format!("{file}: {} — {n} elementen.{hint}", parts.join(", ")))
 }
 
 // ── Export: LandXML 1.2 ─────────────────────────────────────────────────────
