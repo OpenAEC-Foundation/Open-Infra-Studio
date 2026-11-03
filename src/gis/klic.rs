@@ -44,7 +44,9 @@ pub fn read(path: &Path) -> Result<Levering, String> {
     let seen = features.len();
     features.retain(|feature| !feature.lines.is_empty() || !feature.points.is_empty());
     let skipped = seen - features.len();
-    if features.is_empty() { return Err(unreadable()); }
+    // Preserve the converter's existing empty success result. Only reject
+    // converted objects whose geometry turns out to be wholly unreadable.
+    if seen > 0 && features.is_empty() { return Err(unreadable()); }
     let mut themes = BTreeMap::new();
     let mut operators: Vec<String> = Vec::new();
     for f in &features {
@@ -240,12 +242,12 @@ mod tests {
     }
 
     #[test]
-    fn klic_unusable_input_reuses_the_existing_import_error() {
+    fn klic_unreadable_geometry_and_panics_reuse_the_existing_import_error() {
         let dir = std::env::temp_dir().join(format!("oi-klic-existing-error-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(XML_NAME);
         let expected = crate::lang::tr("geen tekenbare objecten in het bestand", "no drawable features in the file");
-        for text in ["<Other/>".to_string(), XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")] {
+        for text in [XML.replace("100 200 110 210", "NaN NaN NaN NaN"), XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")] {
             std::fs::write(&path, text).unwrap();
             assert_eq!(read(&path).err().unwrap(), expected);
         }
@@ -268,15 +270,22 @@ mod tests {
     }
 
     #[test]
-    fn klic_requires_at_least_one_drawable_line_or_point() {
+    fn klic_distinguishes_unreadable_lines_from_already_empty_deliveries() {
         let dir = std::env::temp_dir().join(format!("oi-klic-undrawable-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(XML_NAME);
-        for coordinates in ["NaN NaN NaN NaN", "100 200 NaN NaN", "100 200", ""] {
+        for (coordinates, rejected) in [("NaN NaN NaN NaN", true), ("100 200 NaN NaN", true), ("100 200", false), ("", false)] {
             let text = XML.replace("100 200 110 210", coordinates);
             assert_ne!(text, XML);
             std::fs::write(&path, text).unwrap();
-            assert!(read(&path).is_err(), "{coordinates}");
+            let result = read(&path);
+            if rejected {
+                assert!(result.is_err(), "{coordinates}");
+            } else {
+                let delivery = result.unwrap();
+                assert!(delivery.features.is_empty());
+                assert_eq!(delivery.skipped, 0);
+            }
         }
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -286,7 +295,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("oi-klic-prefix-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(XML_NAME);
-        for text in ["<Other/>".to_string(), XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")] {
+        for text in [XML.replace("100 200 110 210", "NaN NaN NaN NaN"), XML.replace("nl.imkl-KL9999.synthetic", "é-KL9999.synthetic")] {
             std::fs::write(&path, text).unwrap();
             let error = read(&path).err().expect("read error");
             assert!(!error.starts_with("KLIC: "), "{error}");
@@ -341,10 +350,10 @@ mod tests {
     }
 
     #[test]
-    fn klic_returns_errors_for_empty_broken_and_missing_files() {
+    fn klic_preserves_converter_errors_for_broken_xml_zip_and_missing_files() {
         let dir = std::env::temp_dir().join(format!("oi-klic-invalid-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        for (index, text) in ["", "not xml", "<", "<Other/>"].iter().enumerate() {
+        for (index, text) in ["<root></different>", "<root><child></root>"].iter().enumerate() {
             let path = dir.join(format!("invalid-{index}.xml"));
             std::fs::write(&path, text).unwrap();
             assert!(read(&path).is_err(), "{text}");
