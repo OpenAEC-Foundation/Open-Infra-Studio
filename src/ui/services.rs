@@ -193,6 +193,7 @@ impl App {
             attribution: if s.attribution.is_empty() { s.provider.clone() } else { s.attribution.clone() },
             default_layer: layer,
             max_zoom: (s.kind == ServerKind::Xyz).then_some(19),
+            min_zoom: None,
             builtin: false,
         });
         match servers::save_user(&user) {
@@ -425,7 +426,7 @@ impl App {
                     let url = if self.svc.url_kind == ServerKind::Xyz { self.svc.url.trim().to_string() } else { crate::gis::http::clean_service_url(&self.svc.url) };
                     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
                     let host = url.split("//").nth(1).and_then(|r| r.split('/').next()).unwrap_or("").to_string();
-                    let ms = MapServer { id: format!("url-{stamp}"), kind: self.svc.url_kind, name: host, region: String::new(), url, attribution: String::new(), default_layer: String::new(), max_zoom: None, builtin: false };
+                    let ms = MapServer { id: format!("url-{stamp}"), kind: self.svc.url_kind, name: host, region: String::new(), url, attribution: String::new(), default_layer: String::new(), max_zoom: None, min_zoom: None, builtin: false };
                     chosen = Some(catalog::user_service(&ms));
                 }
             });

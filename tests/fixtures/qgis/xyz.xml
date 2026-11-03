@@ -1,0 +1,9 @@
+<!DOCTYPE connections>
+<qgsXYZTilesConnections version="1.0">
+  <xyztiles name="OpenStreetMap" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" zmin="0" zmax="19" authcfg="" username="" password="" referer="" tilePixelRatio="0" interpretation=""/>
+  <xyztiles name="TMS met grenzen" url="https://tms.example.org/tiles/{z}/{x}/{-y}.png?style=a&amp;lang=en" zmin="6" zmax="16" tilePixelRatio="1"/>
+  <xyztiles name="Subdomeinen" url="https://{s}.tiles.example.org/{z}/{x}/{y}.png" zmin="0" zmax="18"/>
+  <xyztiles name="Retina" url="https://retina.example.org/{z}/{x}/{y}@2x.png" zmin="0" zmax="20" tilePixelRatio="2"/>
+  <xyztiles name="Terrein" url="https://terrain.example.org/{z}/{x}/{y}.webp" zmin="0" zmax="14" interpretation="maptilerterrain"/>
+  <xyztiles name="OSM nogmaals" url="HTTPS://Tile.OpenStreetMap.org/{z}/{x}/{y}.png/" zmin="0" zmax="19"/>
+</qgsXYZTilesConnections>

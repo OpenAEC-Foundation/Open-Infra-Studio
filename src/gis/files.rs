@@ -1580,7 +1580,8 @@ mod tests {
     #[test]
     fn csv_multiline_records_preserve_the_whole_quoted_attribute() {
         for newline in ["\n", "\r\n"] {
-            let text = include_str!("../../tests/fixtures/csv/multiline.csv").replace('\n', newline);
+            // A Windows checkout may already have CRLF: start from LF.
+            let text = include_str!("../../tests/fixtures/csv/multiline.csv").replace("\r\n", "\n").replace('\n', newline);
             let data = csv(&text).unwrap();
             assert_eq!(data.features.len(), 2);
             assert_eq!(data.features[0].props["note"], format!("put{newline}west"));

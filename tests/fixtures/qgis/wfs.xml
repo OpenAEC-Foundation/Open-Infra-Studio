@@ -1,0 +1,5 @@
+<!DOCTYPE connections>
+<qgsWFSConnections version="1.0">
+  <wfs name="Kadastrale kaart" url="https://service.pdok.nl/kadaster/kadastralekaart/wfs/v5_0?service=WFS&amp;request=GetCapabilities" version="auto" maxnumfeatures="" pagesize="" pagingenabled="true" ignoreAxisOrientation="false" invertAxisOrientation="false" username="" password="" authcfg=""/>
+  <wfs name="Met header" url="https://wfs.example.org/ows" version="2.0.0" http-header:X-Api-Key="abc123" username="" password=""/>
+</qgsWFSConnections>

@@ -280,6 +280,12 @@ impl Service {
     }
 
     pub fn to_map_server(&self) -> MapServer {
+        // A stored user server keeps its own zoom limits (QGIS imports).
+        if self.source == Source::User {
+            if let Some(u) = servers::load_user().into_iter().find(|u| u.id == self.id) {
+                return u;
+            }
+        }
         MapServer {
             id: self.id.clone(),
             kind: self.kind,
@@ -289,6 +295,7 @@ impl Service {
             attribution: self.attribution.clone(),
             default_layer: self.default_layer.clone(),
             max_zoom: (self.kind == ServerKind::Xyz).then_some(19),
+            min_zoom: None,
             builtin: self.source != Source::User,
         }
     }
