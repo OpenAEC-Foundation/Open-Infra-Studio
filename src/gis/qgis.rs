@@ -268,4 +268,81 @@ mod tests {
         // Bing's documentation example: tile 3,5 at level 3 is quadkey 213.
         assert_eq!(tile_url("https://t/{q}.jpeg", 3, 3, 5), "https://t/213.jpeg");
     }
+
+    #[test]
+    fn url_credentials_are_blocked_and_not_kept_for_preview() {
+        let mut failures = Vec::new();
+        for (root, element, suffix) in [("qgsWMSConnections", "wms", "/wms"), ("qgsWFSConnections", "wfs", "/wfs"), ("qgsXYZTilesConnections", "xyztiles", "/{z}/{x}/{y}.png")] {
+            for credential in ["userinfo", "username", "password", "token", "apikey", "api_key", "access_token", "authcfg", "authorization", "PASS%57ORD", "X-Api-Key", "client_secret"] {
+                let url = if credential == "userinfo" {
+                    format!("https://user:SYNTHETIC_VALUE@example.invalid{suffix}")
+                } else {
+                    format!("https://example.invalid{suffix}?{credential}=SYNTHETIC_VALUE")
+                };
+                let xml = format!("<{root}><{element} url=\"{url}\"/></{root}>");
+                let connections = parse(&xml).unwrap();
+                let c = &connections[0];
+                if c.importable() || format!("{c:?}").contains("SYNTHETIC_VALUE") || c.server.name == "user" {
+                    failures.push(format!("{element}/{credential}"));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "Niet veilig geblokkeerd: {}", failures.join(", "));
+    }
+
+    #[test]
+    fn url_credentials_do_not_enter_the_saved_server_list() {
+        let connections = parse(r#"<qgsWMSConnections><wms name="Besloten" url="https://example.invalid/wms?username=user&amp;password=SYNTHETIC_VALUE"/></qgsWMSConnections>"#).unwrap();
+        let chosen: Vec<_> = connections.iter().collect();
+        let (servers, added) = merge(&[], &chosen, 888);
+        assert_eq!(added, 0);
+        assert!(!serde_json::to_string(&servers).unwrap().contains("SYNTHETIC_VALUE"));
+    }
+
+    #[test]
+    fn a_blocked_connection_does_not_disable_the_public_connection() {
+        let connections = parse(r#"<qgsWMSConnections>
+            <wms name="Besloten" url="https://example.invalid/wms" username="user"/>
+            <wms name="Openbaar" url="https://example.invalid/wms"/>
+        </qgsWMSConnections>"#).unwrap();
+        assert!(!connections[0].importable());
+        assert!(connections[1].importable());
+        let (servers, added) = merge(&[], &[&connections[1]], 888);
+        assert_eq!((servers.len(), added), (1, 1));
+    }
+
+    #[test]
+    fn duplicate_detection_preserves_query_values() {
+        let mut connections = parse(r#"<qgsWMSConnections>
+            <wms name="Zonder slash" url="https://example.invalid/wms?map=/data/a"/>
+            <wms name="Met slash" url="https://example.invalid/wms?map=/data/a/"/>
+            <wms name="Met vraagteken" url="https://example.invalid/wms?map=/data/a?"/>
+        </qgsWMSConnections>"#).unwrap();
+        assert!(connections.iter().all(Connection::importable));
+        let existing = vec![connections[0].server.clone()];
+        mark_duplicates(&mut connections, &existing);
+        assert!(connections[0].duplicate);
+        assert!(connections[1].importable() && connections[2].importable());
+        let (servers, added) = merge(&[], &connections.iter().collect::<Vec<_>>(), 888);
+        assert_eq!((servers.len(), added), (3, 3));
+    }
+
+    #[test]
+    fn two_imports_in_one_second_have_unique_ids() {
+        let a = parse(r#"<qgsWMSConnections><wms name="A" url="https://a.invalid/wms"/></qgsWMSConnections>"#).unwrap();
+        let b = parse(r#"<qgsWMSConnections><wms name="B" url="https://b.invalid/wms"/></qgsWMSConnections>"#).unwrap();
+        let (mut user, _) = merge(&[], &[&a[0]], 888);
+        user[0].id.make_ascii_uppercase();
+        let (user, added) = merge(&user, &[&b[0]], 888);
+        assert_eq!(added, 1);
+        assert_ne!(user[0].id.to_ascii_lowercase(), user[1].id.to_ascii_lowercase());
+        assert_eq!(user[1].url, b[0].server.url);
+    }
+
+    #[test]
+    fn xml_parser_errors_do_not_echo_input() {
+        let error = parse(r#"<qgsWMSConnections><wms password="&SYNTHETIC_VALUE;"/></qgsWMSConnections>"#).unwrap_err();
+        assert!(!error.contains("SYNTHETIC_VALUE"));
+        assert_eq!(error, tr("Geen geldige XML", "Not valid XML"));
+    }
 }

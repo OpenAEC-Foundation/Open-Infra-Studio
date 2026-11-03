@@ -466,6 +466,30 @@ pub struct App {
     planning: super::planning::PlanningPage,
 }
 
+#[cfg(test)]
+mod qgis_preview_tests {
+    use super::*;
+
+    #[test]
+    fn qgis_preview_does_not_render_url_credentials() {
+        let context = egui::Context::default();
+        let creation = eframe::CreationContext::_new_kittest(context.clone());
+        let (_, receiver) = std::sync::mpsc::channel();
+        let mut app = App::new(&creation, receiver);
+        let connections = crate::gis::qgis::parse(r#"<qgsWMSConnections>
+            <wms name="Besloten" url="https://example.invalid/wms?password=SYNTHETIC_VALUE"/>
+            <wms name="Openbaar" url="https://public.invalid/wms"/>
+        </qgsWMSConnections>"#).unwrap();
+        app.srv.qgis = connections.into_iter().map(|c| (c, true)).collect();
+        let output = context.run(egui::RawInput::default(), |context| {
+            egui::CentralPanel::default().show(context, |ui| app.qgis_import(ui));
+        });
+        let rendered = format!("{:?}", output.shapes);
+        assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
+        assert!(!rendered.contains("SYNTHETIC_VALUE"));
+    }
+}
+
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, rx: Receiver<UiMsg>) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
