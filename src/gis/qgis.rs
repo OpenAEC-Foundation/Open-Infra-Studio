@@ -141,7 +141,7 @@ fn url_needs_auth(url: &str) -> bool {
             }
         }
         matches!(key.as_str(), "user" | "username" | "password" | "passwd" | "pwd" | "auth" | "authcfg" | "authorization"
-            | "token" | "accesstoken" | "refreshtoken" | "idtoken" | "apikey" | "xapikey" | "key" | "secret" | "clientsecret"
+            | "token" | "accesstoken" | "refreshtoken" | "idtoken" | "apikey" | "xapikey" | "subscriptionkey" | "key" | "secret" | "clientsecret"
             | "signature" | "sig" | "awsaccesskeyid" | "xamzcredential" | "xamzsecuritytoken" | "xamzsignature" | "xgoogcredential" | "xgoogsignature")
     })
 }

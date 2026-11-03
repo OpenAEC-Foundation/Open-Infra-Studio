@@ -201,10 +201,6 @@ pub fn load_user() -> Vec<MapServer> {
 
 /// The user's servers, or an error when the file exists but cannot be read:
 /// callers that write the list back must not replace a file they could not parse.
-pub fn try_load_user() -> Result<Vec<MapServer>, String> {
-    read_user(&user_file())
-}
-
 fn read_user(path: &Path) -> Result<Vec<MapServer>, String> {
     match std::fs::read_to_string(path) {
         Ok(s) => serde_json::from_str(&s).map_err(|e| format!("{}: {e}", path.display())),
