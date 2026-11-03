@@ -192,9 +192,12 @@ mod tests {
         page.open(&ctx, path.clone());
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while page.read.is_some() && std::time::Instant::now() < deadline {
-            let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| {
                 egui::CentralPanel::default().show(ui, |ui| page.page(ui));
             });
+            // This headless test has no renderer. Explicitly consume its
+            // texture updates before dropping the completed frame.
+            frame.textures_delta.clear();
             if page.read.is_some() { std::thread::sleep(std::time::Duration::from_millis(2)); }
         }
         std::fs::remove_file(path).unwrap();
