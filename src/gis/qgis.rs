@@ -64,7 +64,7 @@ pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
         let raw_url = attr("url");
         let url_auth = url_needs_auth(raw_url);
         let mut blocking = Vec::new();
-        if !(raw_url.starts_with("http://") || raw_url.starts_with("https://")) {
+        if !raw_url.split_once("://").is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")) {
             blocking.push(tr("geen http(s)-adres", "not an http(s) address").to_string());
         }
         if url_auth || !attr("username").is_empty() || !attr("password").is_empty() || !attr("authcfg").is_empty() {
@@ -110,7 +110,7 @@ pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
             "" => host(&server.url).unwrap_or_else(|| format!("{} {}", kind.label(), i + 1)),
             name => name.to_string(),
         };
-        let duplicate = out.iter().any(|c| same(&c.server, &server));
+        let duplicate = blocking.is_empty() && out.iter().any(|c| c.importable() && same(&c.server, &server));
         out.push(Connection { server, blocking, duplicate });
     }
     if out.is_empty() {
@@ -171,26 +171,33 @@ fn host(url: &str) -> Option<String> {
     (!host.is_empty()).then(|| host.to_string())
 }
 
-/// The same service: kind and address, ignoring case of scheme and host and a trailing `/` or `?`.
+/// The same service: kind and address, ignoring case of scheme and host,
+/// a trailing path slash and an empty query. Query values stay unchanged.
 fn same(a: &MapServer, b: &MapServer) -> bool {
     a.kind == b.kind && key(&a.url) == key(&b.url)
 }
 
 fn key(url: &str) -> String {
-    let url = url.trim().trim_end_matches(['/', '?']);
-    match url.split_once("://") {
+    let (path, query) = url.trim().split_once('?').unwrap_or((url.trim(), ""));
+    let path = path.trim_end_matches('/');
+    let mut key = match path.split_once("://") {
         Some((scheme, rest)) => {
-            let (host, path) = rest.split_at(rest.find(['/', '?']).unwrap_or(rest.len()));
+            let (host, path) = rest.split_at(rest.find('/').unwrap_or(rest.len()));
             format!("{}://{}{path}", scheme.to_ascii_lowercase(), host.to_ascii_lowercase())
         }
-        None => url.to_string(),
+        None => path.to_string(),
+    };
+    if !query.is_empty() {
+        key.push('?');
+        key.push_str(query);
     }
+    key
 }
 
 /// Marks connections already present among `existing` (user servers and presets).
 pub fn mark_duplicates(conns: &mut [Connection], existing: &[MapServer]) {
     for c in conns.iter_mut() {
-        if existing.iter().any(|e| same(e, &c.server)) {
+        if c.blocking.is_empty() && existing.iter().any(|e| same(e, &c.server)) {
             c.duplicate = true;
         }
     }
@@ -201,12 +208,19 @@ pub fn mark_duplicates(conns: &mut [Connection], existing: &[MapServer]) {
 pub fn merge(user: &[MapServer], chosen: &[&Connection], stamp: u64) -> (Vec<MapServer>, usize) {
     let mut out = user.to_vec();
     let mut added = 0;
+    let mut next = 0;
     for c in chosen.iter().filter(|c| c.blocking.is_empty() && !url_needs_auth(&c.server.url)) {
         if out.iter().any(|e| same(e, &c.server)) {
             continue;
         }
         let mut s = c.server.clone();
-        s.id = format!("qgis-{stamp}-{added}");
+        loop {
+            s.id = format!("qgis-{stamp}-{next}");
+            next += 1;
+            if !out.iter().any(|e| e.id.eq_ignore_ascii_case(&s.id)) {
+                break;
+            }
+        }
         out.push(s);
         added += 1;
     }
