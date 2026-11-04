@@ -14,6 +14,7 @@ pub mod bridge;
 pub mod civiel;
 pub mod emit;
 pub mod geoexport;
+pub mod nlcspp_host;
 pub mod hoeveelheden;
 pub mod hoogte;
 pub mod ifc;
@@ -272,6 +273,8 @@ impl CadModule for GisModule {
                                     ("GIS_HOEVEELHEDEN", tr("Hoeveelheden", "Quantities"), I_QUANTITIES),
                                     ("GIS_HOEVEELHEDEN_TABEL", tr("Hoeveelhedenstaat", "Bill of quantities"), I_TABLE),
                                     ("GIS_BGT_MUTATIE", tr("BGT-mutatie", "BGT mutation"), I_MUTATION),
+                                    ("GIS_NLCSPP_CONTROLE", tr("NLCS++-controle (netbeheer)", "NLCS++ check (utilities)"), I_CHECK),
+                                    ("GIS_NLCSPP_EXPORT", tr("NLCS++-levering (XML)", "NLCS++ delivery (XML)"), I_FILE),
                                 ],
                                 "GIS_NLCS_CONTROLE",
                             ),
@@ -615,6 +618,60 @@ fn ifc_command(host: &mut dyn HostApi, cmd: &str) {
         match ifc::command(path, selection, texts, &|_| {}) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("GIS_IFC: {e}")),
+        }
+    });
+}
+
+/// `GIS_NLCSPP_IMPORT <levering.xml>`; `GIS_NLCSPP_EXPORT` and
+/// `GIS_NLCSPP_CONTROLE` with `[NETBEHEERDER=Enexis|Liander|Stedin]
+/// [PROJECTNUMMER=] [AANNEMER=] [TEKENINGTYPE=] [VOLGNUMMER=] [PAD=]`:
+/// NLCS++ Netbeheer deliveries (see `nlcspp_host`).
+fn nlcspp_command(host: &mut dyn HostApi, verb: &str, cmd: &str) {
+    let Some(site) = require_site(host) else { return };
+    let rest = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim()).unwrap_or("");
+    let args = civiel::api::Args::parse(rest);
+    let verb = verb.to_string();
+    let operator = args.str("NETBEHEERDER").and_then(nlcspp::model::operator).unwrap_or("Enexis").to_string();
+    let project = nlcspp_host::Project {
+        nummer: args.str("PROJECTNUMMER").map(str::to_string).unwrap_or_else(|| site.label.clone()),
+        aannemer: args.str("AANNEMER").map(str::to_string).unwrap_or_default(),
+        tekeningtype: args.str("TEKENINGTYPE").map(|t| t.replace('_', " ").to_uppercase()).unwrap_or_else(|| "DEFINITIEF ONTWERP".into()),
+        volgnummer: args.str("VOLGNUMMER").and_then(|v| v.parse().ok()),
+        toelichting: String::new(),
+    };
+    let path = args.str("PAD").map(str::to_string).or_else(|| (verb == "GIS_NLCSPP_IMPORT").then(|| rest.trim_matches('"').to_string()));
+    host.push_info(&format!("[Open Infra] {verb} …"));
+    std::thread::spawn(move || {
+        let run = || -> Result<String, String> {
+            let t = bridge::target().ok_or("geen tekening actief")?;
+            if verb == "GIS_NLCSPP_IMPORT" {
+                let p = path.filter(|p| !p.is_empty()).ok_or("GIS_NLCSPP_IMPORT <levering.xml>")?;
+                return nlcspp_host::import(&site, std::path::Path::new(&p), t.unit_factor);
+            }
+            let doc = bridge::snapshot()?;
+            let (xml, findings, n) = nlcspp_host::delivery(&doc, &site, t.unit_factor, &operator, &project)?;
+            if n == 0 {
+                return Err(lang::tr("geen NLCS++-objecten in de tekening (lagen *-OI-KL-* of objectdata nlcspp_object)", "no NLCS++ objects in the drawing (layers *-OI-KL-* or object data nlcspp_object)").into());
+            }
+            let (a, b, c) = nlcspp::check::counts(&findings);
+            civiel::api::note("objecten", n);
+            civiel::api::note("fouten", a);
+            civiel::api::note("waarschuwingen", b);
+            civiel::api::note("informerend", c);
+            let report = bridge::beside_drawing("nlcspp-controle.md");
+            std::fs::write(&report, nlcspp::check::markdown(&findings, &format!("{} ({operator})", bridge::drawing_name()))).map_err(|e| format!("{}: {e}", report.display()))?;
+            let summary = format!("NLCS++ ({operator}, V12.1): {n} objecten — {a} fout(en), {b} waarschuwing(en), {c} informerend. Rapport: {}", report.display());
+            if verb == "GIS_NLCSPP_CONTROLE" {
+                return Ok(summary);
+            }
+            let out = path.map(std::path::PathBuf::from).unwrap_or_else(|| bridge::beside_drawing("nlcspp.xml"));
+            std::fs::write(&out, xml).map_err(|e| format!("{}: {e}", out.display()))?;
+            civiel::api::note("bestand", out.to_string_lossy().into_owned());
+            Ok(format!("{summary} Levering: {} (met de DWG, minimaal R2000, als tekening; Handle = CAD-handle).", out.display()))
+        };
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|p| Err(panic_text(p.as_ref()))) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&format!("{verb}: {e}")),
         }
     });
 }
@@ -1117,6 +1174,7 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_HOEVEELHEDEN_TABEL" => host.start_interactive(Box::new(TableCmd)),
             "GIS_BGT_MUTATIE" => mutation_command(host, cmd),
             "GIS_IFC" => ifc_command(host, cmd),
+            "GIS_NLCSPP_IMPORT" | "GIS_NLCSPP_EXPORT" | "GIS_NLCSPP_CONTROLE" => nlcspp_command(host, &verb, cmd),
             "GIS_EXPORT" | "GIS_EXPORT_GPKG" | "GIS_EXPORT_GEOJSON" => export_command(host, &verb, cmd),
             "GIS_HOOGTEPUNTEN" | "GIS_HOOGTELIJNEN" | "GIS_PUNTENWOLK" => ahn_command(host, &verb),
             "GIS_PROFIEL" => {
@@ -1139,7 +1197,10 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_KLIC" => {
                 // From the ribbon's file dialog: "GIS_KLIC <path>" (original case).
                 let arg = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim().trim_matches('"')).unwrap_or("");
-                if arg.is_empty() {
+                // The same file button opens NLCS++ deliveries of the operators.
+                if !arg.is_empty() && nlcspp_host::is_delivery(std::path::Path::new(arg)) {
+                    nlcspp_command(host, "GIS_NLCSPP_IMPORT", &format!("GIS_NLCSPP_IMPORT {arg}"));
+                } else if arg.is_empty() {
                     open(host, ui::Tab::Nlcs);
                 } else if ui::open(ui::Tab::Nlcs).is_ok() {
                     ui::send(ui::UiMsg::Klic(arg.into()));

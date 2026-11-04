@@ -1025,7 +1025,7 @@ pub fn length_profile(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
     let opt = opt.clone();
     let ctx = Ctx::new(&opt)?;
     let doc = super::document(&["tin"], &handle.into_iter().collect::<Vec<_>>())?;
-    let (al, _, _) = axis(&doc, handle)?;
+    let (al, axis_h, _) = axis(&doc, handle)?;
     let wanted = at;
     let mut ground = Maaiveld::find(&ctx, &doc)?;
     let (f, k) = (ctx.f, ctx.k);
@@ -1202,6 +1202,7 @@ pub fn length_profile(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
         super::api::note("lengteprofiel", super::api::handle_text(*h));
         crate::bridge::index_add("lengteprofiel", &al.name, &[*h], false);
     }
+    super::graaf::register(&doc, "lengteprofiel", axis_h, at, &handles);
     super::api::note("maaiveld_min", zmin);
     super::api::note("maaiveld_max", zmax);
     super::api::note("plaats", serde_json::json!([at[0], at[1]]));
@@ -1215,7 +1216,7 @@ pub fn cross_sections(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
     let opt = opt.clone();
     let ctx = Ctx::new(&opt)?;
     let doc = super::document(&["tin"], &handle.into_iter().collect::<Vec<_>>())?;
-    let (al, _, _) = axis(&doc, handle)?;
+    let (al, axis_h, _) = axis(&doc, handle)?;
     let mut ground = Maaiveld::find(&ctx, &doc)?;
     let f = ctx.f;
     let stations = al.stations(opt.section_every.max(1.0) * f, true);
@@ -1263,7 +1264,9 @@ pub fn cross_sections(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
     SECTION_TEXTS.with(|o| o.borrow_mut().clear());
     let (rows, at) = drawn?;
     let title = format!("Dwarsprofielen {}", if al.name.is_empty() { "as" } else { &al.name });
-    let n = out.write(&title)?;
+    let handles = out.write_handles(&title)?;
+    let n = handles.len();
+    super::graaf::register(&doc, "dwarsprofielen", axis_h, at, &handles);
     ground.note_source();
     super::api::note("dwarsprofielen", views.len());
     super::api::note("plaats", serde_json::json!([at[0], at[1]]));

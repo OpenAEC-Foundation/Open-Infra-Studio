@@ -497,6 +497,36 @@ fn index_lock() -> &'static Mutex<()> {
 /// terrain status, …), kept in the drawing (NOD OPENINFRA/INDEX), so the
 /// civil commands fetch what they need by handle and never depend on the
 /// whole drawing, which may be too large to send.
+/// A JSON document kept in the drawing (NOD XRecord `OPENINFRA/<name>`), in
+/// pieces of at most 2000 characters; `None` when there is none.
+pub fn json_record_read(name: &str) -> Option<String> {
+    let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
+    let Ok(PluginResponse::XRecordEntries(Ok(entries))) = request(PluginRequest::ReadXRecord { dictionary_path: path, name: name.into() }) else {
+        return None;
+    };
+    let text: String = entries.into_iter().filter_map(|e| match e.value {
+        XRecordValue::String(s) => Some(s),
+        _ => None,
+    }).collect();
+    (!text.is_empty()).then_some(text)
+}
+
+/// Writes a JSON document into the drawing (see [`json_record_read`]).
+pub fn json_record_write(name: &str, json: &str) -> Result<(), String> {
+    let chars: Vec<char> = json.chars().collect();
+    let entries: Vec<XRecordEntry> = chars.chunks(2000).map(|c| XRecordEntry::string(1, c.iter().collect::<String>())).collect();
+    let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
+    let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: name.into(), entries: entries.clone() };
+    if matches!(request(update), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
+        return Ok(());
+    }
+    match request(PluginRequest::CreateXRecord { dictionary_path: path, name: name.into(), entries })? {
+        PluginResponse::XRecordCreateResult(Ok(_)) => Ok(()),
+        PluginResponse::XRecordCreateResult(Err(e)) => Err(e),
+        _ => Ok(()),
+    }
+}
+
 pub fn index_read() -> Vec<(String, String, Vec<Handle>)> {
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
     let Ok(PluginResponse::XRecordEntries(Ok(entries))) = request(PluginRequest::ReadXRecord { dictionary_path: path, name: INDEX_RECORD.into() }) else {

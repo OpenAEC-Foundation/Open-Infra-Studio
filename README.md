@@ -298,6 +298,12 @@ The NLCS tables and the official NLCS-BGT 5.0 mapping are built in from [`assets
   - The NLCS-BGT mapping is used backwards. Where a layer stands for several BGT types or functions (asphalt: the BGT classes wegdeel, ondersteunend wegdeel or onbegroeid terreindeel, i.e. road section, auxiliary road section or unvegetated terrain), the type and function come from the object data, else from the BGT object the new surface covers most. What stays ambiguous is listed in the report, not exported.
   - Checks: self-intersections, at most 5000 points, coordinates to the millimetre, ring orientation, overlaps on ground level among the mutation and with BGT objects that stay.
   - The file is valid against the IMGeo 2.1.1 schema. The bronhouder's (the responsible authority's) BGT package reads it and delivers to the LV-BGT as StUF-Geo IMGeo through BRAVO.
+- **NLCS++ Netbeheer** (the sector standard of the network operators for cables and pipes, V11–V12.1; crate [`nlcspp`](nlcspp), host-independent):
+  - **Read:** an NLCS++ XML of any operator and version (the KLIC file button recognises it, or `GIS_NLCSPP_IMPORT <file>`) is drawn on its NLCS++ layers, with Z, every field as object data.
+  - **Layer grammar both ways:** `<Status>-OI-KL-<parts>[-<toestand>]-<G|GV|S>`, e.g. `B-OI-KL-ET_LS_AANSLUITNET_400 V_4x10Cu as10-G`. The positions of attribute values follow the information model, the fixed parts the layers of the operators' DWG templates and the official example deliveries. On the official Enexis example, 594 of 785 objects get exactly the layer of the drawing; the others lie in that drawing on a layer their own XML attributes contradict.
+  - **Code lists per operator** (Liander/Alliander, Enexis, Stedin), from their V12.1 XSDs: [`nlcspp/assets`](nlcspp/assets), regenerated with `tools/import_nlcspp.py`.
+  - **Check** (Netherlands → NLCS → *NLCS++ check*, `GIS_NLCSPP_CONTROLE [NETBEHEERDER=]`): the schema rules (required fields, code values, lengths, types, geometry) plus rule R.5 of the operators and whether each object lies on the layer its attributes ask for, as **Fout**, **Waarschuwing** and **Informerend**. On the official examples it finds exactly the code-value errors the operator's XSD finds. The operators' full content rules (Schematron, 39 rules of *Inhoudelijke validaties*) run with `tools/nlcspp_schematron.py` (SaxonC-HE from Python, no Java).
+  - **Delivery** (*NLCS++ delivery*, `GIS_NLCSPP_EXPORT [NETBEHEERDER=] [PROJECTNUMMER=] [AANNEMER=] [TEKENINGTYPE=] [VOLGNUMMER=] [PAD=]`): V12.1 XML beside the drawing with the project reference over the project area; `Handle` is the CAD handle of each element and `ID` follows from it, so XML and DWG stay linked. Valid against the operator's XSD (tested with the official examples).
 - **Drawing sheet:**
   - The sheet format is chosen automatically (A3–A0 landscape).
   - The title block lists the data sources of the imports.
@@ -412,6 +418,9 @@ Beside the drawing, unless the command is given a path.
 | **Mass balance** | CSV per corridor: `corridor_<name>.csv` | `CIV_CORRIDOR` |
 | **Quantities** | CSV: `hoeveelheden.csv`, or a table in the drawing. Double-drawn elements (the same shape on the same layer to the millimetre, either direction, with the same object data) count once and are listed; the window can select the copies. | `GIS_HOEVEELHEDEN_CSV`, `GIS_HOEVEELHEDEN_TABEL` |
 | **NLCS check** | Markdown report: `nlcs-controle.md` | `GIS_NLCS_RAPPORT` |
+| **NLCS++ delivery** | V12.1 XML `nlcspp.xml` and the check `nlcspp-controle.md` | `GIS_NLCSPP_EXPORT`, `GIS_NLCSPP_CONTROLE` |
+| **Geodata** | GeoPackage (project CRS; points, lines, areas) or GeoJSON (WGS 84), every element with its layer, NLCS meaning and object data: `export.gpkg` | `GIS_EXPORT`, Output → Export |
+| **Sewer for hydraulic models** | GWSW-HydX: the ten CSV files in `<sewer>_hydx/` | `CIV_RIOOL_EXPORT FORMAAT=HYDX` |
 | **BGT mutation** | IMGeo-GML 2.1.1 (`bgt-mutatie.gml`) with a Markdown report (`bgt-mutatie.md`) | `GIS_BGT_MUTATIE` |
 | **IFC 4.3** | IFC4X3_ADD2: `<drawing>_IFC4X3.ifc` (see [IFC 4.3 export](#ifc-43-export)) | `GIS_IFC`, `CIV_IFC` |
 | **Command results** | JSON per call: `<config>/OpenCADStudio/open-infra/api/<ID>.json` | any `CIV_` or GIS data command with `ID=<name>` |
@@ -559,7 +568,10 @@ ocs_plugin_api = { path = "../OpenCADStudio/crates/ocs_plugin_api" }
 - AHN (Actueel Hoogtebestand Nederland): open data (CC0). Height grids come via the PDOK WCS, point clouds from Het Waterschapshuis' object storage.
 - NLCS tables and the NLCS-BGT mapping: DigiGO / Stichting NLCS, CC BY 4.0 (see [`assets/nlcs/NOTICE.md`](assets/nlcs/NOTICE.md)).
 - OpenStreetMap: © OpenStreetMap contributors (ODbL), via Overpass, Nominatim and the OSM tile server. Follow their usage policies (light, interactive use).
-- Sentinel-2 cloudless by EOX: CC BY-NC-SA 4.0 (non-commercial).
+- Sentinel-2 cloudless by EOX: the 2016 mosaic CC BY 4.0 (the default of the terrain photo); later years CC BY-NC-SA 4.0 (non-commercial, only when chosen).
+- USGS The National Map imagery: public domain (US terrain photo). Terrain Tiles on AWS (NASA SRTM, USGS 3DEP and GMTED2010, NOAA ETOPO): open data.
+- NLCS++ Netbeheer: schemas, information model, DWG templates and example deliveries of mijnaansluiting.nl, Apache-2.0 (see [`nlcspp/assets/NOTICE`](nlcspp/assets/NOTICE) and [`tests/fixtures/nlcspp`](tests/fixtures/nlcspp)); the content rules of *Inhoudelijke validaties* (Keronic, Apache-2.0) are fetched by `tools/nlcspp_schematron.py`, not shipped.
+- GWSW-HydX column codes as in the test set of `nens/hydxlib` (Stichting RIONED, GWSW-Hyd).
 - 3D BAG: 3D geoinformation group, TU Delft, CC BY 4.0 (api.3dbag.nl).
 - Aerial photos: Beeldmateriaal.nl via PDOK, CC BY 4.0.
 - BRO cone penetration tests and boreholes (Basisregistratie Ondergrond, TNO): open data (CC0), via publiek.broservices.nl.

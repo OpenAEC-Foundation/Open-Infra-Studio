@@ -12,7 +12,9 @@ KLIC + survey + AHN → cross sections that show what you will meet.
   5. CIV_DWARSPROFIELEN over AHN every 5 m, 6 m either side: each section
      must show the BGT surfaces it cuts, the KLIC crossings at their assumed
      depth and the measured points;
-  6. the objects with their data as GeoPackage (GIS_EXPORT).
+  6. the dependency graph: a length profile too, then a TIN changes the
+     ground of both; CIV_BIJWERKEN must find and remake exactly those two;
+  7. the objects with their data as GeoPackage (GIS_EXPORT).
 
 Runs its own Open CAD Studio with an isolated configuration folder, like the
 other e2e tests:
@@ -171,6 +173,22 @@ def main():
         ok = n >= 4 and bgt_cut > 0 and klic_cut >= n and measured >= n - 1
         return ok, f"{n} sections, {bgt_cut} BGT surface parts, {klic_cut} KLIC crossings, {measured} measured points"
 
+    def graph():
+        """The dependency graph: a new TIN changes the ground of both profiles."""
+        r = cmd(f"CIV_LENGTEPROFIEL AS={state['as']}", "lp", 600)
+        if not r["ok"]:
+            return False, r["message"]
+        before = cmd("CIV_BIJWERKEN CONTROLE", "graph0", 120)
+        r = cmd("CIV_TIN BRON=AHN AFSTAND=5", "tin", 600)
+        if not r["ok"]:
+            return False, r["message"]
+        stale = cmd("CIV_BIJWERKEN CONTROLE", "graph1", 120)
+        update = cmd("CIV_BIJWERKEN", "graph2", 900)
+        after = cmd("CIV_BIJWERKEN CONTROLE", "graph3", 120)
+        n = lambda r: (r.get("data") or {}).get("verouderd")
+        ok = n(before) == 0 and n(stale) == 2 and update["ok"] and n(after) == 0
+        return ok, f"stale before {n(before)}, after a TIN {n(stale)}, updated: {update['message'][:90]}, after {n(after)}"
+
     def export():
         path = OUT / "proefsleuf.gpkg"
         r = cmd(f"GIS_EXPORT {path}", "export", 300)
@@ -204,6 +222,7 @@ def main():
     if step("site", site) and step("BGT", bgt) and step("KLIC delivery", klic) and step("trench axis along a cable", trench):
         step("survey points", survey)
         step("cross sections with cut objects", sections)
+        step("dependency graph (CIV_BIJWERKEN)", graph)
         step("GeoPackage export", export)
         step("capture", captures)
     try:

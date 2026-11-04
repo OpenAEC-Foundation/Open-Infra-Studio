@@ -371,7 +371,7 @@ pub fn entity_fingerprint(e: &EntityType) -> String {
     fingerprint(&v, &texts)
 }
 
-fn tin_fingerprint(t: &super::terrein::Tin) -> String {
+pub(crate) fn tin_fingerprint(t: &super::terrein::Tin) -> String {
     let mut v = Vec::with_capacity(t.points.len() * 3 + 1);
     v.push(t.triangles.len() as f64);
     for p in &t.points {
