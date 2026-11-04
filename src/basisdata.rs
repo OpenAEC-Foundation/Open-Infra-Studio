@@ -379,6 +379,21 @@ fn klic_extras(site: &Site, lev: &klic::Levering, opt: &KlicOptions, to_site: &d
         let d = record(o.object_data, pairs);
         let feat = Feature { lines: a.polygons.iter().flatten().map(|r| (r.clone(), true)).chain(a.lines.iter().map(|r| (r.clone(), false))).collect(), points: a.points.clone(), props: Default::default() };
         let (lines, points) = vector::feature_to_drawing(site, &feat, to_site, f, o.clip);
+        // Areas go to the project area: an operator's detail area can be a
+        // whole region of 18 km, which would swamp the drawing.
+        let rect = site.drawing_rect(f);
+        let lines: Vec<(Vec<XY>, bool)> = lines
+            .into_iter()
+            .map(|(r, c)| {
+                let mut r = crate::civiel::model3d::clip_ring(&r, rect);
+                if r.len() > 2 && r.first() != r.last() {
+                    r.push(r[0]);
+                }
+                (r, c)
+            })
+            .filter(|(r, _)| r.len() >= 3)
+            .collect();
+        let points: Vec<XY> = points.into_iter().filter(|p| vector::inside(*p, rect)).collect();
         if lines.is_empty() && points.is_empty() {
             continue;
         }

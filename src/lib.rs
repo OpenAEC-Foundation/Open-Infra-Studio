@@ -13,6 +13,7 @@
 pub mod bridge;
 pub mod civiel;
 pub mod emit;
+pub mod geoexport;
 pub mod hoeveelheden;
 pub mod hoogte;
 pub mod ifc;
@@ -211,7 +212,15 @@ impl CadModule for GisModule {
                 },
                 RibbonGroup {
                     title: tr("Uitvoer", "Output"),
-                    tools: vec![tool("GIS_TEKENBLAD", tr("Tekenblad", "Drawing sheet"), I_SHEET), small("GIS_IFC", "IFC 4x3", I_IFC), small("GIS_SERVERS", "Servers", I_SERVER)],
+                    tools: vec![
+                        tool("GIS_TEKENBLAD", tr("Tekenblad", "Drawing sheet"), I_SHEET),
+                        menu("GIS_MENU_EXPORT", tr("Exporteren", "Export"), I_IFC, vec![
+                            ("GIS_IFC", "IFC 4x3", I_IFC),
+                            ("GIS_EXPORT_GPKG", "GeoPackage", I_FILE),
+                            ("GIS_EXPORT_GEOJSON", "GeoJSON", I_FILE),
+                        ], "GIS_IFC"),
+                        small("GIS_SERVERS", "Servers", I_SERVER),
+                    ],
                 },
                 // Block libraries (vehicles), like the vehicle sets of
                 // swept-path software.
@@ -606,6 +615,58 @@ fn ifc_command(host: &mut dyn HostApi, cmd: &str) {
         match ifc::command(path, selection, texts, &|_| {}) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("GIS_IFC: {e}")),
+        }
+    });
+}
+
+/// `GIS_EXPORT [<pad.gpkg|pad.geojson>] [LAGEN=<tekst>] [SELECTIE] [ALLES]`
+/// (and `GIS_EXPORT_GPKG`, `GIS_EXPORT_GEOJSON` from the menu): the drawing's
+/// elements with their object data as geodata, beside the drawing by default.
+fn export_command(host: &mut dyn HostApi, verb: &str, cmd: &str) {
+    let Some(site) = require_site(host) else { return };
+    let args = civiel::api::Args::parse(cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or(""));
+    let flag = |k: &str| args.words.iter().any(|w| w.eq_ignore_ascii_case(k));
+    let given = args.words.iter().find(|w| w.contains('.') || w.contains('/') || w.contains('\\')).cloned();
+    let ext = if verb == "GIS_EXPORT_GEOJSON" { "geojson" } else { "gpkg" };
+    let path = given.map(std::path::PathBuf::from).unwrap_or_else(|| bridge::beside_drawing(&format!("export.{ext}")));
+    let opt = geoexport::Options { selection: None, layers: args.str("LAGEN").map(str::to_string), annotation: flag("ALLES") || flag("ALL") };
+    let selection = flag("SELECTIE") || flag("SELECTION");
+    host.push_info(&format!("[Open Infra] {} {} …", lang::tr("Exporteren naar", "Exporting to"), path.display()));
+    std::thread::spawn(move || {
+        let run = || -> Result<String, String> {
+            let t = bridge::target().ok_or("geen tekening actief")?;
+            let doc = bridge::snapshot()?;
+            let mut opt = opt;
+            if selection {
+                opt.selection = Some(bridge::selection()?.into_iter().collect());
+            }
+            let feats = geoexport::features(&doc, &site, t.unit_factor, &opt);
+            if feats.is_empty() {
+                return Err(lang::tr("niets om te exporteren (lege tekening, selectie of filter)", "nothing to export (empty drawing, selection or filter)").into());
+            }
+            let geojson = path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "geojson" | "json"));
+            if geojson {
+                std::fs::write(&path, geoexport::geojson(&feats, &site)?).map_err(|e| format!("{}: {e}", path.display()))?;
+            } else {
+                geoexport::geopackage(&feats, &site, &path)?;
+            }
+            let (p, l, a) = geoexport::counts(&feats);
+            civiel::api::note("punten", p);
+            civiel::api::note("lijnen", l);
+            civiel::api::note("vlakken", a);
+            Ok(format!(
+                "{} {}: {p} {}, {l} {}, {a} {} ({}).",
+                if geojson { "GeoJSON" } else { "GeoPackage" },
+                path.display(),
+                lang::tr("punten", "points"),
+                lang::tr("lijnen", "lines"),
+                lang::tr("vlakken", "areas"),
+                if geojson { "WGS 84".to_string() } else { site.crs.clone() }
+            ))
+        };
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|p| Err(panic_text(p.as_ref()))) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&format!("GIS_EXPORT: {e}")),
         }
     });
 }
@@ -1056,6 +1117,7 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_HOEVEELHEDEN_TABEL" => host.start_interactive(Box::new(TableCmd)),
             "GIS_BGT_MUTATIE" => mutation_command(host, cmd),
             "GIS_IFC" => ifc_command(host, cmd),
+            "GIS_EXPORT" | "GIS_EXPORT_GPKG" | "GIS_EXPORT_GEOJSON" => export_command(host, &verb, cmd),
             "GIS_HOOGTEPUNTEN" | "GIS_HOOGTELIJNEN" | "GIS_PUNTENWOLK" => ahn_command(host, &verb),
             "GIS_PROFIEL" => {
                 let Some(site) = require_site(host) else { return true };

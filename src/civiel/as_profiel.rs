@@ -1251,15 +1251,31 @@ pub fn cross_sections(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
     if views.iter().all(|v| v.ground.iter().all(|p| p.1.is_none())) {
         return Err(ground.error().unwrap_or_else(|| format!("geen hoogtes langs de as ({})", ground.label())));
     }
+    // What the sections cut in plan: BGT surfaces and KLIC cables and pipes.
+    let things = super::doorsnede::cuttables(&doc);
+    let (outlines, texts, (surfaces, crossings, measured)) = super::doorsnede::section_cuts(&things, &views, left, right, 0.15, f, 5.0 * ctx.k / f);
+    SECTION_OUTLINES.with(|o| *o.borrow_mut() = outlines);
+    SECTION_TEXTS.with(|o| *o.borrow_mut() = texts);
     let mut out = Out::default();
     let label = ground.label();
-    let (rows, at) = draw_section_views(&ctx, &al, &views, left, right, at, &label, "", &mut out)?;
+    let drawn = draw_section_views(&ctx, &al, &views, left, right, at, &label, "", &mut out);
+    SECTION_OUTLINES.with(|o| o.borrow_mut().clear());
+    SECTION_TEXTS.with(|o| o.borrow_mut().clear());
+    let (rows, at) = drawn?;
     let title = format!("Dwarsprofielen {}", if al.name.is_empty() { "as" } else { &al.name });
     let n = out.write(&title)?;
     ground.note_source();
     super::api::note("dwarsprofielen", views.len());
     super::api::note("plaats", serde_json::json!([at[0], at[1]]));
-    Ok(format!("{title}: {} profielen in {rows} rij(en) van {} ({label}), {n} elementen.", views.len(), opt.per_row.max(1)))
+    super::api::note("gesneden_bgt", surfaces);
+    super::api::note("klic_kruisingen", crossings);
+    super::api::note("meetpunten_in_profiel", measured);
+    let cut = if surfaces + crossings + measured > 0 {
+        format!(" Gesneden: {surfaces} BGT-vlakdelen, {crossings} kabel- en leidingkruisingen (KLIC, op aangenomen diepte), {measured} meetpunten binnen 1 m.")
+    } else {
+        String::new()
+    };
+    Ok(format!("{title}: {} profielen in {rows} rij(en) van {} ({label}), {n} elementen.{cut}", views.len(), opt.per_row.max(1)))
 }
 
 /// The area views keep clear of: the project area and the axis.
@@ -1297,6 +1313,9 @@ thread_local! {
     /// caller for the next `draw_section_views` on this thread (hook of the
     /// corridor stream).
     pub static SECTION_OUTLINES: std::cell::RefCell<Outlines> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Extra texts per view, (offset m, height m, text, above): the cables and
+    /// pipes a section crosses (above their circle), the measured points (below).
+    pub static SECTION_TEXTS: std::cell::RefCell<Vec<Vec<(f64, f64, String, bool)>>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Section views in a grid (upper-left corner `at`), each with its height
@@ -1306,13 +1325,21 @@ thread_local! {
 pub fn draw_section_views(ctx: &Ctx, al: &Alignment, views: &[SectionView], left: f64, right: f64, at: Option<XY>, source: &str, what: &str, out: &mut Out) -> Result<(usize, XY), String> {
     let opt = &ctx.opt;
     let (f, k) = (ctx.f, ctx.k);
-    let zs_of = |v: &SectionView| -> Vec<f64> { v.ground.iter().filter_map(|p| p.1).chain(v.design.iter().map(|p| p.1)).collect() };
+    // Heights in a view: ground, design and what the caller adds (pavement
+    // layers, cables at depth, measured points), so all of it fits the frame.
+    let extra = |i: usize| -> Vec<f64> {
+        let lines: Vec<f64> = SECTION_OUTLINES.with(|o| o.borrow().get(i).map(|v| v.iter().flat_map(|(_, l)| l.iter().map(|p| p.1)).collect()).unwrap_or_default());
+        let texts: Vec<f64> = SECTION_TEXTS.with(|o| o.borrow().get(i).map(|v| v.iter().map(|t| t.1).collect()).unwrap_or_default());
+        lines.into_iter().chain(texts).collect()
+    };
+    let zs_of = |i: usize, v: &SectionView| -> Vec<f64> { v.ground.iter().filter_map(|p| p.1).chain(v.design.iter().map(|p| p.1)).chain(extra(i)).collect() };
     // One frame size for all: the largest height range of a section.
     let vex = opt.section_exaggeration.max(1.0);
     let span = views
         .iter()
-        .filter_map(|v| {
-            let z = zs_of(v);
+        .enumerate()
+        .filter_map(|(i, v)| {
+            let z = zs_of(i, v);
             (!z.is_empty()).then(|| z.iter().cloned().fold(f64::MIN, f64::max) - z.iter().cloned().fold(f64::MAX, f64::min))
         })
         .fold(0.0, f64::max);
@@ -1341,7 +1368,7 @@ pub fn draw_section_views(ctx: &Ctx, al: &Alignment, views: &[SectionView], left
         let (col, row) = (i % per_row, i / per_row);
         let ox = at[0] + 20.0 * k + col as f64 * cell_w;
         let oy = at[1] - (row as f64 + 1.0) * cell_h + 10.0 * k;
-        let z = zs_of(sct);
+        let z = zs_of(i, sct);
         let st = station(al.start + sct.s / f);
         let zlo = if z.is_empty() { 0.0 } else { z.iter().cloned().fold(f64::MAX, f64::min) };
         let base = (zlo / hstep).floor() * hstep - hstep;
@@ -1393,6 +1420,13 @@ pub fn draw_section_views(ctx: &Ctx, al: &Alignment, views: &[SectionView], left
         SECTION_OUTLINES.with(|o| {
             for (spec, line) in o.borrow().get(i).into_iter().flatten() {
                 out.put(spec, pl(line.iter().map(|(d, z)| [gx(*d), gy(*z)]).collect(), spec));
+            }
+        });
+        SECTION_TEXTS.with(|o| {
+            for (d, z, text, above) in o.borrow().get(i).into_iter().flatten() {
+                let t = ctx.text([gx(*d), gy(*z)], text, 1.5, 0.0, &frame_t, None);
+                let v = if *above { TextVerticalAlignment::Bottom } else { TextVerticalAlignment::Top };
+                out.put(&frame_t, [aligned(t, TextHorizontalAlignment::Center, v)]);
             }
         });
         if let Some(zc) = sct.axis_z {
