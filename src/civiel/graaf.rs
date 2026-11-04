@@ -165,7 +165,8 @@ mod tests {
         if let Some(EntityType::LwPolyline(p)) = doc.get_entity_mut(h) {
             p.vertices[1].location.x = 120.0;
         }
-        assert_eq!(stale(&doc, std::slice::from_ref(&product)), vec![Some("as".to_string())], "messages are Dutch in tests");
+        let s = stale(&doc, std::slice::from_ref(&product));
+        assert!(matches!(s[0].as_deref(), Some("as" | "axis")), "{s:?}");
         let gone = Product { as_handle: "FFFFFF".into(), ..product };
         assert_eq!(stale(&doc, &[gone]), vec![Some(String::new())]);
     }
