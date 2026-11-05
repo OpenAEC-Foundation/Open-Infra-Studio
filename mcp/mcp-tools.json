@@ -405,7 +405,7 @@
   "name": "infra_bgt_mutation"
  },
  {
-  "description": "Export the drawing as IFC 4.3 (IFC4X3_ADD2), beside it as <drawing>_IFC4X3.ifc or to `path`. Every object becomes its IFC class from its NLCS layer and object data: terrain (TIN, photo terrain), 3D BAG and CityGML buildings, pavements, green, water, structures, cables and pipes, sewers, earthworks, CPTs and boreholes (IfcBorehole with IfcGeotechnicalStratum); axes become IfcAlignments with horizontal and vertical layout. Georeferenced from the project location; object data as property sets. Answers with the counts per IFC class.",
+  "description": "Export the drawing as IFC 4.3 (IFC4X3_ADD2), beside it as <drawing>_IFC4X3.ifc or to `path`. Every object becomes its IFC class from its NLCS layer and object data: terrain (TIN, photo terrain), 3D BAG and CityGML buildings, pavements, green, water, structures, cables and pipes, sewers, earthworks, CPTs and boreholes (IfcBorehole with IfcGeotechnicalStratum); axes become IfcAlignments with horizontal and vertical layout. Georeferenced from the project location; object data as property sets. Answers with the counts per IFC class. With `ids` the export is then checked against that IDS file (as civ_ifc_ids).",
   "inputSchema": {
    "type": "object",
    "properties": {
@@ -417,6 +417,9 @@
     },
     "texts": {
      "type": "boolean"
+    },
+    "ids": {
+     "type": "string"
     }
    },
    "required": []
@@ -1841,6 +1844,104 @@
    "required": []
   },
   "name": "infra_civ_landxml_export"
+ },
+ {
+  "description": "Import an IFC model (IFC 4.3; IFC4/IFC2X3 for element geometry) as a base: IfcAlignments (line, circular arc, clothoid; gradients and parabolic arcs) become axes with stationing and their design profile, terrain (IfcTriangulatedIrregularNetwork, IfcGeographicElement TERRAIN) a TIN (status B by default, N with status), other elements meshes on NLCS layers with their property sets as object data. IfcMapConversion places everything in the project CRS. Answers with the axes, terrains, classes and what could not be read.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "B",
+      "N"
+     ],
+     "description": "B = existing ground, N = design surface"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  },
+  "name": "infra_civ_ifc_import"
+ },
+ {
+  "description": "Check an IFC model against a client's IDS (buildingSMART IDS 1.0: entity, attribute, property, classification, material and partOf facets). Without `ifc`: the drawing's last export (<drawing>_IFC4X3.ifc), exported first when missing. Writes <drawing>_ids.md and <drawing>_ids.json and answers with the counts per specification.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "ids": {
+     "type": "string"
+    },
+    "ifc": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "ids"
+   ]
+  },
+  "name": "infra_civ_ifc_ids"
+ },
+ {
+  "description": "Export the drawing's 3D content (meshes, polyface meshes, 3D faces: TINs, photo terrain, 3D BAG, BGT 3D, corridor bodies) as glTF binary (GLB), OBJ (+MTL, Y-up) or STL, one mesh per layer and colour, local origin at the project base point with the EPSG code in the file. Default beside the drawing as <drawing>_3D.<ext>.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "format": {
+     "type": "string",
+     "enum": [
+      "GLB",
+      "OBJ",
+      "STL"
+     ]
+    },
+    "path": {
+     "type": "string"
+    },
+    "selection": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_3d_export"
+ },
+ {
+  "description": "Import an OBJ, STL or glTF/GLB model as mesh entities on a layer, with triangle count, area and volume (closed meshes) as object data. A file exported by Open Infra returns to its own coordinates; otherwise its origin goes to `place` (project coordinates) or the project base point, scaled and rotated (degrees about the vertical).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "place": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    },
+    "scale": {
+     "type": "number"
+    },
+    "rotation": {
+     "type": "number"
+    },
+    "layer": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  },
+  "name": "infra_civ_3d_import"
  },
  {
   "description": "Set the view: preset (TOP, SWISO, SEISO, NEISO, NWISO, FRONT…), visual style (GOURAUDSHADED, FLATSHADED, WIREFRAME2D, HIDDENLINE…) and zoom to extents.",

@@ -22,7 +22,7 @@ use ocs_plugin_api::host::codec::{CadDocument, EntityType, Handle};
 use ocs_plugin_api::host::{ExtendedDataRecord, XDataValue};
 use serde::{Deserialize, Serialize};
 
-use super::as_profiel::{design_z, fit_curves, Alignment, Pvi, Seg};
+use super::as_profiel::{design_z, Alignment, Pvi, Seg};
 use super::bladen::aligned;
 use super::{api, data_value, record, station, CivielOptions, Ctx};
 use crate::bridge;
@@ -640,15 +640,7 @@ impl ProfileMap {
 
 /// The PVIs of a design line (its object data).
 fn pvis_of(e: &EntityType) -> Option<Vec<Pvi>> {
-    let pts: Vec<(f64, f64)> = data_value(e, "pvi")?
-        .split(';')
-        .filter_map(|t| {
-            let (a, b) = t.split_once(':')?;
-            Some((a.parse().ok()?, b.parse().ok()?))
-        })
-        .collect();
-    let l: f64 = data_value(e, "boog_m").and_then(|v| v.parse().ok()).unwrap_or(0.0);
-    (pts.len() >= 2).then(|| fit_curves(&pts, l))
+    super::as_profiel::pvis_from_data(&data_value(e, "pvi")?, data_value(e, "boog_m").as_deref(), data_value(e, "bogen_m").as_deref())
 }
 
 fn profile_map(doc: &CadDocument, design: &EntityType) -> Result<ProfileMap, String> {

@@ -14,6 +14,8 @@
 pub mod alignment;
 // A corridor's surface as road parts and earthworks (stream uitwisseling).
 pub mod corridor;
+// Reading IFC: alignments, terrain and element geometry (CIV_IFC_IMPORT).
+pub mod import;
 pub mod step;
 
 use std::collections::{BTreeMap, HashMap, HashSet};

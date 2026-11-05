@@ -1532,6 +1532,31 @@ pub fn fit_curves(points: &[(f64, f64)], wanted: f64) -> Vec<Pvi> {
         .collect()
 }
 
+/// The PVIs of a design profile's object data: `pvi` ("s:z;…") with the
+/// curve length `boog_m`, or the length per PVI `bogen_m` ("l;l;…", as an
+/// IFC import writes it) when it gives one for every PVI.
+pub fn pvis_from_data(pvi: &str, boog_m: Option<&str>, bogen_m: Option<&str>) -> Option<Vec<Pvi>> {
+    let pts: Vec<(f64, f64)> = pvi
+        .split(';')
+        .filter_map(|t| {
+            let (a, b) = t.split_once(':')?;
+            Some((a.trim().parse().ok()?, b.trim().parse().ok()?))
+        })
+        .collect();
+    if pts.len() < 2 {
+        return None;
+    }
+    let l: f64 = boog_m.and_then(|v| v.trim().parse().ok()).unwrap_or(0.0);
+    let mut pvis = fit_curves(&pts, l);
+    let own: Vec<f64> = bogen_m.map(|v| v.split(';').filter_map(|t| t.trim().parse().ok()).collect()).unwrap_or_default();
+    if own.len() == pvis.len() {
+        for (p, l) in pvis.iter_mut().zip(own) {
+            p.l = l.max(0.0);
+        }
+    }
+    Some(pvis)
+}
+
 fn grade(a: &Pvi, b: &Pvi) -> f64 {
     (b.z - a.z) / (b.s - a.s).max(1e-9)
 }
@@ -1693,6 +1718,18 @@ pub fn sections_extent(al: &Alignment, opt: &super::CivielOptions, f: f64) -> (f
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn design_profile_data_with_curve_lengths_per_pvi() {
+        let p = pvis_from_data("0:10;100:12;180:11", Some("40"), None).unwrap();
+        assert_eq!(p.iter().map(|q| q.l).collect::<Vec<_>>(), [0.0, 40.0, 0.0]);
+        let p = pvis_from_data("0:10;100:12;180:11;300:9", Some("60"), Some("0;30;60;0")).unwrap();
+        assert_eq!(p.iter().map(|q| q.l).collect::<Vec<_>>(), [0.0, 30.0, 60.0, 0.0]);
+        // A list of the wrong length is ignored.
+        let p = pvis_from_data("0:10;100:12;180:11", Some("40"), Some("1;2")).unwrap();
+        assert_eq!(p[1].l, 40.0);
+        assert!(pvis_from_data("0:10", None, None).is_none());
+    }
 
     fn close(a: XY, b: XY) -> bool {
         (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9

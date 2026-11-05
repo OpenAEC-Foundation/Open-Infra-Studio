@@ -39,6 +39,19 @@ class InfraMcpTest(unittest.TestCase):
             if tool['name'].startswith('planning_'):
                 self.assertNotIn('key', tool['inputSchema']['properties'])
 
+    def test_exchange_commands(self):
+        with patch.object(mcp.OCS, 'run', return_value={'ok': True}) as run:
+            mcp.t_ifc_import({'path': 'C:/partner model.ifc', 'status': 'N'})
+            self.assertEqual(run.call_args.args[0], 'CIV_IFC_IMPORT "C:/partner model.ifc" STATUS=N')
+            mcp.t_ifc_ids({'ids': '/data/eisen.ids'})
+            self.assertEqual(run.call_args.args[0], 'CIV_IFC_IDS IDS=/data/eisen.ids')
+            mcp.t_ifc({'ids': '/data/eisen.ids'})
+            self.assertIn('IDS=/data/eisen.ids', run.call_args.args[0])
+            mcp.t_3d_export({'format': 'OBJ', 'selection': True})
+            self.assertEqual(run.call_args.args[0], 'CIV_3D_EXPORT FORMAAT=OBJ SELECTIE')
+            mcp.t_3d_import({'path': '/data/brug.stl', 'place': [105000, 425000, 1.5], 'scale': 0.001, 'rotation': 90})
+            self.assertEqual(run.call_args.args[0], 'CIV_3D_IMPORT /data/brug.stl PLAATS=105000,425000,1.5 SCHAAL=0.001 ROTATIE=90')
+
     def test_service_country_filter_is_explicit(self):
         with patch.object(mcp.OCS, 'run', return_value={'ok':True}) as run:
             mcp.t_services({'country':'US;GLOBAL','query':'elevation'})
