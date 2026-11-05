@@ -1249,6 +1249,7 @@ pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagSty
         progress,
     )?;
     let crs = model.crs.clone().unwrap_or_else(|| site.crs.clone());
+    for warning in &model.warnings { progress(warning.clone()); }
     let to = drawing(&crs)?;
     let outside = model.seen - model.objects.len();
     let p3 = |p: &[f64; 3]| to([p[0], p[1]]).map(|q| [q[0], q[1], p[2] * f]);
