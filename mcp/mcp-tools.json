@@ -13,7 +13,16 @@
    },
    "required": []
   },
-  "name": "infra_catalog"
+  "name": "infra_catalog",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "Place a parametric infrastructure object or attach it to an existing instance. Coordinates in project metres; rotation in degrees. Conflict items require confirm=true and explicit design parameters. Returns instance, handles, ports and warnings.",
@@ -88,7 +97,16 @@
     "item"
    ]
   },
-  "name": "infra_place"
+  "name": "infra_place",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Read saved infrastructure instances, parameters, connector positions and warnings from the active drawing.",
@@ -101,7 +119,16 @@
    },
    "required": []
   },
-  "name": "infra_inspect"
+  "name": "infra_inspect",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "Regenerate a saved infrastructure instance and its connections atomically. Invalid or incompatible edits leave the drawing unchanged.",
@@ -134,7 +161,16 @@
     "instance"
    ]
   },
-  "name": "infra_update"
+  "name": "infra_update",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "List the running Open CAD Studio windows; `select` picks one by session id, pid or drawing name.",
@@ -147,7 +183,16 @@
    },
    "required": []
   },
-  "name": "infra_oi_sessions"
+  "name": "infra_oi_sessions",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "The model: project location, axes (handles), length and design profiles, corridors, existing (B) and design (N) terrain, survey points.",
@@ -156,7 +201,16 @@
    "properties": {},
    "required": []
   },
-  "name": "infra_oi_status"
+  "name": "infra_oi_status",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "Run one command line: Open Infra (GIS_…, CIV_…; waits for its answer) or a host command (e.g. 'ZOOM EXTENTS'). See GIS_HELP and CIV_HELP for the arguments.",
@@ -174,7 +228,16 @@
     "command"
    ]
   },
-  "name": "infra_oi_command"
+  "name": "infra_oi_command",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Set the project location and import area: RD centre (x, y) or WGS84 (lon, lat), width and height in m. Everything else works in this area.",
@@ -208,7 +271,16 @@
    },
    "required": []
   },
-  "name": "infra_oi_site"
+  "name": "infra_oi_site",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Import a dataset into the project area on NLCS layers: bgt, brk, luchtfoto, kadastrale_kaart, ahn_kaart, bag, percelen, nwb, hectometer, spoor, osm, osm_kaart, satelliet, tekenblad, ahn_hoogtelijnen, ahn_hoogtepunten, ahn_puntenwolk",
@@ -242,7 +314,16 @@
     "dataset"
    ]
   },
-  "name": "infra_gis_import"
+  "name": "infra_gis_import",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Search the catalogue of about 620 public WMS, WFS and XYZ tile services in 50+ countries (cadastral parcels, aerial photos, elevation, geology, zoning, buildings …). Free text in Dutch or English (e.g. 'cadastral parcels Bavaria', 'luchtfoto', 'Flurstücke'); `here` keeps only services covering the project location, or give lon/lat. Returns id, type, name, provider, country, coverage, category, url, default_layer, crs (request CRS first), license and bbox per service. country filters ISO codes separated by semicolons, e.g. US;GLOBAL; omit it for all regions.",
@@ -300,7 +381,16 @@
    },
    "required": []
   },
-  "name": "infra_gis_services"
+  "name": "infra_gis_services",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "Load one layer of a catalogue service (id from gis_services) into the project area: WMS and tiles as images, WFS as features with attributes, reprojected to the project CRS. `layer` defaults to the service's preset layer.",
@@ -324,7 +414,16 @@
     "service"
    ]
   },
-  "name": "infra_gis_service_load"
+  "name": "infra_gis_service_load",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Find legacy IMRO/TAM plans at an RD point or the project location. Requires OPENINFRA_RP_API_KEY in the plugin process; never pass a key as an argument. Returns plan IDs, status and dates.",
@@ -340,7 +439,16 @@
    },
    "required": []
   },
-  "name": "infra_planning_search"
+  "name": "infra_planning_search",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "Download a selected legacy IMRO/TAM plan as editable styled geometry. Requires local OPENINFRA_RP_API_KEY and a project location.",
@@ -355,7 +463,16 @@
     "plan"
    ]
   },
-  "name": "infra_planning_import"
+  "name": "infra_planning_import",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Import local IMRO GML with planning styles and source metadata; no API key required.",
@@ -370,7 +487,16 @@
     "path"
    ]
   },
-  "name": "infra_planning_gml"
+  "name": "infra_planning_gml",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "NLCS 5.02 check of the drawing (report beside the drawing); repair=true sets layer styles and ByLayer.",
@@ -383,7 +509,16 @@
    },
    "required": []
   },
-  "name": "infra_nlcs_check"
+  "name": "infra_nlcs_check",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "The NLCS design as a BGT mutation (IMGeo-GML 2.1.1) with a report, beside the drawing. Layers N become plan topography (as_built=true: built), R built (changed when it carries a BGT lokaal_id), V ends the BGT object. Type and function come from the BGT object data, the BGT object beneath or the NLCS layer; ambiguous objects are listed in the report, not exported.",
@@ -402,7 +537,16 @@
    },
    "required": []
   },
-  "name": "infra_bgt_mutation"
+  "name": "infra_bgt_mutation",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "export"
+  }
  },
  {
   "description": "Export the drawing as IFC 4.3 (IFC4X3_ADD2), beside it as <drawing>_IFC4X3.ifc or to `path`. Every object becomes its IFC class from its NLCS layer and object data: terrain (TIN, photo terrain), 3D BAG and CityGML buildings, pavements, green, water, structures, cables and pipes, sewers, earthworks, CPTs and boreholes (IfcBorehole with IfcGeotechnicalStratum); axes become IfcAlignments with horizontal and vertical layout. Georeferenced from the project location; object data as property sets. Answers with the counts per IFC class.",
@@ -421,7 +565,16 @@
    },
    "required": []
   },
-  "name": "infra_ifc_export"
+  "name": "infra_ifc_export",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "export"
+  }
  },
  {
   "description": "Quantities per NLCS layer (count, length, area) as CSV beside the drawing.",
@@ -430,7 +583,16 @@
    "properties": {},
    "required": []
   },
-  "name": "infra_quantities"
+  "name": "infra_quantities",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "export"
+  }
  },
  {
   "description": "Import a survey point file (PNEZD/PENZD/CSV; separator and decimal comma detected).",
@@ -455,7 +617,16 @@
     "path"
    ]
   },
-  "name": "infra_civ_points_import"
+  "name": "infra_civ_points_import",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Place survey points; without z the ground height (TIN or AHN) is used.",
@@ -485,7 +656,16 @@
     "points"
    ]
   },
-  "name": "infra_civ_points"
+  "name": "infra_civ_points",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Export the drawing's points (or the selection) to a point file.",
@@ -501,7 +681,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_points_export"
+  "name": "infra_civ_points_export",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "export"
+  }
  },
  {
   "description": "Import LandXML: points, surfaces (TIN) and alignments (lines, curves, spirals).",
@@ -516,7 +705,16 @@
     "path"
    ]
   },
-  "name": "infra_civ_landxml"
+  "name": "infra_civ_landxml",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Make a terrain (TIN, 3D faces on OG-TRIANGULATIE): from AHN in the project area, the survey points, the selection or a layer. status N makes a design surface.",
@@ -551,7 +749,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_tin"
+  "name": "infra_civ_tin",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Contour lines of a terrain (default: existing ground).",
@@ -575,7 +782,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_contours"
+  "name": "infra_civ_contours",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Height analysis: the terrain coloured in height bands with a legend.",
@@ -596,7 +812,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_analysis"
+  "name": "infra_civ_analysis",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Earthwork (cut/fill m³): design surface (N, or selected faces) against the existing ground, or the ground against a level.",
@@ -612,7 +837,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_volume"
+  "name": "infra_civ_volume",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Create an axis (alignment) with stationing, tangent points and radii: through points of intersection with curve radii (by layout), or from a line by handle.",
@@ -649,7 +883,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_alignment"
+  "name": "infra_civ_alignment",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Offset lines beside an axis (m; left < 0).",
@@ -671,7 +914,16 @@
     "offsets"
    ]
   },
-  "name": "infra_civ_offsets"
+  "name": "infra_civ_offsets",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Station and offset of points relative to an axis.",
@@ -699,7 +951,16 @@
     "points"
    ]
   },
-  "name": "infra_civ_station"
+  "name": "infra_civ_station",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "Length profile of an axis over the existing terrain (TIN, else AHN), with stationing, heights and alignment band.",
@@ -728,7 +989,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_length_profile"
+  "name": "infra_civ_length_profile",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Design (vertical) profile of an axis from PVIs [station, height] with parabolic vertical curves; drawn in its length profile.",
@@ -758,7 +1028,16 @@
     "pvis"
    ]
   },
-  "name": "infra_civ_design_profile"
+  "name": "infra_civ_design_profile",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Cross sections along an axis over the terrain, in a grid of views.",
@@ -796,7 +1075,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_cross_sections"
+  "name": "infra_civ_cross_sections",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Corridor: an assembly swept along an axis and its design profile (or a level / height above ground), daylight to the ground, design TIN (N), feature lines, cut/fill per section and volumes; optional section views.",
@@ -867,7 +1155,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_corridor"
+  "name": "infra_civ_corridor",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "3D feature line (OG-BREUKLIJN, object data) from a line or points: heights from the ground (with grade breaks), from a start level and grades per segment (%), or fixed levels at corners ('2.5;;3' or '1:2.5;4:3').",
@@ -922,7 +1219,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_feature_line"
+  "name": "infra_civ_feature_line",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Edit a feature line in place: set a corner level (corner from 1, or the corner nearest 'at'), raise/lower all (dz), insert a height point at 'at', or a constant grade between two corners.",
@@ -974,7 +1280,16 @@
     "action"
    ]
   },
-  "name": "infra_civ_feature_line_edit"
+  "name": "infra_civ_feature_line_edit",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Building plot plateau from a closed line or points at a level, optionally with a fall (% towards N/NE/E/…/NW or degrees), sloping to the existing ground with separate cut and fill slopes (1:n); joins the combined design surface (N).",
@@ -1033,7 +1348,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_plateau"
+  "name": "infra_civ_plateau",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Slope from a (feature) line on one side: to the ground (cut/fill slopes), over a width, or to a level; joins the design surface.",
@@ -1098,7 +1422,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_slope"
+  "name": "infra_civ_slope",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Exact cut and fill (prismoidal, TIN against TIN) of the design against the existing ground, with bulking and compaction factors and a cut/fill map in colour bands. design: BOUWRIJP (gradings only), PEIL (a level) or empty (selection / design surface N).",
@@ -1133,7 +1466,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_volume_tin"
+  "name": "infra_civ_volume_tin",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Mass haul diagram of an axis from its corridor's cut and fill per section (or measured on the TINs): balance points, haul (m³·km), free haul and overhaul, surplus/shortage; drawn as a graph, returned per station.",
@@ -1173,7 +1515,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_mass_haul"
+  "name": "infra_civ_mass_haul",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "The corridor assemblies (profieltypen): presets and the user's JSON files in <config>/OpenCADStudio/open-infra/assemblies/, with their parts per side (lanes, gutters, kerbs, footways, cycle paths, parking, verges, central reserve, ditches), pavement layers, conditions (cut/fill) and targets. With name: one in detail; copy_to copies it as a start for your own; at draws it as a template section.",
@@ -1198,7 +1549,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_assemblies"
+  "name": "infra_civ_assemblies",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "A corridor with any assembly (preset or own JSON) over a station range, e.g. from a junction's or roundabout's mouth (their result gives 'VAN=…' or 'TOT=…' per arm); targets are named lines in the drawing for width or level targets.",
@@ -1239,7 +1599,16 @@
     "assembly"
    ]
   },
-  "name": "infra_civ_corridor_range"
+  "name": "infra_civ_corridor_range",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "A T or X junction of a main road and a side road (axes with design profiles): corner radii per corner (CROW-based default 8 m, an estimate), kerb returns, the side road tied in to the main road's cross slope, a TIN patch; the result gives each arm's mouth station for its corridor.",
@@ -1278,7 +1647,16 @@
     "side"
    ]
   },
-  "name": "infra_civ_junction"
+  "name": "infra_civ_junction",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "A single-lane roundabout after CROW publication 126 on 2+ axes (3–6 arms): outer diameter, carriageway, overrunnable strip, entry and exit radii and splitter islands; 2D layout and a 3D surface falling outward. The result gives each arm's mouth station.",
@@ -1321,7 +1699,16 @@
     "axes"
    ]
   },
-  "name": "infra_civ_roundabout"
+  "name": "infra_civ_roundabout",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "3D BAG buildings of the project area (LoD 1.2, 1.3 or 2.2): roof and wall meshes per building. style: mooi (roof colours from the aerial photo, walls by building year, windows per storey, crisp planes), maquette (white architectural model), realistisch (two plain colours) or nlcs (layer colours).",
@@ -1355,7 +1742,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_bag3d"
+  "name": "infra_civ_bag3d",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "The AHN ground of the project area as a 3D surface coloured by the PDOK aerial photo.",
@@ -1368,7 +1764,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_photo_terrain"
+  "name": "infra_civ_photo_terrain",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "A water surface at a level (m NAP) over the project area, to see what floods; call again with another level to move it. Returns the share of the area below that level (AHN ground).",
@@ -1383,7 +1788,16 @@
     "level"
    ]
   },
-  "name": "infra_civ_water_level"
+  "name": "infra_civ_water_level",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Import any map server of the catalogue by id (PDOK, 600 worldwide services, HisGIS, Topotijdreis, the user's own): tile/WMS as image, WFS as vectors. year gives Topotijdreis of that year (1815-2014).",
@@ -1405,7 +1819,16 @@
    },
    "required": []
   },
-  "name": "infra_gis_server"
+  "name": "infra_gis_server",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "KLIC cables and pipes as 3D tubes under the AHN ground (depth from the delivery, else the usual cover depth per network type), in IMKL colours. Without path: the delivery imported last. scale thickens the tubes for overview pictures.",
@@ -1421,7 +1844,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_klic3d"
+  "name": "infra_civ_klic3d",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Make the ground surfaces transparent (percent, default 70) so cables, pipes and CPT columns show beneath; all=true also buildings; percent=0 makes the ground opaque again.",
@@ -1437,7 +1869,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_see_through"
+  "name": "infra_civ_see_through",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Import a CityGML file (2.0 or 3.0, also IMGeo/BGT GML) or CityJSON (1.x/2.0, also CityJSONSeq .jsonl) as 3D meshes in the project area: buildings with roof and wall meshes (LoD1/LoD2, walls by year of construction), roads, green, water, bridges and relief on NLCS layers; 2D objects draped on the AHN. The file's CRS is transformed to the project location.",
@@ -1461,7 +1902,16 @@
     "path"
    ]
   },
-  "name": "infra_civ_citygml"
+  "name": "infra_civ_citygml",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "BGT in 3D: areas draped on the ground, buildings and walls extruded to the AHN surface, water at its level, bridges at deck height, posts and trees as symbols.",
@@ -1498,7 +1948,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_bgt3d"
+  "name": "infra_civ_bgt3d",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "The subsurface from the BRO (Dutch key register, successor of DINOloket): cone penetration tests (CPT) and geotechnical boreholes (BHR-GT) of the project area as 3D columns from the surface level (m NAP) down, one mesh per soil layer coloured by soil type (sand yellow, clay green, peat brown, silt grey-green, gravel orange); CPT layers from qc and Rf (Robertson 2010 SBT), boreholes from their described soil names; qc/Rf graphs beside the CPTs. plan_only=true draws just the plan symbols with BRO id (no measurements fetched). Returns per column the BRO id, surface level and layers.",
@@ -1534,7 +1993,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_subsurface"
+  "name": "infra_civ_subsurface",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": true
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.",
@@ -1552,7 +2020,16 @@
    },
    "required": []
   },
-  "name": "infra_civ_landxml_export"
+  "name": "infra_civ_landxml_export",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "export"
+  }
  },
  {
   "description": "Set the view: preset (TOP, SWISO, SEISO, NEISO, NWISO, FRONT…), visual style (GOURAUDSHADED, FLATSHADED, WIREFRAME2D, HIDDENLINE…) and zoom to extents.",
@@ -1571,7 +2048,16 @@
    },
    "required": []
   },
-  "name": "infra_oi_view"
+  "name": "infra_oi_view",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "Capture the drawing viewport as PNG (returned as an image). region = [xmin, ymin, xmax, ymax] in drawing coordinates.",
@@ -1595,7 +2081,16 @@
    },
    "required": []
   },
-  "name": "infra_oi_capture"
+  "name": "infra_oi_capture",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "Save the drawing (QSAVE), or as a new file with path.",
@@ -1608,7 +2103,16 @@
    },
    "required": []
   },
-  "name": "infra_oi_save"
+  "name": "infra_oi_save",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "save"
+  }
  },
  {
   "description": "Open a drawing (DWG/DXF) or start a new one from a template.",
@@ -1624,7 +2128,106 @@
    },
    "required": []
   },
-  "name": "infra_oi_open"
+  "name": "infra_oi_open",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "save"
+  }
+ },
+ {
+  "description": "The drawing's activity log in plain words, newest first: what assistants did (time, client, tool, description, entities added/modified/removed, proposal state) and the user's accepts and rejects.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "max": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_activity_log",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
+ },
+ {
+  "description": "The pending proposals in the drawing (propose mode): id, tool, description, handles added, modified and removed, and whether each is stale (its entities were edited since).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {},
+   "required": []
+  },
+  "name": "infra_proposals_list",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
+ },
+ {
+  "description": "Accept a pending proposal: the change stays, its markers and record go. For scripted tests: refused unless the server runs with OI_MCP_REVIEW=1, since the user reviews an assistant's proposals.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "P1, P2, … (from proposals_list)"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  },
+  "name": "infra_proposal_accept",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
+ },
+ {
+  "description": "Reject a pending proposal: what it added is removed, what it modified or removed comes back with its own handles. A stale proposal cannot be rejected. For scripted tests: refused unless the server runs with OI_MCP_REVIEW=1.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "P1, P2, … (from proposals_list)"
+    }
+   },
+   "required": [
+    "id"
+   ]
+  },
+  "name": "infra_proposal_reject",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "edit"
+  }
  },
  {
   "description": "The state (SuperCloud): which drawing is open, the project location and the model (axes, profiles, corridors, terrains with handles).",
@@ -1633,7 +2236,16 @@
    "properties": {},
    "required": []
   },
-  "name": "infra_stand"
+  "name": "infra_stand",
+  "annotations": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "read"
+  }
  },
  {
   "description": "Open a drawing from the container's work folder (SuperCloud: Docs puts the file there).",
@@ -1648,7 +2260,16 @@
     "path"
    ]
   },
-  "name": "infra_open"
+  "name": "infra_open",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "save"
+  }
  },
  {
   "description": "Save the drawing to its path (SuperCloud: Docs keeps it as a new version), or to `path`.",
@@ -1661,6 +2282,15 @@
    },
    "required": []
   },
-  "name": "infra_opslaan"
+  "name": "infra_opslaan",
+  "annotations": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "_meta": {
+   "org.openaec/class": "save"
+  }
  }
 ]

@@ -21,6 +21,13 @@ Transports: stdio (default) or streamable HTTP (`--http [host:]port`, POST
 `infra_` and `infra_stand`, `infra_open` and `infra_opslaan` are added; the
 old names keep working. `--tools-json` prints the definitions
 (mcp-tools.json).
+
+Every tool has a class (read, edit, export or save), given to clients as
+the MCP tool annotations and as `_meta["org.openaec/class"]`. An edit runs
+as before, but in propose mode (`assistant` in settings.json, the default)
+its change becomes a pending proposal the user accepts or rejects on the
+Assistant page; every edit, export and save is logged in the drawing with
+the client's name from `initialize` (see docs/assistant-proposals.md).
 """
 
 import base64
@@ -30,6 +37,7 @@ import json
 import os
 import socket
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -49,6 +57,38 @@ def config_dir():
 
 AUTOMATION = os.path.join(config_dir(), "OpenCADStudio", "automation")
 RESULTS = os.path.join(config_dir(), "OpenCADStudio", "open-infra", "api")
+SETTINGS = os.path.join(config_dir(), "OpenCADStudio", "open-infra", "settings.json")
+
+# The MCP client, from its initialize (clientInfo): name and version.
+CLIENT = "unknown client"
+# The assistant request of the tool call running on this thread (see call_tool).
+_CTX = threading.local()
+
+
+def assistant_mode():
+    """propose (the default) or apply: OI_ASSISTANT, else `assistant` in
+    <config>/OpenCADStudio/open-infra/settings.json (the Assistant page)."""
+    env = (os.environ.get("OI_ASSISTANT") or "").strip().lower()
+    if env in ("propose", "apply"):
+        return env
+    try:
+        with open(SETTINGS, encoding="utf-8") as f:
+            v = json.load(f).get("assistant")
+    except (OSError, ValueError, AttributeError):
+        v = None
+    return "apply" if str(v).strip().lower() == "apply" else "propose"
+
+
+def _write_request(rid, req):
+    """The request file the plugins read before the command runs: who asked,
+    which tool, its class and arguments, and the mode."""
+    os.makedirs(RESULTS, exist_ok=True)
+    path = os.path.join(RESULTS, rid + ".request.json")
+    tmp = os.path.join(RESULTS, "." + rid + ".request.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(req, f, ensure_ascii=False)
+    os.replace(tmp, path)
+    return path
 
 
 class OcsError(Exception):
@@ -194,6 +234,9 @@ class Ocs:
         """An Open Infra command; waits for its JSON answer."""
         rid = "mcp" + uuid.uuid4().hex[:12]
         path = os.path.join(RESULTS, rid + ".json")
+        req = getattr(_CTX, "request", None)
+        if req:
+            _write_request(rid, req)
         r = self.request("run", {"cmd": f"{cmd} ID={rid}", "document_id": self.document_id()})
         # A busy window answers "still running"; the command goes on and
         # its result file comes when it is done.
@@ -343,8 +386,15 @@ def t_status(a):
       {"command": STR, "timeout_s": NUM}, ["command"])
 def t_command(a):
     c = a["command"].strip()
-    if c.upper().startswith(("GIS_", "CIV_")):
+    verb = (c.split() or [""])[0].upper()
+    if verb in REVIEW_VERBS:
+        return _review(verb, " ".join(c.split()[1:]))
+    if verb.startswith(("GIS_", "CIV_")):
         return OCS.run(c, int(a.get("timeout_s") or 900))
+    if getattr(_CTX, "request", None) and assistant_mode() == "propose" and verb.lstrip("-_.'") not in VIEW_COMMANDS:
+        raise OcsError(f"{verb}: a host command changes the drawing outside Open Infra, so it cannot be kept as a proposal. "
+                       "In propose mode oi_command runs Open Infra commands (GIS_, CIV_) and view commands only "
+                       f"({', '.join(sorted(VIEW_COMMANDS))}); the user can switch the assistant to apply on the Assistant page.")
     OCS.host(c)
     return {"ok": True, "message": f"{c}: uitgevoerd"}
 
@@ -779,6 +829,7 @@ def t_capture(a):
 
 @tool("oi_save", "Save the drawing (QSAVE), or as a new file with path.", {"path": STR})
 def t_save(a):
+    _note("Saved the drawing" + (f" as {a['path']}" if a.get("path") else ""))
     if a.get("path"):
         r = OCS.request("save", {"path": a["path"], "document_id": OCS.document_id()}, timeout=300)
         if not r.get("ok"):
@@ -794,6 +845,79 @@ def t_open(a):
     if not r.get("ok", True) and r.get("error"):
         raise OcsError(f"open: {r.get('error')}")
     return {"ok": True, "message": json.dumps(r)[:300]}
+
+
+# ── Proposals and the activity log ───────────────────────────────────────────
+#
+# In propose mode an edit becomes a pending proposal in the drawing, which the
+# user accepts or rejects on the Assistant page (Civiel → Settings →
+# Assistant). The review tools below are for scripted tests: an assistant
+# does not accept its own proposals, so they are refused unless the person
+# who runs the server sets OI_MCP_REVIEW=1. The plugins refuse a review verb
+# sent with an assistant's ordinary request as well.
+
+REVIEW_VERBS = {"CIV_VOORSTEL_ACCEPTEREN", "CIV_PROPOSAL_ACCEPT", "CIV_VOORSTEL_AFWIJZEN", "CIV_PROPOSAL_REJECT",
+                "CIV_VOORSTEL_VERVALLEN", "CIV_PROPOSAL_DISMISS"}
+# Host commands oi_command may run in propose mode: they only change the view.
+VIEW_COMMANDS = {"ZOOM", "ZOOMEXTENTS", "PAN", "VIEW", "VSCURRENT", "REGEN", "REGENALL", "REDRAW", "REDRAWALL", "PLAN"}
+
+
+def review_allowed():
+    return os.environ.get("OI_MCP_REVIEW") == "1"
+
+
+def _review(verb, rest):
+    if not review_allowed():
+        raise OcsError("refused: an assistant does not accept or reject its own proposals. The user reviews them on the "
+                       "Assistant page (Civiel → Settings → Assistant). Scripted tests start the server with OI_MCP_REVIEW=1.")
+    previous = getattr(_CTX, "request", None)
+    _CTX.request = {"client": CLIENT, "tool": "review", "class": "edit", "review": True, "arguments": {"command": f"{verb} {rest}".strip()}}
+    try:
+        return OCS.run(f"{verb} {rest}".strip(), 300)
+    finally:
+        _CTX.request = previous
+
+
+def _note(text):
+    """A line in the drawing's activity log for a step without an Open Infra
+    command of its own (a save). Best effort: the step goes on without."""
+    req = getattr(_CTX, "request", None)
+    if not req:
+        return
+    previous = req
+    _CTX.request = dict(req, note=text)
+    try:
+        OCS.run("CIV_ACTIVITEIT_NOTEER", 20)
+    except (OcsError, OSError, ValueError):
+        pass
+    finally:
+        _CTX.request = previous
+
+
+@tool("activity_log", "The drawing's activity log in plain words, newest first: what assistants did (time, client, tool, "
+      "description, entities added/modified/removed, proposal state) and the user's accepts and rejects.", {"max": NUM})
+def t_activity_log(a):
+    return OCS.run("CIV_ACTIVITEIT " + _kv(MAX=int(a.get("max") or 50)))
+
+
+@tool("proposals_list", "The pending proposals in the drawing (propose mode): id, tool, description, handles added, "
+      "modified and removed, and whether each is stale (its entities were edited since).")
+def t_proposals_list(a):
+    return OCS.run("CIV_VOORSTELLEN")
+
+
+@tool("proposal_accept", "Accept a pending proposal: the change stays, its markers and record go. For scripted tests: "
+      "refused unless the server runs with OI_MCP_REVIEW=1, since the user reviews an assistant's proposals.",
+      {"id": {"type": "string", "description": "P1, P2, … (from proposals_list)"}}, ["id"])
+def t_proposal_accept(a):
+    return _review("CIV_VOORSTEL_ACCEPTEREN", _kv(VOORSTEL=a["id"]))
+
+
+@tool("proposal_reject", "Reject a pending proposal: what it added is removed, what it modified or removed comes back "
+      "with its own handles. A stale proposal cannot be rejected. For scripted tests: refused unless the server runs "
+      "with OI_MCP_REVIEW=1.", {"id": {"type": "string", "description": "P1, P2, … (from proposals_list)"}}, ["id"])
+def t_proposal_reject(a):
+    return _review("CIV_VOORSTEL_AFWIJZEN", _kv(VOORSTEL=a["id"]))
 
 
 # ── SuperCloud: the tool's own prefix and its open/save contract ─────────────
@@ -827,9 +951,81 @@ def t_opslaan(a):
 SUPERCLOUD_ONLY = {"infra_stand", "infra_open", "infra_opslaan"}
 
 
+# ── Tool classes ─────────────────────────────────────────────────────────────
+#
+# read: looks, changes nothing; edit: changes the drawing (in propose mode a
+# proposal); export: writes a file from the drawing; save: writes or switches
+# the drawing file. A new tool needs a line here (tests/test_mcp_assistant.py).
+
+CLASSES = ("read", "edit", "export", "save")
+CLASS = {
+    "infra_catalog": "read", "infra_place": "edit", "infra_inspect": "read", "infra_update": "edit",
+    "oi_sessions": "read", "oi_status": "read", "oi_command": "edit", "oi_site": "edit",
+    "gis_import": "edit", "gis_services": "read", "gis_service_load": "edit", "gis_server": "edit",
+    "planning_search": "read", "planning_import": "edit", "planning_gml": "edit",
+    "nlcs_check": "edit", "bgt_mutation": "export", "ifc_export": "export", "quantities": "export",
+    "civ_points_import": "edit", "civ_points": "edit", "civ_points_export": "export", "civ_landxml": "edit",
+    "civ_landxml_export": "export",
+    "civ_tin": "edit", "civ_contours": "edit", "civ_analysis": "edit", "civ_volume": "edit",
+    "civ_alignment": "edit", "civ_offsets": "edit", "civ_station": "read", "civ_length_profile": "edit",
+    "civ_design_profile": "edit", "civ_cross_sections": "edit", "civ_corridor": "edit", "civ_corridor_range": "edit",
+    "civ_assemblies": "edit", "civ_junction": "edit", "civ_roundabout": "edit",
+    "civ_feature_line": "edit", "civ_feature_line_edit": "edit", "civ_plateau": "edit", "civ_slope": "edit",
+    "civ_volume_tin": "edit", "civ_mass_haul": "edit",
+    "civ_bag3d": "edit", "civ_photo_terrain": "edit", "civ_water_level": "edit", "civ_klic3d": "edit",
+    "civ_see_through": "edit", "civ_citygml": "edit", "civ_bgt3d": "edit", "civ_subsurface": "edit",
+    "oi_view": "read", "oi_capture": "read", "oi_save": "save", "oi_open": "save",
+    "activity_log": "read", "proposals_list": "read", "proposal_accept": "edit", "proposal_reject": "edit",
+    "infra_stand": "read", "infra_open": "save", "infra_opslaan": "save",
+}
+# MCP tool annotations per class; HINTS refines single tools.
+ANNOTATIONS = {
+    "read": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    "edit": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+    "export": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    "save": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
+}
+_DESTRUCTIVE = ("oi_command", "oi_site", "infra_update", "nlcs_check", "civ_feature_line_edit", "civ_plateau", "civ_slope",
+                "civ_water_level", "civ_see_through", "proposal_reject")
+_IDEMPOTENT = ("oi_site", "infra_update", "nlcs_check", "civ_water_level", "civ_see_through", "proposal_accept", "proposal_reject")
+_OPEN_WORLD = ("gis_import", "gis_service_load", "gis_server", "planning_search", "planning_import", "civ_tin", "civ_points",
+               "civ_length_profile", "civ_cross_sections", "civ_corridor", "civ_corridor_range", "civ_feature_line", "civ_plateau",
+               "civ_slope", "civ_bag3d", "civ_photo_terrain", "civ_water_level", "civ_klic3d", "civ_citygml", "civ_bgt3d",
+               "civ_subsurface", "oi_site")
+HINTS = {}
+for _n in _DESTRUCTIVE:
+    HINTS.setdefault(_n, {})["destructiveHint"] = True
+for _n in _IDEMPOTENT:
+    HINTS.setdefault(_n, {})["idempotentHint"] = True
+for _n in _OPEN_WORLD:
+    HINTS.setdefault(_n, {})["openWorldHint"] = True
+# Not run as an assistant's change: the review itself.
+REVIEW_TOOLS = {"proposal_accept", "proposal_reject"}
+
+
+def unclassified():
+    """Tools without a class (a test keeps this empty)."""
+    return [t["name"] for t in TOOLS if CLASS.get(t["name"]) not in CLASSES]
+
+
+def annotations(name):
+    kind = CLASS.get(name)
+    if kind not in ANNOTATIONS:
+        return None
+    return dict(ANNOTATIONS[kind], **HINTS.get(name, {}))
+
+
 def listed_tools():
-    return [dict({k: t[k] for k in ("description", "inputSchema")}, name=public_name(t["name"]))
-            for t in TOOLS if PREFIX or t["name"] not in SUPERCLOUD_ONLY]
+    out = []
+    for t in TOOLS:
+        if not PREFIX and t["name"] in SUPERCLOUD_ONLY:
+            continue
+        d = dict({k: t[k] for k in ("description", "inputSchema")}, name=public_name(t["name"]))
+        if annotations(t["name"]):
+            d["annotations"] = annotations(t["name"])
+            d["_meta"] = {"org.openaec/class": CLASS[t["name"]]}
+        out.append(d)
+    return out
 
 
 def find_tool(name):
@@ -844,7 +1040,11 @@ INSTRUCTIONS = (
     "Start with oi_sessions and oi_site (project location and area), then import data (gis_import), "
     "terrain (civ_tin), axes (civ_alignment), profiles (civ_length_profile, civ_design_profile), corridors (civ_corridor), "
     "earthwork (civ_volume), the 3D model (civ_photo_terrain, civ_bag3d, civ_bgt3d) and the subsurface (civ_subsurface: BRO CPTs and boreholes). oi_status lists handles; "
-    "oi_view and oi_capture show the result. Coordinates are project coordinates in metres (RD in NL)."
+    "oi_view and oi_capture show the result. Coordinates are project coordinates in metres (RD in NL). "
+    "Each tool is classed read, edit, export or save (annotations, _meta org.openaec/class). In propose mode (the "
+    "default) an edit's change enters the drawing as a pending proposal, marked for the user, who accepts or rejects it "
+    "on the Assistant page; later steps can build on it as usual. Do not try to accept or reject your own proposals. "
+    "proposals_list and activity_log show what is pending and what was done."
 )
 
 
@@ -852,15 +1052,28 @@ def call_tool(name, args):
     t = find_tool(name)
     if not t:
         return {"content": [{"type": "text", "text": f"onbekende tool {name}"}], "isError": True}
+    kind = CLASS.get(t["name"])
+    # Edits, exports and saves are an assistant's acts: the plugins record
+    # them (a proposal in propose mode) and log them.
+    if kind in ("edit", "export", "save") and t["name"] not in REVIEW_TOOLS:
+        _CTX.request = {"client": CLIENT, "tool": t["name"], "class": kind, "mode": assistant_mode(), "arguments": args or {}, "review": False}
+    else:
+        _CTX.request = None
     try:
         r = t["fn"](args or {})
     except (OcsError, urllib.error.URLError, OSError, ValueError, KeyError) as e:
         return {"content": [{"type": "text", "text": f"{name}: {e}"}], "isError": True}
+    finally:
+        _CTX.request = None
     content = []
     if isinstance(r, dict) and "__image__" in r:
         content.append({"type": "image", "data": r.pop("__image__"), "mimeType": "image/png"})
     ok = not (isinstance(r, dict) and r.get("ok") is False)
     text = r.get("message") if isinstance(r, dict) and "message" in r else json.dumps(r, ensure_ascii=False)
+    prop = r.get("data", {}).get("proposal") if isinstance(r, dict) and isinstance(r.get("data"), dict) else None
+    if isinstance(prop, dict) and prop.get("state") == "pending":
+        text += (f"\nProposal {prop.get('id')} is waiting for the user's review (Assistant page): +{prop.get('added', 0)} "
+                 f"~{prop.get('modified', 0)} -{prop.get('removed', 0)} entities. The change is in the drawing; later steps can use it.")
     if isinstance(r, dict) and r.get("data"):
         text += "\n" + json.dumps(r["data"], ensure_ascii=False)[:20000]
     text = text[:30000]
@@ -872,10 +1085,13 @@ def call_tool(name, args):
 
 
 def handle(msg):
+    global CLIENT
     method, mid, params = msg.get("method"), msg.get("id"), msg.get("params") or {}
     if mid is None:
         return None  # a notification
     if method == "initialize":
+        ci = params.get("clientInfo") if isinstance(params.get("clientInfo"), dict) else {}
+        CLIENT = " ".join(str(ci[k]) for k in ("name", "version") if ci.get(k))[:80] or "unknown client"
         result = {
             "protocolVersion": params.get("protocolVersion") or PROTOCOL,
             "capabilities": {"tools": {"listChanged": False}},
