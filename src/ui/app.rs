@@ -39,10 +39,10 @@ use crate::nlcs_check::{self, Report, Rule, Severity};
 use crate::civiel::{self, landmeten::Format, CivielOptions};
 
 const ACI_CHOICES: &[(i16, &str)] = &[(1, "rood"), (2, "geel"), (3, "groen"), (4, "cyaan"), (5, "blauw"), (6, "magenta"), (7, "wit/zwart"), (8, "grijs"), (30, "oranje")];
-const ACCENT: Color32 = Color32::from_rgb(33, 150, 220);
-const OK_GREEN: Color32 = Color32::from_rgb(152, 195, 121);
-const ERR_RED: Color32 = Color32::from_rgb(224, 108, 117);
-const WARN: Color32 = Color32::from_rgb(229, 192, 123);
+pub(super) const ACCENT: Color32 = Color32::from_rgb(33, 150, 220);
+pub(super) const OK_GREEN: Color32 = Color32::from_rgb(152, 195, 121);
+pub(super) const ERR_RED: Color32 = Color32::from_rgb(224, 108, 117);
+pub(super) const WARN: Color32 = Color32::from_rgb(229, 192, 123);
 /// Map height on the import pages; the location page gets most of the window,
 /// like the map pane of FreeCAD's "Set Geographic Location" dialog.
 const MAP_H: f32 = 360.0;
@@ -80,6 +80,7 @@ fn icon(name: &str) -> egui::Image<'static> {
         "quantities" => include_str!("../../assets/hoeveelheden.svg"),
         "axis" => include_str!("../../assets/as.svg"),
         "services" => include_str!("../../assets/services.svg"),
+        "problems" => include_str!("../../assets/problemen.svg"),
         _ => include_str!("../../assets/list.svg"),
     };
     let bytes = svg.replace("currentColor", "#dfe5ea").into_bytes();
@@ -270,7 +271,7 @@ fn severity_colour(s: Severity) -> Color32 {
 }
 
 /// A small coloured label.
-fn badge(ui: &mut egui::Ui, text: &str, colour: Color32) {
+pub(super) fn badge(ui: &mut egui::Ui, text: &str, colour: Color32) {
     let galley = ui.painter().layout_no_wrap(text.to_string(), egui::FontId::proportional(10.5), Color32::BLACK);
     let (rect, _) = ui.allocate_exact_size(Vec2::new((galley.size().x + 12.0).max(84.0), 18.0), egui::Sense::hover());
     ui.painter().rect_filled(rect, 9.0, colour);
@@ -464,6 +465,7 @@ pub struct App {
     files: super::files::FilesPage,
     svc: services::ServicesPage,
     planning: super::planning::PlanningPage,
+    problems: super::problems::ProblemsPage,
 }
 
 #[cfg(test)]
@@ -582,6 +584,7 @@ impl App {
             files: Default::default(),
             svc: Default::default(),
             planning: Default::default(),
+            problems: Default::default(),
         }
     }
 
@@ -647,6 +650,7 @@ impl App {
                     match tab {
                         Tab::Controle => self.start_check(ctx),
                         Tab::Hoeveelheden => self.start_quantities(ctx),
+                        Tab::Problems => self.problems.start(ctx),
                         _ => {}
                     }
                     ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
@@ -2156,6 +2160,9 @@ impl App {
             }
         }
         page_header(ui, "check", "NLCS-controle", "Toetst de tekening aan NLCS 5.02: laagnamen, laagkleur, -lijndikte en -lijntype per tekenstatus, elementen op DuLaag, teksthoogtes.");
+        if ui.link(crate::lang::tr("Alle ontwerptoetsen in één lijst, met herstel: Problemen →", "Every design check in one list, with fixes: Problems →")).clicked() {
+            self.tab = Tab::Problems;
+        }
         group(ui, "Instellingen", |ui| {
             ui.horizontal(|ui| {
                 ui.label("Tekenschaal (voor teksthoogtes)");
@@ -2791,7 +2798,7 @@ fn hit_row(ui: &mut egui::Ui, h: &Hit, highlighted: bool) -> egui::Response {
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-fn page_header(ui: &mut egui::Ui, icon_name: &str, title: &str, subtitle: &str) {
+pub(super) fn page_header(ui: &mut egui::Ui, icon_name: &str, title: &str, subtitle: &str) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.add(icon(icon_name).fit_to_exact_size(Vec2::splat(26.0)));
@@ -2804,7 +2811,7 @@ fn page_header(ui: &mut egui::Ui, icon_name: &str, title: &str, subtitle: &str) 
 }
 
 /// A titled group box, like the QGroupBox sections of the FreeCAD dialogs.
-fn group(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
+pub(super) fn group(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
     egui::Frame::group(ui.style()).inner_margin(egui::Margin::same(10)).corner_radius(4.0).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.label(RichText::new(title.to_uppercase()).small().strong().color(ACCENT));
@@ -2814,24 +2821,24 @@ fn group(ui: &mut egui::Ui, title: &str, add: impl FnOnce(&mut egui::Ui)) {
     ui.add_space(6.0);
 }
 
-fn list_frame(ui: &mut egui::Ui, height: f32, id: &str, add: impl FnOnce(&mut egui::Ui)) {
+pub(super) fn list_frame(ui: &mut egui::Ui, height: f32, id: &str, add: impl FnOnce(&mut egui::Ui)) {
     egui::Frame::new().fill(ui.visuals().extreme_bg_color).inner_margin(egui::Margin::same(4)).corner_radius(3.0).show(ui, |ui| {
         egui::ScrollArea::vertical().id_salt(id).max_height(height).auto_shrink([false, true]).show(ui, add);
     });
 }
 
-fn button_bar(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+pub(super) fn button_bar(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     ui.horizontal(add);
 }
 
-fn job_status<T: Send + 'static>(ui: &mut egui::Ui, job: &Option<Job<T>>) {
+pub(super) fn job_status<T: Send + 'static>(ui: &mut egui::Ui, job: &Option<Job<T>>) {
     if let Some(j) = job {
         ui.spinner();
         ui.label(j.status());
     }
 }
 
-fn primary_button(text: &str) -> egui::Button<'static> {
+pub(super) fn primary_button(text: &str) -> egui::Button<'static> {
     egui::Button::new(RichText::new(text.to_string()).strong().color(Color32::WHITE)).fill(ACCENT).min_size(Vec2::new(130.0, 28.0))
 }
 
@@ -2911,6 +2918,7 @@ impl eframe::App for App {
             if civil {
                 ui.label(RichText::new("CIVIEL").small().weak());
                 nav(ui, Tab::Civiel, "axis", crate::lang::tr("Instellingen en acties", "Settings and actions"));
+                nav(ui, Tab::Problems, "problems", crate::lang::tr("Problemen", "Problems"));
                 ui.add_space(8.0);
                 ui.label(RichText::new(crate::lang::tr("ALGEMEEN","GENERAL")).small().weak());
                 nav(ui, Tab::Location, "location", crate::lang::tr("Projectlocatie", "Project location"));
@@ -2941,6 +2949,7 @@ impl eframe::App for App {
             ui.add_space(8.0);
             ui.label(RichText::new(crate::lang::tr("HULPMIDDELEN","TOOLS")).small().weak());
             nav(ui, Tab::Coords, "point", crate::lang::tr("Coördinaten", "Coordinates"));
+            nav(ui, Tab::Problems, "problems", crate::lang::tr("Problemen", "Problems"));
             nav(ui, Tab::Servers, "server", crate::lang::tr("Servers", "Servers"));
             ui.add_space(8.0);
             ui.label(RichText::new(crate::lang::tr("BESTANDEN EN BIBLIOTHEEK", "FILES AND LIBRARY")).small().weak());
@@ -2985,7 +2994,7 @@ impl eframe::App for App {
         });
         egui::CentralPanel::default().show(ui, |ui| {
             // OK / Test / Annuleren stay visible at the bottom, as in the FreeCAD dialogs.
-            let has_actions = matches!(self.tab, Tab::Location | Tab::Raster | Tab::Wfs | Tab::Osm | Tab::Pdok | Tab::Nlcs | Tab::Ahn | Tab::Controle | Tab::Hoeveelheden | Tab::Civiel | Tab::Services);
+            let has_actions = matches!(self.tab, Tab::Location | Tab::Raster | Tab::Wfs | Tab::Osm | Tab::Pdok | Tab::Nlcs | Tab::Ahn | Tab::Controle | Tab::Hoeveelheden | Tab::Civiel | Tab::Services | Tab::Problems);
             if has_actions {
                 egui::Panel::bottom("actions").frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 8))).show(ui, |ui| match self.tab {
                     Tab::Location => self.location_actions(ui),
@@ -2999,6 +3008,7 @@ impl eframe::App for App {
                     Tab::Hoeveelheden => self.hoeveelheden_actions(ui),
                     Tab::Civiel => self.civiel_actions(ui),
                     Tab::Services => self.services_actions(ui),
+                    Tab::Problems => self.problems.actions(ui),
                     _ => {}
                 });
             }
@@ -3026,6 +3036,7 @@ impl eframe::App for App {
                     Tab::Services => self.services_page(ui),
                     Tab::Localisation => self.localisation_page(ui),
                     Tab::Planning => self.planning.page(ui),
+                    Tab::Problems => self.problems.page(ui),
                 }
             });
         });
