@@ -14,6 +14,8 @@
 pub mod alignment;
 // A corridor's surface as road parts and earthworks (stream uitwisseling).
 pub mod corridor;
+// Reading IFC: alignments, terrain and element geometry (CIV_IFC_IMPORT).
+pub mod import;
 pub mod step;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -1620,7 +1622,7 @@ impl<W: Write> Exporter<'_, W> {
         let road = gr.road.clone().unwrap_or_default();
         let al = doc
             .model_space_entities()
-            .filter(|e| matches!(e, EntityType::LwPolyline(_)) && e.common().layer.contains("-AM-AS-"))
+            .filter(|e| matches!(e, EntityType::LwPolyline(_)) && nlcs::as_nlcs(&e.common().layer).contains("-AM-AS-"))
             .filter(|e| {
                 let d = data_of(e);
                 get(&d, "as") == Some(axis_name.as_str()) && ["verschuiving_m", "corridor", "ontwerpprofiel", "lengteprofiel"].iter().all(|k| get(&d, k).is_none())

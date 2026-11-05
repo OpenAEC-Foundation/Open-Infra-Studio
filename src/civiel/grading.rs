@@ -1595,6 +1595,18 @@ pub struct PlateauRequest {
     pub name: Option<String>,
     /// Join the design surface of the other gradings.
     pub join: bool,
+    /// `PEIL=AUTO`: find the level where cut and fill balance.
+    pub auto: Option<AutoLevel>,
+}
+
+/// `PEIL=AUTO [MIN=] [MAX=] [FACTOR=]`: the balance search of a plateau.
+#[derive(Clone, Copy, Debug)]
+pub struct AutoLevel {
+    /// Search bounds (m); default the ground under the outline ± 1 m.
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    /// In-situ cut needed per m³ of compacted fill: balance is cut = factor × fill.
+    pub factor: f64,
 }
 
 fn level_text(z: f64) -> String {
@@ -1615,15 +1627,72 @@ pub fn plateau(opt: &super::CivielOptions, req: PlateauRequest, progress: &dyn F
     let reference = req.reference.map(|p| ctx.to_drawing(p)).unwrap_or(centroid);
     let mut edge = line.pts.clone();
     let mut how = String::new();
-    let level = req.level.or(if line.has_z { None } else { req.default_level });
+    let (gfall, bfall) = req.fall.unwrap_or((0.0, 0.0));
+    let ufall = [bfall.sin(), bfall.cos()];
+    let edge_at = |level: f64, edge: &mut Vec<[f64; 3]>| {
+        for p in edge.iter_mut() {
+            p[2] = level * f - gfall / 100.0 * ((p[0] - reference[0]) * ufall[0] + (p[1] - reference[1]) * ufall[1]);
+        }
+    };
+    let side = if area > 0.0 { 1.0 } else { -1.0 };
+    let target = Target::Ground { cut: req.cut, fill: req.fill, reach: req.reach * f };
+    let doc = super::document(&["tin"], &req.source.handle())?;
+    let mut ground = Maaiveld::find(&ctx, &doc)?;
+    let mut balance = None;
+    if let Some(a) = req.auto {
+        progress(tr("Balanspeil zoeken…", "Searching the balance level…").into());
+        let mut zs: Vec<f64> = line.pts.iter().filter_map(|p| ground.height([p[0], p[1]], f)).collect();
+        zs.extend(ground.height(centroid, f));
+        if zs.is_empty() {
+            return Err(ground.error().unwrap_or_else(|| tf!("geen maaiveld onder het plateau ({})", "no ground under the plateau ({})", ground.label())));
+        }
+        let lo = a.min.unwrap_or(zs.iter().copied().fold(f64::MAX, f64::min) - 1.0);
+        let hi = a.max.unwrap_or(zs.iter().copied().fold(f64::MIN, f64::max) + 1.0);
+        let mut trial = line.pts.clone();
+        let found = rekenkern::balans::balance_level(
+            |z| {
+                edge_at(z, &mut trial);
+                let v = grade(&trial, true, side, target, Sampling::metres(f, req.step.max(2.0)), &mut |p| ground.height(p, f).map(|h| h * f), true)
+                    .ok()
+                    .and_then(|g| grading_volume(&ctx, &mut ground, &g.tris));
+                let (cut, fill) = v.map(|v| (v.0, v.1)).unwrap_or((0.0, 0.0));
+                rekenkern::balans::CutFill { cut, fill }
+            },
+            lo,
+            hi,
+            a.factor,
+            0.005,
+        );
+        match found {
+            Ok(b) => balance = Some(b),
+            Err(e) => {
+                return Err(match e.best {
+                    Some(b) => tf!(
+                        "geen balans tussen {} en {} m: bij {} m blijft {} m³ over (afgraven {}, ophogen {}); geef MIN= en MAX= of een ander FACTOR=",
+                        "no balance between {} and {} m: at {} m {} m³ is left (cut {}, fill {}); give MIN= and MAX= or another FACTOR=",
+                        lvl(lo), lvl(hi), lvl(b.level), b.net.round(), b.cut.round(), b.fill.round()
+                    ),
+                    None => e.message,
+                })
+            }
+        }
+    }
+    let level = balance.as_ref().map(|b| b.level).or(req.level).or(if line.has_z { None } else { req.default_level });
     match level {
         Some(level) => {
-            let (g, b) = req.fall.unwrap_or((0.0, 0.0));
-            let u = [b.sin(), b.cos()];
-            for p in edge.iter_mut() {
-                p[2] = level * f - g / 100.0 * ((p[0] - reference[0]) * u[0] + (p[1] - reference[1]) * u[1]);
-            }
+            let (g, b) = (gfall, bfall);
+            edge_at(level, &mut edge);
             how = tf!("peil {}", "level {}", level_text(level));
+            if let Some(bal) = &balance {
+                how.push_str(&tf!(
+                    " (balans: afgraven {} = {} × ophogen {} m³, {} pogingen)",
+                    " (balance: cut {} = {} × fill {} m³, {} trials)",
+                    bal.cut.round(), bal.factor, bal.fill.round(), bal.evaluations
+                ));
+                api::note("balans_afgraven_m3", bal.cut);
+                api::note("balans_ophogen_m3", bal.fill);
+                api::note("balans_factor", bal.factor);
+            }
             if g != 0.0 {
                 how.push_str(&tf!(", afschot {} % naar {}", ", fall {} % to {}", pct(g), bearing_name(b)));
             }
@@ -1631,11 +1700,6 @@ pub fn plateau(opt: &super::CivielOptions, req: PlateauRequest, progress: &dyn F
         None if line.has_z => how.push_str(tr("hoogtes van de kantlijn", "heights of the feature line")),
         None => return Err(tr("geef het peil van het plateau: PEIL=<m NAP>", "give the level of the plateau: PEIL=<m>").into()),
     }
-    progress(tr("Maaiveld rond het plateau…", "Ground around the plateau…").into());
-    let doc = super::document(&["tin"], &req.source.handle())?;
-    let mut ground = Maaiveld::find(&ctx, &doc)?;
-    let side = if area > 0.0 { 1.0 } else { -1.0 };
-    let target = Target::Ground { cut: req.cut, fill: req.fill, reach: req.reach * f };
     progress(tr("Taluds naar het maaiveld…", "Slopes to the ground…").into());
     let g = grade(&edge, true, side, target, Sampling::metres(f, req.step), &mut |p| ground.height(p, f).map(|z| z * f), true)?;
     if g.rays.iter().all(|r| r.end == End::NoGround) {
@@ -1860,9 +1924,14 @@ pub fn volume_tin(opt: &super::CivielOptions, req: VolumeRequest, progress: &dyn
     let ground = Tin::of_status(&doc, 'B').ok_or("geen bestaand terrein (B-…-OG-TRIANGULATIE): maak eerst een TIN (CIV_TIN)")?;
     let selected = || -> Option<Tin> {
         let sel: std::collections::HashSet<Handle> = bridge::selection().unwrap_or_default().into_iter().collect();
+        let mut memo = crate::nlcs::LayerMemo::default();
         let faces: std::collections::HashSet<Handle> = doc
             .model_space_entities()
-            .filter(|e| matches!(e, EntityType::Face3D(_) | EntityType::Mesh(_)) && sel.contains(&e.common().handle) && !e.common().layer.starts_with("B-"))
+            .filter(|e| matches!(e, EntityType::Face3D(_) | EntityType::Mesh(_)) && sel.contains(&e.common().handle))
+            .filter(|e| {
+                let l = &e.common().layer;
+                !(l.starts_with("B-") || memo.other(l).is_some_and(|(s, _)| s == crate::nlcs::Status::B))
+            })
             .map(|e| e.common().handle)
             .collect();
         (!faces.is_empty()).then(|| Tin::from_document_with(&doc, &faces)).flatten()

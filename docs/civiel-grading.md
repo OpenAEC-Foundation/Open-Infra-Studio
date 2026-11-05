@@ -51,6 +51,7 @@ A plot at a level with an optional fall, sloping to the existing ground: a cut s
 |---|---|
 | `LIJN=` / `PUNTEN=` / selection | The closed outline (a polyline, a closed feature line, or three or more points). |
 | `PEIL=<m>` | The level at the reference point. Without it a feature line keeps its own heights. |
+| `PEIL=AUTO [MIN=] [MAX=] [FACTOR=]` | Find the level where cut and fill balance: cut = `FACTOR` × fill, where `FACTOR` is the m³ of in-situ cut needed per m³ of compacted fill (default 1). The search uses Brent's method between `MIN` and `MAX` (default: the ground under the outline ± 1 m) to 5 mm. Each trial builds the same slopes to the ground and measures cut and fill as the plateau itself does. If there is no balance within the bounds, the error gives the best bound and its surplus. The calculation is in `rekenkern::balans` (issue #68). |
 | `AFSCHOT=<%> RICHTING=<N…NW or degrees>` (or `AFSCHOT=<%>;<dir>`) | Fall of the plateau, downhill towards the compass direction (N, NO/NE, O/E, ZO/SE, Z/S, ZW/SW, W, NW, or degrees clockwise from north). |
 | `PEILPUNT=x,y` | Where `PEIL` applies (default: the centroid of the outline). |
 | `TALUD_AF=1:n`, `TALUD_OP=1:n`, `TALUD=1:n` | Cut and fill slopes (`TALUD` sets both); `1:2,5`, `2.5` and `1:2.5` all work. |

@@ -1,0 +1,280 @@
+#id	ncs-us
+#name	U.S. National CAD Standard (NCS) — A/E/C CAD Standard R6 layers
+#region	US
+#source	https://www.nationalcadstandard.org/ncs6/content.php
+#source	https://www.wbdg.org/FFC/AECCAD/ERDCITL_TR12-6_r6.pdf
+#status	B=E	N=N	T=T	V=D
+#element	G=	S=	T=IDEN	A=PATT
+# NCS layer format (AIA CAD Layer Guidelines): discipline designator (2),
+# major group (4), up to two minor groups (4), status (1, last field).
+# Layer names, colours (RGB), line widths and line styles from the A/E/C
+# CAD Standard Release 6.0 (ERDC/ITL TR-12-6, public), which follows the
+# NCS format. "derived" in the note: no verbatim A/E/C layer; built from
+# the format with the pen of the named A/E/C layer. Named line styles
+# with text or symbols are drawn CONTINUOUS. See docs/laagstandaarden.md.
+group	name	layer	annotation	color	linetype	lineweight_mm	note
+*	*	C-SITE-MISC{-status}	C-SITE-MISC-{element}{-status}	165,41,0	CONTINUOUS	0.35	derived; pen of C-SITE-STRC
+ZZ	*	G-ANNO-SYMB		255,0,255	CONTINUOUS	0.35	A/E/C R6: Miscellaneous symbols
+AL	*	G-ANNO-TTLB		255,255,255	CONTINUOUS	0.35	A/E/C R6: Border and titleblock linework
+KG	*	C-PROP-LINE{-status}	C-PROP-LINE-{element}{-status}	255,255,0	PHANTOM	0.50	A/E/C R6: Property lines
+KL	*	E-COMM-UGND{-status}	E-COMM-UGND-{element}{-status}	255,63,0	CONTINUOUS	0.50	A/E/C R6: Underground communications/telephone lines
+KW	*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+MO	*	V-BORE-GENL-LOCN{-status}	V-BORE-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: General boring X,Y location marker
+OB	*	C-CHAN-BWTR{-status}	C-CHAN-BWTR-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Breakwaters
+OG	*	C-TOPO-SHOR{-status}	C-TOPO-SHOR-{element}{-status}	0,255,255	CONTINUOUS	0.35	A/E/C R6: Shorelines, land features, and references
+RI	*	C-SSWR-MAIN-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Sanitary sewer piping
+VH	*	C-ROAD-ASPH{-status}	C-ROAD-ASPH-{element}{-status}	128,128,128	CONTINUOUS	0.25	A/E/C R6: Road outlines - asphalt surface
+VV	*	C-CHAN-NAID{-status}	C-CHAN-NAID-{element}{-status}	255,255,255	CONTINUOUS	0.35	A/E/C R6: Navigation aids and text
+VW	*	C-ROAD-SIGN{-status}	C-ROAD-SIGN-{element}{-status}	255,0,0	CONTINUOUS	0.25	A/E/C R6: Signs
+WH	*	C-STRM-POND{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Retention ponds, lagoons, watersheds, and basins
+BC	*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+FC	*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+GC	*	L-SITE-RTWL{-status}	L-SITE-RTWL-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Retaining walls
+HC	*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+HU	*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+MC	*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+SC	*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+KC	*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+MW	*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+AM	*	C-ALGN-LINE{-status}	C-ALGN-LINE-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Alignments
+IW	*	C-ROAD-SGNL{-status}	C-ROAD-SGNL-{element}{-status}	255,0,0	CONTINUOUS	0.25	derived; pen of C-ROAD-SIGN
+IV	*	C-CHAN-SGNL{-status}	C-CHAN-SGNL-{element}{-status}	255,255,255	CONTINUOUS	0.35	derived; pen of C-CHAN-NAID
+OV	*	E-LITE-EXTR{-status}	E-LITE-{element}{-status}	255,0,0	CONTINUOUS	0.50	A/E/C R6: Exterior lights
+BV	*	C-ROAD-GRAL{-status}	C-ROAD-GRAL-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Guard rails
+FV	*	C-ECCO-PRCH{-status}	C-ECCO-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Perch/nesting hole
+GK	*	L-SITE-RTWL{-status}	L-SITE-RTWL-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Retaining walls
+GR	*	L-PLNT-PLNT{-status}	L-PLNT-{element}{-status}	103,165,82	CONTINUOUS	0.50	A/E/C R6: Planting plants (e.g., ornamental annuals and perennials)
+GW	*	C-GRAD-FNSH{-status}	C-GRAD-FNSH-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Finished grade
+IE	*	L-SITE-FURN{-status}	L-SITE-FURN-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Furnishings
+RI	DWA*	C-SSWR-MAIN-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Sanitary sewer piping
+RI	DWA_RIOOLLEIDING*	C-SSWR-MAIN-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Sanitary sewer piping
+RI	DWA_TRANSPORTLEIDING*	C-SSWR-MAIN-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Sanitary sewer piping
+RI	DWA_PERCEELAANSLUITLEIDING*	C-SSWR-SERV-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Sanitary sewer service piping
+RI	DWA_RIOOLPUT*	C-SSWR-JBOX{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Junction boxes and manholes
+RI	DWA_STROMINGSRICHTING	C-SSWR-FLOW{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Flow direction arrows
+RI	HWA*	C-STRM-MAIN-PIPE{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Storm sewer piping
+RI	HWA_RIOOLLEIDING*	C-STRM-MAIN-PIPE{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Storm sewer piping
+RI	HWA_TRANSPORTLEIDING*	C-STRM-MAIN-PIPE{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Storm sewer piping
+RI	HWA_PERCEELAANSLUITLEIDING*	C-STRM-SERV-PIPE{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Storm sewer service piping
+RI	HWA_KOLKAANSLUITLEIDING*	C-STRM-SERV-PIPE{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Storm sewer service piping
+RI	HWA_RIOOLPUT*	C-STRM-MHOL{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Manholes
+RI	HWA_KOLK*	C-STRM-INLT{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Inlets (curb, surface, and catch basins)
+RI	HWA_GOOT*	C-STRM-INLT{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Inlets (curb, surface, and catch basins)
+RI	HWA_STROMINGSRICHTING	C-STRM-FLOW{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Flow direction arrows
+RI	HWA_UITLAATCONSTRUCTIE	C-STRM-HWAL{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.50	A/E/C R6: Headwalls and endwalls
+RI	GWA*	C-SSWR-CMBD-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	derived; pen of C-SSWR-MAIN-PIPE
+RI	GWA_RIOOLLEIDING*	C-SSWR-CMBD-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	derived; pen of C-SSWR-MAIN-PIPE
+RI	GWA_TRANSPORTLEIDING*	C-SSWR-CMBD-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	derived; pen of C-SSWR-MAIN-PIPE
+RI	GWA_PERCEELAANSLUITLEIDING*	C-SSWR-SERV-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Sanitary sewer service piping
+RI	GWA_KOLKAANSLUITLEIDING*	C-STRM-SERV-PIPE{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Storm sewer service piping
+RI	GWA_RIOOLPUT*	C-SSWR-JBOX{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Junction boxes and manholes
+RI	GWA_KOLK*	C-STRM-INLT{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Inlets (curb, surface, and catch basins)
+RI	GWA_STROMINGSRICHTING	C-SSWR-FLOW{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Flow direction arrows
+RI	ITR*	C-STRM-SUBS-PIPE{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Subsurface drain piping
+RI	ITR_RIOOLPUT*	C-STRM-MHOL{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Manholes
+RI	ITR_KOLK*	C-STRM-INLT{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Inlets (curb, surface, and catch basins)
+RI	ITR_STROMINGSRICHTING	C-STRM-FLOW{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Flow direction arrows
+RI	PERSLEIDING*	C-SSWR-FORC-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	derived; pen of C-SSWR-MAIN-PIPE
+RI	PERSLEIDING_RIOOLPUT*	C-SSWR-JBOX{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Junction boxes and manholes
+RI	PERSLEIDING_GEMAAL*	C-SSWR-STNS-PUMP{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Booster pump stations
+RI	PERSLEIDING_STROMINGSRICHTING	C-SSWR-FLOW{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Flow direction arrows
+RI	VACUUMLEIDING*	C-SSWR-VACU-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	derived; pen of C-SSWR-MAIN-PIPE
+RI	VACUUMLEIDING_RIOOLPUT*	C-SSWR-JBOX{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Junction boxes and manholes
+RI	VACUUMLEIDING_GEMAAL*	C-SSWR-STNS-PUMP{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Booster pump stations
+RI	DRAINAGE*	C-STRM-SUBS-PIPE{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Subsurface drain piping
+RI	DRAINAGE_PUT*	C-STRM-MHOL{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Manholes
+RI	OVERIG*	C-SSWR-MAIN-PIPE{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Sanitary sewer piping
+RI	OVERIG_LOZEPUT	C-SSWR-JBOX{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Junction boxes and manholes
+RI	OVERIG_RIOOLPUT*	C-SSWR-JBOX{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Junction boxes and manholes
+RI	OVERIG_DUIKER*	C-STRM-CULV{-status}	C-STRM-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Culverts
+RI	RWZI*	C-SSWR-PLNT{-status}	C-SSWR-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Treatment plants
+KL	ET*	E-SECD-UGND{-status}	E-SECD-UGND-{element}{-status}	105,0,0	CONTINUOUS	0.50	A/E/C R6: Underground electrical utility lines
+KL	ET_LS*	E-SECD-UGND{-status}	E-SECD-UGND-{element}{-status}	105,0,0	CONTINUOUS	0.50	A/E/C R6: Underground electrical utility lines
+KL	ET_MS*	E-PRIM-UGND{-status}	E-PRIM-UGND-{element}{-status}	105,0,0	CONTINUOUS	0.50	A/E/C R6: Underground electrical utility lines
+KL	ET_HS*	E-PRIM-UGND-HVLT{-status}	E-PRIM-{element}{-status}	105,0,0	CONTINUOUS	0.50	derived; pen of E-PRIM-UGND
+KL	ET_ZHS*	E-PRIM-UGND-EHVT{-status}	E-PRIM-{element}{-status}	105,0,0	CONTINUOUS	0.50	derived; pen of E-PRIM-UGND
+KL	ET_MANTELBUIS*	E-SECD-UGND-DUCT{-status}	E-SECD-{element}{-status}	105,0,0	CONTINUOUS	0.50	derived; pen of E-SECD-UGND
+KL	ET_HULPSTUK*	E-SECD-JBOX{-status}	E-SECD-{element}{-status}	255,63,0	CONTINUOUS	0.50	derived; pen of E-COMM-JBOX
+KL	ET_AARDING*	E-SECD-GRND{-status}	E-SECD-{element}{-status}	105,0,0	CONTINUOUS	0.50	derived; pen of E-SECD-UGND
+KL	DATA*	E-COMM-UGND{-status}	E-COMM-UGND-{element}{-status}	255,63,0	CONTINUOUS	0.50	A/E/C R6: Underground communications/telephone lines
+KL	DATA_MANTELBUIS*	E-COMM-UGND-DUCT{-status}	E-COMM-{element}{-status}	255,63,0	CONTINUOUS	0.50	derived; pen of E-COMM-UGND
+KL	DATA_HULPSTUK*	E-COMM-JBOX{-status}	E-COMM-{element}{-status}	255,63,0	CONTINUOUS	0.50	A/E/C R6: Communication junction boxes, pull boxes, handholes, pedestals, and splices
+KL	DATA_KAST*	E-COMM-EQPM{-status}	E-COMM-{element}{-status}	255,63,0	CONTINUOUS	0.50	A/E/C R6: Other communications distribution equipment
+KL	CCTV*	E-COMM-UGND{-status}	E-COMM-UGND-{element}{-status}	255,63,0	CONTINUOUS	0.50	A/E/C R6: Underground communications/telephone lines
+KL	GAS*	C-NGAS-PIPE{-status}	C-NGAS-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Natural gas piping
+KL	GAS_LD*	C-NGAS-PIPE{-status}	C-NGAS-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Natural gas piping
+KL	GAS_HD*	C-NGAS-PIPE-HPRS{-status}	C-NGAS-{element}{-status}	255,255,0	CONTINUOUS	0.35	derived; pen of C-NGAS-PIPE
+KL	GAS_MANTELBUIS*	C-NGAS-PIPE-DUCT{-status}	C-NGAS-{element}{-status}	255,255,0	CONTINUOUS	0.35	derived; pen of C-NGAS-PIPE
+KL	GAS_HULPSTUK*	C-NGAS-INST{-status}	C-NGAS-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Instrumentation (valves, etc.)
+KL	GAS_STATION*	C-NGAS-STNS-REDC{-status}	C-NGAS-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Reducing stations
+KL	WATER*	C-WATR-MAIN-PIPE{-status}	C-WATR-{element}{-status}	0,255,255	CONTINUOUS	0.35	A/E/C R6: Main domestic water piping
+KL	WATER_HUISAANSLUITING*	C-WATR-SERV-PIPE{-status}	C-WATR-{element}{-status}	0,255,255	CONTINUOUS	0.35	A/E/C R6: Domestic water service piping
+KL	WATER_MANTELBUIS*	C-WATR-MAIN-DUCT{-status}	C-WATR-{element}{-status}	0,255,255	CONTINUOUS	0.35	derived; pen of C-WATR-MAIN-PIPE
+KL	WATER_HULPSTUK*	C-WATR-DEVC{-status}	C-WATR-{element}{-status}	0,255,255	CONTINUOUS	0.35	A/E/C R6: Connectors, faucets, reducers, regulators, vents, intake points, taps, backflow preventers, and valves
+KL	WATER_PUT*	C-WATR-VALT{-status}	C-WATR-{element}{-status}	0,255,255	CONTINUOUS	0.35	A/E/C R6: Valve/vent pits/vaults
+KL	WATER_BRANDLEIDING*	C-FIRE-PIPE{-status}	C-FIRE-{element}{-status}	255,0,0	CONTINUOUS	0.35	A/E/C R6: Piping
+KL	WATER_BRANDLEIDING_BRANDHYDRANT	C-FIRE-HYDT{-status}	C-FIRE-{element}{-status}	255,0,0	CONTINUOUS	0.35	A/E/C R6: Hydrants and connections
+KL	WATER_BEREGENING*	L-IRRG-PIPE{-status}	L-IRRG-{element}{-status}	124,0,165	CONTINUOUS	0.35	A/E/C R6: Piping
+KL	WARMTENET*	M-HTCW-HWTR-MAIN{-status}	M-HTCW-{element}{-status}	255,0,0	CONTINUOUS	0.35	A/E/C R6: Main high temperature piping
+KL	WARMTENET_AANSLUITLEIDING*	M-HTCW-HWTR-SERV{-status}	M-HTCW-{element}{-status}	255,0,0	CONTINUOUS	0.25	A/E/C R6: High temperature service piping
+KL	WARMTENET_HULPSTUK*	M-HTCW-DEVC{-status}	M-HTCW-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Rigid anchors, anchor guides, rectifiers, reducers, markers, pumps, regulators, tanks, and valves
+KL	WARMTENET_MANTELBUIS*	M-HTCW-HWTR-DUCT{-status}	M-HTCW-{element}{-status}	255,0,0	CONTINUOUS	0.35	derived; pen of M-HTCW-HWTR-MAIN
+KL	CV*	M-HTCW-HWTR-SERV{-status}	M-HTCW-{element}{-status}	255,0,0	CONTINUOUS	0.25	A/E/C R6: High temperature service piping
+KL	KOUDENET*	M-HTCW-CWTR-MAIN{-status}	M-HTCW-{element}{-status}	0,0,255	CONTINUOUS	0.35	A/E/C R6: Main chilled water piping
+KL	OLIE*	C-FUEL-MAIN-PIPE{-status}	C-FUEL-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Main fuel piping
+KL	CHEMIE*	C-FUEL-CHEM-PIPE{-status}	C-FUEL-{element}{-status}	255,255,0	CONTINUOUS	0.35	derived; pen of C-FUEL-MAIN-PIPE
+KL	CHEMIE_HULPSTUK*	C-FUEL-DEVC{-status}	C-FUEL-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: 0
+KL	CHEMIE_MANTELBUIS*	C-FUEL-CHEM-DUCT{-status}	C-FUEL-{element}{-status}	255,255,0	CONTINUOUS	0.35	derived; pen of C-FUEL-MAIN-PIPE
+KL	BRANDSTOF*	C-FUEL-MAIN-PIPE{-status}	C-FUEL-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Main fuel piping
+KL	MANTELBUIS*	E-COMM-UGND-DUCT{-status}	E-COMM-{element}{-status}	255,63,0	CONTINUOUS	0.50	derived; pen of E-COMM-UGND
+KL	SCHEMA*	E-COMM-SCHM		255,255,0	CONTINUOUS	0.35	derived; pen of E-COMM-CNMB
+KL	TRACE*	C-PROP-UTIL{-status}	C-PROP-UTIL-{element}{-status}	255,255,255	DASHED	0.70	derived; pen of C-PROP-ESMT
+KL	WEESLEIDING	E-COMM-UGND-ABND{-status}	E-COMM-{element}{-status}	255,63,0	CONTINUOUS	0.50	derived; pen of E-COMM-UGND
+OV	KABEL*	E-LITE-CIRC{-status}	E-LITE-{element}{-status}	255,0,0	CONTINUOUS	0.50	A/E/C R6: Lighting circuits (including crosslines and homeruns)
+OV	LICHTMAST	E-LITE-EXTR{-status}	E-LITE-{element}{-status}	255,0,0	CONTINUOUS	0.50	A/E/C R6: Exterior lights
+OV	ARMATUUR*	E-LITE-EXTR{-status}	E-LITE-{element}{-status}	255,0,0	CONTINUOUS	0.50	A/E/C R6: Exterior lights
+OV	KAST*	E-LITE-PANL{-status}	E-LITE-{element}{-status}	255,0,0	CONTINUOUS	0.50	A/E/C R6: Main distribution panels, switchboards, lighting panels
+VH	GESLOTENVERHARDING*	C-ROAD-ASPH{-status}	C-ROAD-ASPH-{element}{-status}	128,128,128	CONTINUOUS	0.25	A/E/C R6: Road outlines - asphalt surface
+VH	GESLOTENVERHARDING_BETON*	C-ROAD-CONC{-status}	C-ROAD-CONC-{element}{-status}	255,255,255	CONTINUOUS	0.25	A/E/C R6: Road outlines - concrete surface
+VH	OPENVERHARDING*	C-PVMT-UNIT{-status}	C-PVMT-{element}{-status}	128,128,128	CONTINUOUS	0.18	derived; pen of C-PVMT-CONC
+VH	HALFVERHARDING*	C-ROAD-GRVL{-status}	C-ROAD-GRVL-{element}{-status}	255,63,0	CONTINUOUS	0.25	A/E/C R6: Road outlines - gravel surface
+VH	ONVERHARD*	C-ROAD-UPVD{-status}	C-ROAD-UPVD-{element}{-status}	0,255,0	CONTINUOUS	0.25	A/E/C R6: Road outlines - unpaved surface
+VH	KANTOPSLUITING*	C-ROAD-CURB{-status}	C-ROAD-CURB-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Curbs and gutters
+VH	KANTVERHARDING*	C-ROAD-SHLD{-status}	C-ROAD-SHLD-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Roadway shoulder
+VH	GOOT*	C-ROAD-CURB{-status}	C-ROAD-CURB-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Curbs and gutters
+VH	FUNDERING*	C-PVMT-BASE{-status}	C-PVMT-{element}{-status}	128,128,128	CONTINUOUS	0.18	derived; pen of C-PVMT-PATT
+VH	DREMPEL*	C-ROAD-HUMP{-status}	C-ROAD-HUMP-{element}{-status}	128,128,128	CONTINUOUS	0.25	derived; pen of C-ROAD-ASPH
+VH	VERKANTING	C-ALGN-SUPR{-status}	C-ALGN-SUPR-{element}{-status}	0,255,0	CONTINUOUS	0.35	derived; pen of C-ALGN-DATA
+VH	BEDRIJFSVLOERPLAAT*	C-PVMT-CONC{-status}	C-PVMT-{element}{-status}	128,128,128	CONTINUOUS	0.18	A/E/C R6: Pavement pattern - concrete
+VH	SPECIAAL_SPORT*	L-SITE-SPRT{-status}	L-SITE-SPRT-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Sports fields
+VW	MARKERING*	C-ROAD-MRKG{-status}	C-ROAD-MRKG-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Pavement markings
+VW	BEWEGWIJZERING*	C-ROAD-SIGN{-status}	C-ROAD-SIGN-{element}{-status}	255,0,0	CONTINUOUS	0.25	A/E/C R6: Signs
+VW	VERKEERSTEKEN*	C-ROAD-SIGN{-status}	C-ROAD-SIGN-{element}{-status}	255,0,0	CONTINUOUS	0.25	A/E/C R6: Signs
+VW	AFZETTING*	C-ROAD-BARR{-status}	C-ROAD-BARR-{element}{-status}	255,0,255	CONTINUOUS	0.35	derived; pen of C-ROAD-GRAL
+VV	MARKERING*	C-CHAN-NAID{-status}	C-CHAN-NAID-{element}{-status}	255,255,255	CONTINUOUS	0.35	A/E/C R6: Navigation aids and text
+AM	AS	C-ALGN-LINE{-status}	C-ALGN-LINE-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Alignments
+AM	AS_WEG*	C-ROAD-CNTR{-status}	C-ROAD-CNTR-{element}{-status}	255,0,0	CENTER	0.25	A/E/C R6: Road centerlines
+AM	AS_PAD*	C-SITE-CNTR{-status}	C-SITE-CNTR-{element}{-status}	255,255,0	CONTINUOUS	0.35	derived; pen of C-SITE-WALK
+AM	AS_SPOOR*	C-RAIL-CNTR{-status}	C-RAIL-CNTR-{element}{-status}	255,0,0	CENTER	0.25	A/E/C R6: Railroad track centerlines
+AM	AS_WATERGANG*	C-DTCH-CNTR{-status}	C-DTCH-CNTR-{element}{-status}	0,0,255	CENTER	0.25	A/E/C R6: Centerline of ditch or wash
+AM	AS_WATERWEG*	C-CHAN-CNTR{-status}	C-CHAN-CNTR-{element}{-status}	0,0,255	CENTER	0.25	A/E/C R6: Channel centerline and survey report lines
+AM	AS_DIJK*	C-LEVE-CNTR{-status}	C-LEVE-CNTR-{element}{-status}	255,63,0	CENTER	0.25	A/E/C R6: Levee centerline
+AM	AS_KUNSTWERK*	C-BRDG-CNTR{-status}	C-BRDG-CNTR-{element}{-status}	255,0,0	CENTER	0.25	A/E/C R6: Bridge centerlines
+AM	KILOMETRERING	C-ALGN-STAT{-status}	C-ALGN-STAT-{element}{-status}	0,255,0	CONTINUOUS	0.35	A/E/C R6: Alignment stationing and tick marks, alignment PI stations
+AM	TANGENTPUNT	C-ALGN-SYMB{-status}	C-ALGN-SYMB-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Alignment symbols (PIs)
+AM	STRING*	C-ALGN-STRG{-status}	C-ALGN-STRG-{element}{-status}	255,255,0	CONTINUOUS	0.35	derived; pen of C-ALGN-LINE
+OG	HOOGTELIJN	C-TOPO-MINR{-status}	C-TOPO-MINR-{element}{-status}	0,255,0	CONTINUOUS	0.25	A/E/C R6: Minor contours
+OG	HOOGTELIJN_MINOR	C-TOPO-MINR{-status}	C-TOPO-MINR-{element}{-status}	0,255,0	CONTINUOUS	0.25	A/E/C R6: Minor contours
+OG	HOOGTELIJN_MAJOR	C-TOPO-MAJR{-status}	C-TOPO-MAJR-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Major contours
+OG	HOOGTEPUNT	V-TOPO-SPOT{-status}	V-TOPO-{element}{-status}	255,255,0	CONTINUOUS	0.25	A/E/C R6: Spot elevations
+OG	TRIANGULATIE	C-TOPO-DTMT{-status}	C-TOPO-DTMT-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: DTM triangles
+OG	DTM	C-TOPO-DTMP{-status}	C-TOPO-DTMP-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: DTM points
+OG	BREUKLIJN	C-TOPO-BKLN{-status}	C-TOPO-BKLN-{element}{-status}	255,255,255	CONTINUOUS	0.50	A/E/C R6: Breaklines
+OG	GRENS	C-TOPO-SURF-PERI{-status}	C-TOPO-SURF-{element}{-status}	0,255,0	CONTINUOUS	0.18	A/E/C R6: Surface perimeter
+OG	BEBOUWING*	C-BLDG-FTPT{-status}	C-BLDG-{element}{-status}	255,255,255	CONTINUOUS	0.70	A/E/C R6: Building footprints
+OG	BEBOUWING_STRAATNAAM	C-ROAD-IDEN{-status}	C-ROAD-IDEN-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Road, street, highway annotation
+OG	BEBOUWING_HUISNUMMER	C-BLDG-IDEN{-status}	C-BLDG-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Building and other stucture annotation
+OG	WEG*	C-ROAD-ASPH{-status}	C-ROAD-ASPH-{element}{-status}	128,128,128	CONTINUOUS	0.25	A/E/C R6: Road outlines - asphalt surface
+OG	WEG_VOETPAD*	C-SITE-WALK{-status}	C-SITE-WALK-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Walks, trails and bicycle paths
+OG	WEG_RIJWIELPAD*	C-SITE-WALK{-status}	C-SITE-WALK-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Walks, trails and bicycle paths
+OG	WEG_PARKEERPLAATS*	C-PRKG-OTLN{-status}	C-PRKG-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Parking lot outlines
+OG	WEG_SPOORBAAN	C-RAIL-TRAK{-status}	C-RAIL-TRAK-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Railroad tracks
+OG	SPOORBAAN	C-RAIL-TRAK{-status}	C-RAIL-TRAK-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Railroad tracks
+OG	WATER*	C-RIVR-EDGE{-status}	C-RIVR-{element}{-status}	0,0,255	CONTINUOUS	0.50	A/E/C R6: River edge
+OG	GREPPEL	C-DTCH-EDGE{-status}	C-DTCH-EDGE-{element}{-status}	0,255,255	CONTINUOUS	0.25	derived; pen of C-DTCH-EWAT
+OG	TERREIN*	C-SITE-OTLN{-status}	C-SITE-OTLN-{element}{-status}	0,255,255	CONTINUOUS	0.50	derived; pen of V-SITE-OTLN
+OG	TOPOGRAFIE*	C-SITE-FENC{-status}	C-SITE-FENC-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Fences and handrails
+OG	ZONE*	C-PROP-ESMT{-status}	C-PROP-ESMT-{element}{-status}	255,255,255	DASHED	0.70	A/E/C R6: Easements
+OG	KADASTRAAL	C-PROP-LINE{-status}	C-PROP-LINE-{element}{-status}	255,255,0	PHANTOM	0.50	A/E/C R6: Property lines
+OG	GRID	G-GRID-COOR		255,255,255	CONTINUOUS	0.25	A/E/C R6: X-Y coordinate grid lines
+OG	COORDINAAT	G-GRID-COOR		255,255,255	CONTINUOUS	0.25	A/E/C R6: X-Y coordinate grid lines
+OG	HULPLIJN	G-ANNO-NPLT		0,0,255	CONTINUOUS	0.18	A/E/C R6: Non-plotting graphic information
+OG	GRONDGEBRUIK*	C-SITE-OTLN{-status}	C-SITE-OTLN-{element}{-status}	0,255,255	CONTINUOUS	0.50	derived; pen of V-SITE-OTLN
+KG	GRENS_PERCEEL	C-PROP-LINE{-status}	C-PROP-LINE-{element}{-status}	255,255,0	PHANTOM	0.50	A/E/C R6: Property lines
+KG	KADASTRAAL*	C-PROP-LINE{-status}	C-PROP-LINE-{element}{-status}	255,255,0	PHANTOM	0.50	A/E/C R6: Property lines
+KG	GRONDVERWERVING*	C-PROP-RWAY-ACQU{-status}	C-PROP-RWAY-{element}{-status}	255,255,255	CONTINUOUS	0.70	A/E/C R6: Right of way to be acquired in perpetuity
+KG	GRONDEIGENDOM*	C-PROP-LINE{-status}	C-PROP-LINE-{element}{-status}	255,255,0	PHANTOM	0.50	A/E/C R6: Property lines
+KG	BEHEERGRENS*	C-PROP-CONS{-status}	C-PROP-CONS-{element}{-status}	255,255,255	DASHED	0.70	A/E/C R6: Construction limits/controls, staging area
+KG	ONDERHOUDGRENS*	C-PROP-CONS{-status}	C-PROP-CONS-{element}{-status}	255,255,255	DASHED	0.70	A/E/C R6: Construction limits/controls, staging area
+GW	TALUD*	C-TOPO-SLOP-FILL{-status}	C-TOPO-SLOP-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Cut/fill slopes
+GW	TALUD_KRUIN	C-TOPO-SLOP-TOPT{-status}	C-TOPO-SLOP-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Top/toe slopes
+GW	TALUD_TEEN	C-TOPO-SLOP-TOPT{-status}	C-TOPO-SLOP-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Top/toe slopes
+GW	TALUDARCERING*	C-TOPO-SLOP-FILL{-status}	C-TOPO-SLOP-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Cut/fill slopes
+GW	GRONDWERKLIJN*	C-TOPO-SLOP-TOPT{-status}	C-TOPO-SLOP-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Top/toe slopes
+GW	DIJK*	C-LEVE-OTLN{-status}	C-LEVE-OTLN-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Levee outline
+GW	DIJK_KRUIN	C-LEVE-TOPB{-status}	C-LEVE-TOPB-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Levee top of bank
+GW	DIJK_TEEN	C-LEVE-BERM{-status}	C-LEVE-BERM-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Levee berm outline
+GW	WAL*	C-LEVE-OTLN{-status}	C-LEVE-OTLN-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Levee outline
+GW	OPHOGING*	C-GRAD-FILL{-status}	C-GRAD-FILL-{element}{-status}	0,255,255	CONTINUOUS	0.50	derived; pen of C-GRAD-FNSH
+GW	ONTGRAVINGSVAK*	C-GRAD-EXCV{-status}	C-GRAD-EXCV-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Excavation grade
+GW	CUNET*	C-GRAD-EXCV{-status}	C-GRAD-EXCV-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Excavation grade
+GW	CUNET_BODEM	C-GRAD-EXCV{-status}	C-GRAD-EXCV-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Excavation grade
+GW	SLEUF*	C-GRAD-EXCV{-status}	C-GRAD-EXCV-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Excavation grade
+GW	WATERGANG*	C-DTCH-EWAT{-status}	C-DTCH-EWAT-{element}{-status}	0,255,255	CONTINUOUS	0.25	A/E/C R6: Edge of water
+GW	WATERGANG_SLOOT*	C-DTCH-EWAT{-status}	C-DTCH-EWAT-{element}{-status}	0,255,255	CONTINUOUS	0.25	A/E/C R6: Edge of water
+GW	WATERGANG_SLOOT_BODEM	C-DTCH-BOTM{-status}	C-DTCH-BOTM-{element}{-status}	0,0,255	CONTINUOUS	0.25	A/E/C R6: Bottom of ditch or wash
+GW	WATERGANG_BODEM	C-DTCH-BOTM{-status}	C-DTCH-BOTM-{element}{-status}	0,0,255	CONTINUOUS	0.25	A/E/C R6: Bottom of ditch or wash
+GW	WATERGANG_SLOOT_INSTEEK	C-DTCH-TOPB{-status}	C-DTCH-TOPB-{element}{-status}	0,0,255	CONTINUOUS	0.35	derived; pen of C-RIVR-TOPB
+GW	WATERGANG_INSTEEK	C-DTCH-TOPB{-status}	C-DTCH-TOPB-{element}{-status}	0,0,255	CONTINUOUS	0.35	derived; pen of C-RIVR-TOPB
+GW	WATERGANG_WATERLIJN	C-DTCH-EWAT{-status}	C-DTCH-EWAT-{element}{-status}	0,255,255	CONTINUOUS	0.25	A/E/C R6: Edge of water
+GW	HOOGTE*	C-GRAD-FNSH{-status}	C-GRAD-FNSH-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Finished grade
+GW	HOOGTE_AFWERKHOOGTE	C-GRAD-FNSH{-status}	C-GRAD-FNSH-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Finished grade
+GW	MAAIVELD	C-GRAD-EXST{-status}	C-GRAD-EXST-{element}{-status}	255,0,255	DASHED	0.35	A/E/C R6: Existing grade, ground line                                                                                     MS3 Long
+GW	GROND*	C-GRAD-FNSH{-status}	C-GRAD-FNSH-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Finished grade
+GR	BOOM*	L-PLNT-TREE{-status}	L-PLNT-{element}{-status}	103,165,82	CONTINUOUS	0.50	A/E/C R6: Trees (e.g., evergreen, deciduous, etc.)
+GR	BOMENRIJ	L-PLNT-TREE-LINE{-status}	L-PLNT-{element}{-status}	103,165,82	CONTINUOUS	0.50	A/E/C R6: Tree line
+GR	BOS*	L-PLNT-TREE-LINE{-status}	L-PLNT-{element}{-status}	103,165,82	CONTINUOUS	0.50	A/E/C R6: Tree line
+GR	HOUTOPSTAND*	L-PLNT-TREE-LINE{-status}	L-PLNT-{element}{-status}	103,165,82	CONTINUOUS	0.50	A/E/C R6: Tree line
+GR	HAAG*	L-PLNT-BUSH-LINE{-status}	L-PLNT-{element}{-status}	103,165,82	CONTINUOUS	0.50	A/E/C R6: Bush and shrub line
+GR	GRAS*	L-PLNT-TURF{-status}	L-PLNT-{element}{-status}	165,103,82	CONTINUOUS	0.50	A/E/C R6: Lawn areas (turfing limits)
+GR	BEPLANTING*	L-PLNT-BEDS{-status}	L-PLNT-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Planting beds (perennial and annual beds)
+GR	HEESTER*	L-PLNT-BUSH{-status}	L-PLNT-{element}{-status}	103,165,82	CONTINUOUS	0.50	A/E/C R6: Bushes and shrubs (e.g., evergreen, deciduous, etc.)
+GR	STRUIK*	L-PLNT-BUSH{-status}	L-PLNT-{element}{-status}	103,165,82	CONTINUOUS	0.50	A/E/C R6: Bushes and shrubs (e.g., evergreen, deciduous, etc.)
+KW	KUNSTWERK_BRUG*	C-BRDG-OTLN{-status}	C-BRDG-OTLN-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Bridge outlines
+KW	KUNSTWERK_VIADUCT*	C-BRDG-OTLN{-status}	C-BRDG-OTLN-{element}{-status}	0,255,255	CONTINUOUS	0.50	A/E/C R6: Bridge outlines
+KW	KUNSTWERK_TUNNEL*	C-SITE-STRC{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	A/E/C R6: Structures (bridges, sheds, foundation pads, footings, etc.)
+KW	KUNSTWERK_DUIKER*	C-SITE-STRC-CULV{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	derived; pen of C-SITE-STRC
+KW	KUNSTWERK_GEMAAL*	C-SITE-STRC-PUMP{-status}	C-SITE-STRC-{element}{-status}	165,41,0	CONTINUOUS	0.35	derived; pen of C-SITE-STRC
+KW	ZICHTRUIMTE	C-ROAD-SGHT{-status}	C-ROAD-SGHT-{element}{-status}	255,255,0	CONTINUOUS	0.35	derived; pen of C-ROAD-MRKG
+KW	PROFIELVRIJERUIMTE	C-ROAD-CLRN{-status}	C-ROAD-CLRN-{element}{-status}	255,255,0	CONTINUOUS	0.35	derived; pen of C-ROAD-MRKG
+GK	BESCHOEIING*	C-CHAN-BWTR{-status}	C-CHAN-BWTR-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Breakwaters
+BV	OBSTAKELBEVEILIGER*	C-ROAD-GRAL{-status}	C-ROAD-GRAL-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Guard rails
+IE	TERREINAFSCHEIDING*	C-SITE-FENC{-status}	C-SITE-FENC-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: Fences and handrails
+MO	ONDERZOEK*	V-BORE-GENL-LOCN{-status}	V-BORE-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: General boring X,Y location marker
+MO	ONDERZOEK_SONDERING	V-BORE-CPTS-LOCN{-status}	V-BORE-{element}{-status}	255,0,255	CONTINUOUS	0.35	derived; pen of V-BORE-GENL-LOCN
+MO	ONDERZOEK_BORING	V-BORE-GENL-LOCN{-status}	V-BORE-{element}{-status}	255,0,255	CONTINUOUS	0.35	A/E/C R6: General boring X,Y location marker
+MO	BODEM*	C-SITE-SOIL{-status}	C-SITE-SOIL-{element}{-status}	255,0,0	CONTINUOUS	0.25	derived; pen of V-SITE-SOIL
+MO	ARCHEOLOGIE*	C-SITE-ARCH{-status}	C-SITE-ARCH-{element}{-status}	255,0,255	CONTINUOUS	0.35	derived; pen of C-SITE-IDEN
+AL	TEKENBLAD*	G-ANNO-TTLB		255,255,255	CONTINUOUS	0.35	A/E/C R6: Border and titleblock linework
+AL	TEKENBLAD_KADER*	G-ANNO-TTLB		255,255,255	CONTINUOUS	0.35	A/E/C R6: Border and titleblock linework
+AL	TEKENBLAD_DEELKADER	G-ANNO-TTLB		255,255,255	CONTINUOUS	0.35	A/E/C R6: Border and titleblock linework
+AL	TEKENBLAD_TITELBLOK*	G-ANNO-TTLB		255,255,255	CONTINUOUS	0.35	A/E/C R6: Border and titleblock linework
+AL	TEKENBLAD_VIEWPORT	G-ANNO-NPLT		0,0,255	CONTINUOUS	0.18	A/E/C R6: Non-plotting graphic information
+AL	TEKENBLAD_SCHAALBALK	G-ANNO-SYMB		255,0,255	CONTINUOUS	0.35	A/E/C R6: Miscellaneous symbols
+AL	TEKENBLAD_VERKLARING	G-ANNO-LEGN		255,255,255	CONTINUOUS	0.35	A/E/C R6: Legends and symbol keys
+AL	TEKENBLAD_WIJZIGINGSBLOK	G-ANNO-REVS		0,255,255	CONTINUOUS	0.35	A/E/C R6: Revision indicators and text
+AL	TEKENBLAD_HULPLIJN	G-ANNO-NPLT		0,0,255	CONTINUOUS	0.18	A/E/C R6: Non-plotting graphic information
+AL	TEKENBLADGRENS	G-ANNO-TTLB		255,255,255	CONTINUOUS	0.35	A/E/C R6: Border and titleblock linework
+AL	LEGENDA	G-ANNO-LEGN		255,255,255	CONTINUOUS	0.35	A/E/C R6: Legends and symbol keys
+AL	ORIENTATIE	G-ANNO-SYMB		255,0,255	CONTINUOUS	0.35	A/E/C R6: Miscellaneous symbols
+AL	AANKLEDING	G-ANNO-TTLB		255,255,255	CONTINUOUS	0.35	A/E/C R6: Border and titleblock linework
+AL	VERWIJZING*	G-ANNO-SYMB		255,0,255	CONTINUOUS	0.35	A/E/C R6: Miscellaneous symbols
+AL	VERWIJZING_DOORSNEDE	G-ANNO-SYMB		255,0,255	CONTINUOUS	0.35	A/E/C R6: Miscellaneous symbols
+AL	BLADVERWIJZING*	G-ANNO-MATC		255,0,255	CENTER	0.70	A/E/C R6: Match lines
+AL	PROFIELBALK	C-GRAD-IDEN		255,255,0	CONTINUOUS	0.35	A/E/C R6: Grade annotation for cross sections and profiles
+AL	COORDINAATPUNT	G-GRID-COOR-IDEN		255,255,255	CONTINUOUS	0.25	A/E/C R6: X-Y coordinate grid lines annotation
+AL	REFERENTIE	G-ANNO-REFR		255,255,255	CONTINUOUS	0.35	A/E/C R6: Reference files and raster attachments
+ZZ	(T*	G-ANNO-TEXT		255,255,255	CONTINUOUS	0.35	A/E/C R6: Miscellaneous text
+ZZ	(M)	G-ANNO-DIMS		255,0,0	CONTINUOUS	0.35	A/E/C R6: Witness/extension lines, dimension terminators, dimension tex
+ZZ	GRENS*	C-PROP-CONS{-status}	C-PROP-CONS-{element}{-status}	255,255,255	DASHED	0.70	A/E/C R6: Construction limits/controls, staging area
+ZZ	GRENS_WERK	C-PROP-CONS{-status}	C-PROP-CONS-{element}{-status}	255,255,255	DASHED	0.70	A/E/C R6: Construction limits/controls, staging area
+ZZ	HULPLIJN	G-ANNO-NPLT		0,0,255	CONTINUOUS	0.18	A/E/C R6: Non-plotting graphic information
+ZZ	CONSTRUCTIELIJN	G-ANNO-NPLT		0,0,255	CONTINUOUS	0.18	A/E/C R6: Non-plotting graphic information
+ZZ	NAP	C-GRAD-WATR		255,255,0	CONTINUOUS	0.35	A/E/C R6: Water surface in section view
+ZZ	PEIL*	C-GRAD-IDEN{-status}	C-GRAD-IDEN-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Grade annotation for cross sections and profiles
+ZZ	HOOGTELABEL*	C-GRAD-IDEN{-status}	C-GRAD-IDEN-{element}{-status}	255,255,0	CONTINUOUS	0.35	A/E/C R6: Grade annotation for cross sections and profiles
+ZZ	DETAIL*	G-ANNO-SYMB		255,0,255	CONTINUOUS	0.35	A/E/C R6: Miscellaneous symbols
+ZZ	AFBREEKLIJN	G-ANNO-SYMB		255,0,255	CONTINUOUS	0.35	A/E/C R6: Miscellaneous symbols
+ZZ	AANPIJLING	G-ANNO-NOTE		255,255,0	CONTINUOUS	0.35	A/E/C R6: General notes and general remarks
+ZZ	HARTLIJN	G-ANNO-CNTR		255,0,0	CENTER	0.25	derived; pen of C-ROAD-CNTR
+ZZ	STRAMIENLIJN	G-GRID-COOR		255,255,255	CONTINUOUS	0.25	A/E/C R6: X-Y coordinate grid lines

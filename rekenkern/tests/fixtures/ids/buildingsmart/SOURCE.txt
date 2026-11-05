@@ -1,0 +1,12 @@
+Source: buildingSMART International, IDS repository
+https://github.com/buildingSMART/IDS (branch development),
+Documentation/ImplementersDocumentation/TestCases/<facet>/<name>.{ids,ifc}
+Downloaded 2026-11-05. Files are unmodified; only renamed to <facet>-<name>.
+
+(c) buildingSMART International Ltd. Licensed under the Creative Commons
+Attribution-NoDerivatives 4.0 International License
+(http://creativecommons.org/licenses/by-nd/4.0/).
+
+The file name prefix (pass-/fail-) after the facet gives the expected result
+of checking the .ifc against the .ids; see rekenkern/src/ids.rs test
+buildingsmart_test_cases.

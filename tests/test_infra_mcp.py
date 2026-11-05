@@ -39,10 +39,49 @@ class InfraMcpTest(unittest.TestCase):
             if tool['name'].startswith('planning_'):
                 self.assertNotIn('key', tool['inputSchema']['properties'])
 
+    def test_exchange_commands(self):
+        with patch.object(mcp.OCS, 'run', return_value={'ok': True}) as run:
+            mcp.t_ifc_import({'path': 'C:/partner model.ifc', 'status': 'N'})
+            self.assertEqual(run.call_args.args[0], 'CIV_IFC_IMPORT "C:/partner model.ifc" STATUS=N')
+            mcp.t_ifc_ids({'ids': '/data/eisen.ids'})
+            self.assertEqual(run.call_args.args[0], 'CIV_IFC_IDS IDS=/data/eisen.ids')
+            mcp.t_ifc({'ids': '/data/eisen.ids'})
+            self.assertIn('IDS=/data/eisen.ids', run.call_args.args[0])
+            mcp.t_3d_export({'format': 'OBJ', 'selection': True})
+            self.assertEqual(run.call_args.args[0], 'CIV_3D_EXPORT FORMAAT=OBJ SELECTIE')
+            mcp.t_3d_import({'path': '/data/brug.stl', 'place': [105000, 425000, 1.5], 'scale': 0.001, 'rotation': 90})
+            self.assertEqual(run.call_args.args[0], 'CIV_3D_IMPORT /data/brug.stl PLAATS=105000,425000,1.5 SCHAAL=0.001 ROTATIE=90')
+
+    def test_layer_standard_show_and_set(self):
+        with patch.object(mcp.OCS, 'run', return_value={'ok': True}) as run:
+            mcp.t_layer_standard({})
+            self.assertEqual(run.call_args.args[0], 'GIS_LAAGSTANDAARD')
+            mcp.t_layer_standard({'id': 'ncs-us'})
+            self.assertEqual(run.call_args.args[0], 'GIS_LAAGSTANDAARD ncs-us')
+            with self.assertRaises(ValueError):
+                mcp.t_layer_standard({'id': 'nlcs ID=x'})
+
     def test_service_country_filter_is_explicit(self):
         with patch.object(mcp.OCS, 'run', return_value={'ok':True}) as run:
             mcp.t_services({'country':'US;GLOBAL','query':'elevation'})
             self.assertIn('COUNTRY=US;GLOBAL',run.call_args.args[0])
+
+    def test_water_commands(self):
+        with patch.object(mcp.OCS, 'run', return_value={'ok': True}) as run:
+            mcp.t_water_profile({'axis': '1F', 'q': 1.5, 'downstream_level': -0.4,
+                                 'culverts': [{'station': 120, 'diameter': 0.8, 'length': 12, 'invert_in': 0.1, 'invert_out': 0.05},
+                                              {'station': 300, 'width': 2, 'height': 1.5, 'length': 8, 'invert_in': 0, 'invert_out': 0}],
+                                 'weirs': [{'station': 250, 'crest': 0.8, 'width': 2.5}]})
+            cmd = run.call_args.args[0]
+            self.assertTrue(cmd.startswith('CIV_WATERLOOP AS=1F Q=1.5 BENEDENSTROOMS=-0.4'), cmd)
+            self.assertIn('DUIKER=120,0.8,12,0.1,0.05;300,2x1.5,8,0,0', cmd)
+            self.assertIn('STUW=250,0.8,2.5', cmd)
+            mcp.t_storage({'kind': 'wadi', 'bottom': 1.2, 'depth': 0.4, 'side_slope': 4, 'orifice_mm': 110, 'weir_level': 1.5, 'weir_width': 2, 'storm': 'T100', 'area_m2': 5000, 'tin': True})
+            cmd = run.call_args.args[0]
+            for part in ('CIV_BERGING', 'SOORT=wadi', 'TALUD=1:4', 'KNIJP=110', 'DREMPEL=1.5,2', 'BUI=T100', 'OPPERVLAK=5000', 'TIN=ja'):
+                self.assertIn(part, cmd)
+            mcp.t_pressure_network({'sources': [[10, 0, 30]], 'demand_total_ls': 2.5, 'hydrants': [[50, 0]], 'diameter_mm': 110})
+            self.assertEqual(run.call_args.args[0], 'CIV_DRUKNET BRON=10,0,30 VRAAG=TOTAAL:2.5 DIAMETER=110 BRANDKRAAN=50,0')
 
 if __name__=='__main__':
     unittest.main()

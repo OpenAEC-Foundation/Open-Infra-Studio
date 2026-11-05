@@ -29,10 +29,18 @@ pub mod mesh;
 pub mod puntenwolk;
 // Exchange: LandXML export (stream uitwisseling).
 pub mod uitwisseling;
+// Exchange: 3D meshes out and in (GLB, OBJ, STL), IFC in, IDS checks.
+pub mod ids;
+pub mod ifc_import;
+pub mod uitwisseling3d;
 // Clothoids, design criteria, rail and sight distance (as-spoor).
 pub mod ontwerpcriteria;
 pub mod spoor;
 pub mod zicht;
+// Water: open-channel profiles, storage, pressure networks (#74, #64, #67).
+pub mod waterloop;
+pub mod berging;
+pub mod druknet;
 
 use std::sync::{Mutex, OnceLock};
 
@@ -233,6 +241,24 @@ impl Out {
 
     pub fn is_empty(&self) -> bool {
         self.layers.iter().all(|(_, e)| e.is_empty())
+    }
+
+    /// How many entities are on `layer` so far.
+    pub fn count(&self, layer: &str) -> usize {
+        self.layers.iter().find(|(s, _)| s.name == layer).map(|(_, e)| e.len()).unwrap_or(0)
+    }
+
+    /// Where the `nth` entity put on `layer` lands in the list
+    /// [`Out::write_handles`] returns.
+    pub fn position(&self, layer: &str, nth: usize) -> Option<usize> {
+        let mut before = 0;
+        for (s, e) in &self.layers {
+            if s.name == layer {
+                return (nth < e.len()).then_some(before + nth);
+            }
+            before += e.len();
+        }
+        None
     }
 
     pub fn write(self, label: &str) -> Result<usize, String> {
@@ -473,7 +499,7 @@ pub fn info() -> Result<String, String> {
         } else if data_value(e, "corridor").is_some() && matches!(e, EntityType::Polyline3D(_)) {
             corridors.push(json!({"handle": h(e), "naam": data_value(e, "corridor"), "sjabloon": data_value(e, "sjabloon")}));
         } else if let (Some(name), Some(al)) = (data_value(e, "as"), as_profiel::Alignment::from_entity(e)) {
-            if e.common().layer.contains("-AM-AS-") && matches!(e, EntityType::LwPolyline(_)) && data_value(e, "verschuiving_m").is_none() {
+            if matches!(e, EntityType::LwPolyline(_)) && nlcs::as_nlcs(&e.common().layer).contains("-AM-AS-") && data_value(e, "verschuiving_m").is_none() {
                 axes.push(json!({"handle": h(e), "naam": name, "lengte_m": al.length() / f, "beginstation": al.start}));
             }
         }
@@ -484,7 +510,7 @@ pub fn info() -> Result<String, String> {
             json!({"driehoeken": t.triangles.len(), "punten": t.points.len(), "hoogte_min": lo / f, "hoogte_max": hi / f})
         })
     };
-    let points = doc.model_space_entities().filter(|e| matches!(e, EntityType::Point(_)) && e.common().layer.contains("-OG-HOOGTEPUNT-")).count();
+    let points = doc.model_space_entities().filter(|e| matches!(e, EntityType::Point(_)) && nlcs::as_nlcs(&e.common().layer).contains("-OG-HOOGTEPUNT-")).count();
     api::note("projectlocatie", ctx.site.as_ref().map(|s| json!({"naam": s.label, "crs": s.crs, "x": s.origin_e, "y": s.origin_n, "breedte": s.width, "hoogte": s.height, "absoluut": s.absolute})).unwrap_or(serde_json::Value::Null));
     api::note("eenheid_per_m", f);
     api::note("assen", axes.clone());

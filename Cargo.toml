@@ -21,7 +21,7 @@ plugin = []
 ui-test = ["eframe/accesskit"]
 
 [workspace]
-members = [".", "civiel", "nlcspp"]
+members = [".", "civiel", "nlcspp", "rekenkern"]
 
 [dependencies]
 # Stable host contract, pinned to the Open CAD Studio v2026.44 release tag (API 14).
@@ -34,6 +34,7 @@ proj4rs = "0.2"
 ureq = "3"
 roxmltree = "0.21"
 nlcspp = { path = "nlcspp" }
+rekenkern = { path = "rekenkern" }
 quick-xml = "0.41"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }

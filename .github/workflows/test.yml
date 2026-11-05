@@ -33,7 +33,7 @@ jobs:
       # Validate the development profile across every offline Rust test target.
       # Fixed local DWGs and boundary cases use the same writer as GIS_IFC /
       # CIV_IFC. Network-dependent tests remain ignored by the normal harness.
-      - run: cargo test --lib --tests --locked -p open-infra -p nlcspp
+      - run: cargo test --lib --tests --locked -p open-infra -p nlcspp -p rekenkern
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

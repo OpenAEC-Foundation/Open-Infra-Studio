@@ -141,10 +141,11 @@ impl Tin {
     /// The faces on the drawing's triangulation layers (OG-TRIANGULATIE),
     /// or the selected faces when `only` is not empty.
     pub fn from_document_with(doc: &CadDocument, only: &HashSet<Handle>) -> Option<Tin> {
+        let mut memo = crate::nlcs::LayerMemo::default();
         let faces: Vec<[P3; 3]> = doc
             .model_space_entities()
             .filter(|e| matches!(e, EntityType::Face3D(_) | EntityType::Mesh(_)))
-            .filter(|e| if only.is_empty() { e.common().layer.contains("-OG-TRIANGULATIE-") } else { only.contains(&e.common().handle) })
+            .filter(|e| if only.is_empty() { memo.is(&e.common().layer, "OG", Some("TRIANGULATIE"), None) } else { only.contains(&e.common().handle) })
             .flat_map(triangles_of)
             .collect();
         Tin::from_faces(&faces)
@@ -156,12 +157,17 @@ impl Tin {
         Tin::of_status(doc, 'B')
     }
 
-    /// The faces on the OG-TRIANGULATIE layers of one drawing status.
+    /// The faces on the OG-TRIANGULATIE layers of one drawing status (the
+    /// NLCS letter; other layer standards' names are taken back to it).
     pub fn of_status(doc: &CadDocument, status: char) -> Option<Tin> {
         let prefix = format!("{status}-");
+        let mut memo = crate::nlcs::LayerMemo::default();
         let faces: Vec<[P3; 3]> = doc
             .model_space_entities()
-            .filter(|e| e.common().layer.starts_with(&prefix) && e.common().layer.contains("-OG-TRIANGULATIE-"))
+            .filter(|e| {
+                let l = &e.common().layer;
+                (l.starts_with(&prefix) && l.contains("-OG-TRIANGULATIE-")) || memo.other(l).is_some_and(|(s, o)| o.group == "OG" && o.name == "TRIANGULATIE" && s.code().starts_with(status))
+            })
             .flat_map(triangles_of)
             .collect();
         Tin::from_faces(&faces)
@@ -432,7 +438,7 @@ pub fn create(opt: &super::CivielOptions, source: TinSource, progress: &dyn Fn(S
         TinSource::Points => doc
             .model_space_entities()
             .filter(|e| {
-                let l = &e.common().layer;
+                let l = crate::nlcs::as_nlcs(&e.common().layer);
                 (matches!(e, EntityType::Point(_)) && l.contains("-OG-HOOGTEPUNT-")) || l.contains("-OG-BREUKLIJN-")
             })
             .map(|e| e.common().handle)
@@ -588,9 +594,10 @@ fn surfaces(doc: &CadDocument) -> Result<(Option<Tin>, Option<Tin>), String> {
         return Ok((None, Tin::from_document(doc)));
     }
     let design = Tin::from_document_with(doc, &picked);
+    let mut memo = crate::nlcs::LayerMemo::default();
     let rest: Vec<[P3; 3]> = doc
         .model_space_entities()
-        .filter(|e| e.common().layer.starts_with("B-") && e.common().layer.contains("-OG-TRIANGULATIE-") && !picked.contains(&e.common().handle))
+        .filter(|e| !picked.contains(&e.common().handle) && memo.is(&e.common().layer, "OG", Some("TRIANGULATIE"), Some(crate::nlcs::Status::B)))
         .flat_map(triangles_of)
         .collect();
     Ok((design, Tin::from_faces(&rest)))

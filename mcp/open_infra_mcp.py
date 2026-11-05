@@ -424,6 +424,18 @@ def t_nlcs(a):
     return OCS.run("GIS_NLCS_HERSTEL" if a.get("repair") else "GIS_NLCS_RAPPORT")
 
 
+@tool("layer_standard", "The CAD layer standard new layers follow: nlcs (Dutch NLCS), ncs-us (U.S. National CAD Standard), "
+      "uk-iso13567 (BS EN ISO 13567 / BS 1192 with Uniclass 2015), au-iso13567 (AS ISO 13567 with Uniclass 2015), "
+      "iso13567 (generic ISO 13567), or a user's own TSV. Without `id` lists the standards with example layer names; "
+      "with `id` makes it the active one (stored in settings.json).",
+      {"id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"}})
+def t_layer_standard(a):
+    sid = a.get("id")
+    if sid is not None and (not sid or not all(c.isascii() and (c.isalnum() or c in "-_") for c in sid)):
+        raise ValueError("id: letters, digits, - and _ only")
+    return OCS.run("GIS_LAAGSTANDAARD" + (f" {sid}" if sid else ""))
+
+
 @tool("bgt_mutation", "The NLCS design as a BGT mutation (IMGeo-GML 2.1.1) with a report, beside the drawing. "
       "Layers N become plan topography (as_built=true: built), R built (changed when it carries a BGT lokaal_id), "
       "V ends the BGT object. Type and function come from the BGT object data, the BGT object beneath or the NLCS layer; "
@@ -438,11 +450,12 @@ def t_mutation(a):
       "Every object becomes its IFC class from its NLCS layer and object data: terrain (TIN, photo terrain), 3D BAG and CityGML "
       "buildings, pavements, green, water, structures, cables and pipes, sewers, earthworks, CPTs and boreholes (IfcBorehole with "
       "IfcGeotechnicalStratum); axes become IfcAlignments with horizontal and vertical layout. Georeferenced from the project "
-      "location; object data as property sets. Answers with the counts per IFC class.",
-      {"path": STR, "selection": {"type": "boolean"}, "texts": {"type": "boolean"}})
+      "location; object data as property sets. Answers with the counts per IFC class. With `ids` the export is then checked "
+      "against that IDS file (as civ_ifc_ids).",
+      {"path": STR, "selection": {"type": "boolean"}, "texts": {"type": "boolean"}, "ids": STR})
 def t_ifc(a):
     words = (" SELECTIE" if a.get("selection") else "") + (" TEKST=nee" if a.get("texts") is False else "")
-    return OCS.run(f"CIV_IFC {_kv(BESTAND=a.get('path'))}{words}", 1800)
+    return OCS.run(f"CIV_IFC {_kv(BESTAND=a.get('path'), IDS=a.get('ids'))}{words}", 1800)
 
 
 @tool("quantities", "Quantities per NLCS layer (count, length, area) as CSV beside the drawing.")
@@ -608,6 +621,76 @@ def t_mass_haul(a):
                                            VRIJ=a.get("free_haul"), PLAATS=a.get("at") and _pt(a["at"])))
 
 
+# Water: open-channel profiles (#74), storage (#64), pressure networks (#67).
+CULVERT = {"type": "object", "properties": {"station": NUM, "diameter": {"type": "number", "description": "m (or mm from 20 up)"},
+           "width": {"type": "number", "description": "box culvert width (m), with height instead of diameter"}, "height": NUM,
+           "length": NUM, "invert_in": {"type": "number", "description": "upstream invert (m)"}, "invert_out": {"type": "number", "description": "downstream invert (m)"}},
+           "required": ["station", "length", "invert_in", "invert_out"]}
+WEIR = {"type": "object", "properties": {"station": NUM, "crest": NUM, "width": NUM}, "required": ["station", "crest", "width"]}
+
+
+def _culvert(c):
+    size = f"{_num(c['width'])}x{_num(c['height'])}" if c.get("width") else _num(c["diameter"])
+    return ",".join([_num(c["station"]), size, _num(c["length"]), _num(c["invert_in"]), _num(c["invert_out"])])
+
+
+@tool("civ_water_profile", "Steady water surface profile of a watercourse along an axis (standard step, Manning) at discharge q (m³/s): cross sections "
+      "from the TIN (else AHN), culverts and weirs as structures. Draws the water line in the axis's length profile and the inundation boundary "
+      "in plan (GW WATERGANG_WATERLIJN); returns level, depth, velocity and width per section and a Markdown/JSON report path.",
+      {"axis": AXIS, "q": NUM, "roughness": {"type": "number", "description": "Manning n (< 1, default 0.035) or k_M = 1/n (≥ 1)"},
+       "downstream_level": {"type": "number", "description": "known downstream water level (m); else see downstream"},
+       "downstream": {"type": "string", "enum": ["NORMAAL", "KRITIEK"], "description": "normal depth on the bed slope (default) or critical depth"},
+       "interval": {"type": "number", "description": "cross section spacing (m)"}, "half_width": {"type": "number", "description": "section width each side of the axis (m)"},
+       "culverts": {"type": "array", "items": CULVERT}, "weirs": {"type": "array", "items": WEIR},
+       "direction": {"type": "string", "enum": ["AUTO", "MEE", "TEGEN"], "description": "flow along (MEE) or against (TEGEN) the axis; AUTO from the bed"}},
+      ["q"])
+def t_water_profile(a):
+    return OCS.run("CIV_WATERLOOP " + _kv(AS=a.get("axis"), Q=a.get("q"), RUWHEID=a.get("roughness"),
+                                         BENEDENSTROOMS=a.get("downstream_level") if a.get("downstream_level") is not None else a.get("downstream"),
+                                         INTERVAL=a.get("interval"), BREEDTE=a.get("half_width"),
+                                         DUIKER=";".join(_culvert(c) for c in a.get("culverts") or []),
+                                         STUW=";".join(",".join(_num(w[k]) for k in ("station", "crest", "width")) for w in a.get("weirs") or []),
+                                         RICHTING=a.get("direction")))
+
+
+@tool("civ_storage", "Storage facility (wadi, pond or crate system) from a closed bottom outline: draws bottom and top outlines with side slopes, builds "
+      "the stage–storage curve, routes a design storm (Leidraad bui 01–10, stress test T100/T250/T1000/48H/R100/R250/R1000, 'mm:min' or a CSV path) "
+      "through an orifice, a weir and infiltration, and draws a level–time graph. Returns max level, overflow, drain time and the series.",
+      {"line": LINE, "kind": {"type": "string", "enum": ["wadi", "vijver", "krat"]}, "bottom": {"type": "number", "description": "bottom level (m)"},
+       "depth": NUM, "side_slope": {"type": "number", "description": "n of 1:n (default 3; crates vertical)"},
+       "orifice_mm": NUM, "orifice_invert": NUM, "weir_level": NUM, "weir_width": NUM, "infiltration_mm_h": NUM,
+       "storm": {"type": "string", "description": "08 (default), T100, R100, '40:60' (mm:min) or a CSV path"},
+       "area_m2": {"type": "number", "description": "connected paved area draining into it (m²)"}, "name": STR,
+       "tin": {"type": "boolean", "description": "cut the design TIN to the basin, as civ_plateau"}, "at": PT},
+      ["kind", "bottom", "depth"])
+def t_storage(a):
+    knijp = None
+    if a.get("orifice_mm"):
+        knijp = _num(a["orifice_mm"]) + ("," + _num(a["orifice_invert"]) if a.get("orifice_invert") is not None else "")
+    drempel = f"{_num(a['weir_level'])},{_num(a['weir_width'])}" if a.get("weir_level") is not None and a.get("weir_width") else None
+    return OCS.run("CIV_BERGING " + _kv(LIJN=a.get("line"), SOORT=a.get("kind"), BODEM=a.get("bottom"), DIEPTE=a.get("depth"),
+                                       TALUD=a.get("side_slope") and f"1:{_num(a['side_slope'])}", KNIJP=knijp, DREMPEL=drempel,
+                                       INFILTRATIE=a.get("infiltration_mm_h"), BUI=a.get("storm"), OPPERVLAK=a.get("area_m2"), NAAM=a.get("name"),
+                                       TIN=a.get("tin"), PLAATS=a.get("at") and _pt(a["at"])))
+
+
+@tool("civ_pressure_network", "Drinking-water / pressure network from the selected lines (or a layer, or the library's water mains): ends within 0.5 m "
+      "join, tees split; node levels from the ground; solved with the gradient method (Hazen-Williams or Darcy-Weisbach). Labels pressure per "
+      "node and flow/velocity per pipe, checks the fire flow per hydrant (library hydrants and given points) and returns all results.",
+      {"layer": {"type": "string", "description": "layer pattern(s) with * wildcards, ';'-separated; empty = the selection or the water mains"},
+       "sources": {"type": "array", "items": {"type": "array", "items": NUM, "minItems": 3, "maxItems": 3}, "description": "[x, y, head m] per source"},
+       "demand_ls": {"type": "number", "description": "demand per node (l/s)"}, "demand_total_ls": {"type": "number", "description": "total demand (l/s), spread by pipe length"},
+       "diameter_mm": {"type": "number", "description": "internal diameter for pipes without one in their object data"},
+       "roughness": {"type": "number", "description": "Hazen-Williams C (≥ 20, default 130) or Darcy-Weisbach k in mm (< 20)"},
+       "hydrants": PTS, "min_pressure_kpa": NUM, "fire_flow_m3h": NUM},
+      ["sources"])
+def t_pressure_network(a):
+    vraag = f"TOTAAL:{_num(a['demand_total_ls'])}" if a.get("demand_total_ls") is not None else a.get("demand_ls")
+    return OCS.run("CIV_DRUKNET " + _kv(LAAG=a.get("layer"), BRON=";".join(_pt(s) for s in a.get("sources") or []), VRAAG=vraag,
+                                       DIAMETER=a.get("diameter_mm"), RUWHEID=a.get("roughness"), BRANDKRAAN=a.get("hydrants") and _pts(a["hydrants"]),
+                                       MINDRUK=a.get("min_pressure_kpa"), BLUSDEBIET=a.get("fire_flow_m3h")))
+
+
 # Corridor stream: assemblies (JSON), junctions and roundabouts.
 @tool("civ_assemblies", "The corridor assemblies (profieltypen): presets and the user's JSON files in <config>/OpenCADStudio/open-infra/assemblies/, "
       "with their parts per side (lanes, gutters, kerbs, footways, cycle paths, parking, verges, central reserve, ditches), pavement layers, "
@@ -730,9 +813,58 @@ EXPORT = {"path": {"type": "string", "description": "Output file; empty = beside
           "all": {"type": "boolean", "description": "Everything (default); false = only the objects in the selection"}}
 
 
+@tool("civ_sewer_hydraulics", "Sewer hydraulics of a CIV_RIOOL network: design flow per pipe (rain on the connected paved area, dry weather flow of "
+      "inhabitants or dwellings, infiltration), filling and velocity, optionally the smallest standard diameter (auto_diameter), "
+      "and the hydraulic grade line from the outfall with manholes where water reaches the street; the grade line is drawn in the length profile.",
+      {"sewer": STR, "area_m2": NUM, "rain_l_s_ha": NUM, "inhabitants": NUM, "dwellings": NUM, "outfall_level": NUM,
+       "auto_diameter": {"type": "boolean"}, "max_fill": NUM, "manhole_loss": NUM})
+def t_sewer_hydraulics(a):
+    return OCS.run("CIV_RIOOL_HYDRAULICA " + _kv(RIOOL=a.get("sewer"), OPPERVLAK=a.get("area_m2"), REGEN=a.get("rain_l_s_ha"),
+                                               INWONERS=a.get("inhabitants"), WONINGEN=a.get("dwellings"), UITLAATPEIL=a.get("outfall_level"),
+                                               DIAMETER=("AUTO" if a.get("auto_diameter") else None), VULLING=a.get("max_fill"),
+                                               PUTVERLIES=a.get("manhole_loss")), timeout=900)
+
+
 @tool("civ_landxml_export", "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.", EXPORT)
 def t_landxml_export(a):
     return OCS.run(f"CIV_LANDXML_EXPORT {_kv(BESTAND=a.get('path'))}{' ALLES' if a.get('all', True) else ''}")
+
+
+# Exchange: IFC in, IDS checks, 3D meshes out and in (#66, #65, #71).
+@tool("civ_ifc_import", "Import an IFC model (IFC 4.3; IFC4/IFC2X3 for element geometry) as a base: IfcAlignments (line, circular arc, clothoid; "
+      "gradients and parabolic arcs) become axes with stationing and their design profile, terrain (IfcTriangulatedIrregularNetwork, "
+      "IfcGeographicElement TERRAIN) a TIN (status B by default, N with status), other elements meshes on NLCS layers with their "
+      "property sets as object data. IfcMapConversion places everything in the project CRS. Answers with the axes, terrains, "
+      "classes and what could not be read.",
+      {"path": STR, "status": SURF}, ["path"])
+def t_ifc_import(a):
+    return OCS.run(f"CIV_IFC_IMPORT {_quote(a['path'])} {_kv(STATUS=a.get('status'))}", 1800)
+
+
+@tool("civ_ifc_ids", "Check an IFC model against a client's IDS (buildingSMART IDS 1.0: entity, attribute, property, classification, "
+      "material and partOf facets). Without `ifc`: the drawing's last export (<drawing>_IFC4X3.ifc), exported first when missing. "
+      "Writes <drawing>_ids.md and <drawing>_ids.json and answers with the counts per specification.",
+      {"ids": STR, "ifc": STR}, ["ids"])
+def t_ifc_ids(a):
+    return OCS.run(f"CIV_IFC_IDS {_kv(IDS=a['ids'], IFC=a.get('ifc'))}", 1800)
+
+
+@tool("civ_3d_export", "Export the drawing's 3D content (meshes, polyface meshes, 3D faces: TINs, photo terrain, 3D BAG, BGT 3D, corridor "
+      "bodies) as glTF binary (GLB), OBJ (+MTL, Y-up) or STL, one mesh per layer and colour, local origin at the project base point "
+      "with the EPSG code in the file. Default beside the drawing as <drawing>_3D.<ext>.",
+      {"format": {"type": "string", "enum": ["GLB", "OBJ", "STL"]}, "path": STR, "selection": {"type": "boolean"}})
+def t_3d_export(a):
+    words = " SELECTIE" if a.get("selection") else ""
+    return OCS.run(f"CIV_3D_EXPORT {_kv(FORMAAT=a.get('format'), PAD=a.get('path'))}{words}", 1800)
+
+
+@tool("civ_3d_import", "Import an OBJ, STL or glTF/GLB model as mesh entities on a layer, with triangle count, area and volume (closed "
+      "meshes) as object data. A file exported by Open Infra returns to its own coordinates; otherwise its origin goes to `place` "
+      "(project coordinates) or the project base point, scaled and rotated (degrees about the vertical).",
+      {"path": STR, "place": PT, "scale": NUM, "rotation": NUM, "layer": STR}, ["path"])
+def t_3d_import(a):
+    place = ",".join(_num(v) for v in a["place"]) if a.get("place") else None
+    return OCS.run(f"CIV_3D_IMPORT {_quote(a['path'])} {_kv(PLAATS=place, SCHAAL=a.get('scale'), ROTATIE=a.get('rotation'), LAAG=a.get('layer'))}", 1800)
 
 
 

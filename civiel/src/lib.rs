@@ -164,6 +164,9 @@ fn terrain_tools() -> Vec<RibbonItem> {
             ("CIV_STROOMGEBIED", tr("Stroomgebied", "Catchment"), I_CATCHMENT),
             ("CIV_WATERDRUPPEL", tr("Waterdruppel", "Water drop"), I_DROP),
             ("CIV_PLASSEN", tr("Plassen", "Ponds"), I_PONDS),
+            ("CIV_BUI", tr("Bui op het maaiveld", "Storm on the ground"), I_PONDS),
+            ("CIV_WATERLOOP", tr("Waterlijn watergang", "Water surface profile"), I_WATER),
+            ("CIV_BERGING", tr("Berging (wadi, vijver, krat)", "Storage (swale, pond, crates)"), I_PONDS),
         ],
         default: "CIV_STROOMGEBIED",
     });
@@ -194,6 +197,7 @@ impl CadModule for CivielModule {
                     tools: vec![
                         file_tool("CIV_PUNTEN_IMPORT", tr("Punten importeren", "Import points"), I_POINTS, tr("Puntenbestand openen", "Open a point file"), tr("Puntenbestand (PNEZD, PENZD, CSV)", "Point file (PNEZD, PENZD, CSV)"), &["csv", "txt", "xyz", "pnt", "asc"], true),
                         file_tool("CIV_LANDXML", "LandXML", I_LANDXML, tr("LandXML openen", "Open LandXML"), "LandXML", &["xml", "landxml"], false),
+                        file_tool("CIV_IFC_IMPORT", tr("IFC inlezen", "IFC import"), I_IFC, tr("IFC openen", "Open IFC"), "IFC", &["ifc"], false),
                         menu("CIV_MENU_PUNTEN", tr("Punten", "Points"), I_PLACE, vec![
                             ("CIV_PUNT", tr("Punt plaatsen", "Place point"), I_PLACE),
                             ("CIV_PUNTEN_EXPORT", tr("Punten exporteren", "Export points"), I_EXPORT),
@@ -270,6 +274,8 @@ impl CadModule for CivielModule {
                             ("CIV_BIJWERKEN", tr("Profielen bijwerken", "Update profiles"), I_LABELS_UPDATE),
                         ], "CIV_BLADEN_PDF"),
                         file_tool("CIV_CITYGML", "CityGML/JSON", I_CITYGML, tr("CityGML of CityJSON openen", "Open CityGML or CityJSON"), "CityGML / CityJSON", &["gml", "xml", "citygml", "json", "jsonl"], false),
+                        file_tool("CIV_3D_IMPORT", tr("3D-model", "3D model"), I_MESH, tr("3D-model openen (OBJ, STL, glTF)", "Open a 3D model (OBJ, STL, glTF)"), "OBJ / STL / glTF", &["obj", "stl", "glb", "gltf"], false),
+                        file_tool("CIV_IFC_IDS", tr("IDS-controle", "IDS check"), I_CHECK, tr("IDS van de opdrachtgever openen", "Open the client's IDS"), "IDS", &["ids", "xml"], false),
                         menu("CIV_MENU_WEERGAVE", tr("Weergave", "View"), I_PHOTO, vec![
                             ("CIV_FOTOTERREIN", tr("Terrein + luchtfoto", "Terrain + aerial photo"), I_PHOTO),
                             ("CIV_DOORZICHT", tr("Maaiveld doorzichtig", "See-through ground"), I_SEE),
@@ -278,6 +284,7 @@ impl CadModule for CivielModule {
                         menu("CIV_MENU_EXPORT", tr("Exporteren", "Export"), I_IFC, vec![
                             ("CIV_IFC", "IFC 4x3", I_IFC),
                             ("CIV_LANDXML_EXPORT", "LandXML", I_LANDXML_EXPORT),
+                            ("CIV_3D_EXPORT", tr("3D (glTF)", "3D (glTF)"), I_MESH),
                         ], "CIV_IFC"),
                         menu("CIV_MENU_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS, vec![
                             ("CIV_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS),
@@ -662,7 +669,7 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
             job(host, tr("Kantlijn bewerken", "Edit feature line"), id, move |_| grading::edit_feature(&o, h, edit));
         }
         "CIV_PLATEAU" => {
-            let o = grading::design_options(&args.apply(&base, &["LIJN", "PUNTEN", "AFSCHOT", "RICHTING", "PEILPUNT", "TALUD", "TALUD_AF", "TALUD_OP", "REIKWIJDTE", "NAAM", "SAMENVOEGEN"])?, keep_status);
+            let o = grading::design_options(&args.apply(&base, &["LIJN", "PUNTEN", "AFSCHOT", "RICHTING", "PEILPUNT", "TALUD", "TALUD_AF", "TALUD_OP", "REIKWIJDTE", "NAAM", "SAMENVOEGEN", "MIN", "MAX", "FACTOR"])?, keep_status);
             let source = grading_source(args, "LIJN")?;
             let fall = match args.str("AFSCHOT") {
                 None => None,
@@ -676,9 +683,10 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
                 }
             };
             let both = ratio("TALUD")?;
+            let auto_level = args.str("PEIL").is_some_and(|v| v.eq_ignore_ascii_case("auto"));
             let req = grading::PlateauRequest {
                 source,
-                level: args.f64("PEIL")?,
+                level: if auto_level { None } else { args.f64("PEIL")? },
                 default_level: (!scripted).then_some(base.level),
                 fall,
                 reference: args.points("PEILPUNT")?.and_then(|p| p.first().copied()),
@@ -688,6 +696,7 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
                 step: if args.str("STAP").is_some() { o.step } else { 1.0 },
                 name: args.str("NAAM").map(str::to_string),
                 join: yes(args.str("SAMENVOEGEN")).unwrap_or(true),
+                auto: auto_level.then(|| -> Result<grading::AutoLevel, String> { Ok(grading::AutoLevel { min: args.f64("MIN")?, max: args.f64("MAX")?, factor: args.f64("FACTOR")?.unwrap_or(1.0) }) }).transpose()?,
             };
             job(host, tr("Plateau", "Plateau"), id, move |p| grading::plateau(&o, req, p));
         }
@@ -781,8 +790,8 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
             job(host, tr("Grondbalans", "Mass haul"), id, move |p| massa::mass_haul_diagram(&o, req, p));
         }
         "CIV_HELP" if args.words.first().is_some_and(|w| w.eq_ignore_ascii_case("GRADING") || w.eq_ignore_ascii_case("GRONDWERK")) => host.push_info(tr(
-            "[Open Infra — Grondwerk] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL= [AFSCHOT=% RICHTING=N|O|Z|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (of CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
-            "[Open Infra — Grading] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL= [AFSCHOT=% RICHTING=N|E|S|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (or CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
+            "[Open Infra — Grondwerk] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL=<m>|AUTO [MIN= MAX= FACTOR=] [AFSCHOT=% RICHTING=N|O|Z|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (of CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
+            "[Open Infra — Grading] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL=<m>|AUTO [MIN= MAX= FACTOR=] [AFSCHOT=% RICHTING=N|E|S|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (or CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
         )),
         _ => return Ok(false),
     }
@@ -867,6 +876,8 @@ fn riool_tools() -> Vec<RibbonItem> {
     let mut items = vec![
         ("CIV_RIOOL_PROFIEL", tr("Lengteprofiel", "Length profile"), I_RIOOL_PROFIEL),
         ("CIV_RIOOL_TOETS", tr("Toetsen", "Check"), I_RIOOL_TOETS),
+        ("CIV_RIOOL_HYDRAULICA", tr("Hydraulica", "Hydraulics"), I_RIOOL_TOETS),
+        ("CIV_DRUKNET", tr("Drukleidingnet (drinkwater)", "Pressure network (water mains)"), I_RIOOL_TOETS),
         ("CIV_RIOOL_BIJWERKEN", tr("Bijwerken", "Update"), I_RIOOL_BIJWERKEN),
         ("CIV_RIOOL_EXPORT", tr("Exporteren", "Export"), I_RIOOL_EXPORT),
     ];
@@ -1516,6 +1527,26 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let label = if ponds_only { open_infra::lang::tr("Plassen", "Ponds") } else { open_infra::lang::tr("Stroomgebied", "Catchment") };
             job(host, label, id, move |p| civiel::hydrologie::catchment(&o, req, p));
         }
+        "CIV_BUI" => {
+            let o = opt(&["BRON", "BUI", "INFILTRATIE", "RUWHEID", "RAND", "KOLKEN", "LAAG", "KOLK", "NA"])?;
+            let ground = catchment_request(&args.without(&["LAAG", "PUNTEN"]), true)?;
+            let sinks = match args.points("KOLKEN")? {
+                Some(p) => p.into_iter().map(to_drawing).collect::<Result<Vec<_>, _>>()?,
+                None => Vec::new(),
+            };
+            let layers = args.str("LAAG").map(|l| l.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default();
+            let req = civiel::hydrologie::StormRequest {
+                ground: civiel::hydrologie::CatchmentRequest { cell: args.f64("CEL")?.unwrap_or(2.0).max(0.5), ..ground },
+                storm: args.str("BUI").unwrap_or("T100").to_string(),
+                infiltration: args.f64("INFILTRATIE")?.unwrap_or(0.0),
+                manning: args.f64("RUWHEID")?,
+                free_edge: !args.str("RAND").is_some_and(|v| v.eq_ignore_ascii_case("dicht") || v.eq_ignore_ascii_case("closed")),
+                sinks: civiel::hydrologie::Outlets { points: sinks, layers },
+                sink_capacity: args.f64("KOLK")?.unwrap_or(5.0),
+                after: args.f64("NA")?.unwrap_or(30.0),
+            };
+            job(host, open_infra::lang::tr("Bui op het maaiveld", "Storm on the ground"), id, move |p| civiel::hydrologie::storm(&o, req, p));
+        }
         // Point clouds: a TIN from the AHN points (of the site or the selected
         // closed polyline) or from a file, and a 3D mesh of an object.
         "CIV_PUNTENWOLK_TIN" | "CIV_PUNTENWOLK_BESTAND" => {
@@ -1564,9 +1595,69 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             job(host, "Sonderingen 3D", id, move |p| civiel::ondergrond::columns(&o, &req, p));
         }
         "CIV_IFC" => {
-            opt(&["BESTAND", "PAD", "TEKST"])?;
+            opt(&["BESTAND", "PAD", "TEKST", "IDS"])?;
             let (file, selection, texts) = open_infra::ifc::args(args);
-            job(host, "IFC 4x3", id, move |p| open_infra::ifc::command(file, selection, texts, p));
+            // IDS=: export, then check the export against the client's IDS.
+            match args.str("IDS").map(std::path::PathBuf::from) {
+                Some(ids) => job(host, "IFC 4x3 + IDS", id, move |p| civiel::ids::export_and_check(file, selection, texts, ids, p)),
+                None => job(host, "IFC 4x3", id, move |p| open_infra::ifc::command(file, selection, texts, p)),
+            }
+        }
+        // Exchange: IFC in, IDS checks, 3D meshes out and in (#66, #65, #71).
+        "CIV_IFC_IMPORT" => {
+            let Some(file) = path() else {
+                return Err(tr("geef een bestand: CIV_IFC_IMPORT <pad.ifc> (of kies via de knop in het lint)", "give a file: CIV_IFC_IMPORT <path.ifc> (or pick one with the ribbon button)").into());
+            };
+            let o = opt(&[])?;
+            // STATUS= sets the terrain's status too (B by default).
+            let status = args.str("STATUS").and_then(|s| open_infra::nlcs::Status::from_code(&s.to_ascii_uppercase()));
+            job(host, "IFC", id, move |p| civiel::ifc_import::import(&o, std::path::Path::new(&file), status, p));
+        }
+        "CIV_IFC_IDS" => {
+            opt(&["IDS", "IFC"])?;
+            let ends = |w: &String, ext: &[&str]| ext.iter().any(|e| w.to_ascii_lowercase().ends_with(e));
+            let ids = args.str("IDS").map(str::to_string).or_else(|| args.words.iter().find(|w| ends(*w, &[".ids", ".xml"])).cloned());
+            let Some(ids) = ids.map(std::path::PathBuf::from) else {
+                return Err(tr("geef de IDS: CIV_IFC_IDS IDS=<pad.ids> [IFC=<pad.ifc>]", "give the IDS: CIV_IFC_IDS IDS=<path.ids> [IFC=<path.ifc>]").into());
+            };
+            let ifc = args.str("IFC").map(str::to_string).or_else(|| args.words.iter().find(|w| ends(*w, &[".ifc"])).cloned()).map(std::path::PathBuf::from);
+            job(host, "IDS", id, move |p| civiel::ids::command(ids, ifc, p));
+        }
+        "CIV_3D_EXPORT" => {
+            // FORMAAT= is this command's own (GLB, OBJ, STL), not the point file format.
+            args.without(&["FORMAAT"]).apply(&base, &["PAD", "BESTAND"])?;
+            use civiel::uitwisseling3d::Formaat;
+            let file = args.str("PAD").or(args.str("BESTAND")).map(str::to_string).or_else(|| args.words.iter().find(|w| !w.eq_ignore_ascii_case("SELECTIE") && !w.eq_ignore_ascii_case("SELECTION")).cloned()).map(std::path::PathBuf::from);
+            let formaat = match args.str("FORMAAT") {
+                Some(f) => Formaat::parse(f)?,
+                None => file.as_deref().and_then(Formaat::of_path).unwrap_or(Formaat::Glb),
+            };
+            let selection = args.words.iter().any(|w| w.eq_ignore_ascii_case("SELECTIE") || w.eq_ignore_ascii_case("SELECTION"));
+            job(host, "3D export", id, move |p| civiel::uitwisseling3d::export(formaat, selection, file, p));
+        }
+        "CIV_3D_IMPORT" => {
+            let Some(file) = path() else {
+                return Err(tr("geef een bestand: CIV_3D_IMPORT <pad.obj|stl|glb> (of kies via de knop in het lint)", "give a file: CIV_3D_IMPORT <path.obj|stl|glb> (or pick one with the ribbon button)").into());
+            };
+            // SCHAAL= is the model's scale here, not the drawing scale.
+            let o = args.without(&["SCHAAL"]).apply(&base, &["PLAATS", "ROTATIE", "LAAG"])?;
+            let plaats = match args.str("PLAATS") {
+                Some(v) => {
+                    let c: Vec<f64> = v.split(',').map(|t| t.trim().parse::<f64>()).collect::<Result<_, _>>().map_err(|_| tr("PLAATS: x,y of x,y,z in projectcoördinaten", "PLAATS: x,y or x,y,z in project coordinates").to_string())?;
+                    if c.len() < 2 || c.len() > 3 {
+                        return Err(tr("PLAATS: x,y of x,y,z in projectcoördinaten", "PLAATS: x,y or x,y,z in project coordinates").into());
+                    }
+                    Some([c[0], c[1], c.get(2).copied().unwrap_or(0.0)])
+                }
+                None => None,
+            };
+            let schaal = args.f64("SCHAAL")?.unwrap_or(1.0);
+            if !(schaal > 0.0 && schaal.is_finite()) {
+                return Err(tr("SCHAAL moet groter dan 0 zijn", "SCHAAL must be greater than 0").into());
+            }
+            let pl = civiel::uitwisseling3d::Plaatsing { plaats, schaal, rotatie: args.f64("ROTATIE")?.unwrap_or(0.0) };
+            let laag = args.str("LAAG").map(str::to_string);
+            job(host, tr("3D-model", "3D model"), id, move |p| civiel::uitwisseling3d::import(&o, std::path::Path::new(&file), pl, laag, p));
         }
         // Plan production: sheets and labels.
         "CIV_BLADEN" => {
@@ -1681,6 +1772,33 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let naam = args.str("RIOOL").map(str::to_string);
             job(host, open_infra::lang::tr("Riooltoets", "Sewer check"), id, move |p| riool::toets(&o, naam, t, p));
         }
+        "CIV_RIOOL_HYDRAULICA" => {
+            let o = opt(riool::HYDRAULICA_ARGS)?;
+            let h = riool::Hydraulica::from_args(args)?;
+            let naam = args.str("RIOOL").map(str::to_string);
+            job(host, open_infra::lang::tr("Rioolhydraulica", "Sewer hydraulics"), id, move |p| riool::hydraulica(&o, naam, h, p));
+        }
+        // ── Water (src/civiel/waterloop.rs, berging.rs, druknet.rs) ──
+        "CIV_WATERLOOP" => {
+            let o = opt(civiel::waterloop::ARGS)?;
+            let w = civiel::waterloop::Waterloop::from_args(args)?;
+            job(host, open_infra::lang::tr("Waterlijn", "Water surface profile"), id, move |p| civiel::waterloop::waterloop(&o, w, p));
+        }
+        "CIV_BERGING" => {
+            let mut o = opt(civiel::berging::ARGS)?;
+            // A design: new work, unless STATUS= says otherwise.
+            if args.str("STATUS").is_none() {
+                o.nlcs.status = open_infra::nlcs::Status::N;
+            }
+            let mut b = civiel::berging::Berging::from_args(args)?;
+            b.plaats = place_arg(args)?;
+            job(host, open_infra::lang::tr("Berging", "Storage"), id, move |p| civiel::berging::berging(&o, b, p));
+        }
+        "CIV_DRUKNET" => {
+            let o = opt(civiel::druknet::ARGS)?;
+            let r = civiel::druknet::Druknet::from_args(args)?;
+            job(host, open_infra::lang::tr("Drukleidingnet", "Pressure network"), id, move |p| civiel::druknet::druknet(&o, r, p));
+        }
         "CIV_RIOOL_EXPORT" => {
             // FORMAAT= is this command's own (GWSW or CSV), not the point file format.
             let o = args.without(&["FORMAAT"]).apply(&base, &["RIOOL", "PAD"])?;
@@ -1707,7 +1825,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             "[Open Infra — Riolering / Sewers] CIV_RIOOL [LIJN=<handle> | PUNTEN=x,y;x,y;… | selectie | klikken] [STELSEL=DWA|HWA|GWA|ITR] [DIAMETER=mm] [MATERIAAL=beton|PVC|PP|PE|gres] \
              [DEKKING=m] [VERHANG=1:250|4 (‰)] [BOB=m NAP|AUTO] [PUT=800|800x1000] [PUTNR=P101] [NAAM=] [OMKEREN=ja] [MAAIVELD=AUTO|ONTWERP|AHN]; \
              CIV_RIOOL_BIJWERKEN [RIOOL=] [PUTNR= BOB=|MAAIVELD=|PUT=] [LEIDING=P101-P102 DIAMETER=|MATERIAAL=|VERHANG=|DEKKING=] [INVOEGEN=x,y]; \
-             CIV_RIOOL_PROFIEL [RIOOL=] [VAN=] [NAAR=] [PLAATS=x,y]; CIV_RIOOL_TOETS [RIOOL=] [Q=l/s | OPPERVLAK=m² of ha [REGEN=l/s/ha] | INWONERS=] [PUTAFSTAND=] [VRIJ=] [RUWHEID=mm]; \
+             CIV_RIOOL_PROFIEL [RIOOL=] [VAN=] [NAAR=] [PLAATS=x,y]; CIV_RIOOL_TOETS [RIOOL=] [Q=l/s | OPPERVLAK=m² of ha [REGEN=l/s/ha] | INWONERS=] [PUTAFSTAND=] [VRIJ=] [RUWHEID=mm]; CIV_RIOOL_HYDRAULICA [RIOOL=] [OPPERVLAK=m² of ha] [REGEN=l/s/ha] [INWONERS= | WONINGEN=] [UITLAATPEIL=m] [DIAMETER=AUTO] [VULLING=h/D] [PUTVERLIES=ξ]; \
              CIV_RIOOL_EXPORT [RIOOL=] [FORMAAT=GWSW|CSV|HYDX] [PAD=]; CIV_RIOOL_IMPORT <pad.orox.ttl>; CIV_RIOOL_GWSW [NAAM=].",
         ),
         // Design criteria, sight distance and rail (as-spoor).
@@ -1808,9 +1926,14 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              3D: CIV_BAG3D [LOD=1.2|1.3|2.2] [MAX=] [STIJL=mooi|maquette|realistisch|nlcs] [RAMEN=nee], CIV_FOTOTERREIN [CEL=2|10] [FOTO=auto|pdok|usgs|sentinel2|sentinel2-<jaar>] (wereldwijd: AHN of Terrain Tiles met luchtfoto), CIV_BGT3D [GROEPEN=wegen;terrein;water;gebouwen;kunstwerken;scheidingen;spoor;inrichting;vegetatie] [PANDEN=nee], CIV_3DMODEL (alles), CIV_WATERPEIL PEIL=<m NAP>, CIV_CITYGML <pad> [STIJL=], CIV_KLIC3D [<levering>] [VERGROOT=], CIV_DOORZICHT [PCT=70] [ALLES] [UIT], CIV_SONDERINGEN3D [BRON=sonderingen|boringen|alles] [MAX=100] [STRAAL=0.4] [MINLAAG=0.2] [QC=nee] [LABELS=nee] (BRO: kolommen met grondsoorten); \
              CIV_CORRIDOR AS= [PROFIELTYPE=<naam>|<pad.json>] [NIVEAU=|BOVEN=] [VAN=] [TOT=] [DOELEN=naam:handle;…] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y] [KLEUR=nlcs]; \
              CIV_PROFIELTYPEN, CIV_PROFIELTYPE NAAM= [KOPIE=] [PLAATS=x,y]; CIV_KRUISPUNT HOOFD= ZIJ= [R=8;…] [PROFIELTYPE=] [NIVEAU=]; \
-             CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_LANDXML_EXPORT [BESTAND=<pad>] [ALLES]; CIV_INFO; \
+             CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] [IDS=<pad.ids>] (IFC 4x3); CIV_LANDXML_EXPORT [BESTAND=<pad>] [ALLES]; CIV_INFO; \
+             uitwisseling: CIV_IFC_IMPORT <pad.ifc> [STATUS=B|N] (assen, terrein, elementen), CIV_IFC_IDS IDS=<pad.ids> [IFC=<pad.ifc>], CIV_3D_EXPORT [FORMAAT=GLB|OBJ|STL] [SELECTIE] [PAD=], CIV_3D_IMPORT <pad.obj|stl|glb> [PLAATS=x,y,z] [SCHAAL=] [ROTATIE=graden] [LAAG=]; \
              codes: CIV_PUNTEN_IMPORT <pad> CODES=JA [CODETABEL=], CIV_CODES_TOEPASSEN [CODETABEL=]; percelen: CIV_PERCELEN KAVEL= [STRAAT=|RICHTING=graden] N=|OPP=|FRONT= [REST=laatste|apart|verdelen] [PREFIX=P] [START=1], CIV_PERCEEL_INFO [PERCEEL=h;h] [STRAAT=]; \
-             water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=]; \
+             water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=], \
+             CIV_BUI [BUI=T100|T250|T1000|48h|R100|08|<mm>/<min>|<bui.csv>] [BRON=TIN|AHN] [CEL=2] [INFILTRATIE=mm/h] [RUWHEID=n] [RAND=open|dicht] [KOLKEN=x,y;… | LAAG=*KOLK*] [KOLK=l/s] [NA=min], \
+             CIV_WATERLOOP AS= Q=m³/s [RUWHEID=n|k_M] [BENEDENSTROOMS=peil|NORMAAL|KRITIEK] [INTERVAL=m] [BREEDTE=m] [DUIKER=station,diameter,lengte,bob_in,bob_uit;…] [STUW=station,kruin,breedte;…] [RICHTING=AUTO|MEE|TEGEN], \
+             CIV_BERGING [LIJN=] SOORT=wadi|vijver|krat BODEM= DIEPTE= [TALUD=1:n] [KNIJP=diameter[,bob]] [DREMPEL=peil,breedte] [INFILTRATIE=mm/h] [BUI=08|T100|T250|T1000|48H|R100|R250|R1000|mm:min|pad.csv] [OPPERVLAK=m² of ha] [NAAM=] [TIN=ja] [PLAATS=x,y], \
+             CIV_DRUKNET [LAAG=] BRON=x,y,stijghoogte;… [VRAAG=l/s per knoop|TOTAAL:l/s] [DIAMETER=mm] [RUWHEID=C|k mm] [BRANDKRAAN=x,y;…] [MINDRUK=150 kPa] [BLUSDEBIET=60 m³/h]; \
              CIV_ONTWERPCRITERIA [RICHTLIJN=roa|noa|crow|aashto CATEGORIE= V=] [AS=]; CIV_AS_TOETS AS= [RICHTLIJN= CATEGORIE= V=] [VERKANTING=%]; \
              CIV_ZICHT AS= [RICHTLIJN= CATEGORIE= V=|NODIG=] [OOG=] [OBJECT=] [OM=10] [RIJLIJN=1.75] [VRIJ=5] [MAX=] [RICHTING=heen|terug|beide] [LAGEN=-OG-BEBOUWING;…] [PLAATS=]; \
              CIV_SPOOR AS=|PI= R= [LS=|A=] V= [VMIN=] [VERKANTING=mm;…] [SPOREN=] [SPOORAFSTAND=] [NAAM=] [PLAATS=]; CIV_WISSEL AS= STATION= [TYPE=1:9|1:12|1:15|…] [ZIJDE=links|rechts] [RICHTING=op|af] [LENGTE=].",

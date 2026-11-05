@@ -1879,6 +1879,7 @@ pub fn bijwerken(opt: &super::CivielOptions, naam: Option<String>, w: Wijziging,
         progress(t!("{} bijwerken …", "Updating {} …", g.net.naam));
         let mut changes = std::mem::take(&mut g.changes);
         changes.extend(apply(&mut g, &w)?);
+        hgl_forget(&g.net.naam);
         let mut ground = Grond::new(&ctx, &doc, g.referentie);
         let mut warnings = g.net.sample_ground(&mut |p| ground.height(p), opt.step.max(0.5));
         warnings.extend(g.net.bereken()?);
@@ -1910,6 +1911,246 @@ pub fn bijwerken(opt: &super::CivielOptions, naam: Option<String>, w: Wijziging,
         msg.push_str(&t!(" Let op: {}.", " Note: {}.", all_warnings.join("; ")));
     }
     Ok(msg)
+}
+
+// ── CIV_RIOOL_HYDRAULICA: design flows, filling, diameters, grade line ────────
+
+/// What `CIV_RIOOL_HYDRAULICA` loads the network with (arguments; the
+/// defaults of `rekenkern::riool` where `None`).
+#[derive(Clone, Debug, Default)]
+pub struct Hydraulica {
+    /// Connected paved area (m²) of the whole network, spread over the
+    /// pipes by length (the street along them drains into them).
+    pub oppervlak: Option<f64>,
+    /// Rain intensity (l/s/ha).
+    pub regen: Option<f64>,
+    pub inwoners: Option<f64>,
+    pub woningen: Option<f64>,
+    /// Water level at the outfalls (m NAP), e.g. the surface water level;
+    /// none: a free outfall.
+    pub uitlaatpeil: Option<f64>,
+    /// Choose the smallest standard diameter that carries the design flow.
+    pub diameter_auto: bool,
+    /// Largest h/D at the design flow (default: full for storm and combined, 0,5 for foul).
+    pub vulling: Option<f64>,
+    /// Manhole loss coefficient ξ.
+    pub putverlies: Option<f64>,
+}
+
+pub const HYDRAULICA_ARGS: &[&str] = &["RIOOL", "OPPERVLAK", "REGEN", "INWONERS", "WONINGEN", "UITLAATPEIL", "DIAMETER", "VULLING", "PUTVERLIES"];
+
+impl Hydraulica {
+    pub fn from_args(a: &api::Args) -> Result<Hydraulica, String> {
+        let auto = match a.str("DIAMETER") {
+            None => false,
+            Some(s) if s.eq_ignore_ascii_case("auto") => true,
+            Some(_) => return Err(tr("DIAMETER=AUTO kiest de diameters; een vaste diameter zet je met CIV_RIOOL_BIJWERKEN", "DIAMETER=AUTO chooses the diameters; set a fixed one with CIV_RIOOL_BIJWERKEN").into()),
+        };
+        Ok(Hydraulica {
+            oppervlak: a.str("OPPERVLAK").map(parse_oppervlak).transpose()?,
+            regen: a.f64("REGEN")?,
+            inwoners: a.f64("INWONERS")?,
+            woningen: a.f64("WONINGEN")?,
+            uitlaatpeil: a.f64("UITLAATPEIL")?,
+            diameter_auto: auto,
+            vulling: a.f64("VULLING")?,
+            putverlies: a.f64("PUTVERLIES")?,
+        })
+    }
+}
+
+/// The standard sizes (DN, mm) of a material for the diameter choice.
+fn dn_reeks(m: Materiaal) -> &'static [f64] {
+    match m {
+        Materiaal::Pvc | Materiaal::Pp | Materiaal::Pe => &[160.0, 200.0, 250.0, 315.0, 400.0, 500.0],
+        _ => &[300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1000.0, 1250.0, 1500.0],
+    }
+}
+
+/// The network for the calculation core: manholes with their ground and
+/// load, pipes with inner diameter, inverts and roughness.
+pub fn kern_net(net: &Net, h: &Hydraulica) -> rekenkern::riool::Network {
+    use rekenkern::riool::{Network, Node, Pipe};
+    let total: f64 = (0..net.leidingen.len()).map(|i| net.lengte(i)).sum::<f64>().max(1e-9);
+    let mut nodes: Vec<Node> = net.putten.iter().map(|p| Node { ground: p.maaiveld, ..Node::new(&p.naam) }).collect();
+    let mut pipes = Vec::new();
+    for (i, l) in net.leidingen.iter().enumerate() {
+        let share = net.lengte(i) / total;
+        let n = &mut nodes[l.van];
+        n.area += h.oppervlak.unwrap_or(0.0) * share;
+        n.inhabitants += h.inwoners.unwrap_or(0.0) * share;
+        n.dwellings += h.woningen.unwrap_or(0.0) * share;
+        pipes.push(Pipe {
+            id: net.naam_leiding(i),
+            from: net.putten[l.van].naam.clone(),
+            to: net.putten[l.naar].naam.clone(),
+            length: net.lengte(i),
+            diameter: l.d(),
+            invert_up: l.bob_van,
+            invert_down: l.bob_naar,
+            k_mm: l.materiaal.ruwheid(),
+        });
+    }
+    Network { nodes, pipes }
+}
+
+const HGL_RECORD: &str = "RIOOLHYDRAULICA";
+
+/// The grade line last computed per network: put → level, pipe → [up, down].
+fn hgl_read() -> serde_json::Map<String, Value> {
+    bridge::json_record_read(HGL_RECORD).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+fn hgl_write(m: &serde_json::Map<String, Value>) {
+    let _ = bridge::json_record_write(HGL_RECORD, &Value::Object(m.clone()).to_string());
+}
+
+/// A network changed: its grade line no longer holds.
+fn hgl_forget(naam: &str) {
+    let mut m = hgl_read();
+    if m.remove(naam).is_some() {
+        hgl_write(&m);
+    }
+}
+
+/// `CIV_RIOOL_HYDRAULICA`: the design flow of every pipe summed downstream
+/// (rain on the connected area, dry weather flow, infiltration), its
+/// filling and velocity, optionally the smallest standard diameter that
+/// carries it (`DIAMETER=AUTO`, the network is then drawn again), and the
+/// hydraulic grade line from the outfall, with the manholes where the water
+/// comes above the ground. The grade line appears in the length profile.
+pub fn hydraulica(opt: &super::CivielOptions, naam: Option<String>, h: Hydraulica, progress: &dyn Fn(String)) -> Result<String, String> {
+    use rekenkern::riool as kern;
+    if h.oppervlak.is_none() && h.inwoners.is_none() && h.woningen.is_none() {
+        return Err(tr("geef de belasting: OPPERVLAK= (aangesloten verhard oppervlak, m² of ha) en/of INWONERS= of WONINGEN=", "give the load: OPPERVLAK= (connected paved area, m² or ha) and/or INWONERS= (inhabitants) or WONINGEN= (dwellings)").into());
+    }
+    let ctx = Ctx::new(opt)?;
+    let doc = super::document(&["riool", "rioolprofiel", "riooltoets", "tin"], &[])?;
+    let chosen = choose(lees(&doc, &ctx), naam.as_deref(), true)?;
+    let loads = kern::Loads { rain: h.regen.unwrap_or(REGEN), ..kern::Loads::default() };
+    let mut msgs = Vec::new();
+    let mut rows = Vec::new();
+    let mut report = format!("# {}\n\n", tr("Rioolhydraulica", "Sewer hydraulics"));
+    let mut hgl_all = hgl_read();
+    for mut g in chosen {
+        if !g.changes.is_empty() {
+            return Err(t!("{} is in de tekening gewijzigd ({}): voer eerst CIV_RIOOL_BIJWERKEN uit", "{} was changed in the drawing ({}): run CIV_RIOOL_BIJWERKEN first", g.net.naam, g.changes.join(", ")));
+        }
+        progress(t!("{} doorrekenen …", "Computing {} …", g.net.naam));
+        let mut ground = Grond::new(&ctx, &doc, g.referentie);
+        let mut warnings = g.net.sample_ground(&mut |p| ground.height(p), opt.step.max(0.5));
+        let foul = g.net.stelsel() == Stelsel::Dwa;
+        let mut crit = if foul { kern::Criteria::foul() } else { kern::Criteria::default() };
+        if let Some(v) = h.vulling {
+            crit.max_fill = v;
+        }
+        let mut changed = Vec::new();
+        if h.diameter_auto {
+            let m = g.net.leidingen.first().map(|l| l.materiaal).unwrap_or(Materiaal::Pvc);
+            let reeks = dn_reeks(m);
+            let candidates: Vec<f64> = reeks.iter().map(|dn| m.binnen(*dn) / 1000.0).collect();
+            let kn = kern_net(&g.net, &h);
+            let flows = kern::design_flows(&kn, &loads)?;
+            let choice = kern::choose_diameters(&kn, &flows, &candidates, &crit)?;
+            for (i, c) in choice.iter().enumerate() {
+                let l = &mut g.net.leidingen[i];
+                if l.bestaand {
+                    continue;
+                }
+                match c.diameter {
+                    Some(d) => {
+                        let dn = reeks.iter().copied().min_by(|a, b| (m.binnen(*a) / 1000.0 - d).abs().total_cmp(&(m.binnen(*b) / 1000.0 - d).abs())).unwrap_or(l.dn);
+                        if (dn - l.dn).abs() > 0.5 {
+                            changed.push(format!("{} Ø{:.0} → Ø{:.0}", c.pipe, l.dn, dn));
+                            l.dn = dn;
+                            l.materiaal = m;
+                            l.verhang_min = min_verhang(dn);
+                        }
+                    }
+                    None => warnings.push(format!("{}: {}", c.pipe, c.warnings.join(", "))),
+                }
+                warnings.extend(c.warnings.iter().filter(|_| c.diameter.is_some()).map(|w| format!("{}: {w}", c.pipe)));
+            }
+            if !changed.is_empty() {
+                warnings.extend(g.net.bereken()?);
+            }
+        }
+        let kn = kern_net(&g.net, &h);
+        let flows = kern::design_flows(&kn, &loads)?;
+        let q: Vec<f64> = flows.iter().map(|f| f.q_design).collect();
+        let outfalls: Vec<(String, f64)> = match h.uitlaatpeil {
+            Some(z) => kn.nodes.iter().filter(|n| !kn.pipes.iter().any(|p| p.from == n.id)).map(|n| (n.id.clone(), z)).collect(),
+            None => Vec::new(),
+        };
+        let hgl = kern::hydraulic_grade_line(&kn, &q, &kern::HglParams { outfall_levels: outfalls, manhole_loss: h.putverlies.unwrap_or(0.0) })?;
+        let flooded: Vec<&kern::NodeLevel> = hgl.nodes.iter().filter(|n| n.flooded).collect();
+        let surcharged = hgl.pipes.iter().filter(|p| p.surcharged).count();
+        report.push_str(&format!("## {}\n\n| {} | Q (l/s) | DWA (l/s) | Ø | h/D | v (m/s) | Q {} (l/s) | {} |\n|---|---|---|---|---|---|---|---|\n", g.net.naam, tr("Leiding", "Pipe"), tr("vol", "full"), tr("waterstand boven/beneden (m)", "level up/down (m)")));
+        for (i, f) in flows.iter().enumerate() {
+            let p = &kn.pipes[i];
+            let (_, q_full) = kern::full_pipe(p.diameter, p.slope().max(0.0), p.k_mm / 1000.0);
+            let pf = kern::part_full(p.diameter, p.slope(), p.k_mm / 1000.0, f.q_design).ok();
+            let lvl = &hgl.pipes[i];
+            report.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {} | {} | {} / {}{} |\n",
+                f.pipe,
+                dec(f.q_design * 1000.0, 1),
+                dec(f.q_dwa * 1000.0, 2),
+                g.net.leidingen[i].dn,
+                pf.map(|p| dec(p.fill, 2)).unwrap_or_else(|| "> 1".into()),
+                pf.map(|p| dec(p.velocity, 2)).unwrap_or_else(|| "–".into()),
+                dec(q_full * 1000.0, 1),
+                nap(lvl.level_up, 2),
+                nap(lvl.level_down, 2),
+                if lvl.surcharged { tr(" (vol)", " (full)") } else { "" }
+            ));
+            rows.push(json!({"riool": g.net.naam, "leiding": f.pipe, "q": f.q_design, "q_dwa": f.q_dwa, "q_regen": f.q_storm, "diameter": g.net.leidingen[i].dn, "vulling": pf.map(|p| p.fill), "snelheid": pf.map(|p| p.velocity), "q_vol": q_full, "peil_boven": lvl.level_up, "peil_beneden": lvl.level_down, "vol": lvl.surcharged}));
+        }
+        if !flooded.is_empty() {
+            report.push_str(&format!("\n**{}:** {}\n", tr("Water op straat", "Water on the street"), flooded.iter().map(|n| format!("{} ({} > {})", n.node, n.level.map(|z| nap(z, 2)).unwrap_or_default(), n.ground.map(|z| nap(z, 2)).unwrap_or_default())).collect::<Vec<_>>().join(", ")));
+        }
+        if !changed.is_empty() {
+            report.push_str(&format!("\n**{}:** {}\n", tr("Diameters gekozen", "Diameters chosen"), changed.join(", ")));
+        }
+        report.push('\n');
+        // Keep the grade line for the length profile.
+        let mut entry = serde_json::Map::new();
+        entry.insert("putten".into(), Value::Object(hgl.nodes.iter().filter_map(|n| n.level.map(|z| (n.node.clone(), json!(z)))).collect()));
+        entry.insert("leidingen".into(), Value::Object(hgl.pipes.iter().map(|p| (p.pipe.clone(), json!([p.level_up, p.level_down]))).collect()));
+        hgl_all.insert(g.net.naam.clone(), Value::Object(entry));
+        hgl_write(&hgl_all);
+        if !changed.is_empty() {
+            let old = g.handles.clone();
+            let (_, puts, pipes) = write_net(&ctx, &g, opt.point_labels, &old, &t!("{} diameters", "{} diameters", g.net.naam))?;
+            note_net(&g.net, &puts, &pipes, &warnings, &ground.label());
+        }
+        let profile = redraw_profile(&ctx, &doc, &g, opt, &mut ground)?;
+        let outlet = flows.iter().zip(&kn.pipes).filter(|(_, p)| !kn.pipes.iter().any(|o| o.from == p.to)).map(|(f, _)| f.q_design).sum::<f64>();
+        msgs.push(t!(
+            "{}: {} l/s bij de uitlaat, {} van {} leidingen vol, {} put(ten) met water op straat{}{}",
+            "{}: {} l/s at the outlet, {} of {} pipes full, {} manhole(s) with water on the street{}{}",
+            g.net.naam,
+            dec(outlet * 1000.0, 1),
+            surcharged,
+            kn.pipes.len(),
+            flooded.len(),
+            if changed.is_empty() { String::new() } else { t!("; diameters: {}", "; diameters: {}", changed.join(", ")) },
+            profile.map(|p| t!("; drukhoogtelijn in het lengteprofiel ({})", "; grade line in the length profile ({})", p)).unwrap_or_default()
+        ));
+        if !warnings.is_empty() {
+            msgs.push(t!("Let op: {}.", "Note: {}.", warnings.join("; ")));
+        }
+    }
+    report.push_str(&t!(
+        "Regen {} l/s/ha op het aangesloten verhard oppervlak, DWA 120 l per inwoner per dag in 10 uur, infiltratie 0,2 m³/(km·h) (Stichting RIONED, Module Riolering voor het HBO). Prandtl-Colebrook; de drukhoogtelijn is een stationaire benadering vanaf de uitlaat, geen hydrodynamische berekening (Leidraad C2100).\n",
+        "Rain {} l/s/ha on the connected paved area, dry weather flow 120 l per inhabitant per day over 10 hours, infiltration 0.2 m³/(km·h) (Stichting RIONED, Module Riolering voor het HBO). Prandtl-Colebrook; the grade line is a steady approximation from the outfall, not a hydrodynamic computation (Leidraad C2100).\n",
+        dec(loads.rain, 0)
+    ));
+    let path = bridge::beside_drawing("rioolhydraulica.md");
+    let _ = std::fs::write(&path, report);
+    api::note("leidingen", rows);
+    api::note("rapport", path.to_string_lossy().into_owned());
+    Ok(format!("{} {}: {}", msgs.join(" "), tr("Rapport", "Report"), path.display()))
 }
 
 // ── CIV_RIOOL_PROFIEL: the length profile of a run ──────────────────────────
@@ -2081,6 +2322,21 @@ fn draw_profile(ctx: &Ctx, net: &Net, path: &[usize], ground: &mut Grond, opt: &
         let s = net.verhang(i);
         out.put(&frame_t, [ctx.text([xm, mid(4)], &format!("L={}  i={}", dec(pl_len, 2), verhang_text(s)), 1.8, 0.0, &frame_t, tag)]);
         out.put(&frame_t, [ctx.text([xm, mid(5)], &l.label(), 1.8, 0.0, &frame_t, tag)]);
+    }
+    // The hydraulic grade line of the last CIV_RIOOL_HYDRAULICA.
+    if let Some(Value::Object(levels)) = hgl_read().get(&naam).and_then(|e| e.get("leidingen")).cloned() {
+        let water = ctx.layer("GW", "WATERGANG_WATERLIJN", Element::G)?;
+        let mut line: Vec<XY> = Vec::new();
+        for (j, &i) in path.iter().enumerate() {
+            if let Some([a, b]) = levels.get(&net.naam_leiding(i)).and_then(|v| serde_json::from_value::<[f64; 2]>(v.clone()).ok()) {
+                line.push([gx(st[j]), gy(a)]);
+                line.push([gx(st[j + 1]), gy(b)]);
+            }
+        }
+        line.dedup_by(|a, b| (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9);
+        if line.len() > 1 {
+            out.put(&water, [pl(line, false, &water)]);
+        }
     }
     // The ground line, broken where there is no height.
     let mut run: Vec<XY> = Vec::new();
@@ -2284,13 +2540,14 @@ fn leading_number(s: &str) -> Option<f64> {
 fn klic_cables(doc: &CadDocument, ctx: &Ctx) -> Vec<Kabel> {
     let f = ctx.f;
     let mut out = Vec::new();
+    let mut memo = crate::nlcs::LayerMemo::default();
     for e in doc.model_space_entities() {
         if data_value(e, "riool").is_some() || data_value(e, "rioolprofiel").is_some() || data_value(e, "riooltoets").is_some() {
             continue;
         }
         let layer = &e.common().layer;
-        let klic = data_value(e, "bron").as_deref() == Some("KLIC") || layer.contains("-KL-");
-        if !klic || data_value(e, "thema").as_deref() == Some("graafpolygoon") || layer.contains("-ZZ-") {
+        let klic = data_value(e, "bron").as_deref() == Some("KLIC") || memo.is(layer, "KL", None, None);
+        if !klic || data_value(e, "thema").as_deref() == Some("graafpolygoon") || memo.is(layer, "ZZ", None, None) {
             continue;
         }
         let v = vertices(e);
@@ -2793,17 +3050,23 @@ pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn
     let ctx = Ctx::new(opt)?;
     let doc = super::document(&["riool"], &[])?;
     let sel: HashSet<Handle> = bridge::selection().unwrap_or_default().into_iter().collect();
-    let gwsw_entity = |e: &EntityType| data_value(e, "riool").is_none() && data_value(e, "naam").is_some() && e.common().layer.contains("-RI-");
+    // Sewer layers of NLCS by their parts, of other layer standards by their mapping.
+    let memo = std::cell::RefCell::new(crate::nlcs::LayerMemo::default());
+    let object_of = |e: &EntityType| -> String {
+        let l = &e.common().layer;
+        memo.borrow_mut().other(l).map(|(_, o)| o.name.clone()).unwrap_or_else(|| l.clone())
+    };
+    let gwsw_entity = |e: &EntityType| data_value(e, "riool").is_none() && data_value(e, "naam").is_some() && memo.borrow_mut().is(&e.common().layer, "RI", None, None);
     let pipe_ents: Vec<&EntityType> = doc
         .model_space_entities()
-        .filter(|e| gwsw_entity(e) && vertices(e).len() >= 2 && (data_value(e, "beginpunt").is_some() || data_value(e, "bob_beginpunt_leiding").is_some() || e.common().layer.contains("LEIDING")))
+        .filter(|e| gwsw_entity(e) && vertices(e).len() >= 2 && (data_value(e, "beginpunt").is_some() || data_value(e, "bob_beginpunt_leiding").is_some() || object_of(e).contains("LEIDING")))
         .filter(|e| sel.is_empty() || sel.contains(&e.common().handle))
         .collect();
     if pipe_ents.is_empty() {
         return Err(tr("geen GWSW-leidingen in de tekening (of de selectie): haal ze op met GIS_Q_GWSW of CIV_RIOOL_IMPORT", "no GWSW pipes in the drawing (or the selection): fetch them with GIS_Q_GWSW or CIV_RIOOL_IMPORT").into());
     }
     progress(t!("{} GWSW-leidingen overnemen …", "Taking over {} GWSW pipes …", pipe_ents.len()));
-    let put_ents: Vec<&EntityType> = doc.model_space_entities().filter(|e| gwsw_entity(e) && matches!(e, EntityType::Circle(_)) && e.common().layer.contains("RIOOLPUT")).collect();
+    let put_ents: Vec<&EntityType> = doc.model_space_entities().filter(|e| gwsw_entity(e) && matches!(e, EntityType::Circle(_)) && object_of(e).contains("RIOOLPUT")).collect();
     // Manholes by name.
     struct Raw {
         naam: String,
@@ -2951,6 +3214,28 @@ mod tests {
         let mut net = Net { naam: "Riool 1".into(), putten, leidingen };
         let _ = net.sample_ground(&mut |p| Some(g(p[0])), 1.0);
         net
+    }
+
+    #[test]
+    fn a_designed_run_through_the_calculation_core() {
+        use rekenkern::riool as kern;
+        let mut net = run(4, 50.0, 250.0, Materiaal::Pvc, |_| 0.0);
+        net.bereken().unwrap();
+        // 1 ha over 150 m of pipe: each upstream manhole gets a third.
+        let h = Hydraulica { oppervlak: Some(10_000.0), ..Hydraulica::default() };
+        let kn = kern_net(&net, &h);
+        assert_eq!((kn.nodes.len(), kn.pipes.len()), (4, 3));
+        assert!((kn.nodes[0].area - 10_000.0 / 3.0).abs() < 1e-6 && kn.nodes[3].area == 0.0);
+        assert!((kn.pipes[0].diameter - 0.2354).abs() < 1e-9 && kn.pipes[0].from == "P101");
+        let flows = kern::design_flows(&kn, &kern::Loads::default()).unwrap();
+        // 60 l/s/ha on 1 ha reaches the outlet (plus a little infiltration).
+        assert!((flows[2].q_storm - 0.060).abs() < 1e-9, "{:?}", flows[2]);
+        // PVC 250 at 1:250 carries about 36 l/s full: PVC 315 (inner 296.6 mm) is chosen downstream.
+        let m = Materiaal::Pvc;
+        let candidates: Vec<f64> = dn_reeks(m).iter().map(|dn| m.binnen(*dn) / 1000.0).collect();
+        let choice = kern::choose_diameters(&kn, &flows, &candidates, &kern::Criteria::default()).unwrap();
+        assert!((choice[2].diameter.unwrap() - 0.2966).abs() < 1e-9, "{:?}", choice[2]);
+        assert!(choice.windows(2).all(|w| w[1].diameter >= w[0].diameter));
     }
 
     #[test]

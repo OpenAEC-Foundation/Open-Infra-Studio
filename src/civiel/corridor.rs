@@ -500,15 +500,7 @@ pub fn profile_of(doc: &CadDocument, axis_name: &str) -> Option<Vec<Pvi>> {
         .model_space_entities()
         .filter(|e| super::data_value(e, "ontwerpprofiel").is_some() && super::data_value(e, "as").as_deref() == Some(axis_name))
         .last()?;
-    let pts: Vec<(f64, f64)> = super::data_value(e, "pvi")?
-        .split(';')
-        .filter_map(|t| {
-            let (a, b) = t.split_once(':')?;
-            Some((a.parse().ok()?, b.parse().ok()?))
-        })
-        .collect();
-    let l: f64 = super::data_value(e, "boog_m").and_then(|v| v.parse().ok()).unwrap_or(0.0);
-    (pts.len() >= 2).then(|| as_profiel::fit_curves(&pts, l))
+    as_profiel::pvis_from_data(&super::data_value(e, "pvi")?, super::data_value(e, "boog_m").as_deref(), super::data_value(e, "bogen_m").as_deref())
 }
 
 /// The assembly the newest corridor on an axis was built with.
