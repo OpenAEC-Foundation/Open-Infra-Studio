@@ -227,7 +227,12 @@ pub fn parse_with(text: &str, keep: &dyn Fn(&CityObject) -> bool, progress: &dyn
         read_objects(&doc, &mut model, None, keep, progress);
     }
     if model.seen == 0 {
-        return Err(model.report("CityJSON: geen stadsobjecten met geometrie gevonden".into()));
+        let mut e = "CityJSON: geen stadsobjecten met geometrie gevonden".to_string();
+        for w in &model.warnings {
+            e.push(' ');
+            e.push_str(w);
+        }
+        return Err(e);
     }
     Ok(model)
 }
@@ -378,7 +383,7 @@ mod tests {
         let data = parse_with(&doc.to_string(), &|_| true, &|_| {}).unwrap();
         assert_eq!((data.seen, data.objects.len()), (1, 1));
         assert_eq!(data.warnings.len(), 1);
-        assert!(data.report("CityJSON gelezen".into()).contains("broken"));
+        assert!(data.warnings[0].contains("broken"));
     }
 
     #[test]
