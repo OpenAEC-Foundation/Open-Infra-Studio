@@ -84,3 +84,8 @@ opt-level = 3
 [profile.ui-test]
 inherits = "release"
 debug = "line-tables-only"
+
+# The codec's own repository (HakanSeven12/acadrust, used by opencaddocument)
+# is gone from GitHub; the same commit lives on in hakanaktt/acadrust (#75).
+[patch."https://github.com/HakanSeven12/acadrust.git"]
+acadrust = { git = "https://github.com/hakanaktt/acadrust.git", rev = "53e6420" }

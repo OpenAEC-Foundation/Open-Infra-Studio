@@ -32,6 +32,20 @@ Claude Code (`.mcp.json` in je project, of `claude mcp add`):
 
 Claude Desktop (`claude_desktop_config.json`): dezelfde regel onder `mcpServers`. Gebruik op Windows `python` en een Windows-pad.
 
+## In de OpenAEC SuperCloud
+
+Daar draait Open CAD Studio met beide plugins als gestreamde desktop (route B van het [SuperCloud-contract](https://github.com/OpenAEC-Foundation/OpenAEC-Blueprint/blob/main/docs/supercloud-koppeling.md)).
+
+- **Transport:** stdio, of streamable HTTP met `python3 open_infra_mcp.py --http 0.0.0.0:8765`. Een POST naar `/mcp` met JSON-RPC krijgt één JSON-antwoord terug. Is `OI_MCP_TOKEN` gezet, dan is `Authorization: Bearer <token>` verplicht.
+- **Eén voorvoegsel:** met `OPENAEC_BEHEERD=1` (of `--prefix infra`) beginnen alle tools met `infra_`. Zo wordt `civ_tin` bijvoorbeeld `infra_civ_tin`. De oude namen blijven werken.
+- **Stand en bestanden:**
+  - `infra_stand`: wat er open is, de projectlocatie en het model.
+  - `infra_open` met een pad in de werkmap: de SuperCloud zet het bestand uit Docs daar neer.
+  - `infra_opslaan`: schrijft naar dat pad, en de SuperCloud bewaart het als nieuwe versie.
+- **Definities:** [`mcp-tools.json`](mcp-tools.json) wordt gemaakt met `--prefix infra --tools-json`. Een test controleert dat het bestand actueel is.
+- **Taal:** de plugins nemen `OPENAEC_TAAL` over (`nl` geeft Nederlands, de andere talen geven Engels).
+- **arm64:** de release bevat ook `openaec.open-infra-linux-aarch64.so` en `open-infra-civiel-linux-aarch64.zip`.
+
 ## Tools
 
 De infra-bibliotheek biedt daarnaast `infra_catalog`, `infra_place`, `infra_inspect` en `infra_update`. Lees [de bibliotheekreferentie](../docs/infra-bibliotheek.md) voor aansluitpunten, parameters, bronconflicten en voorbeelden. `parameters` bevat numerieke waarden met de sleutels uit de catalogus; `path` bevat absolute projectpunten in meters.

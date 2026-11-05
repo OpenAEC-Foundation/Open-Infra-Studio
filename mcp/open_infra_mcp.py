@@ -14,10 +14,18 @@ OI_REST_PORT with OCS_API_TOKEN uses a window's REST API (--http) instead.
 
 Coordinates are project coordinates: metres in the project CRS (RD,
 EPSG:28992, in the Netherlands), set with oi_site.
+
+Transports: stdio (default) or streamable HTTP (`--http [host:]port`, POST
+/mcp; bearer token from OI_MCP_TOKEN when set). In the OpenAEC SuperCloud
+(`OPENAEC_BEHEERD=1`, or `--prefix infra`) every tool carries the prefix
+`infra_` and `infra_stand`, `infra_open` and `infra_opslaan` are added; the
+old names keep working. `--tools-json` prints the definitions
+(mcp-tools.json).
 """
 
 import base64
 import glob
+import http.server
 import json
 import os
 import socket
@@ -788,7 +796,48 @@ def t_open(a):
     return {"ok": True, "message": json.dumps(r)[:300]}
 
 
-# ── MCP protocol (JSON-RPC over stdio) ───────────────────────────────────────
+# ── SuperCloud: the tool's own prefix and its open/save contract ─────────────
+
+PREFIX = os.environ.get("OI_TOOL_PREFIX") or ("infra" if os.environ.get("OPENAEC_BEHEERD") == "1" else "")
+
+
+def public_name(name):
+    """The name a client sees: with PREFIX, `infra_` before every tool
+    (those of the library already have it)."""
+    if not PREFIX or name.startswith(PREFIX + "_"):
+        return name
+    return f"{PREFIX}_{name}"
+
+
+@tool("infra_stand", "The state (SuperCloud): which drawing is open, the project location and the model (axes, profiles, corridors, terrains with handles).")
+def t_stand(a):
+    return t_status(a)
+
+
+@tool("infra_open", "Open a drawing from the container's work folder (SuperCloud: Docs puts the file there).", {"path": STR}, ["path"])
+def t_open_docs(a):
+    return t_open({"path": a["path"]})
+
+
+@tool("infra_opslaan", "Save the drawing to its path (SuperCloud: Docs keeps it as a new version), or to `path`.", {"path": STR})
+def t_opslaan(a):
+    return t_save(a)
+
+
+SUPERCLOUD_ONLY = {"infra_stand", "infra_open", "infra_opslaan"}
+
+
+def listed_tools():
+    return [dict({k: t[k] for k in ("description", "inputSchema")}, name=public_name(t["name"]))
+            for t in TOOLS if PREFIX or t["name"] not in SUPERCLOUD_ONLY]
+
+
+def find_tool(name):
+    """By its public or its own name, so old clients keep working."""
+    return next((t for t in TOOLS if name in (t["name"], public_name(t["name"]))), None)
+
+
+# ── MCP protocol (JSON-RPC over stdio or streamable HTTP) ────────────────────
 
 INSTRUCTIONS = (
     "Open Infra: infra and civil modelling in Open CAD Studio (Netherlands: PDOK, AHN, BGT, 3D BAG, NLCS). "
@@ -800,7 +849,7 @@ INSTRUCTIONS = (
 
 
 def call_tool(name, args):
-    t = next((t for t in TOOLS if t["name"] == name), None)
+    t = find_tool(name)
     if not t:
         return {"content": [{"type": "text", "text": f"onbekende tool {name}"}], "isError": True}
     try:
@@ -814,6 +863,7 @@ def call_tool(name, args):
     text = r.get("message") if isinstance(r, dict) and "message" in r else json.dumps(r, ensure_ascii=False)
     if isinstance(r, dict) and r.get("data"):
         text += "\n" + json.dumps(r["data"], ensure_ascii=False)[:20000]
+    text = text[:30000]
     content.insert(0, {"type": "text", "text": text})
     out = {"content": content, "isError": not ok}
     if isinstance(r, dict) and isinstance(r.get("data"), dict):
@@ -835,7 +885,7 @@ def handle(msg):
     elif method == "ping":
         result = {}
     elif method == "tools/list":
-        result = {"tools": [{k: t[k] for k in ("name", "description", "inputSchema")} for t in TOOLS]}
+        result = {"tools": listed_tools()}
     elif method == "tools/call":
         result = call_tool(params.get("name"), params.get("arguments"))
     else:
@@ -843,7 +893,63 @@ def handle(msg):
     return {"jsonrpc": "2.0", "id": mid, "result": result}
 
 
+class HttpHandler(http.server.BaseHTTPRequestHandler):
+    """Streamable HTTP (MCP 2025-06-18) without server-sent events: every
+    POST is answered with one JSON body."""
+
+    def _send(self, code, body=None, extra=None):
+        data = json.dumps(body, ensure_ascii=False).encode() if body is not None else b""
+        self.send_response(code)
+        if body is not None:
+            self.send_header("Content-Type", "application/json")
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _allowed(self):
+        token = os.environ.get("OI_MCP_TOKEN")
+        return not token or self.headers.get("Authorization", "") == f"Bearer {token}"
+
+    def do_POST(self):
+        if self.path.split("?")[0].rstrip("/") not in ("/mcp", ""):
+            return self._send(404, {"error": "not found"})
+        if not self._allowed():
+            return self._send(401, {"error": "unauthorized"})
+        try:
+            msg = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"null")
+        except ValueError:
+            return self._send(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}})
+        replies = [r for r in (handle(m) for m in (msg if isinstance(msg, list) else [msg]) if isinstance(m, dict)) if r is not None]
+        if not replies:
+            return self._send(202)
+        self._send(200, replies if isinstance(msg, list) else replies[0])
+
+    def do_GET(self):
+        self._send(405, {"error": "no server-sent events; POST JSON-RPC to /mcp"}, {"Allow": "POST"})
+
+    def log_message(self, *args):
+        pass
+
+
+def serve_http(where):
+    host, _, port = where.rpartition(":")
+    server = http.server.ThreadingHTTPServer((host or "127.0.0.1", int(port)), HttpHandler)
+    sys.stderr.write(f"open-infra MCP on http://{host or '127.0.0.1'}:{port}/mcp\n")
+    server.serve_forever()
+
+
 def main():
+    global PREFIX
+    args = sys.argv[1:]
+    if "--prefix" in args:
+        PREFIX = args[args.index("--prefix") + 1].rstrip("_")
+    if "--tools-json" in args:
+        print(json.dumps(listed_tools(), ensure_ascii=False, indent=1))
+        return
+    if "--http" in args:
+        return serve_http(args[args.index("--http") + 1])
     for line in sys.stdin:
         line = line.strip()
         if not line:

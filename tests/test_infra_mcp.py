@@ -46,3 +46,58 @@ class InfraMcpTest(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+
+class SuperCloudTest(unittest.TestCase):
+    """Route B of the SuperCloud contract (OpenAEC-Blueprint docs/supercloud-koppeling.md, #75)."""
+
+    def tearDown(self):
+        mcp.PREFIX = ''
+
+    def test_desktop_names_unchanged(self):
+        names = [t['name'] for t in mcp.listed_tools()]
+        self.assertIn('oi_status', names)
+        self.assertNotIn('infra_stand', names)
+
+    def test_one_prefix_unique_names_and_old_names_still_work(self):
+        mcp.PREFIX = 'infra'
+        names = [t['name'] for t in mcp.listed_tools()]
+        self.assertTrue(all(n.startswith('infra_') for n in names), names)
+        self.assertEqual(len(names), len(set(names)))
+        for n in ('infra_stand', 'infra_open', 'infra_opslaan', 'infra_civ_tin', 'infra_oi_status', 'infra_catalog'):
+            self.assertIn(n, names)
+        self.assertIs(mcp.find_tool('infra_civ_tin'), mcp.find_tool('civ_tin'))
+        with patch.object(mcp.OCS, 'request', return_value={'ok': True}) as req:
+            r = mcp.call_tool('infra_open', {'path': '/werkmap/tekening.dwg'})
+            self.assertFalse(r['isError'])
+            self.assertEqual(req.call_args.args[:2], ('open', {'path': '/werkmap/tekening.dwg'}))
+
+    def test_streamable_http(self):
+        import json, threading, urllib.request
+        server = mcp.http.server.ThreadingHTTPServer(('127.0.0.1', 0), mcp.HttpHandler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            url = f'http://127.0.0.1:{server.server_address[1]}/mcp'
+            def post(body):
+                req = urllib.request.Request(url, json.dumps(body).encode(), {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream'})
+                with urllib.request.urlopen(req) as r:
+                    return r.status, (json.loads(r.read() or b'null'))
+            status, init = post({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2025-06-18'}})
+            self.assertEqual((status, init['result']['serverInfo']['name']), (200, 'open-infra'))
+            self.assertEqual(post({'jsonrpc': '2.0', 'method': 'notifications/initialized'})[0], 202)
+            status, listed = post({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
+            self.assertGreater(len(listed['result']['tools']), 30)
+        finally:
+            server.shutdown()
+
+
+class ToolsFileTest(unittest.TestCase):
+    def test_mcp_tools_json_is_current(self):
+        import json
+        mcp.PREFIX = 'infra'
+        try:
+            want = mcp.listed_tools()
+        finally:
+            mcp.PREFIX = ''
+        have = json.loads((Path(__file__).resolve().parents[1] / 'mcp/mcp-tools.json').read_text(encoding='utf-8'))
+        self.assertEqual(have, want, 'regenerate: python3 mcp/open_infra_mcp.py --prefix infra --tools-json > mcp/mcp-tools.json')
