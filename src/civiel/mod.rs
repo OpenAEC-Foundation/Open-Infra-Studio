@@ -29,7 +29,8 @@ pub mod mesh;
 pub mod puntenwolk;
 // Exchange: LandXML export (stream uitwisseling).
 pub mod uitwisseling;
-// Exchange: 3D meshes out and in (GLB, OBJ, STL).
+// Exchange: 3D meshes out and in (GLB, OBJ, STL), IFC in.
+pub mod ifc_import;
 pub mod uitwisseling3d;
 // Clothoids, design criteria, rail and sight distance (as-spoor).
 pub mod ontwerpcriteria;
@@ -235,6 +236,24 @@ impl Out {
 
     pub fn is_empty(&self) -> bool {
         self.layers.iter().all(|(_, e)| e.is_empty())
+    }
+
+    /// How many entities are on `layer` so far.
+    pub fn count(&self, layer: &str) -> usize {
+        self.layers.iter().find(|(s, _)| s.name == layer).map(|(_, e)| e.len()).unwrap_or(0)
+    }
+
+    /// Where the `nth` entity put on `layer` lands in the list
+    /// [`Out::write_handles`] returns.
+    pub fn position(&self, layer: &str, nth: usize) -> Option<usize> {
+        let mut before = 0;
+        for (s, e) in &self.layers {
+            if s.name == layer {
+                return (nth < e.len()).then_some(before + nth);
+            }
+            before += e.len();
+        }
+        None
     }
 
     pub fn write(self, label: &str) -> Result<usize, String> {

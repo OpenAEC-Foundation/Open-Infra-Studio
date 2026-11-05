@@ -194,6 +194,7 @@ impl CadModule for CivielModule {
                     tools: vec![
                         file_tool("CIV_PUNTEN_IMPORT", tr("Punten importeren", "Import points"), I_POINTS, tr("Puntenbestand openen", "Open a point file"), tr("Puntenbestand (PNEZD, PENZD, CSV)", "Point file (PNEZD, PENZD, CSV)"), &["csv", "txt", "xyz", "pnt", "asc"], true),
                         file_tool("CIV_LANDXML", "LandXML", I_LANDXML, tr("LandXML openen", "Open LandXML"), "LandXML", &["xml", "landxml"], false),
+                        file_tool("CIV_IFC_IMPORT", tr("IFC inlezen", "IFC import"), I_IFC, tr("IFC openen", "Open IFC"), "IFC", &["ifc"], false),
                         menu("CIV_MENU_PUNTEN", tr("Punten", "Points"), I_PLACE, vec![
                             ("CIV_PUNT", tr("Punt plaatsen", "Place point"), I_PLACE),
                             ("CIV_PUNTEN_EXPORT", tr("Punten exporteren", "Export points"), I_EXPORT),
@@ -1571,7 +1572,16 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let (file, selection, texts) = open_infra::ifc::args(args);
             job(host, "IFC 4x3", id, move |p| open_infra::ifc::command(file, selection, texts, p));
         }
-        // Exchange: 3D meshes out and in (#71).
+        // Exchange: IFC in, 3D meshes out and in (#66, #71).
+        "CIV_IFC_IMPORT" => {
+            let Some(file) = path() else {
+                return Err(tr("geef een bestand: CIV_IFC_IMPORT <pad.ifc> (of kies via de knop in het lint)", "give a file: CIV_IFC_IMPORT <path.ifc> (or pick one with the ribbon button)").into());
+            };
+            let o = opt(&[])?;
+            // STATUS= sets the terrain's status too (B by default).
+            let status = args.str("STATUS").and_then(|s| open_infra::nlcs::Status::from_code(&s.to_ascii_uppercase()));
+            job(host, "IFC", id, move |p| civiel::ifc_import::import(&o, std::path::Path::new(&file), status, p));
+        }
         "CIV_3D_EXPORT" => {
             // FORMAAT= is this command's own (GLB, OBJ, STL), not the point file format.
             args.without(&["FORMAAT"]).apply(&base, &["PAD", "BESTAND"])?;
@@ -1855,7 +1865,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_CORRIDOR AS= [PROFIELTYPE=<naam>|<pad.json>] [NIVEAU=|BOVEN=] [VAN=] [TOT=] [DOELEN=naam:handle;…] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y] [KLEUR=nlcs]; \
              CIV_PROFIELTYPEN, CIV_PROFIELTYPE NAAM= [KOPIE=] [PLAATS=x,y]; CIV_KRUISPUNT HOOFD= ZIJ= [R=8;…] [PROFIELTYPE=] [NIVEAU=]; \
              CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_LANDXML_EXPORT [BESTAND=<pad>] [ALLES]; CIV_INFO; \
-             uitwisseling: CIV_3D_EXPORT [FORMAAT=GLB|OBJ|STL] [SELECTIE] [PAD=], CIV_3D_IMPORT <pad.obj|stl|glb> [PLAATS=x,y,z] [SCHAAL=] [ROTATIE=graden] [LAAG=]; \
+             uitwisseling: CIV_IFC_IMPORT <pad.ifc> [STATUS=B|N] (assen, terrein, elementen), CIV_3D_EXPORT [FORMAAT=GLB|OBJ|STL] [SELECTIE] [PAD=], CIV_3D_IMPORT <pad.obj|stl|glb> [PLAATS=x,y,z] [SCHAAL=] [ROTATIE=graden] [LAAG=]; \
              codes: CIV_PUNTEN_IMPORT <pad> CODES=JA [CODETABEL=], CIV_CODES_TOEPASSEN [CODETABEL=]; percelen: CIV_PERCELEN KAVEL= [STRAAT=|RICHTING=graden] N=|OPP=|FRONT= [REST=laatste|apart|verdelen] [PREFIX=P] [START=1], CIV_PERCEEL_INFO [PERCEEL=h;h] [STRAAT=]; \
              water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=]; \
              CIV_ONTWERPCRITERIA [RICHTLIJN=roa|noa|crow|aashto CATEGORIE= V=] [AS=]; CIV_AS_TOETS AS= [RICHTLIJN= CATEGORIE= V=] [VERKANTING=%]; \
