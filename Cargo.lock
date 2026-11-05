@@ -2774,6 +2774,7 @@ dependencies = [
  "pointcloud-core",
  "proj4rs",
  "quick-xml 0.41.0",
+ "rekenkern",
  "roxmltree 0.21.1",
  "rusqlite",
  "serde",
@@ -3308,6 +3309,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "580c875845b41ecb1564ad1ae4703044cef774145e3d7a94dc2b3fa7c97868fd"
 dependencies = [
  "bitflags 2.13.2",
+]
+
+[[package]]
+name = "rekenkern"
+version = "2026.45.3"
+dependencies = [
+ "roxmltree 0.21.1",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

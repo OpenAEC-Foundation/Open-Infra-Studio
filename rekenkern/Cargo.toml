@@ -1,0 +1,11 @@
+[package]
+name = "rekenkern"
+version = "2026.45.3"
+edition = "2021"
+license = "GPL-3.0-only"
+description = "Open Infra's civil engineering calculations without a CAD host: sewer and open-channel hydraulics, pressure networks, storage routing, storm simulation on terrain, earthwork balance, survey adjustment, road markings, cable routes, solar layouts, 3D mesh exchange, STEP reading and IDS checks."
+
+[dependencies]
+roxmltree = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
