@@ -4,6 +4,8 @@
 //! the interface come in both languages. The choice is `language` in
 //! `<config>/OpenCADStudio/open-infra/settings.json` ("nl" or "en"); without
 //! it the system locale decides (`nl*` → Dutch, anything else → English).
+//! In the OpenAEC SuperCloud the user's language there (`OPENAEC_TAAL`)
+//! comes first.
 
 use std::sync::OnceLock;
 
@@ -47,6 +49,12 @@ fn from_locale() -> Lang {
     Lang::En
 }
 
+/// The SuperCloud's language (nl, en, de, fr, es, tr): Dutch or else English.
+fn from_supercloud() -> Option<Lang> {
+    let v = std::env::var("OPENAEC_TAAL").ok().filter(|v| !v.trim().is_empty())?;
+    Some(parse(&v).unwrap_or(Lang::En))
+}
+
 /// Open CAD Studio's interface language; `None` for "system" or unknown.
 fn from_host() -> Option<Option<Lang>> {
     let path = crate::gis::servers::config_dir().parent()?.join("settings.json");
@@ -58,7 +66,7 @@ fn from_host() -> Option<Option<Lang>> {
 /// The interface language, decided once per session.
 pub fn current() -> Lang {
     static L: OnceLock<Lang> = OnceLock::new();
-    *L.get_or_init(|| from_settings().or_else(|| from_host().flatten()).unwrap_or_else(from_locale))
+    *L.get_or_init(|| from_supercloud().or_else(from_settings).or_else(|| from_host().flatten()).unwrap_or_else(from_locale))
 }
 
 /// Store the language for the next session (the ribbon is built at load).

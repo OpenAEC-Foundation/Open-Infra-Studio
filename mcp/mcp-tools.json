@@ -1,0 +1,1666 @@
+[
+ {
+  "description": "Search the NLCS 5.0.2 infrastructure library; returns parameters, connectors, material variants and source conflicts.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string"
+    },
+    "category": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_catalog"
+ },
+ {
+  "description": "Place a parametric infrastructure object or attach it to an existing instance. Coordinates in project metres; rotation in degrees. Conflict items require confirm=true and explicit design parameters. Returns instance, handles, ports and warnings.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "item": {
+     "type": "string"
+    },
+    "at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    },
+    "path": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    },
+    "rotation": {
+     "type": "number"
+    },
+    "scale": {
+     "type": "number"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "B",
+      "N",
+      "T",
+      "V"
+     ]
+    },
+    "discipline": {
+     "type": "string"
+    },
+    "parameters": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "number"
+     }
+    },
+    "instance": {
+     "type": "string"
+    },
+    "connect": {
+     "type": "string"
+    },
+    "port": {
+     "type": "string"
+    },
+    "own": {
+     "type": "string"
+    },
+    "confirm": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "item"
+   ]
+  },
+  "name": "infra_place"
+ },
+ {
+  "description": "Read saved infrastructure instances, parameters, connector positions and warnings from the active drawing.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "instance": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_inspect"
+ },
+ {
+  "description": "Regenerate a saved infrastructure instance and its connections atomically. Invalid or incompatible edits leave the drawing unchanged.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "instance": {
+     "type": "string"
+    },
+    "parameters": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "number"
+     }
+    },
+    "path": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    }
+   },
+   "required": [
+    "instance"
+   ]
+  },
+  "name": "infra_update"
+ },
+ {
+  "description": "List the running Open CAD Studio windows; `select` picks one by session id, pid or drawing name.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "select": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_oi_sessions"
+ },
+ {
+  "description": "The model: project location, axes (handles), length and design profiles, corridors, existing (B) and design (N) terrain, survey points.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {},
+   "required": []
+  },
+  "name": "infra_oi_status"
+ },
+ {
+  "description": "Run one command line: Open Infra (GIS_…, CIV_…; waits for its answer) or a host command (e.g. 'ZOOM EXTENTS'). See GIS_HELP and CIV_HELP for the arguments.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "command": {
+     "type": "string"
+    },
+    "timeout_s": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "command"
+   ]
+  },
+  "name": "infra_oi_command"
+ },
+ {
+  "description": "Set the project location and import area: RD centre (x, y) or WGS84 (lon, lat), width and height in m. Everything else works in this area.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "x": {
+     "type": "number"
+    },
+    "y": {
+     "type": "number"
+    },
+    "lon": {
+     "type": "number"
+    },
+    "lat": {
+     "type": "number"
+    },
+    "width": {
+     "type": "number"
+    },
+    "height": {
+     "type": "number"
+    },
+    "name": {
+     "type": "string"
+    },
+    "relative": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_oi_site"
+ },
+ {
+  "description": "Import a dataset into the project area on NLCS layers: bgt, brk, luchtfoto, kadastrale_kaart, ahn_kaart, bag, percelen, nwb, hectometer, spoor, osm, osm_kaart, satelliet, tekenblad, ahn_hoogtelijnen, ahn_hoogtepunten, ahn_puntenwolk",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "dataset": {
+     "type": "string",
+     "enum": [
+      "bgt",
+      "brk",
+      "luchtfoto",
+      "kadastrale_kaart",
+      "ahn_kaart",
+      "bag",
+      "percelen",
+      "nwb",
+      "hectometer",
+      "spoor",
+      "osm",
+      "osm_kaart",
+      "satelliet",
+      "tekenblad",
+      "ahn_hoogtelijnen",
+      "ahn_hoogtepunten",
+      "ahn_puntenwolk"
+     ]
+    }
+   },
+   "required": [
+    "dataset"
+   ]
+  },
+  "name": "infra_gis_import"
+ },
+ {
+  "description": "Search the catalogue of about 620 public WMS, WFS and XYZ tile services in 50+ countries (cadastral parcels, aerial photos, elevation, geology, zoning, buildings …). Free text in Dutch or English (e.g. 'cadastral parcels Bavaria', 'luchtfoto', 'Flurstücke'); `here` keeps only services covering the project location, or give lon/lat. Returns id, type, name, provider, country, coverage, category, url, default_layer, crs (request CRS first), license and bbox per service. country filters ISO codes separated by semicolons, e.g. US;GLOBAL; omit it for all regions.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "query": {
+     "type": "string"
+    },
+    "category": {
+     "type": "string",
+     "enum": [
+      "cadastre",
+      "aerial",
+      "elevation",
+      "subsurface",
+      "zoning",
+      "buildings",
+      "buildings3d",
+      "basemap",
+      "environment",
+      "roads",
+      "protected",
+      "water",
+      "rail",
+      "landcover",
+      "admin",
+      "structures",
+      "utilities"
+     ]
+    },
+    "type": {
+     "type": "string",
+     "enum": [
+      "WMS",
+      "WFS",
+      "XYZ"
+     ]
+    },
+    "country": {
+     "type": "string"
+    },
+    "here": {
+     "type": "boolean"
+    },
+    "lon": {
+     "type": "number"
+    },
+    "lat": {
+     "type": "number"
+    },
+    "limit": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_gis_services"
+ },
+ {
+  "description": "Load one layer of a catalogue service (id from gis_services) into the project area: WMS and tiles as images, WFS as features with attributes, reprojected to the project CRS. `layer` defaults to the service's preset layer.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "service": {
+     "type": "string"
+    },
+    "layer": {
+     "type": "string"
+    },
+    "resolution": {
+     "type": "number"
+    },
+    "limit": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "service"
+   ]
+  },
+  "name": "infra_gis_service_load"
+ },
+ {
+  "description": "Find legacy IMRO/TAM plans at an RD point or the project location. Requires OPENINFRA_RP_API_KEY in the plugin process; never pass a key as an argument. Returns plan IDs, status and dates.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "x": {
+     "type": "number"
+    },
+    "y": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_planning_search"
+ },
+ {
+  "description": "Download a selected legacy IMRO/TAM plan as editable styled geometry. Requires local OPENINFRA_RP_API_KEY and a project location.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "plan": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "plan"
+   ]
+  },
+  "name": "infra_planning_import"
+ },
+ {
+  "description": "Import local IMRO GML with planning styles and source metadata; no API key required.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  },
+  "name": "infra_planning_gml"
+ },
+ {
+  "description": "NLCS 5.02 check of the drawing (report beside the drawing); repair=true sets layer styles and ByLayer.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "repair": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_nlcs_check"
+ },
+ {
+  "description": "The NLCS design as a BGT mutation (IMGeo-GML 2.1.1) with a report, beside the drawing. Layers N become plan topography (as_built=true: built), R built (changed when it carries a BGT lokaal_id), V ends the BGT object. Type and function come from the BGT object data, the BGT object beneath or the NLCS layer; ambiguous objects are listed in the report, not exported.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "bronhouder": {
+     "type": "string"
+    },
+    "as_built": {
+     "type": "boolean"
+    },
+    "selection": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_bgt_mutation"
+ },
+ {
+  "description": "Export the drawing as IFC 4.3 (IFC4X3_ADD2), beside it as <drawing>_IFC4X3.ifc or to `path`. Every object becomes its IFC class from its NLCS layer and object data: terrain (TIN, photo terrain), 3D BAG and CityGML buildings, pavements, green, water, structures, cables and pipes, sewers, earthworks, CPTs and boreholes (IfcBorehole with IfcGeotechnicalStratum); axes become IfcAlignments with horizontal and vertical layout. Georeferenced from the project location; object data as property sets. Answers with the counts per IFC class.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "selection": {
+     "type": "boolean"
+    },
+    "texts": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_ifc_export"
+ },
+ {
+  "description": "Quantities per NLCS layer (count, length, area) as CSV beside the drawing.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {},
+   "required": []
+  },
+  "name": "infra_quantities"
+ },
+ {
+  "description": "Import a survey point file (PNEZD/PENZD/CSV; separator and decimal comma detected).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "format": {
+     "type": "string",
+     "enum": [
+      "AUTO",
+      "PNEZD",
+      "PENZD",
+      "NEZD",
+      "ENZD"
+     ]
+    }
+   },
+   "required": [
+    "path"
+   ]
+  },
+  "name": "infra_civ_points_import"
+ },
+ {
+  "description": "Place survey points; without z the ground height (TIN or AHN) is used.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "points": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    },
+    "number": {
+     "type": "string"
+    },
+    "code": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "points"
+   ]
+  },
+  "name": "infra_civ_points"
+ },
+ {
+  "description": "Export the drawing's points (or the selection) to a point file.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "format": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_points_export"
+ },
+ {
+  "description": "Import LandXML: points, surfaces (TIN) and alignments (lines, curves, spirals).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  },
+  "name": "infra_civ_landxml"
+ },
+ {
+  "description": "Make a terrain (TIN, 3D faces on OG-TRIANGULATIE): from AHN in the project area, the survey points, the selection or a layer. status N makes a design surface.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "source": {
+     "type": "string",
+     "enum": [
+      "AHN",
+      "PUNTEN",
+      "SELECTIE"
+     ]
+    },
+    "layer": {
+     "type": "string"
+    },
+    "spacing": {
+     "type": "number"
+    },
+    "max_edge": {
+     "type": "number"
+    },
+    "status": {
+     "type": "string",
+     "enum": [
+      "B",
+      "N"
+     ],
+     "description": "B = existing ground, N = design surface"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_tin"
+ },
+ {
+  "description": "Contour lines of a terrain (default: existing ground).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "interval": {
+     "type": "number"
+    },
+    "major_every": {
+     "type": "number"
+    },
+    "surface": {
+     "type": "string",
+     "enum": [
+      "B",
+      "N"
+     ],
+     "description": "B = existing ground, N = design surface"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_contours"
+ },
+ {
+  "description": "Height analysis: the terrain coloured in height bands with a legend.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "bands": {
+     "type": "number"
+    },
+    "surface": {
+     "type": "string",
+     "enum": [
+      "B",
+      "N"
+     ],
+     "description": "B = existing ground, N = design surface"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_analysis"
+ },
+ {
+  "description": "Earthwork (cut/fill m³): design surface (N, or selected faces) against the existing ground, or the ground against a level.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "level": {
+     "type": "number"
+    },
+    "cell": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_volume"
+ },
+ {
+  "description": "Create an axis (alignment) with stationing, tangent points and radii: through points of intersection with curve radii (by layout), or from a line by handle.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "pis": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    },
+    "radii": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     }
+    },
+    "handle": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "start_station": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_alignment"
+ },
+ {
+  "description": "Offset lines beside an axis (m; left < 0).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "offsets": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     }
+    }
+   },
+   "required": [
+    "offsets"
+   ]
+  },
+  "name": "infra_civ_offsets"
+ },
+ {
+  "description": "Station and offset of points relative to an axis.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "points": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    }
+   },
+   "required": [
+    "points"
+   ]
+  },
+  "name": "infra_civ_station"
+ },
+ {
+  "description": "Length profile of an axis over the existing terrain (TIN, else AHN), with stationing, heights and alignment band.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    },
+    "step": {
+     "type": "number"
+    },
+    "exaggeration": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_length_profile"
+ },
+ {
+  "description": "Design (vertical) profile of an axis from PVIs [station, height] with parabolic vertical curves; drawn in its length profile.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "pvis": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+     }
+    },
+    "curve_length": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "pvis"
+   ]
+  },
+  "name": "infra_civ_design_profile"
+ },
+ {
+  "description": "Cross sections along an axis over the terrain, in a grid of views.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    },
+    "every": {
+     "type": "number"
+    },
+    "left": {
+     "type": "number"
+    },
+    "right": {
+     "type": "number"
+    },
+    "exaggeration": {
+     "type": "number"
+    },
+    "per_row": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_cross_sections"
+ },
+ {
+  "description": "Corridor: an assembly swept along an axis and its design profile (or a level / height above ground), daylight to the ground, design TIN (N), feature lines, cut/fill per section and volumes; optional section views.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "assembly": {
+     "type": "string",
+     "enum": [
+      "weg",
+      "fietspad",
+      "snelweg",
+      "dijk"
+     ]
+    },
+    "level": {
+     "type": "number"
+    },
+    "above_ground": {
+     "type": "number"
+    },
+    "lane_width": {
+     "type": "number"
+    },
+    "shoulder_width": {
+     "type": "number"
+    },
+    "cross_slope_pct": {
+     "type": "number"
+    },
+    "shoulder_slope_pct": {
+     "type": "number"
+    },
+    "fill_slope": {
+     "type": "number"
+    },
+    "cut_slope": {
+     "type": "number"
+    },
+    "crest_half_width": {
+     "type": "number"
+    },
+    "superelevation_pct": {
+     "type": "number"
+    },
+    "reach": {
+     "type": "number"
+    },
+    "frequency": {
+     "type": "number"
+    },
+    "sections": {
+     "type": "boolean"
+    },
+    "sections_at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_corridor"
+ },
+ {
+  "description": "3D feature line (OG-BREUKLIJN, object data) from a line or points: heights from the ground (with grade breaks), from a start level and grades per segment (%), or fixed levels at corners ('2.5;;3' or '1:2.5;4:3').",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "line": {
+     "type": "string",
+     "description": "Handle of a line, polyline or feature line (hex); empty = the selection or points"
+    },
+    "points": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    },
+    "heights": {
+     "type": "string",
+     "enum": [
+      "MAAIVELD",
+      "ONTWERP",
+      "EIGEN"
+     ]
+    },
+    "grade_breaks": {
+     "type": "boolean"
+    },
+    "start_level": {
+     "type": "number"
+    },
+    "grades_pct": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     }
+    },
+    "levels": {
+     "type": "string"
+    },
+    "closed": {
+     "type": "boolean"
+    },
+    "name": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_feature_line"
+ },
+ {
+  "description": "Edit a feature line in place: set a corner level (corner from 1, or the corner nearest 'at'), raise/lower all (dz), insert a height point at 'at', or a constant grade between two corners.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "line": {
+     "type": "string",
+     "description": "Handle of a line, polyline or feature line (hex); empty = the selection or points"
+    },
+    "action": {
+     "type": "string",
+     "enum": [
+      "level",
+      "raise",
+      "point",
+      "grade"
+     ]
+    },
+    "corner": {
+     "type": "number"
+    },
+    "at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    },
+    "z": {
+     "type": "number"
+    },
+    "dz": {
+     "type": "number"
+    },
+    "from_corner": {
+     "type": "number"
+    },
+    "to_corner": {
+     "type": "number"
+    },
+    "grade_pct": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "action"
+   ]
+  },
+  "name": "infra_civ_feature_line_edit"
+ },
+ {
+  "description": "Building plot plateau from a closed line or points at a level, optionally with a fall (% towards N/NE/E/…/NW or degrees), sloping to the existing ground with separate cut and fill slopes (1:n); joins the combined design surface (N).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "line": {
+     "type": "string",
+     "description": "Handle of a line, polyline or feature line (hex); empty = the selection or points"
+    },
+    "points": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    },
+    "level": {
+     "type": "number"
+    },
+    "fall_pct": {
+     "type": "number"
+    },
+    "fall_direction": {
+     "type": "string"
+    },
+    "level_point": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    },
+    "cut_slope": {
+     "type": "number"
+    },
+    "fill_slope": {
+     "type": "number"
+    },
+    "reach": {
+     "type": "number"
+    },
+    "name": {
+     "type": "string"
+    },
+    "join": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_plateau"
+ },
+ {
+  "description": "Slope from a (feature) line on one side: to the ground (cut/fill slopes), over a width, or to a level; joins the design surface.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "line": {
+     "type": "string",
+     "description": "Handle of a line, polyline or feature line (hex); empty = the selection or points"
+    },
+    "points": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    },
+    "side": {
+     "type": "string",
+     "enum": [
+      "LINKS",
+      "RECHTS"
+     ]
+    },
+    "to": {
+     "type": "string",
+     "enum": [
+      "MAAIVELD",
+      "AFSTAND",
+      "PEIL"
+     ]
+    },
+    "slope": {
+     "type": "number"
+    },
+    "cut_slope": {
+     "type": "number"
+    },
+    "fill_slope": {
+     "type": "number"
+    },
+    "width": {
+     "type": "number"
+    },
+    "level": {
+     "type": "number"
+    },
+    "up": {
+     "type": "boolean"
+    },
+    "edge_level": {
+     "type": "number"
+    },
+    "name": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_slope"
+ },
+ {
+  "description": "Exact cut and fill (prismoidal, TIN against TIN) of the design against the existing ground, with bulking and compaction factors and a cut/fill map in colour bands. design: BOUWRIJP (gradings only), PEIL (a level) or empty (selection / design surface N).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "design": {
+     "type": "string",
+     "enum": [
+      "BOUWRIJP",
+      "PEIL"
+     ]
+    },
+    "level": {
+     "type": "number"
+    },
+    "bulking": {
+     "type": "number"
+    },
+    "compaction": {
+     "type": "number"
+    },
+    "bands": {
+     "type": "number"
+    },
+    "map": {
+     "type": "boolean"
+    },
+    "compare_grid_cell": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_volume_tin"
+ },
+ {
+  "description": "Mass haul diagram of an axis from its corridor's cut and fill per section (or measured on the TINs): balance points, haul (m³·km), free haul and overhaul, surplus/shortage; drawn as a graph, returned per station.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "source": {
+     "type": "string",
+     "enum": [
+      "AUTO",
+      "CORRIDOR",
+      "TIN"
+     ]
+    },
+    "factor": {
+     "type": "number"
+    },
+    "reuse_pct": {
+     "type": "number"
+    },
+    "free_haul": {
+     "type": "number"
+    },
+    "at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_mass_haul"
+ },
+ {
+  "description": "The corridor assemblies (profieltypen): presets and the user's JSON files in <config>/OpenCADStudio/open-infra/assemblies/, with their parts per side (lanes, gutters, kerbs, footways, cycle paths, parking, verges, central reserve, ditches), pavement layers, conditions (cut/fill) and targets. With name: one in detail; copy_to copies it as a start for your own; at draws it as a template section.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string"
+    },
+    "copy_to": {
+     "type": "string"
+    },
+    "at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_assemblies"
+ },
+ {
+  "description": "A corridor with any assembly (preset or own JSON) over a station range, e.g. from a junction's or roundabout's mouth (their result gives 'VAN=…' or 'TOT=…' per arm); targets are named lines in the drawing for width or level targets.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "assembly": {
+     "type": "string"
+    },
+    "from_station": {
+     "type": "number"
+    },
+    "to_station": {
+     "type": "number"
+    },
+    "targets": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "string"
+     },
+     "description": "name → handle"
+    },
+    "level": {
+     "type": "number"
+    },
+    "frequency": {
+     "type": "number"
+    },
+    "sections": {
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "assembly"
+   ]
+  },
+  "name": "infra_civ_corridor_range"
+ },
+ {
+  "description": "A T or X junction of a main road and a side road (axes with design profiles): corner radii per corner (CROW-based default 8 m, an estimate), kerb returns, the side road tied in to the main road's cross slope, a TIN patch; the result gives each arm's mouth station for its corridor.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "main": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "side": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "radii": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     }
+    },
+    "assembly": {
+     "type": "string"
+    },
+    "main_assembly": {
+     "type": "string"
+    },
+    "side_assembly": {
+     "type": "string"
+    },
+    "level": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "main",
+    "side"
+   ]
+  },
+  "name": "infra_civ_junction"
+ },
+ {
+  "description": "A single-lane roundabout after CROW publication 126 on 2+ axes (3–6 arms): outer diameter, carriageway, overrunnable strip, entry and exit radii and splitter islands; 2D layout and a 3D surface falling outward. The result gives each arm's mouth station.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axes": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "centre": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "binnen",
+      "buiten"
+     ]
+    },
+    "diameter": {
+     "type": "number"
+    },
+    "assembly": {
+     "type": "string"
+    },
+    "level": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "axes"
+   ]
+  },
+  "name": "infra_civ_roundabout"
+ },
+ {
+  "description": "3D BAG buildings of the project area (LoD 1.2, 1.3 or 2.2): roof and wall meshes per building. style: mooi (roof colours from the aerial photo, walls by building year, windows per storey, crisp planes), maquette (white architectural model), realistisch (two plain colours) or nlcs (layer colours).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "lod": {
+     "type": "string",
+     "enum": [
+      "1.2",
+      "1.3",
+      "2.2"
+     ]
+    },
+    "max": {
+     "type": "number"
+    },
+    "style": {
+     "type": "string",
+     "enum": [
+      "mooi",
+      "maquette",
+      "realistisch",
+      "nlcs"
+     ]
+    },
+    "windows": {
+     "type": "boolean",
+     "description": "false: plain facades without windows"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_bag3d"
+ },
+ {
+  "description": "The AHN ground of the project area as a 3D surface coloured by the PDOK aerial photo.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "cell": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_photo_terrain"
+ },
+ {
+  "description": "A water surface at a level (m NAP) over the project area, to see what floods; call again with another level to move it. Returns the share of the area below that level (AHN ground).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "level": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "level"
+   ]
+  },
+  "name": "infra_civ_water_level"
+ },
+ {
+  "description": "Import any map server of the catalogue by id (PDOK, 600 worldwide services, HisGIS, Topotijdreis, the user's own): tile/WMS as image, WFS as vectors. year gives Topotijdreis of that year (1815-2014).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "layer": {
+     "type": "string"
+    },
+    "resolution": {
+     "type": "number"
+    },
+    "year": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_gis_server"
+ },
+ {
+  "description": "KLIC cables and pipes as 3D tubes under the AHN ground (depth from the delivery, else the usual cover depth per network type), in IMKL colours. Without path: the delivery imported last. scale thickens the tubes for overview pictures.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "scale": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_klic3d"
+ },
+ {
+  "description": "Make the ground surfaces transparent (percent, default 70) so cables, pipes and CPT columns show beneath; all=true also buildings; percent=0 makes the ground opaque again.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "percent": {
+     "type": "number"
+    },
+    "all": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_see_through"
+ },
+ {
+  "description": "Import a CityGML file (2.0 or 3.0, also IMGeo/BGT GML) or CityJSON (1.x/2.0, also CityJSONSeq .jsonl) as 3D meshes in the project area: buildings with roof and wall meshes (LoD1/LoD2, walls by year of construction), roads, green, water, bridges and relief on NLCS layers; 2D objects draped on the AHN. The file's CRS is transformed to the project location.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "style": {
+     "type": "string",
+     "enum": [
+      "mooi",
+      "maquette",
+      "realistisch",
+      "nlcs"
+     ]
+    }
+   },
+   "required": [
+    "path"
+   ]
+  },
+  "name": "infra_civ_citygml"
+ },
+ {
+  "description": "BGT in 3D: areas draped on the ground, buildings and walls extruded to the AHN surface, water at its level, bridges at deck height, posts and trees as symbols.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "groups": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "wegen",
+       "terrein",
+       "water",
+       "gebouwen",
+       "kunstwerken",
+       "scheidingen",
+       "spoor",
+       "inrichting",
+       "vegetatie"
+      ]
+     }
+    },
+    "buildings": {
+     "type": "boolean"
+    },
+    "colours": {
+     "type": "string",
+     "enum": [
+      "realistisch",
+      "nlcs"
+     ]
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_bgt3d"
+ },
+ {
+  "description": "The subsurface from the BRO (Dutch key register, successor of DINOloket): cone penetration tests (CPT) and geotechnical boreholes (BHR-GT) of the project area as 3D columns from the surface level (m NAP) down, one mesh per soil layer coloured by soil type (sand yellow, clay green, peat brown, silt grey-green, gravel orange); CPT layers from qc and Rf (Robertson 2010 SBT), boreholes from their described soil names; qc/Rf graphs beside the CPTs. plan_only=true draws just the plan symbols with BRO id (no measurements fetched). Returns per column the BRO id, surface level and layers.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "source": {
+     "type": "string",
+     "enum": [
+      "alles",
+      "sonderingen",
+      "boringen"
+     ]
+    },
+    "max": {
+     "type": "number"
+    },
+    "radius": {
+     "type": "number"
+    },
+    "min_layer": {
+     "type": "number"
+    },
+    "graphs": {
+     "type": "boolean"
+    },
+    "labels": {
+     "type": "boolean"
+    },
+    "plan_only": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_subsurface"
+ },
+ {
+  "description": "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string",
+     "description": "Output file; empty = beside the drawing"
+    },
+    "all": {
+     "type": "boolean",
+     "description": "Everything (default); false = only the objects in the selection"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_landxml_export"
+ },
+ {
+  "description": "Set the view: preset (TOP, SWISO, SEISO, NEISO, NWISO, FRONT…), visual style (GOURAUDSHADED, FLATSHADED, WIREFRAME2D, HIDDENLINE…) and zoom to extents.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "preset": {
+     "type": "string"
+    },
+    "style": {
+     "type": "string"
+    },
+    "zoom_extents": {
+     "type": "boolean"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_oi_view"
+ },
+ {
+  "description": "Capture the drawing viewport as PNG (returned as an image). region = [xmin, ymin, xmax, ymax] in drawing coordinates.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "region": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 4,
+     "maxItems": 4
+    },
+    "max_dimension": {
+     "type": "number"
+    },
+    "path": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_oi_capture"
+ },
+ {
+  "description": "Save the drawing (QSAVE), or as a new file with path.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_oi_save"
+ },
+ {
+  "description": "Open a drawing (DWG/DXF) or start a new one from a template.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    },
+    "template": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_oi_open"
+ },
+ {
+  "description": "The state (SuperCloud): which drawing is open, the project location and the model (axes, profiles, corridors, terrains with handles).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {},
+   "required": []
+  },
+  "name": "infra_stand"
+ },
+ {
+  "description": "Open a drawing from the container's work folder (SuperCloud: Docs puts the file there).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "path"
+   ]
+  },
+  "name": "infra_open"
+ },
+ {
+  "description": "Save the drawing to its path (SuperCloud: Docs keeps it as a new version), or to `path`.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "path": {
+     "type": "string"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_opslaan"
+ }
+]
