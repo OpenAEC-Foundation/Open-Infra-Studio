@@ -80,6 +80,7 @@ fn icon(name: &str) -> egui::Image<'static> {
         "quantities" => include_str!("../../assets/hoeveelheden.svg"),
         "axis" => include_str!("../../assets/as.svg"),
         "services" => include_str!("../../assets/services.svg"),
+        "assistant" => include_str!("../../assets/assistent.svg"),
         _ => include_str!("../../assets/list.svg"),
     };
     let bytes = svg.replace("currentColor", "#dfe5ea").into_bytes();
@@ -464,6 +465,7 @@ pub struct App {
     files: super::files::FilesPage,
     svc: services::ServicesPage,
     planning: super::planning::PlanningPage,
+    assistant: super::assistant::AssistantPage,
 }
 
 #[cfg(test)]
@@ -582,6 +584,7 @@ impl App {
             files: Default::default(),
             svc: Default::default(),
             planning: Default::default(),
+            assistant: Default::default(),
         }
     }
 
@@ -633,6 +636,7 @@ impl App {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
                 }
                 UiMsg::SiteChanged => self.reload_site(),
+                UiMsg::AssistantChanged => self.assistant.changed(),
                 UiMsg::File(path) => {
                     self.tab = Tab::Files;
                     self.reload_site();
@@ -2915,6 +2919,7 @@ impl eframe::App for App {
                 ui.label(RichText::new(crate::lang::tr("ALGEMEEN","GENERAL")).small().weak());
                 nav(ui, Tab::Location, "location", crate::lang::tr("Projectlocatie", "Project location"));
                 nav(ui, Tab::Coords, "point", crate::lang::tr("Coördinaten", "Coordinates"));
+                nav(ui, Tab::Assistant, "assistant", crate::lang::tr("Assistent", "Assistant"));
                 if bridge::site().map(|s|s.region).unwrap_or(crate::localisation::current())==crate::localisation::Region::Netherlands {
                     ui.add_space(8.0);
                     ui.label(RichText::new(crate::lang::tr("NEDERLAND", "NETHERLANDS")).small().weak());
@@ -2942,6 +2947,7 @@ impl eframe::App for App {
             ui.label(RichText::new(crate::lang::tr("HULPMIDDELEN","TOOLS")).small().weak());
             nav(ui, Tab::Coords, "point", crate::lang::tr("Coördinaten", "Coordinates"));
             nav(ui, Tab::Servers, "server", crate::lang::tr("Servers", "Servers"));
+            nav(ui, Tab::Assistant, "assistant", crate::lang::tr("Assistent", "Assistant"));
             ui.add_space(8.0);
             ui.label(RichText::new(crate::lang::tr("BESTANDEN EN BIBLIOTHEEK", "FILES AND LIBRARY")).small().weak());
             nav(ui, Tab::Files, "file", crate::lang::tr("GIS-bestand", "GIS file"));
@@ -3026,6 +3032,7 @@ impl eframe::App for App {
                     Tab::Services => self.services_page(ui),
                     Tab::Localisation => self.localisation_page(ui),
                     Tab::Planning => self.planning.page(ui),
+                    Tab::Assistant => self.assistant.page(ui),
                 }
             });
         });

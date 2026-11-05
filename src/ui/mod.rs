@@ -6,6 +6,7 @@
 //! afterwards only hidden/shown; closing it hides it.
 
 mod app;
+mod assistant;
 mod files;
 mod jobs;
 mod library;
@@ -40,6 +41,8 @@ pub enum Tab {
     Planning,
     /// The Civiel plugin's settings and actions.
     Civiel,
+    /// An assistant's pending proposals and the activity log.
+    Assistant,
 }
 
 /// Which plugin this window belongs to: the GIS tab or the Civiel tab (each
@@ -74,6 +77,8 @@ pub enum UiMsg {
     File(std::path::PathBuf),
     /// Run the page's action (validation, quantities) right away.
     Run(Tab),
+    /// Proposals or the activity log changed: the Assistant page reloads.
+    AssistantChanged,
 }
 
 struct Handle {
