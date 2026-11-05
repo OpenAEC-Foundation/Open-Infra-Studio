@@ -83,3 +83,9 @@ opt-level = 3
 [profile.ui-test]
 inherits = "release"
 debug = "line-tables-only"
+
+# HakanSeven12/acadrust no longer exists (404), but Open CAD Studio v2026.44
+# and opencaddocument still name it. hakanaktt/acadrust holds the same commit,
+# so fetch it from there (#75). Same commit hash, so the host sees the same codec.
+[patch."https://github.com/HakanSeven12/acadrust.git"]
+acadrust = { git = "https://github.com/hakanaktt/acadrust.git", rev = "53e6420c4df4d207409798c2719d32fc6cf2811d" }
