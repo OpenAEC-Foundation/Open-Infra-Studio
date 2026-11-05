@@ -270,6 +270,7 @@ impl CadModule for CivielModule {
                             ("CIV_BIJWERKEN", tr("Profielen bijwerken", "Update profiles"), I_LABELS_UPDATE),
                         ], "CIV_BLADEN_PDF"),
                         file_tool("CIV_CITYGML", "CityGML/JSON", I_CITYGML, tr("CityGML of CityJSON openen", "Open CityGML or CityJSON"), "CityGML / CityJSON", &["gml", "xml", "citygml", "json", "jsonl"], false),
+                        file_tool("CIV_3D_IMPORT", tr("3D-model", "3D model"), I_MESH, tr("3D-model openen (OBJ, STL, glTF)", "Open a 3D model (OBJ, STL, glTF)"), "OBJ / STL / glTF", &["obj", "stl", "glb", "gltf"], false),
                         menu("CIV_MENU_WEERGAVE", tr("Weergave", "View"), I_PHOTO, vec![
                             ("CIV_FOTOTERREIN", tr("Terrein + luchtfoto", "Terrain + aerial photo"), I_PHOTO),
                             ("CIV_DOORZICHT", tr("Maaiveld doorzichtig", "See-through ground"), I_SEE),
@@ -278,6 +279,7 @@ impl CadModule for CivielModule {
                         menu("CIV_MENU_EXPORT", tr("Exporteren", "Export"), I_IFC, vec![
                             ("CIV_IFC", "IFC 4x3", I_IFC),
                             ("CIV_LANDXML_EXPORT", "LandXML", I_LANDXML_EXPORT),
+                            ("CIV_3D_EXPORT", tr("3D (glTF)", "3D (glTF)"), I_MESH),
                         ], "CIV_IFC"),
                         menu("CIV_MENU_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS, vec![
                             ("CIV_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS),
@@ -1569,6 +1571,43 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let (file, selection, texts) = open_infra::ifc::args(args);
             job(host, "IFC 4x3", id, move |p| open_infra::ifc::command(file, selection, texts, p));
         }
+        // Exchange: 3D meshes out and in (#71).
+        "CIV_3D_EXPORT" => {
+            // FORMAAT= is this command's own (GLB, OBJ, STL), not the point file format.
+            args.without(&["FORMAAT"]).apply(&base, &["PAD", "BESTAND"])?;
+            use civiel::uitwisseling3d::Formaat;
+            let file = args.str("PAD").or(args.str("BESTAND")).map(str::to_string).or_else(|| args.words.iter().find(|w| !w.eq_ignore_ascii_case("SELECTIE") && !w.eq_ignore_ascii_case("SELECTION")).cloned()).map(std::path::PathBuf::from);
+            let formaat = match args.str("FORMAAT") {
+                Some(f) => Formaat::parse(f)?,
+                None => file.as_deref().and_then(Formaat::of_path).unwrap_or(Formaat::Glb),
+            };
+            let selection = args.words.iter().any(|w| w.eq_ignore_ascii_case("SELECTIE") || w.eq_ignore_ascii_case("SELECTION"));
+            job(host, "3D export", id, move |p| civiel::uitwisseling3d::export(formaat, selection, file, p));
+        }
+        "CIV_3D_IMPORT" => {
+            let Some(file) = path() else {
+                return Err(tr("geef een bestand: CIV_3D_IMPORT <pad.obj|stl|glb> (of kies via de knop in het lint)", "give a file: CIV_3D_IMPORT <path.obj|stl|glb> (or pick one with the ribbon button)").into());
+            };
+            // SCHAAL= is the model's scale here, not the drawing scale.
+            let o = args.without(&["SCHAAL"]).apply(&base, &["PLAATS", "ROTATIE", "LAAG"])?;
+            let plaats = match args.str("PLAATS") {
+                Some(v) => {
+                    let c: Vec<f64> = v.split(',').map(|t| t.trim().parse::<f64>()).collect::<Result<_, _>>().map_err(|_| tr("PLAATS: x,y of x,y,z in projectcoördinaten", "PLAATS: x,y or x,y,z in project coordinates").to_string())?;
+                    if c.len() < 2 || c.len() > 3 {
+                        return Err(tr("PLAATS: x,y of x,y,z in projectcoördinaten", "PLAATS: x,y or x,y,z in project coordinates").into());
+                    }
+                    Some([c[0], c[1], c.get(2).copied().unwrap_or(0.0)])
+                }
+                None => None,
+            };
+            let schaal = args.f64("SCHAAL")?.unwrap_or(1.0);
+            if !(schaal > 0.0 && schaal.is_finite()) {
+                return Err(tr("SCHAAL moet groter dan 0 zijn", "SCHAAL must be greater than 0").into());
+            }
+            let pl = civiel::uitwisseling3d::Plaatsing { plaats, schaal, rotatie: args.f64("ROTATIE")?.unwrap_or(0.0) };
+            let laag = args.str("LAAG").map(str::to_string);
+            job(host, tr("3D-model", "3D model"), id, move |p| civiel::uitwisseling3d::import(&o, std::path::Path::new(&file), pl, laag, p));
+        }
         // Plan production: sheets and labels.
         "CIV_BLADEN" => {
             use open_infra::lang::tr;
@@ -1816,6 +1855,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_CORRIDOR AS= [PROFIELTYPE=<naam>|<pad.json>] [NIVEAU=|BOVEN=] [VAN=] [TOT=] [DOELEN=naam:handle;…] [RIJSTROOK=] [BERM=] [HELLING=] [TALUD=] [INGRAVING=] [KRUIN=] [VERKANTING=] [FREQUENTIE=] [DWARSPROFIELEN=ja|x,y] [KLEUR=nlcs]; \
              CIV_PROFIELTYPEN, CIV_PROFIELTYPE NAAM= [KOPIE=] [PLAATS=x,y]; CIV_KRUISPUNT HOOFD= ZIJ= [R=8;…] [PROFIELTYPE=] [NIVEAU=]; \
              CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_LANDXML_EXPORT [BESTAND=<pad>] [ALLES]; CIV_INFO; \
+             uitwisseling: CIV_3D_EXPORT [FORMAAT=GLB|OBJ|STL] [SELECTIE] [PAD=], CIV_3D_IMPORT <pad.obj|stl|glb> [PLAATS=x,y,z] [SCHAAL=] [ROTATIE=graden] [LAAG=]; \
              codes: CIV_PUNTEN_IMPORT <pad> CODES=JA [CODETABEL=], CIV_CODES_TOEPASSEN [CODETABEL=]; percelen: CIV_PERCELEN KAVEL= [STRAAT=|RICHTING=graden] N=|OPP=|FRONT= [REST=laatste|apart|verdelen] [PREFIX=P] [START=1], CIV_PERCEEL_INFO [PERCEEL=h;h] [STRAAT=]; \
              water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=]; \
              CIV_ONTWERPCRITERIA [RICHTLIJN=roa|noa|crow|aashto CATEGORIE= V=] [AS=]; CIV_AS_TOETS AS= [RICHTLIJN= CATEGORIE= V=] [VERKANTING=%]; \

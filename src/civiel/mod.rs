@@ -29,6 +29,8 @@ pub mod mesh;
 pub mod puntenwolk;
 // Exchange: LandXML export (stream uitwisseling).
 pub mod uitwisseling;
+// Exchange: 3D meshes out and in (GLB, OBJ, STL).
+pub mod uitwisseling3d;
 // Clothoids, design criteria, rail and sight distance (as-spoor).
 pub mod ontwerpcriteria;
 pub mod spoor;
