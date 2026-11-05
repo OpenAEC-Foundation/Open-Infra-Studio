@@ -1537,6 +1537,43 @@
   "name": "infra_civ_subsurface"
  },
  {
+  "description": "Sewer hydraulics of a CIV_RIOOL network: design flow per pipe (rain on the connected paved area, dry weather flow of inhabitants or dwellings, infiltration), filling and velocity, optionally the smallest standard diameter (auto_diameter), and the hydraulic grade line from the outfall with manholes where water reaches the street; the grade line is drawn in the length profile.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "sewer": {
+     "type": "string"
+    },
+    "area_m2": {
+     "type": "number"
+    },
+    "rain_l_s_ha": {
+     "type": "number"
+    },
+    "inhabitants": {
+     "type": "number"
+    },
+    "dwellings": {
+     "type": "number"
+    },
+    "outfall_level": {
+     "type": "number"
+    },
+    "auto_diameter": {
+     "type": "boolean"
+    },
+    "max_fill": {
+     "type": "number"
+    },
+    "manhole_loss": {
+     "type": "number"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_sewer_hydraulics"
+ },
+ {
   "description": "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.",
   "inputSchema": {
    "type": "object",

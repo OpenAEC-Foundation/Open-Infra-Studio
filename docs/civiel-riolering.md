@@ -16,6 +16,7 @@ All commands take `KEY=value` arguments and `ID=<name>` for a JSON result in `<c
 | `CIV_RIOOL_BIJWERKEN` | Bijwerken (Update) | Reads the network back from the drawing, applies edits and recomputes it. |
 | `CIV_RIOOL_PROFIEL` | Lengteprofiel (Length profile) | The length profile of a run. |
 | `CIV_RIOOL_TOETS` | Toetsen (Check) | Cover, slope, manhole spacing, capacity and velocity, crossings with KLIC and with other sewers. |
+| `CIV_RIOOL_HYDRAULICA` | Hydraulica (Hydraulics) | Design flow per pipe, filling and velocity, the smallest standard diameter (`DIAMETER=AUTO`) and the hydraulic grade line, also in the length profile. |
 | `CIV_RIOOL_EXPORT` | Exporteren (Export) | GWSW-OroX (`FORMAAT=GWSW`, the default) or two CSV tables (`FORMAAT=CSV`). |
 | `CIV_RIOOL_IMPORT <file.orox.ttl>` | GWSW-bestand (GWSW file), Dutch modules only | Reads a GWSW-OroX file and draws it the way `GIS_Q_GWSW` draws the PDOK service. |
 | `CIV_RIOOL_GWSW` | GWSW overnemen (Take over GWSW), Dutch modules only | Turns GWSW pipes and manholes in the drawing into an editable network. |
@@ -97,6 +98,30 @@ Results:
 - markers in the drawing: a circle with a short text on `OI-RIOOLTOETS` (errors, red) or `OI-RIOOLTOETS-LET-OP` (warnings, orange), with the finding as object data;
 - a CSV report beside the drawing, `riooltoets_<name>.csv`;
 - with `ID=`, the JSON: findings, the hydraulics per pipe (inner diameter, roughness, slope, full-pipe velocity and capacity, design flow, filling ratio, smallest cover) and every crossing with its clearance.
+
+### `CIV_RIOOL_HYDRAULICA`
+
+`RIOOL=` (default: all networks) and the load:
+- `OPPERVLAK=` is the connected paved area of the network (m², or ha with `ha`), and `REGEN=` the rain intensity (l/s/ha, default 60).
+- `INWONERS=` or `WONINGEN=` sets the dry weather flow: 120 l per inhabitant per day, discharged over 10 hours, with 2.5 inhabitants per dwelling.
+- Infiltration is added at 0.2 m³ per km of pipe per hour.
+
+The load is spread over the pipes by their length: the street along a pipe drains into it. Every pipe carries everything upstream of it. The calculation is the host-independent `rekenkern::riool`:
+- **Design flow per pipe:** rational method (Q = c·i·A) plus dry weather flow and infiltration, summed downstream.
+- **Filling and velocity:** the normal depth in the part-full circular pipe after Prandtl-Colebrook (the hydraulic radius in place of D/4), and the full-pipe capacity.
+- **`DIAMETER=AUTO`:** the smallest standard size of the network's material that carries the design flow within the filling and velocity limits. Downstream a pipe is never smaller than upstream. Storm and combined sewers may run full at the design rain; foul sewers at most half full (`VULLING=` changes the limit). Existing (GWSW) pipes keep their size. The network gets its new sizes, its inverts are computed again and it is drawn again.
+- **Grade line:** a steady water level from the outfall upstream. The outfall is free, or set with `UITLAATPEIL=` (m NAP, for example the surface water level). A full pipe adds its friction loss, and `PUTVERLIES=` adds a manhole loss ξ·v²/2g. A manhole whose level comes above the ground is reported as water on the street.
+
+Results:
+- **Report:** a Markdown table beside the drawing, `rioolhydraulica.md`, with per pipe Q, dry weather flow, size, h/D, velocity, full capacity and the levels up and down.
+- **Command result:** the same per pipe as JSON (`leidingen`) with `ID=`.
+- **Length profile:** the grade line drawn on `GW-WATERGANG_WATERLIJN`. Each `CIV_RIOOL_PROFIEL` keeps it until the network is changed with `CIV_RIOOL_BIJWERKEN`.
+
+Values and sources:
+- **Design values:** Stichting RIONED, *Module Riolering voor het HBO* (2009), §5.2.
+- **Standard sizes:** PVC SN 8 (Wavin) and concrete (Martens).
+- **Inhabitants per dwelling:** the 2.5 is a common value in Dutch municipal plans, not a RIONED value, so it is an adjustable default.
+- **Grade line:** a steady approximation, not the hydrodynamic computation of Leidraad Riolering C2100 with its standard storms. Use it for sizing and a first check, not for a basic sewer plan (*basisrioleringsplan*).
 
 ### `CIV_RIOOL_EXPORT`
 

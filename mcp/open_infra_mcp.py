@@ -730,6 +730,18 @@ EXPORT = {"path": {"type": "string", "description": "Output file; empty = beside
           "all": {"type": "boolean", "description": "Everything (default); false = only the objects in the selection"}}
 
 
+@tool("civ_sewer_hydraulics", "Sewer hydraulics of a CIV_RIOOL network: design flow per pipe (rain on the connected paved area, dry weather flow of "
+      "inhabitants or dwellings, infiltration), filling and velocity, optionally the smallest standard diameter (auto_diameter), "
+      "and the hydraulic grade line from the outfall with manholes where water reaches the street; the grade line is drawn in the length profile.",
+      {"sewer": STR, "area_m2": NUM, "rain_l_s_ha": NUM, "inhabitants": NUM, "dwellings": NUM, "outfall_level": NUM,
+       "auto_diameter": {"type": "boolean"}, "max_fill": NUM, "manhole_loss": NUM})
+def t_sewer_hydraulics(a):
+    return OCS.run("CIV_RIOOL_HYDRAULICA " + _kv(RIOOL=a.get("sewer"), OPPERVLAK=a.get("area_m2"), REGEN=a.get("rain_l_s_ha"),
+                                               INWONERS=a.get("inhabitants"), WONINGEN=a.get("dwellings"), UITLAATPEIL=a.get("outfall_level"),
+                                               DIAMETER=("AUTO" if a.get("auto_diameter") else None), VULLING=a.get("max_fill"),
+                                               PUTVERLIES=a.get("manhole_loss")), timeout=900)
+
+
 @tool("civ_landxml_export", "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.", EXPORT)
 def t_landxml_export(a):
     return OCS.run(f"CIV_LANDXML_EXPORT {_kv(BESTAND=a.get('path'))}{' ALLES' if a.get('all', True) else ''}")
