@@ -494,21 +494,90 @@ pub enum Grade {
     AboveGround(f64),
 }
 
+/// An axis's geometry fingerprint (its object data left out, so criteria or
+/// labels stored on it do not count as a change).
+pub fn geometry_fingerprint(e: &EntityType) -> String {
+    let mut bare = e.clone();
+    bare.common_mut().extended_data = Default::default();
+    super::labels::entity_fingerprint(&bare)
+}
+
+/// Corridors as design problems: cross sections without a design height
+/// (outside the design profile) or without daylight on a side, and a
+/// corridor whose axis has changed since it was built. No fix: building the
+/// corridor again needs its own arguments.
+pub fn problems(ctx: &super::Ctx, doc: &CadDocument) -> Vec<super::problems::Problem> {
+    use super::problems::{Problem, Severity, Text};
+    let mut seen: Vec<String> = Vec::new();
+    let mut out = Vec::new();
+    for e in doc.model_space_entities() {
+        let (Some(name), Some(sections)) = (super::data_value(e, "corridor"), super::data_value(e, "dwarsprofielen").and_then(|v| v.parse::<usize>().ok())) else { continue };
+        if seen.contains(&name) {
+            continue;
+        }
+        seen.push(name.clone());
+        let h = e.common().handle;
+        let axis_h = super::data_value(e, "as_handle").and_then(|v| super::api::parse_handle(&v).ok());
+        let spot = Alignment::from_entity(e).map(|l| ctx.from_drawing(l.at(l.length() / 2.0).0));
+        let about: Vec<Handle> = std::iter::once(h).chain(axis_h).collect();
+        let base = |code: &str, title: Text, message: Text| {
+            let mut p = Problem::new(code, Severity::Warning, "corridor", format!("corridor:{name}"), title, message).about(&about, "corridor", &name).no_fix(Text::new("bouw de corridor opnieuw (CIV_CORRIDOR) met de aangepaste invoer", "build the corridor again (CIV_CORRIDOR) with the changed input"));
+            if let Some(s) = spot {
+                p = p.at(s, None);
+            }
+            p
+        };
+        let count = |k: &str| super::data_value(e, k).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+        let skipped = count("zonder_ontwerphoogte");
+        if skipped > 0 {
+            out.push(
+                base(
+                    "corridor.no_design_height",
+                    Text::new(format!("Dwarsprofielen zonder ontwerphoogte: {name}"), format!("Sections without a design height: {name}")),
+                    Text::new(format!("{skipped} dwarsprofielen van {name} vallen buiten het ontwerpprofiel en zijn overgeslagen."), format!("{skipped} cross sections of {name} lie outside the design profile and were skipped.")),
+                )
+                .required(0.0, "-")
+                .found(skipped as f64, "-"),
+            );
+        }
+        let missing = count("zonder_aansluiting");
+        if missing > 0 {
+            out.push(
+                base(
+                    "corridor.no_daylight",
+                    Text::new(format!("Geen aansluiting op het maaiveld: {name}"), format!("No daylight: {name}")),
+                    Text::new(format!("{missing} van de {sections} dwarsprofielen van {name} vinden aan een kant het maaiveld niet: daar ontbreekt het talud."), format!("{missing} of the {sections} cross sections of {name} find no ground on a side: the slope is missing there.")),
+                )
+                .required(0.0, "-")
+                .found(missing as f64, "-"),
+            );
+        }
+        if let (Some(ah), Some(print)) = (axis_h, super::data_value(e, "as_vingerafdruk")) {
+            let now = doc.get_entity(ah).map(geometry_fingerprint);
+            if now.as_deref() != Some(print.as_str()) {
+                let gone = now.is_none();
+                out.push(base(
+                    "corridor.stale",
+                    Text::new(format!("Corridor verouderd: {name}"), format!("Corridor out of date: {name}")),
+                    if gone {
+                        Text::new(format!("De as van {name} is er niet meer."), format!("The alignment of {name} is gone."))
+                    } else {
+                        Text::new(format!("De as van {name} is veranderd nadat de corridor is gemaakt."), format!("The alignment of {name} changed after the corridor was built."))
+                    },
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// The design profile drawn for an axis: PVIs from its object data.
 pub fn profile_of(doc: &CadDocument, axis_name: &str) -> Option<Vec<Pvi>> {
     let e = doc
         .model_space_entities()
         .filter(|e| super::data_value(e, "ontwerpprofiel").is_some() && super::data_value(e, "as").as_deref() == Some(axis_name))
         .last()?;
-    let pts: Vec<(f64, f64)> = super::data_value(e, "pvi")?
-        .split(';')
-        .filter_map(|t| {
-            let (a, b) = t.split_once(':')?;
-            Some((a.parse().ok()?, b.parse().ok()?))
-        })
-        .collect();
-    let l: f64 = super::data_value(e, "boog_m").and_then(|v| v.parse().ok()).unwrap_or(0.0);
-    (pts.len() >= 2).then(|| as_profiel::fit_curves(&pts, l))
+    as_profiel::pvis_from_data(e)
 }
 
 /// The assembly the newest corridor on an axis was built with.
@@ -1195,10 +1264,12 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
     let ctx = Ctx::new(&opt)?;
     let extra: Vec<Handle> = req.axis.into_iter().chain(req.targets.iter().map(|t| t.1)).collect();
     let doc = super::document(&["tin", "ontwerpprofiel"], &extra)?;
-    let (al, _, _) = as_profiel::axis(&doc, req.axis)?;
+    let (al, axis_h, _) = as_profiel::axis(&doc, req.axis)?;
     let (f, k) = (ctx.f, ctx.k);
     let len_m = al.length() / f;
     let asm = req.assembly;
+    // The axis as it is now, to tell later whether the corridor is out of date.
+    let axis_print = doc.get_entity(axis_h).map(geometry_fingerprint).unwrap_or_default();
     let lines: Vec<(String, TargetLine)> = req.targets.iter().map(|(n, h)| Ok((n.clone(), target_line(&doc, *h, f)?))).collect::<Result<_, String>>()?;
     let grade = match req.grade {
         Some(g) => g,
@@ -1285,7 +1356,17 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
     };
     let mut out = Out::default();
     let name = if al.name.is_empty() { "as".to_string() } else { al.name.clone() };
-    let data = record(&[("corridor", format!("Corridor {name}")), ("as", al.name.clone()), ("sjabloon", asm.name.clone())]);
+    let no_daylight = sections.iter().filter(|sct| sct.fill_side.iter().any(Option::is_none)).count();
+    let data = record(&[
+        ("corridor", format!("Corridor {name}")),
+        ("as", al.name.clone()),
+        ("sjabloon", asm.name.clone()),
+        ("as_handle", super::api::handle_text(axis_h)),
+        ("as_vingerafdruk", axis_print.clone()),
+        ("dwarsprofielen", sections.len().to_string()),
+        ("zonder_ontwerphoogte", skipped.to_string()),
+        ("zonder_aansluiting", no_daylight.to_string()),
+    ]);
     // Design surface: strips between consecutive sections.
     let faces_spec = ctx.layer("OG", "TRIANGULATIE", Element::G)?;
     // One mesh per surface in natural colours, or one by layer.

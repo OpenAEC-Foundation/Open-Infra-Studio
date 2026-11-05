@@ -172,7 +172,8 @@ impl Report {
 
 /// Layers left out of the check: the CAD system's own and external references.
 fn exempt(name: &str) -> bool {
-    name == "0" || name.eq_ignore_ascii_case("Defpoints") || name.contains('|')
+    // The design problem markers (`CIV_PROBLEMEN`) are check output, not design.
+    name == "0" || name.eq_ignore_ascii_case("Defpoints") || name.contains('|') || name.starts_with("OI-PROBLEMEN")
 }
 
 fn color_index(c: &Color) -> Option<u8> {
@@ -423,6 +424,67 @@ pub fn repair(doc: &CadDocument, repairs: &[&Repair]) -> Result<String, String> 
     }
     let n = crate::bridge::update_entities("NLCS: elementen DuLaag", changed)?;
     Ok(format!("NLCS hersteld: {layers} laag/lagen kregen de NLCS-kleur, -lijndikte en -lijntype; {n} element(en) staan nu op DuLaag."))
+}
+
+impl Rule {
+    /// The rule's title in English.
+    pub fn title_en(self) -> &'static str {
+        match self {
+            Rule::LayerName => "Layer name not NLCS",
+            Rule::LayerObject => "Object not in the main group",
+            Rule::LayerElement => "Element type not allowed for the object",
+            Rule::LayerColor => "Layer colour differs from NLCS",
+            Rule::LayerLineweight => "Layer lineweight differs from NLCS",
+            Rule::LayerLinetype => "Layer linetype differs from NLCS",
+            Rule::EntityColor => "Element colour not ByLayer",
+            Rule::EntityLineweight => "Element lineweight not ByLayer",
+            Rule::EntityLinetype => "Element linetype not ByLayer",
+            Rule::LayerZero => "Elements on layer 0",
+            Rule::TextHeight => "Text height not an NLCS text class",
+            Rule::EmptyLayer => "Empty NLCS layer",
+        }
+    }
+}
+
+/// The NLCS check as design problems: one per finding, with its repair as
+/// the fix where there is one.
+pub fn problems(r: &Report) -> Vec<crate::civiel::problems::Problem> {
+    use crate::civiel::problems::{Action, Problem, Severity as S, Text};
+    let mut out: Vec<Problem> = Vec::new();
+    for f in &r.findings {
+        let severity = match f.rule.severity() {
+            Severity::Fout => S::Error,
+            Severity::Waarschuwing => S::Warning,
+            Severity::Info => S::Info,
+        };
+        let code = format!("nlcs.{}", f.rule.code());
+        let object = format!("laag:{}", f.layer);
+        let n = f.handles.len();
+        let count_en = if n > 0 { format!(" ({n} element{})", if n == 1 { "" } else { "s" }) } else { String::new() };
+        let mut p = Problem::new(
+            &code,
+            severity,
+            "nlcs",
+            object,
+            Text::new(format!("{}: {}", f.rule.title(), f.layer), format!("{}: {}", f.rule.title_en(), f.layer)),
+            Text::new(f.message.clone(), format!("{} on layer {}{count_en}.", f.rule.title_en(), f.layer)),
+        )
+        .about(&f.handles, "layer", &f.layer);
+        if n > 0 {
+            p = p.found(n as f64, "-").required(0.0, "-");
+        }
+        p = match &f.repair {
+            Some(Repair::LayerStyle(_)) => p.fix("laag", Text::new("De laag krijgt de NLCS-kleur, -lijndikte en -lijntype", "Give the layer the NLCS colour, lineweight and linetype"), Action::NlcsLayer { layer: f.layer.clone() }),
+            Some(Repair::ByLayer(h)) => p.fix("dulaag", Text::new(format!("{} element(en) op DuLaag", h.len()), format!("Set {} element(s) to ByLayer", h.len())), Action::NlcsByLayer { handles: h.iter().map(|x| crate::civiel::api::handle_text(*x)).collect() }),
+            None => p,
+        };
+        // One problem per rule and layer.
+        match out.iter_mut().find(|q| q.code == p.code && q.object == p.object) {
+            Some(q) => q.about.handles.extend(p.about.handles),
+            None => out.push(p),
+        }
+    }
+    out
 }
 
 /// A Markdown report for the project file.

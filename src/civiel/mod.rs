@@ -5,6 +5,8 @@
 pub mod api;
 pub mod as_profiel;
 pub mod corridor;
+// Design problems: one list of all checks, with computed fixes.
+pub mod curve_fit;
 pub mod doorsnede;
 pub mod graaf;
 pub mod grading;
@@ -31,6 +33,7 @@ pub mod puntenwolk;
 pub mod uitwisseling;
 // Clothoids, design criteria, rail and sight distance (as-spoor).
 pub mod ontwerpcriteria;
+pub mod problems;
 pub mod spoor;
 pub mod zicht;
 
@@ -233,6 +236,11 @@ impl Out {
 
     pub fn is_empty(&self) -> bool {
         self.layers.iter().all(|(_, e)| e.is_empty())
+    }
+
+    /// The entities by layer, in the order they were put.
+    pub fn into_layers(self) -> Vec<(LayerSpec, Vec<EntityType>)> {
+        self.layers
     }
 
     pub fn write(self, label: &str) -> Result<usize, String> {

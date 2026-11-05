@@ -539,6 +539,176 @@ pub fn check(opt: &super::CivielOptions, axis_h: Option<Handle>, choice: Option<
     ))
 }
 
+// ── Design problems (`CIV_PROBLEMEN`) ───────────────────────────────────────
+
+/// The design criteria as design problems: every violation of the axis and
+/// its design profile. A radius below the minimum gets the minimum radius
+/// when it fits between the neighbouring curves (else the reason none
+/// does); a crest or sag curve below the minimum radius the curve length
+/// that gives it, when that fits between its neighbours.
+pub fn problems(ctx: &Ctx, axis_e: &EntityType, al: &Alignment, layout: Option<&super::curve_fit::Layout>, design: Option<&EntityType>) -> Vec<super::problems::Problem> {
+    use super::problems::{en, nl as n, Action, Problem, Severity, Text};
+    let f = ctx.f;
+    let h = axis_e.common().handle;
+    let hex = super::api::handle_text(h);
+    let name = if al.name.is_empty() { hex.clone() } else { al.name.clone() };
+    let mid_spot = |s0: f64, s1: f64| {
+        let s = ((s0 + s1) / 2.0 * f).clamp(0.0, al.length());
+        (ctx.from_drawing(al.at(s).0), al.start + s / f)
+    };
+    let Some(choice) = choice_for(None, Some(axis_e)) else {
+        let (spot, st) = mid_spot(0.0, 0.0);
+        return vec![Problem::new(
+            "criteria.none",
+            Severity::Info,
+            "criteria",
+            format!("as:{hex}"),
+            Text::new("Geen ontwerpcriteria", "No design criteria"),
+            Text::new(
+                format!("{name} heeft geen ontwerpcriteria: boogstralen, hellingen en verticale bogen zijn niet getoetst. Kies ze met CIV_ONTWERPCRITERIA RICHTLIJN= CATEGORIE= V= AS={hex}."),
+                format!("{name} has no design criteria: radii, grades and vertical curves were not checked. Choose them with CIV_ONTWERPCRITERIA RICHTLIJN= CATEGORIE= V= AS={hex}."),
+            ),
+        )
+        .about(&[h], "alignment", &name)
+        .at(spot, Some(st))];
+    };
+    let (g, c, l) = match choice.resolve(&guidelines()) {
+        Ok(v) => v,
+        Err(e) => {
+            return vec![Problem::new("criteria.unknown", Severity::Warning, "criteria", format!("as:{hex}"), Text::new("Ontwerpcriteria onbekend", "Design criteria unknown"), Text::new(e.clone(), e)).about(&[h], "alignment", &name)];
+        }
+    };
+    let rule = format!("{} {} {} km/h", g.id.to_uppercase(), c.naam, l.v);
+    let mut out: Vec<Problem> = Vec::new();
+    let push = |p: Problem, out: &mut Vec<Problem>| {
+        if !out.iter().any(|q| q.code == p.code && q.object == p.object) {
+            out.push(p);
+        }
+    };
+    for fd in check_plan(al, f, &g, &l) {
+        let (seg_i, _) = al.seg_at((fd.s0 + fd.s1) / 2.0 * f);
+        let pi = layout.and_then(|lay| al.segs.get(seg_i).and_then(|sg| lay.pi_of(sg)));
+        let object = match pi {
+            Some(k) => format!("as:{hex}/PI{k}"),
+            None => format!("as:{hex}/{:.0}", al.start + fd.s0),
+        };
+        let at = pi.map(|k| format!("PI {k}")).unwrap_or_else(|| station(al.start + fd.s0));
+        let (code, title, message) = match fd.check {
+            "boogstraal" => (
+                "criteria.radius_min",
+                Text::new(format!("Boogstraal te klein: {at}"), format!("Radius too small: {at}")),
+                Text::new(format!("Boogstraal R = {} m bij {at} is kleiner dan het minimum {} m ({rule}).", n(fd.value, 1), n(fd.limit, 0)), format!("Curve radius R = {} m at {at} is below the minimum {} m ({rule}).", en(fd.value, 1), en(fd.limit, 0))),
+            ),
+            "clothoide" => (
+                "criteria.clothoid_min",
+                Text::new(format!("Clothoïde te kort: {at}"), format!("Clothoid too short: {at}")),
+                Text::new(format!("Clothoïdeparameter A = {} m bij {at} is kleiner dan het minimum {} m ({rule}).", n(fd.value, 1), n(fd.limit, 0)), format!("Clothoid parameter A = {} m at {at} is below the minimum {} m ({rule}).", en(fd.value, 1), en(fd.limit, 0))),
+            ),
+            "clothoide_r" => (
+                "criteria.clothoid_ratio",
+                Text::new(format!("Clothoïde A < R/n: {at}"), format!("Clothoid A < R/n: {at}")),
+                Text::new(format!("Clothoïdeparameter A = {} m bij {at} is kleiner dan {} m (A ≥ R/n, {rule}).", n(fd.value, 1), n(fd.limit, 1)), format!("Clothoid parameter A = {} m at {at} is below {} m (A ≥ R/n, {rule}).", en(fd.value, 1), en(fd.limit, 1))),
+            ),
+            _ => (
+                "criteria.transition_missing",
+                Text::new(format!("Overgangsboog ontbreekt: {at}"), format!("Transition curve missing: {at}")),
+                Text::new(format!("De boog R = {} m bij {at} sluit zonder overgangsboog aan op een rechtstand; nodig onder R = {} m ({rule}).", n(fd.value, 0), n(fd.limit, 0)), format!("The curve R = {} m at {at} meets a straight without a transition curve; needed below R = {} m ({rule}).", en(fd.value, 0), en(fd.limit, 0))),
+            ),
+        };
+        let (spot, st) = mid_spot(fd.s0, fd.s1);
+        let mut p = Problem::new(code, Severity::Error, "criteria", object, title, message).required(fd.limit, "m").found(fd.value, "m").source(fd.source.clone()).about(&[h], "alignment", &name).at(spot, Some(st));
+        if code == "criteria.radius_min" {
+            match (layout, pi) {
+                (Some(lay), Some(k)) => match lay.fits(k, fd.limit * f, &lay.radii) {
+                    Ok(()) => {
+                        let mut radii: Vec<f64> = lay.radii.iter().map(|r| r / f).collect();
+                        radii[k] = fd.limit;
+                        p = p.fix("rmin", Text::new(format!("R = {} m bij PI {k}: de kleinste die voldoet", n(fd.limit, 0)), format!("R = {} m at PI {k}: the smallest that complies", en(fd.limit, 0))), Action::AxisRadii { axis: hex.clone(), radii });
+                    }
+                    Err((need, room)) => {
+                        p = p.no_fix(Text::new(
+                            format!("Rmin = {} m vraagt {} m raaklijn bij PI {k}; er is {} m naast de buurbogen: geen straal die voldoet past. Leg de PI's verder uit elkaar, verklein de buurboog of kies een kleinere hoek.", n(fd.limit, 0), n(need / f, 1), n(room / f, 1)),
+                            format!("Rmin = {} m needs {} m of tangent at PI {k}; there is {} m next to the neighbouring curves: no compliant radius fits. Move the PIs apart, reduce the neighbouring curve or choose a smaller deflection.", en(fd.limit, 0), en(need / f, 1), en(room / f, 1)),
+                        ));
+                    }
+                },
+                _ => {
+                    p = p.no_fix(Text::new("de PI's van deze as zijn niet bekend (een as die in een boog begint of eindigt)", "the PIs of this alignment are not known (an alignment that starts or ends in a curve)"));
+                }
+            }
+        }
+        push(p, &mut out);
+    }
+    if let Some(d) = design {
+        let Some(pd) = super::as_profiel::ProfileData::of(d) else { return out };
+        let pvis = pd.pvis();
+        let dh = d.common().handle;
+        let dhex = super::api::handle_text(dh);
+        let mut own = pd.own.clone();
+        own.resize(pvis.len(), None);
+        let pname = format!("{} {}", crate::lang::tr("Ontwerpprofiel", "Design profile"), al.name);
+        let index = |s: f64| pvis.iter().enumerate().min_by(|a, b| (a.1.s - s).abs().total_cmp(&(b.1.s - s).abs())).map(|(i, _)| i).unwrap_or(0);
+        for fd in check_profile(&pvis, &g, &l) {
+            let (spot, st) = mid_spot(fd.s0, fd.s1);
+            let severity = if fd.severity == "fout" { Severity::Error } else { Severity::Warning };
+            let p = match fd.check {
+                "helling_max" | "helling_min" => {
+                    let j = index(fd.s0);
+                    let (code, nl_t, en_t, nl_m, en_m) = if fd.check == "helling_max" {
+                        ("criteria.grade_max", "Helling te steil", "Grade too steep", format!("De helling {} % tussen PVI {j} en PVI {} is steiler dan het maximum {} % ({rule}).", n(fd.value, 2), j + 1, n(fd.limit, 1)), format!("The grade {} % between PVI {j} and PVI {} is steeper than the maximum {} % ({rule}).", en(fd.value, 2), j + 1, en(fd.limit, 1)))
+                    } else {
+                        ("criteria.grade_min", "Helling te flauw", "Grade too flat", format!("De helling {} % tussen PVI {j} en PVI {} is flauwer dan {} % voor de afwatering ({rule}).", n(fd.value, 2), j + 1, n(fd.limit, 1)), format!("The grade {} % between PVI {j} and PVI {} is flatter than {} % for drainage ({rule}).", en(fd.value, 2), j + 1, en(fd.limit, 1)))
+                    };
+                    Problem::new(code, severity, "criteria", format!("profiel:{dhex}/PVI{j}-PVI{}", j + 1), Text::new(format!("{nl_t}: PVI {j}–{}", j + 1), format!("{en_t}: PVI {j}–{}", j + 1)), Text::new(nl_m, en_m)).required(fd.limit, "%").found(fd.value, "%")
+                }
+                _ => {
+                    let j = index((fd.s0 + fd.s1) / 2.0);
+                    let crest = fd.check == "topboog";
+                    let (code, kn, ke) = if crest { ("criteria.crest_min", "topboog", "crest curve") } else { ("criteria.sag_min", "voetboog", "sag curve") };
+                    let (g1, g2) = (grade(&pvis[j.saturating_sub(1)], &pvis[j]), grade(&pvis[j], &pvis[(j + 1).min(pvis.len() - 1)]));
+                    let mut p = Problem::new(
+                        code,
+                        severity,
+                        "criteria",
+                        format!("profiel:{dhex}/PVI{j}"),
+                        Text::new(format!("Straal {kn} te klein: PVI {j}"), format!("{} radius too small: PVI {j}", if crest { "Crest" } else { "Sag" })),
+                        Text::new(
+                            format!("De {kn} bij PVI {j} heeft R = {} m (L = {} m), minder dan het minimum {} m ({rule}).", n(fd.value, 0), n(pvis[j].l, 1), n(fd.limit, 0)),
+                            format!("The {ke} at PVI {j} has R = {} m (L = {} m), below the minimum {} m ({rule}).", en(fd.value, 0), en(pvis[j].l, 1), en(fd.limit, 0)),
+                        ),
+                    )
+                    .required(fd.limit, "m")
+                    .found(fd.value, "m");
+                    let need = super::curve_fit::length_for_radius(fd.limit, g1, g2);
+                    let longest = super::as_profiel::longest_curve(&pvis, &own, j);
+                    if need <= longest + 1e-6 {
+                        // Rounded up to the centimetre, when that still fits.
+                        let up = (need * 100.0).ceil() / 100.0;
+                        let lnew = if up <= longest + 1e-9 { up } else { need };
+                        let mut lengths = own.clone();
+                        lengths[j] = Some(lnew);
+                        let k = super::curve_fit::k_value(lnew, g1, g2);
+                        p = p.fix(
+                            "l",
+                            Text::new(format!("L = {} m bij PVI {j} (K = {}): R = {} m", n(lnew, 2), n(k, 1), n(lnew / (g2 - g1).abs(), 0)), format!("L = {} m at PVI {j} (K = {}): R = {} m", en(lnew, 2), en(k, 1), en(lnew / (g2 - g1).abs(), 0))),
+                            Action::CurveLengths { profile: dhex.clone(), lengths },
+                        );
+                    } else {
+                        let (k, r) = (super::curve_fit::k_value(longest, g1, g2), longest / (g2 - g1).abs().max(1e-12));
+                        p = p.no_fix(Text::new(
+                            format!("Rmin = {} m vraagt L = {} m bij PVI {j}; de langste die past is L = {} m (K = {}, R = {} m). Leg de PVI's verder uit elkaar of verklein het hellingsverschil.", n(fd.limit, 0), n(need, 1), n(longest, 1), n(k, 1), n(r, 0)),
+                            format!("Rmin = {} m needs L = {} m at PVI {j}; the longest that fits is L = {} m (K = {}, R = {} m). Move the PVIs apart or reduce the grade change.", en(fd.limit, 0), en(need, 1), en(longest, 1), en(k, 1), en(r, 0)),
+                        ));
+                    }
+                    p
+                }
+            };
+            push(p.source(fd.source.clone()).about(&[h, dh], "design profile", &pname).at(spot, Some(st)), &mut out);
+        }
+    }
+    out
+}
+
 /// Whether the interface is Dutch.
 fn nl() -> bool {
     crate::lang::current() == crate::lang::Lang::Nl

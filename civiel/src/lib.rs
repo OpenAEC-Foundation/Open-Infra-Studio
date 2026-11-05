@@ -1179,7 +1179,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
         }
         "CIV_ONTWERPPROFIEL" => {
             let o = opt(&["AS", "PVI", "LIJN"])?;
-            let (axis, line, pvi) = (args.handle("AS")?, args.handle("LIJN")?, args.pairs("PVI")?);
+            let (axis, line, pvi) = (args.handle("AS")?, args.handle("LIJN")?, args.pvis("PVI")?);
             job(host, "Ontwerpprofiel", id, move |_| as_profiel::design_profile(&o, line, axis, pvi));
         }
         "CIV_STATION" if scripted => {

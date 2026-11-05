@@ -148,6 +148,51 @@ pub fn update(opt: &CivielOptions, only_check: bool, progress: &dyn Fn(String)) 
     ) + &format!(" {}", done.join(" | ")))
 }
 
+/// Length profiles and cross sections out of date, as design problems; the
+/// fix makes them again in their place (`CIV_BIJWERKEN`).
+pub fn problems(ctx: &super::Ctx, doc: &CadDocument) -> Vec<super::problems::Problem> {
+    use super::problems::{Action, Problem, Severity, Text};
+    let products = read();
+    let mut out = Vec::new();
+    for p in &products {
+        let Some(axis) = handle(&p.as_handle) else { continue };
+        let now = fingerprints(doc, axis);
+        let changed = |key: &str| match &now {
+            Some(n) => n.iter().find(|(k, _)| k.starts_with(key)).map(|(_, v)| v) != p.bronnen.iter().find(|(k, _)| k.starts_with(key)).map(|(_, v)| v),
+            None => true,
+        };
+        let (axis_changed, ground_changed) = (changed("as:"), changed("maaiveld"));
+        if now.is_some() && !axis_changed && !ground_changed {
+            continue;
+        }
+        let (wn, we) = if p.soort == "lengteprofiel" { ("Lengteprofiel", "Length profile") } else { ("Dwarsprofielen", "Cross sections") };
+        let name = doc.get_entity(axis).and_then(|e| super::data_value(e, "as")).unwrap_or_else(|| p.as_handle.clone());
+        let (why_nl, why_en) = match (now.is_some(), axis_changed, ground_changed) {
+            (false, _, _) => ("de as is verwijderd", "the alignment was removed"),
+            (true, true, true) => ("de as en het maaiveld zijn gewijzigd", "the alignment and the ground have changed"),
+            (true, true, false) => ("de as is gewijzigd", "the alignment has changed"),
+            _ => ("het maaiveld is gewijzigd", "the ground has changed"),
+        };
+        let made: Vec<Handle> = p.gemaakt.iter().filter_map(|h| handle(h)).take(30).collect();
+        let about: Vec<Handle> = std::iter::once(axis).chain(made).collect();
+        let mut q = Problem::new(
+            "products.stale",
+            Severity::Warning,
+            "products",
+            format!("product:{}/{}", p.soort, p.as_handle),
+            Text::new(format!("{wn} verouderd: {name}"), format!("{we} out of date: {name}")),
+            Text::new(format!("{wn} van {name}: {why_nl} sinds ze zijn gemaakt."), format!("{we} of {name}: {why_en} since they were made.")),
+        )
+        .about(&about, if p.soort == "lengteprofiel" { "length profile" } else { "cross sections" }, &name)
+        .fix("bijwerken", Text::new("Opnieuw maken op dezelfde plek (CIV_BIJWERKEN)", "Make again in the same place (CIV_BIJWERKEN)"), Action::UpdateProducts {});
+        if let Some(at) = p.plaats {
+            q = q.at(ctx.from_drawing(at), None);
+        }
+        out.push(q);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
