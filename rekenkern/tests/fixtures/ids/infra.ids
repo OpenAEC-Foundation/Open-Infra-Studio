@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-written fixture for rekenkern::ids (GPL-3.0, Open Infra Studio); pairs with infra.ifc. -->
+<ids xmlns="http://standards.buildingsmart.org/IDS" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://standards.buildingsmart.org/IDS http://standards.buildingsmart.org/IDS/1.0/ids.xsd">
+  <info>
+    <title>Open Infra test: verharding</title>
+    <version>1</version>
+    <description>One specification per facet kind, with passing and failing elements.</description>
+  </info>
+  <specifications>
+    <specification name="entity predefined type" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCCOURSE</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <entity>
+          <name><simpleValue>IFCCOURSE</simpleValue></name>
+          <predefinedType><simpleValue>PAVEMENT</simpleValue></predefinedType>
+        </entity>
+      </requirements>
+    </specification>
+    <specification name="attribute Tag" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCCOURSE</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <attribute><name><simpleValue>Tag</simpleValue></name></attribute>
+      </requirements>
+    </specification>
+    <specification name="property thickness with units" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCCOURSE</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <property dataType="IFCPOSITIVELENGTHMEASURE">
+          <propertySet><simpleValue>OI_Verharding</simpleValue></propertySet>
+          <baseName><simpleValue>Dikte</simpleValue></baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:minInclusive value="0.04"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="property optional pattern" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCCOURSE</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <property cardinality="optional">
+          <propertySet><simpleValue>OI_Verharding</simpleValue></propertySet>
+          <baseName><simpleValue>Mengsel</simpleValue></baseName>
+          <value>
+            <xs:restriction base="xs:string">
+              <xs:pattern value="AC \d+ (surf|bin|base)"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="property from type" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCCOURSE</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <property dataType="IFCLABEL">
+          <propertySet><simpleValue>Pset_Open</simpleValue></propertySet>
+          <baseName><simpleValue>Leverancier</simpleValue></baseName>
+          <value><simpleValue>Asfaltcentrale</simpleValue></value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="classification with parent value" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity>
+          <name>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="IFCCOURSE"/>
+              <xs:enumeration value="IFCKERB"/>
+            </xs:restriction>
+          </name>
+        </entity>
+      </applicability>
+      <requirements>
+        <classification>
+          <value><simpleValue>21</simpleValue></value>
+          <system><simpleValue>NL-SfB</simpleValue></system>
+        </classification>
+      </requirements>
+    </specification>
+    <specification name="material layer" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCCOURSE</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <material><value><simpleValue>Asfalt</simpleValue></value></material>
+      </requirements>
+    </specification>
+    <specification name="partOf indirect containment" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCCOURSE</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <partOf relation="IFCRELCONTAINEDINSPATIALSTRUCTURE">
+          <entity><name><simpleValue>IFCROAD</simpleValue></name></entity>
+        </partOf>
+      </requirements>
+    </specification>
+    <specification name="classification prohibited" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCKERB</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <classification cardinality="prohibited">
+          <system><simpleValue>Oud</simpleValue></system>
+        </classification>
+      </requirements>
+    </specification>
+    <specification name="entity user defined" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCKERB</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <entity>
+          <name><simpleValue>IFCKERB</simpleValue></name>
+          <predefinedType><simpleValue>Opsluitband</simpleValue></predefinedType>
+        </entity>
+      </requirements>
+    </specification>
+    <specification name="no proxies" ifcVersion="IFC4X3_ADD2">
+      <applicability minOccurs="0" maxOccurs="0">
+        <entity><name><simpleValue>IFCBUILDINGELEMENTPROXY</simpleValue></name></entity>
+      </applicability>
+    </specification>
+    <specification name="quantity volume" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCCOURSE</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <property dataType="IFCVOLUMEMEASURE">
+          <propertySet><simpleValue>Qto_CourseBaseQuantities</simpleValue></propertySet>
+          <baseName><simpleValue>NetVolume</simpleValue></baseName>
+          <value>
+            <xs:restriction base="xs:double">
+              <xs:maxInclusive value="20"/>
+            </xs:restriction>
+          </value>
+        </property>
+      </requirements>
+    </specification>
+    <specification name="applicability by property" ifcVersion="IFC4X3_ADD2">
+      <applicability minOccurs="0" maxOccurs="unbounded">
+        <property>
+          <propertySet><simpleValue>OI_Verharding</simpleValue></propertySet>
+          <baseName><simpleValue>Dikte</simpleValue></baseName>
+        </property>
+      </applicability>
+      <requirements>
+        <attribute>
+          <name><simpleValue>Name</simpleValue></name>
+          <value>
+            <xs:restriction base="xs:string">
+              <xs:pattern value="[A-Z][a-z]+"/>
+            </xs:restriction>
+          </value>
+        </attribute>
+      </requirements>
+    </specification>
+    <specification name="road part" ifcVersion="IFC4X3_ADD2">
+      <applicability maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCROADPART</simpleValue></name></entity>
+      </applicability>
+      <requirements>
+        <entity>
+          <name><simpleValue>IFCROADPART</simpleValue></name>
+          <predefinedType><simpleValue>CARRIAGEWAY</simpleValue></predefinedType>
+        </entity>
+        <partOf relation="IFCRELAGGREGATES">
+          <entity><name><simpleValue>IFCROAD</simpleValue></name></entity>
+        </partOf>
+      </requirements>
+    </specification>
+    <specification name="bridges required" ifcVersion="IFC4X3_ADD2">
+      <applicability minOccurs="1" maxOccurs="unbounded">
+        <entity><name><simpleValue>IFCBRIDGE</simpleValue></name></entity>
+      </applicability>
+    </specification>
+  </specifications>
+</ids>
