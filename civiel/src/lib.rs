@@ -662,7 +662,7 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
             job(host, tr("Kantlijn bewerken", "Edit feature line"), id, move |_| grading::edit_feature(&o, h, edit));
         }
         "CIV_PLATEAU" => {
-            let o = grading::design_options(&args.apply(&base, &["LIJN", "PUNTEN", "AFSCHOT", "RICHTING", "PEILPUNT", "TALUD", "TALUD_AF", "TALUD_OP", "REIKWIJDTE", "NAAM", "SAMENVOEGEN"])?, keep_status);
+            let o = grading::design_options(&args.apply(&base, &["LIJN", "PUNTEN", "AFSCHOT", "RICHTING", "PEILPUNT", "TALUD", "TALUD_AF", "TALUD_OP", "REIKWIJDTE", "NAAM", "SAMENVOEGEN", "MIN", "MAX", "FACTOR"])?, keep_status);
             let source = grading_source(args, "LIJN")?;
             let fall = match args.str("AFSCHOT") {
                 None => None,
@@ -676,9 +676,10 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
                 }
             };
             let both = ratio("TALUD")?;
+            let auto_level = args.str("PEIL").is_some_and(|v| v.eq_ignore_ascii_case("auto"));
             let req = grading::PlateauRequest {
                 source,
-                level: args.f64("PEIL")?,
+                level: if auto_level { None } else { args.f64("PEIL")? },
                 default_level: (!scripted).then_some(base.level),
                 fall,
                 reference: args.points("PEILPUNT")?.and_then(|p| p.first().copied()),
@@ -688,6 +689,7 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
                 step: if args.str("STAP").is_some() { o.step } else { 1.0 },
                 name: args.str("NAAM").map(str::to_string),
                 join: yes(args.str("SAMENVOEGEN")).unwrap_or(true),
+                auto: auto_level.then(|| -> Result<grading::AutoLevel, String> { Ok(grading::AutoLevel { min: args.f64("MIN")?, max: args.f64("MAX")?, factor: args.f64("FACTOR")?.unwrap_or(1.0) }) }).transpose()?,
             };
             job(host, tr("Plateau", "Plateau"), id, move |p| grading::plateau(&o, req, p));
         }
@@ -781,8 +783,8 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
             job(host, tr("Grondbalans", "Mass haul"), id, move |p| massa::mass_haul_diagram(&o, req, p));
         }
         "CIV_HELP" if args.words.first().is_some_and(|w| w.eq_ignore_ascii_case("GRADING") || w.eq_ignore_ascii_case("GRONDWERK")) => host.push_info(tr(
-            "[Open Infra — Grondwerk] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL= [AFSCHOT=% RICHTING=N|O|Z|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (of CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
-            "[Open Infra — Grading] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL= [AFSCHOT=% RICHTING=N|E|S|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (or CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
+            "[Open Infra — Grondwerk] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL=<m>|AUTO [MIN= MAX= FACTOR=] [AFSCHOT=% RICHTING=N|O|Z|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (of CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
+            "[Open Infra — Grading] CIV_KANTLIJN [LIJN=|PUNTEN=x,y[,z];…] [HOOGTE=MAAIVELD|ONTWERP|EIGEN] [START= HELLING=%;%] [PEILEN=z;;z | n:z;…] [TUSSENPUNTEN=ja|<m>] [NAAM=];              CIV_KANTLIJN_PEIL KANTLIJN= PUNT=|BIJ=x,y Z=; CIV_KANTLIJN_VERHOOG KANTLIJN= DZ=; CIV_KANTLIJN_PUNT KANTLIJN= BIJ=x,y [Z=]; CIV_KANTLIJN_HELLING KANTLIJN= VAN= TOT= [HELLING=%];              CIV_PLATEAU [LIJN=|PUNTEN=] PEIL=<m>|AUTO [MIN= MAX= FACTOR=] [AFSCHOT=% RICHTING=N|E|S|W|…] [PEILPUNT=x,y] [TALUD_AF=1:n] [TALUD_OP=1:n] [REIKWIJDTE=] [SAMENVOEGEN=nee];              CIV_TALUD [LIJN=|PUNTEN=] [ZIJDE=LINKS|RECHTS] [NAAR=MAAIVELD|AFSTAND|PEIL] [TALUD=1:n] [BREEDTE=] [PEIL=] [RICHTING=OP|AF] [RANDPEIL=];              CIV_VOLUME BASIS=TIN (or CIV_VOLUME_TIN) [ONTWERP=BOUWRIJP|PEIL] [LOSFACTOR=] [VERDICHTING=] [BANDEN=] [KAART=nee] [VERGELIJK=ja];              CIV_GRONDBALANS [AS=] [BRON=AUTO|CORRIDOR|TIN] [CSV=] [FACTOR=] [HERGEBRUIK=%] [VRIJ=m] [FREQUENTIE=] [PLAATS=x,y].",
         )),
         _ => return Ok(false),
     }
