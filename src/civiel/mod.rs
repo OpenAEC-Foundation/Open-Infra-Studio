@@ -29,7 +29,8 @@ pub mod mesh;
 pub mod puntenwolk;
 // Exchange: LandXML export (stream uitwisseling).
 pub mod uitwisseling;
-// Exchange: 3D meshes out and in (GLB, OBJ, STL), IFC in.
+// Exchange: 3D meshes out and in (GLB, OBJ, STL), IFC in, IDS checks.
+pub mod ids;
 pub mod ifc_import;
 pub mod uitwisseling3d;
 // Clothoids, design criteria, rail and sight distance (as-spoor).
