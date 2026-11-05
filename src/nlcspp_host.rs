@@ -33,7 +33,7 @@ fn spec(name: &str) -> LayerSpec {
     let parts = layer::parse(name).map(|l| l.parts).unwrap_or_default();
     let obj = (parts.len() >= 2).then(|| crate::nlcs::object_by_name("KL", &format!("{}_{}", parts[0], parts[1]))).flatten();
     let (color, rgb) = obj.map(|o| {
-        let c = crate::nlcs::layer(o, crate::nlcs::Status::B, "OI", crate::nlcs::Element::G).color;
+        let c = crate::nlcs::nlcs_layer(o, crate::nlcs::Status::B, "OI", crate::nlcs::Element::G).color;
         (c, crate::nlcs::color_rgb(c))
     }).unwrap_or((7, (255, 255, 255)));
     LayerSpec { name: name.to_string(), color, rgb, true_color: None, lineweight: None, linetype: "Continuous".into(), object_id: 0 }

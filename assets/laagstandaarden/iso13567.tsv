@@ -1,0 +1,282 @@
+#id	iso13567
+#name	ISO 13567 — generic profile (Uniclass 2015 element codes)
+#region	international
+#source	https://www.iso.org/standard/70182.html
+#source	https://en.wikipedia.org/wiki/ISO_13567
+#source	https://www.standardsforhighways.co.uk/tses/attachments/f184cf11-a54c-4f82-9a79-e5ff4332daf0
+#status	B=E	N=N	T=T	V=R
+#element	G=E-	S=E-	T=T-	A=H-
+# ISO 13567-2 positional fields: agent (2), element (6), presentation (2),
+# status (1), sector (4), phase (1), projection (1), scale (1), work
+# package (2), user defined (21+). Unused optional fields are "-".
+# Element: the Uniclass 2015 code without underscores, first 6 characters
+# (as DMRB GG 184 does), "-" filled. Presentation E element, T text,
+# H hatching, D dimensions, B border, U construction lines, G grid.
+# No colours in ISO 13567: empty colour and lineweight cells keep the NLCS
+# pen of the object; linetypes are ISO 128 dash patterns.
+group	name	layer	annotation	color	linetype	lineweight_mm	note
+*	*	Z-Zz3060{element}{status}---------Object			CONTINUOUS		element from Zz_30_60
+ZZ	*	Z-Zz2010{element}----------Annotation					element from Zz_20_10
+AL	*	Z-Zz10--B-----------DrawingSheet					element from Zz_10
+KG	*	G-Zz5010{element}{status}---------Boundary			ISO05W100		element from Zz_50_10
+KL	*	E-Ss75--{element}{status}---------UtilityCable					element from Ss_75
+KW	*	S-Ss20--{element}{status}---------Structure					element from Ss_20
+MO	*	C-Ss1510{element}{status}---------EnvironmentalSurvey					element from Ss_15_10
+OB	*	C-Ss2516{element}{status}---------BankProtection					element from Ss_25_16_50
+OG	*	G-Zz40--{element}{status}---------Topography					element from Zz_40
+RI	*	D-Ss50--{element}{status}---------Drainage					element from Ss_50
+VH	*	D-Ss3014{element}{status}---------Paving					element from Ss_30_14
+VV	*	C-Ss4010{element}{status}---------WaterwaySign					element from Ss_40_10
+VW	*	D-Ss4010{element}{status}---------TrafficSign					element from Ss_40_10_90
+WH	*	D-Ss5070{element}{status}---------WaterManagement					element from Ss_50_70
+BC	*	S-Ss20--{element}{status}---------ConcreteStructure					element from Ss_20
+FC	*	S-Ss2005{element}{status}---------Foundation					element from Ss_20_05
+GC	*	S-Ss2060{element}{status}---------EarthRetainingStructure					element from Ss_20_60
+HC	*	S-Ss20--{element}{status}---------TimberStructure					element from Ss_20
+HU	*	S-Ss2095{element}{status}---------TemporaryStructure					element from Ss_20_95
+MC	*	S-Ss20--{element}{status}---------MechanicalStructure					element from Ss_20
+SC	*	S-Ss20--{element}{status}---------SteelStructure					element from Ss_20
+KC	*	S-Ss20--{element}{status}---------PlasticStructure					element from Ss_20
+MW	*	S-Ss20--{element}{status}---------MasonryStructure					element from Ss_20
+AM	*	D-Zz3510{element}{status}---------Alignment			ISO04W100		element from Zz_35_10
+IW	*	E-Ss75--{element}{status}---------RoadInstallation					element from Ss_75
+IV	*	E-Ss75--{element}{status}---------WaterwayInstallation					element from Ss_75
+OV	*	E-Ss7080{element}{status}---------StreetLighting					element from Ss_70_80_25
+BV	*	D-Ss2516{element}{status}---------VehicleRestraint					element from Ss_25_16_94
+FV	*	L-Ss4555{element}{status}---------FaunaProvision					element from Ss_45_55
+GK	*	S-Ss2060{element}{status}---------RetainingWall					element from Ss_20_60
+GR	*	L-Ss4535{element}{status}---------Planting					element from Ss_45_35
+GW	*	C-Ss1510{element}{status}---------Earthworks					element from Ss_15_10
+IE	*	L-Ss4015{element}{status}---------StreetFurniture					element from Ss_40_15
+RI	DWA*	D-Ss5035{element}{status}---------FoulSewer					element from Ss_50_35_08_30
+RI	DWA_RIOOLLEIDING*	D-Ss5035{element}{status}---------FoulSewer					element from Ss_50_35_08_30
+RI	DWA_TRANSPORTLEIDING*	D-Ss5035{element}{status}---------FoulSewerTrunk					element from Ss_50_35_08_30
+RI	DWA_PERCEELAANSLUITLEIDING*	D-Ss5035{element}{status}---------FoulSewerConnection					element from Ss_50_35_08_30
+RI	DWA_RIOOLPUT*	D-Ss5035{element}{status}---------FoulManhole					element from Ss_50_35_06
+RI	DWA_STROMINGSRICHTING	D-Zz6030{element}{status}---------FoulFlowDirection					element from Zz_60_30
+RI	HWA*	D-Ss5035{element}{status}---------SurfaceWaterSewer					element from Ss_50_35_08_85
+RI	HWA_RIOOLLEIDING*	D-Ss5035{element}{status}---------SurfaceWaterSewer					element from Ss_50_35_08_85
+RI	HWA_TRANSPORTLEIDING*	D-Ss5035{element}{status}---------SurfaceWaterSewerTrunk					element from Ss_50_35_08_85
+RI	HWA_PERCEELAANSLUITLEIDING*	D-Ss5035{element}{status}---------SurfaceWaterConnection					element from Ss_50_35_08_85
+RI	HWA_KOLKAANSLUITLEIDING*	D-Ss5035{element}{status}---------GullyConnection					element from Ss_50_35_08_85
+RI	HWA_RIOOLPUT*	D-Ss5035{element}{status}---------SurfaceWaterManhole					element from Ss_50_35_06
+RI	HWA_KOLK*	D-Pr6552{element}{status}---------Gully					element from Pr_65_52_24
+RI	HWA_GOOT*	D-Pr6552{element}{status}---------DrainageChannel					element from Pr_65_52_24
+RI	HWA_STROMINGSRICHTING	D-Zz6030{element}{status}---------SurfaceWaterFlowDirection					element from Zz_60_30
+RI	HWA_UITLAATCONSTRUCTIE	D-Ss5035{element}{status}---------Outfall					element from Ss_50_35_08_85
+RI	GWA*	D-Ss5035{element}{status}---------CombinedSewer					element from Ss_50_35_08_15
+RI	GWA_RIOOLLEIDING*	D-Ss5035{element}{status}---------CombinedSewer					element from Ss_50_35_08_15
+RI	GWA_TRANSPORTLEIDING*	D-Ss5035{element}{status}---------CombinedSewerTrunk					element from Ss_50_35_08_15
+RI	GWA_PERCEELAANSLUITLEIDING*	D-Ss5035{element}{status}---------CombinedSewerConnection					element from Ss_50_35_08_15
+RI	GWA_KOLKAANSLUITLEIDING*	D-Ss5035{element}{status}---------GullyConnection					element from Ss_50_35_08_15
+RI	GWA_RIOOLPUT*	D-Ss5035{element}{status}---------CombinedManhole					element from Ss_50_35_06
+RI	GWA_KOLK*	D-Pr6552{element}{status}---------Gully					element from Pr_65_52_24
+RI	GWA_STROMINGSRICHTING	D-Zz6030{element}{status}---------CombinedFlowDirection					element from Zz_60_30
+RI	ITR*	D-Ss5070{element}{status}---------InfiltrationSewer					element from Ss_50_70_85
+RI	ITR_RIOOLPUT*	D-Ss5035{element}{status}---------InfiltrationManhole					element from Ss_50_35_06
+RI	ITR_KOLK*	D-Pr6552{element}{status}---------InfiltrationGully					element from Pr_65_52_24
+RI	ITR_STROMINGSRICHTING	D-Zz6030{element}{status}---------InfiltrationFlowDirection					element from Zz_60_30
+RI	PERSLEIDING*	D-Ss5035{element}{status}---------RisingMain					element from Ss_50_35_10
+RI	PERSLEIDING_RIOOLPUT*	D-Ss5035{element}{status}---------RisingMainChamber					element from Ss_50_35_06
+RI	PERSLEIDING_GEMAAL*	D-Ss5035{element}{status}---------PumpingStation					element from Ss_50_35_10
+RI	PERSLEIDING_STROMINGSRICHTING	D-Zz6030{element}{status}---------RisingMainFlowDirection					element from Zz_60_30
+RI	VACUUMLEIDING*	D-Ss5035{element}{status}---------VacuumSewer					element from Ss_50_35_10
+RI	VACUUMLEIDING_RIOOLPUT*	D-Ss5035{element}{status}---------VacuumSewerChamber					element from Ss_50_35_06
+RI	VACUUMLEIDING_GEMAAL*	D-Ss5035{element}{status}---------VacuumStation					element from Ss_50_35_10
+RI	DRAINAGE*	D-Ss5070{element}{status}---------LandDrain					element from Ss_50_70_45
+RI	DRAINAGE_PUT*	D-Ss5035{element}{status}---------LandDrainChamber					element from Ss_50_35_06
+RI	OVERIG*	D-Ss50--{element}{status}---------OtherSewer					element from Ss_50
+RI	OVERIG_LOZEPUT	D-Ss5035{element}{status}---------DummyManhole					element from Ss_50_35_06
+RI	OVERIG_RIOOLPUT*	D-Ss5035{element}{status}---------OtherManhole					element from Ss_50_35_06
+RI	OVERIG_DUIKER*	D-Ss5070{element}{status}---------Culvert					element from Ss_50_70_80
+RI	RWZI*	D-Ss50--{element}{status}---------TreatmentPlantPipe					element from Ss_50
+KL	ET*	E-Ss7030{element}{status}---------PowerCable					element from Ss_70_30
+KL	ET_LS*	E-Ss7030{element}{status}---------LVCable					element from Ss_70_30_45_45
+KL	ET_MS*	E-Ss7030{element}{status}---------MVCable					element from Ss_70_30_50_55
+KL	ET_HS*	E-Ss7030{element}{status}---------HVCable					element from Ss_70_30_35_35
+KL	ET_ZHS*	E-Ss7020{element}{status}---------EHVCable					element from Ss_70_20
+KL	ET_MANTELBUIS*	E-Ss7030{element}{status}---------PowerDuct					element from Ss_70_30
+KL	ET_HULPSTUK*	E-Ss7030{element}{status}---------PowerFitting					element from Ss_70_30
+KL	ET_AARDING*	E-Ss7030{element}{status}---------Earthing					element from Ss_70_30
+KL	DATA*	E-Ss7510{element}{status}---------TelecomCable					element from Ss_75_10_21_88
+KL	DATA_MANTELBUIS*	E-Ss7510{element}{status}---------TelecomDuct					element from Ss_75_10_21_88
+KL	DATA_HULPSTUK*	E-Ss7510{element}{status}---------TelecomFitting					element from Ss_75_10_21_88
+KL	DATA_KAST*	E-Ss7510{element}{status}---------TelecomCabinet					element from Ss_75_10_21_88
+KL	CCTV*	E-Ss75--{element}{status}---------CCTVCable					element from Ss_75
+KL	GAS*	C-Ss5520{element}{status}---------GasMain					element from Ss_55_20_33_56
+KL	GAS_LD*	C-Ss5520{element}{status}---------GasMainLowPressure					element from Ss_55_20_33_56
+KL	GAS_HD*	C-Ss5520{element}{status}---------GasMainHighPressure					element from Ss_55_20_33_56
+KL	GAS_MANTELBUIS*	C-Ss5520{element}{status}---------GasDuct					element from Ss_55_20_33_56
+KL	GAS_HULPSTUK*	C-Ss5520{element}{status}---------GasFitting					element from Ss_55_20_33_56
+KL	GAS_STATION*	C-Ss5520{element}{status}---------GasStation					element from Ss_55_20_33_56
+KL	WATER*	C-Ss5570{element}{status}---------WaterMain					element from Ss_55_70_95_50
+KL	WATER_HUISAANSLUITING*	C-Ss5570{element}{status}---------WaterServicePipe					element from Ss_55_70_95_50
+KL	WATER_MANTELBUIS*	C-Ss5570{element}{status}---------WaterDuct					element from Ss_55_70_95_50
+KL	WATER_HULPSTUK*	C-Ss5570{element}{status}---------WaterFitting					element from Ss_55_70_95_50
+KL	WATER_PUT*	C-Ss5570{element}{status}---------WaterChamber					element from Ss_55_70_95_50
+KL	WATER_BRANDLEIDING*	C-Ss5570{element}{status}---------FireMain					element from Ss_55_70_95_50
+KL	WATER_BRANDLEIDING_BRANDHYDRANT	C-Ss5570{element}{status}---------FireHydrant					element from Ss_55_70_95_50
+KL	WATER_BEREGENING*	L-Ss5570{element}{status}---------IrrigationPipe					element from Ss_55_70
+KL	WARMTENET*	M-Ss6040{element}{status}---------DistrictHeatingPipe					element from Ss_60_40_84_22
+KL	WARMTENET_AANSLUITLEIDING*	M-Ss6040{element}{status}---------DistrictHeatingConnection					element from Ss_60_40_84_22
+KL	WARMTENET_HULPSTUK*	M-Ss6040{element}{status}---------DistrictHeatingFitting					element from Ss_60_40_84_22
+KL	WARMTENET_MANTELBUIS*	M-Ss6040{element}{status}---------DistrictHeatingDuct					element from Ss_60_40_84_22
+KL	CV*	M-Ss6040{element}{status}---------HeatingPipe					element from Ss_60_40_84_22
+KL	KOUDENET*	M-Ss60--{element}{status}---------DistrictCoolingPipe					element from Ss_60
+KL	OLIE*	C-Ss55--{element}{status}---------OilPipeline					element from Ss_55
+KL	CHEMIE*	C-Ss55--{element}{status}---------ChemicalPipeline					element from Ss_55
+KL	CHEMIE_HULPSTUK*	C-Ss55--{element}{status}---------ChemicalPipelineFitting					element from Ss_55
+KL	CHEMIE_MANTELBUIS*	C-Ss55--{element}{status}---------ChemicalPipelineDuct					element from Ss_55
+KL	BRANDSTOF*	C-Ss55--{element}{status}---------FuelPipeline					element from Ss_55
+KL	MANTELBUIS*	E-Ss7030{element}{status}---------Duct					element from Ss_70_30
+KL	SCHEMA*	E-Zz2080{element}----------Schematic					element from Zz_20_80
+KL	TRACE*	C-Zz5095{element}{status}---------UtilityCorridor					element from Zz_50_95
+KL	WEESLEIDING	E-Ss75--{element}{status}---------AbandonedCable					element from Ss_75
+OV	KABEL*	E-Ss7080{element}{status}---------StreetLightingCable					element from Ss_70_80_25
+OV	LICHTMAST	E-Ss7080{element}{status}---------LightingColumn					element from Ss_70_80_25
+OV	ARMATUUR*	E-Ss7080{element}{status}---------Luminaire					element from Ss_70_80_25
+OV	KAST*	E-Ss7080{element}{status}---------LightingCabinet					element from Ss_70_80_25
+VH	GESLOTENVERHARDING*	D-Ss3014{element}{status}---------AsphaltPaving					element from Ss_30_14_05
+VH	GESLOTENVERHARDING_BETON*	D-Ss3014{element}{status}---------ConcretePaving					element from Ss_30_14
+VH	OPENVERHARDING*	D-Ss3014{element}{status}---------BlockPaving					element from Ss_30_14
+VH	HALFVERHARDING*	D-Ss3014{element}{status}---------SemiPaved					element from Ss_30_14
+VH	ONVERHARD*	D-Ss3014{element}{status}---------Unpaved					element from Ss_30_14
+VH	KANTOPSLUITING*	D-Ss3060{element}{status}---------Kerb					element from Ss_30_60_45
+VH	KANTVERHARDING*	D-Ss3014{element}{status}---------PavingEdge					element from Ss_30_14
+VH	GOOT*	D-Ss3075{element}{status}---------Gutter					element from Ss_30_75
+VH	FUNDERING*	D-Ss3014{element}{status}---------PavementBase					element from Ss_30_14
+VH	DREMPEL*	D-Ss3014{element}{status}---------SpeedHump					element from Ss_30_14
+VH	VERKANTING	D-Zz3510{element}{status}---------SuperElevation					element from Zz_35_10_80
+VH	BEDRIJFSVLOERPLAAT*	D-Ss3014{element}{status}---------Slab					element from Ss_30_14
+VH	SPECIAAL_SPORT*	L-Ss3014{element}{status}---------SportsSurface					element from Ss_30_14
+VW	MARKERING*	D-Ss4010{element}{status}---------RoadMarking					element from Ss_40_10_90
+VW	BEWEGWIJZERING*	D-Ss4010{element}{status}---------DirectionSign					element from Ss_40_10_90
+VW	VERKEERSTEKEN*	D-Ss4010{element}{status}---------TrafficSign					element from Ss_40_10_90
+VW	AFZETTING*	D-Ss2536{element}{status}---------TrafficBarrier					element from Ss_25_36
+VV	MARKERING*	C-Ss4010{element}{status}---------WaterwayMarking					element from Ss_40_10
+AM	AS	D-Zz3510{element}{status}---------HorizontalAlignment			ISO04W100		element from Zz_35_10_40
+AM	AS_WEG*	D-Zz3520{element}{status}---------RoadCentreline			ISO04W100		element from Zz_35_20
+AM	AS_PAD*	D-Zz3520{element}{status}---------PathCentreline			ISO04W100		element from Zz_35_20
+AM	AS_SPOOR*	C-Zz3520{element}{status}---------RailCentreline			ISO04W100		element from Zz_35_20
+AM	AS_WATERGANG*	C-Zz3520{element}{status}---------WatercourseCentreline			ISO04W100		element from Zz_35_20
+AM	AS_WATERWEG*	C-Zz3520{element}{status}---------WaterwayCentreline			ISO04W100		element from Zz_35_20
+AM	AS_DIJK*	C-Zz3520{element}{status}---------EmbankmentCentreline			ISO04W100		element from Zz_35_20
+AM	AS_KUNSTWERK*	S-Zz3520{element}{status}---------StructureCentreline			ISO04W100		element from Zz_35_20
+AM	KILOMETRERING	D-Zz3510{element}{status}---------Chainage			ISO04W100		element from Zz_35_10_40
+AM	TANGENTPUNT	D-Zz3510{element}{status}---------TangentPoint			ISO04W100		element from Zz_35_10_40
+AM	STRING*	C-Zz3510{element}{status}---------String			ISO04W100		element from Zz_35_10
+OG	HOOGTELIJN	G-Zz4015{element}{status}---------Contour					element from Zz_40_15
+OG	HOOGTELIJN_MINOR	G-Zz4015{element}{status}---------MinorContour					element from Zz_40_15_55
+OG	HOOGTELIJN_MAJOR	G-Zz4015{element}{status}---------MajorContour					element from Zz_40_15_50
+OG	HOOGTEPUNT	G-Zz4050{element}{status}---------LevelIndicator					element from Zz_40_50
+OG	TRIANGULATIE	G-Zz40--{element}{status}---------GroundModelTriangle					element from Zz_40
+OG	DTM	G-Zz40--{element}{status}---------TerrainModel					element from Zz_40
+OG	BREUKLIJN	G-Zz40--{element}{status}---------Breakline					element from Zz_40
+OG	GRENS	G-Zz5010{element}{status}---------SurveyBoundary					element from Zz_50_10
+OG	BEBOUWING*	G-Zz5030{element}{status}---------BuildingOutline					element from Zz_50_30_30
+OG	BEBOUWING_STRAATNAAM	G-Zz2010{element}{status}---------StreetName					element from Zz_20_10_45
+OG	BEBOUWING_HUISNUMMER	G-Zz2010{element}{status}---------HouseNumber					element from Zz_20_10_45
+OG	WEG*	G-SL8035{element}{status}---------Carriageway					element from SL_80_35_13
+OG	WEG_VOETPAD*	G-SL8040{element}{status}---------Path					element from SL_80_40_60
+OG	WEG_RIJWIELPAD*	G-SL8035{element}{status}---------CycleLane					element from SL_80_35_20
+OG	WEG_PARKEERPLAATS*	G-SL8035{element}{status}---------Parking					element from SL_80_35_13
+OG	WEG_SPOORBAAN	G-Ss8070{element}{status}---------RailTrack					element from Ss_80_70_70
+OG	SPOORBAAN	G-Ss8070{element}{status}---------RailTrack					element from Ss_80_70_70
+OG	WATER*	G-Zz40--{element}{status}---------WaterEdge					element from Zz_40
+OG	GREPPEL	G-Ss5070{element}{status}---------Ditch					element from Ss_50_70_45
+OG	TERREIN*	G-Zz5020{element}{status}---------LandUse					element from Zz_50_20_30
+OG	TOPOGRAFIE*	G-Zz40--{element}{status}---------TopographicFeature					element from Zz_40
+OG	ZONE*	G-Zz5095{element}{status}---------Zone					element from Zz_50_95
+OG	KADASTRAAL	G-Zz5060{element}{status}---------Parcel					element from Zz_50_60
+OG	GRID	G-Zz3540G-----------Gridline					element from Zz_35_40
+OG	COORDINAAT	G-Zz3540G-----------GridLabel					element from Zz_35_40_45
+OG	HULPLIJN	G-Zz9020U-----------ConstructionLine			ISO02W100		element from Zz_90_20
+OG	GRONDGEBRUIK*	G-Zz5020{element}{status}---------LandUse					element from Zz_50_20_30
+KG	GRENS_PERCEEL	G-Zz5060{element}{status}---------Parcel			ISO05W100		element from Zz_50_60
+KG	KADASTRAAL*	G-Zz5060{element}{status}---------Parcel			ISO05W100		element from Zz_50_60
+KG	GRONDVERWERVING*	G-Zz5010{element}{status}---------LandAcquisition			ISO05W100		element from Zz_50_10
+KG	GRONDEIGENDOM*	G-Zz5050{element}{status}---------Ownership			ISO05W100		element from Zz_50_50
+KG	BEHEERGRENS*	G-Zz5010{element}{status}---------ManagementBoundary			ISO05W100		element from Zz_50_10
+KG	ONDERHOUDGRENS*	G-Zz5010{element}{status}---------MaintenanceBoundary			ISO05W100		element from Zz_50_10
+GW	TALUD*	C-Zz4020{element}{status}---------Slope					element from Zz_40_20
+GW	TALUD_KRUIN	C-Zz4020{element}{status}---------TopOfSlope					element from Zz_40_20
+GW	TALUD_TEEN	C-Zz4020{element}{status}---------ToeOfSlope					element from Zz_40_20
+GW	TALUDARCERING*	C-Zz4020{element}{status}---------SlopeHatching					element from Zz_40_20
+GW	GRONDWERKLIJN*	C-Zz4020{element}{status}---------EarthworksLine					element from Zz_40_20
+GW	DIJK*	C-Ss1510{element}{status}---------Embankment					element from Ss_15_10_30_27
+GW	DIJK_KRUIN	C-Zz4020{element}{status}---------EmbankmentCrest					element from Zz_40_20
+GW	DIJK_TEEN	C-Zz4020{element}{status}---------EmbankmentToe					element from Zz_40_20
+GW	WAL*	C-Ss1510{element}{status}---------Bund					element from Ss_15_10_30_27
+GW	OPHOGING*	C-Ss1510{element}{status}---------Fill					element from Ss_15_10_30_27
+GW	ONTGRAVINGSVAK*	C-Ss1510{element}{status}---------Excavation					element from Ss_15_10_30
+GW	CUNET*	C-Ss1510{element}{status}---------Formation					element from Ss_15_10_30
+GW	CUNET_BODEM	C-Ss1510{element}{status}---------FormationBottom					element from Ss_15_10_30
+GW	SLEUF*	C-Ss1510{element}{status}---------Trench					element from Ss_15_10_30
+GW	WATERGANG*	C-Ss5070{element}{status}---------Ditch					element from Ss_50_70_45
+GW	WATERGANG_SLOOT*	C-Ss5070{element}{status}---------Ditch					element from Ss_50_70_45
+GW	WATERGANG_SLOOT_BODEM	C-Ss5070{element}{status}---------DitchBottom					element from Ss_50_70_45
+GW	WATERGANG_BODEM	C-Ss5070{element}{status}---------DitchBottom					element from Ss_50_70_45
+GW	WATERGANG_SLOOT_INSTEEK	C-Ss5070{element}{status}---------DitchTopOfBank					element from Ss_50_70_45
+GW	WATERGANG_INSTEEK	C-Ss5070{element}{status}---------DitchTopOfBank					element from Ss_50_70_45
+GW	WATERGANG_WATERLIJN	C-Ss5070{element}{status}---------DitchWaterLine					element from Ss_50_70_45
+GW	HOOGTE*	C-Zz6045{element}{status}---------Level					element from Zz_60_45
+GW	HOOGTE_AFWERKHOOGTE	C-Zz6045{element}{status}---------FinishedLevel					element from Zz_60_45_70
+GW	MAAIVELD	C-Zz6045{element}{status}---------OriginalGroundLevel					element from Zz_60_45_60
+GW	GROND*	C-Ss1510{element}{status}---------SoilMaterial					element from Ss_15_10
+GR	BOOM*	L-Ss4535{element}{status}---------Tree					element from Ss_45_35_30
+GR	BOMENRIJ	L-Ss4535{element}{status}---------TreeLine					element from Ss_45_35_30
+GR	BOS*	L-Ss4535{element}{status}---------Woodland					element from Ss_45_35_30
+GR	HOUTOPSTAND*	L-Ss4535{element}{status}---------Woodland					element from Ss_45_35_30
+GR	HAAG*	L-Ss4535{element}{status}---------Hedge					element from Ss_45_35_30
+GR	GRAS*	L-Ss4535{element}{status}---------Grass					element from Ss_45_35_45
+GR	BEPLANTING*	L-Ss4535{element}{status}---------Planting					element from Ss_45_35_05
+GR	HEESTER*	L-Ss4535{element}{status}---------Shrub					element from Ss_45_35_05
+GR	STRUIK*	L-Ss4535{element}{status}---------Shrub					element from Ss_45_35_05
+KW	KUNSTWERK_BRUG*	S-Ss2050{element}{status}---------Bridge					element from Ss_20_50
+KW	KUNSTWERK_VIADUCT*	S-Ss2050{element}{status}---------Viaduct					element from Ss_20_50
+KW	KUNSTWERK_TUNNEL*	S-Ss37--{element}{status}---------Tunnel					element from Ss_37
+KW	KUNSTWERK_DUIKER*	S-Ss5070{element}{status}---------Culvert					element from Ss_50_70_80
+KW	KUNSTWERK_GEMAAL*	S-Ss5035{element}{status}---------PumpingStation					element from Ss_50_35_10
+KW	ZICHTRUIMTE	D-Zz5095{element}{status}---------SightTriangle					element from Zz_50_95
+KW	PROFIELVRIJERUIMTE	D-Zz5090{element}{status}---------ClearanceEnvelope					element from Zz_50_90
+GK	BESCHOEIING*	S-Ss2516{element}{status}---------BankRevetment					element from Ss_25_16_50
+BV	OBSTAKELBEVEILIGER*	D-Ss2516{element}{status}---------CrashCushion					element from Ss_25_16_94
+IE	TERREINAFSCHEIDING*	L-Ss2514{element}{status}---------Fence					element from Ss_25_14
+MO	ONDERZOEK*	C-Ss1510{element}{status}---------GroundInvestigation					element from Ss_15_10
+MO	ONDERZOEK_SONDERING	C-Ss1510{element}{status}---------ConePenetrationTest					element from Ss_15_10
+MO	ONDERZOEK_BORING	C-Ss1510{element}{status}---------Borehole					element from Ss_15_10
+MO	BODEM*	C-Ss1510{element}{status}---------SoilContamination					element from Ss_15_10_35
+MO	ARCHEOLOGIE*	C-Zz5095{element}{status}---------Archaeology					element from Zz_50_95
+AL	TEKENBLAD*	Z-Zz1020B-----------DrawingFrame					element from Zz_10_20
+AL	TEKENBLAD_KADER*	Z-Zz1020B-----------DrawingFrameOutline					element from Zz_10_20_25
+AL	TEKENBLAD_DEELKADER	Z-Zz1020B-----------DrawingFrameOutline					element from Zz_10_20_25
+AL	TEKENBLAD_TITELBLOK*	Z-Zz1020B-----------TitleBlock					element from Zz_10_20_85
+AL	TEKENBLAD_VIEWPORT	Z-Zz1020B-----------Viewport					element from Zz_10_20_95
+AL	TEKENBLAD_SCHAALBALK	Z-Zz2080B-----------Barscale					element from Zz_20_80_10
+AL	TEKENBLAD_VERKLARING	Z-Zz2080B-----------Legend					element from Zz_20_80_50
+AL	TEKENBLAD_WIJZIGINGSBLOK	Z-Zz1070B-----------Revision					element from Zz_10_70
+AL	TEKENBLAD_HULPLIJN	Z-Zz9020B-----------ConstructionLine					element from Zz_90_20
+AL	TEKENBLADGRENS	Z-Zz1020B-----------SheetBoundary					element from Zz_10_20_25
+AL	LEGENDA	Z-Zz2080B-----------Legend					element from Zz_20_80_50
+AL	ORIENTATIE	Z-Zz2080B-----------NorthPoint					element from Zz_20_80_55
+AL	AANKLEDING	Z-Zz10--B-----------SheetDressing					element from Zz_10
+AL	VERWIJZING*	Z-Zz2080B-----------CrossReference					element from Zz_20_80_15
+AL	VERWIJZING_DOORSNEDE	Z-Zz6050B-----------SectionMark					element from Zz_60_50_80
+AL	BLADVERWIJZING*	Z-Zz6055B-----------MatchLine					element from Zz_60_55
+AL	PROFIELBALK	Z-Zz3090B-----------ProfileBand					element from Zz_30_90_60
+AL	COORDINAATPUNT	Z-Zz3540B-----------GridLabel					element from Zz_35_40_45
+AL	REFERENTIE	Z-Zz3030B-----------ExternalReference					element from Zz_30_30
+ZZ	(T*	Z-Zz2010T-----------Text					element from Zz_20_10_90
+ZZ	(M)	Z-Zz2020D-----------Dimension					element from Zz_20_20
+ZZ	GRENS*	Z-Zz5010{element}{status}---------Boundary					element from Zz_50_10
+ZZ	GRENS_WERK	Z-Zz5010{element}{status}---------WorksBoundary					element from Zz_50_10_10
+ZZ	HULPLIJN	Z-Zz9020U-----------ConstructionLine			ISO02W100		element from Zz_90_20
+ZZ	CONSTRUCTIELIJN	Z-Zz9020U-----------ConstructionLine			ISO02W100		element from Zz_90_20
+ZZ	NAP	Z-Zz6045{element}----------Datum					element from Zz_60_45_20
+ZZ	PEIL*	Z-Zz6045{element}{status}---------Level					element from Zz_60_45
+ZZ	HOOGTELABEL*	Z-Zz6045{element}{status}---------LevelLabel					element from Zz_60_45
+ZZ	DETAIL*	Z-Zz6020{element}----------DetailCallUp					element from Zz_60_20
+ZZ	AFBREEKLIJN	Z-Zz6050{element}----------BreakMark					element from Zz_60_50_10
+ZZ	AANPIJLING	Z-Zz2010{element}----------Leader					element from Zz_20_10_50
+ZZ	HARTLIJN	Z-Zz3520{element}{status}---------Centreline			ISO04W100		element from Zz_35_20
+ZZ	STRAMIENLIJN	Z-Zz3540G-----------Gridline					element from Zz_35_40

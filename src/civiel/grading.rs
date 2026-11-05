@@ -1860,9 +1860,14 @@ pub fn volume_tin(opt: &super::CivielOptions, req: VolumeRequest, progress: &dyn
     let ground = Tin::of_status(&doc, 'B').ok_or("geen bestaand terrein (B-…-OG-TRIANGULATIE): maak eerst een TIN (CIV_TIN)")?;
     let selected = || -> Option<Tin> {
         let sel: std::collections::HashSet<Handle> = bridge::selection().unwrap_or_default().into_iter().collect();
+        let mut memo = crate::nlcs::LayerMemo::default();
         let faces: std::collections::HashSet<Handle> = doc
             .model_space_entities()
-            .filter(|e| matches!(e, EntityType::Face3D(_) | EntityType::Mesh(_)) && sel.contains(&e.common().handle) && !e.common().layer.starts_with("B-"))
+            .filter(|e| matches!(e, EntityType::Face3D(_) | EntityType::Mesh(_)) && sel.contains(&e.common().handle))
+            .filter(|e| {
+                let l = &e.common().layer;
+                !(l.starts_with("B-") || memo.other(l).is_some_and(|(s, _)| s == crate::nlcs::Status::B))
+            })
             .map(|e| e.common().handle)
             .collect();
         (!faces.is_empty()).then(|| Tin::from_document_with(&doc, &faces)).flatten()

@@ -473,7 +473,7 @@ pub fn info() -> Result<String, String> {
         } else if data_value(e, "corridor").is_some() && matches!(e, EntityType::Polyline3D(_)) {
             corridors.push(json!({"handle": h(e), "naam": data_value(e, "corridor"), "sjabloon": data_value(e, "sjabloon")}));
         } else if let (Some(name), Some(al)) = (data_value(e, "as"), as_profiel::Alignment::from_entity(e)) {
-            if e.common().layer.contains("-AM-AS-") && matches!(e, EntityType::LwPolyline(_)) && data_value(e, "verschuiving_m").is_none() {
+            if matches!(e, EntityType::LwPolyline(_)) && nlcs::as_nlcs(&e.common().layer).contains("-AM-AS-") && data_value(e, "verschuiving_m").is_none() {
                 axes.push(json!({"handle": h(e), "naam": name, "lengte_m": al.length() / f, "beginstation": al.start}));
             }
         }
@@ -484,7 +484,7 @@ pub fn info() -> Result<String, String> {
             json!({"driehoeken": t.triangles.len(), "punten": t.points.len(), "hoogte_min": lo / f, "hoogte_max": hi / f})
         })
     };
-    let points = doc.model_space_entities().filter(|e| matches!(e, EntityType::Point(_)) && e.common().layer.contains("-OG-HOOGTEPUNT-")).count();
+    let points = doc.model_space_entities().filter(|e| matches!(e, EntityType::Point(_)) && nlcs::as_nlcs(&e.common().layer).contains("-OG-HOOGTEPUNT-")).count();
     api::note("projectlocatie", ctx.site.as_ref().map(|s| json!({"naam": s.label, "crs": s.crs, "x": s.origin_e, "y": s.origin_n, "breedte": s.width, "hoogte": s.height, "absoluut": s.absolute})).unwrap_or(serde_json::Value::Null));
     api::note("eenheid_per_m", f);
     api::note("assen", axes.clone());

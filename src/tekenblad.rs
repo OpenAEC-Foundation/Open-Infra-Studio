@@ -126,7 +126,12 @@ impl Sheet {
 }
 
 /// NLCS text class: a text's colour and lineweight follow its height.
+/// Text pens by height are an NLCS convention; under another layer standard
+/// the text keeps its layer's pen.
 pub fn text_pen(e: &mut EntityType, mm: f64) {
+    if !crate::laagstandaard::current().is_nlcs() {
+        return;
+    }
     if let Some((color, lw)) = nlcs::text_class(mm) {
         let c = e.common_mut();
         c.color = ocs_plugin_api::host::codec::Color::Index(color);
@@ -302,9 +307,17 @@ fn title_block(s: &mut Sheet, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOpti
 /// Legend of the NLCS layers drawn in this session, grouped by main group.
 /// Returns the number of layers shown.
 fn legend(s: &mut Sheet, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
-    let mut layers: Vec<LayerSpec> = bridge::nlcs_layers().into_iter().filter(|l| !l.name.contains("-AL-") && !l.name.ends_with("-T")).collect();
+    // Other layer standards' names are read in their NLCS form.
+    let mut layers: Vec<LayerSpec> = bridge::nlcs_layers()
+        .into_iter()
+        .filter(|l| {
+            let n = nlcs::as_nlcs(&l.name);
+            !n.contains("-AL-") && !n.ends_with("-T")
+        })
+        .collect();
     let key = |l: &LayerSpec| {
-        let parts: Vec<&str> = l.name.splitn(5, '-').collect();
+        let name = nlcs::as_nlcs(&l.name);
+        let parts: Vec<&str> = name.splitn(5, '-').collect();
         (parts.get(2).copied().unwrap_or("").to_string(), parts.get(3).copied().unwrap_or("").to_string(), l.name.clone())
     };
     layers.sort_by_key(key);
@@ -339,7 +352,7 @@ fn legend(s: &mut Sheet, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
         // quantity take-off can leave it out.
         let (a, b) = (s.at(x + 1.0, y), s.at(x + 13.0, y));
         let mark = bridge::object_data([("bron", "tekenblad".to_string())]);
-        if l.name.ends_with("-S") {
+        if nlcs::as_nlcs(&l.name).ends_with("-S") {
             let c = s.at(x + 7.0, y);
             s.out.push((l.clone(), emit::markers(&[c], &l.name, 0.8 * s.k, Some(&mark))));
         } else {

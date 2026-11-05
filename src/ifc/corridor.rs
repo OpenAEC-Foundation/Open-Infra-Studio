@@ -29,7 +29,7 @@ pub struct Edges {
 impl Edges {
     /// Widen an edge to a feature line at `offset` (either side).
     pub fn add(&mut self, layer: &str, offset: f64) {
-        let l = layer.to_ascii_uppercase();
+        let l = crate::nlcs::as_nlcs(layer).to_ascii_uppercase();
         let slot = if l.contains("VERHARDING") {
             &mut self.pavement
         } else if l.contains("GRAS_BERM") {

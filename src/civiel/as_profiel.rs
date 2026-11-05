@@ -983,7 +983,7 @@ pub fn create(opt: &super::CivielOptions, input: AxisInput, name: Option<String>
     let axis_t = ctx.layer("AM", "AS", Element::T)?;
     let mut out = Out::default();
     // The axis itself, unless the line already is one.
-    let drawn = !layer.contains("-AM-AS");
+    let drawn = !crate::nlcs::as_nlcs(&layer).contains("-AM-AS");
     let drawing = draw_axis(&ctx, &al, &axis, &axis_t, drawn, &[], &mut out)?;
     let handles = out.write_handles(&al.name)?;
     let written = handles.len();

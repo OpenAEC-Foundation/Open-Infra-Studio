@@ -230,7 +230,7 @@ pub fn check(doc: &CadDocument, opt: &Options) -> Report {
             report.conform_entities += elements.len();
             continue;
         }
-        let parsed = match nlcs::parse_layer(&name) {
+        let parsed = match nlcs::parse_nlcs_layer(&name) {
             Ok(p) => p,
             Err(why) => {
                 report.findings.push(Finding { rule: Rule::LayerName, layer: name, message: format!("{why} — {} element(en)", elements.len()), handles: handles(), repair: None });
@@ -266,7 +266,7 @@ pub fn check(doc: &CadDocument, opt: &Options) -> Report {
             "T" => nlcs::Element::T,
             _ => nlcs::Element::G,
         };
-        let spec = nlcs::layer(obj, parsed.status, &parsed.discipline, element);
+        let spec = nlcs::nlcs_layer(obj, parsed.status, &parsed.discipline, element);
         let spec = LayerSpec { name: name.clone(), ..spec };
         let mut style = Vec::new();
         if opt.layer_props && color_index(&layer.color) != Some(spec.color.max(1)) {

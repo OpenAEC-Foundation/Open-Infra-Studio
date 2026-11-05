@@ -2540,13 +2540,14 @@ fn leading_number(s: &str) -> Option<f64> {
 fn klic_cables(doc: &CadDocument, ctx: &Ctx) -> Vec<Kabel> {
     let f = ctx.f;
     let mut out = Vec::new();
+    let mut memo = crate::nlcs::LayerMemo::default();
     for e in doc.model_space_entities() {
         if data_value(e, "riool").is_some() || data_value(e, "rioolprofiel").is_some() || data_value(e, "riooltoets").is_some() {
             continue;
         }
         let layer = &e.common().layer;
-        let klic = data_value(e, "bron").as_deref() == Some("KLIC") || layer.contains("-KL-");
-        if !klic || data_value(e, "thema").as_deref() == Some("graafpolygoon") || layer.contains("-ZZ-") {
+        let klic = data_value(e, "bron").as_deref() == Some("KLIC") || memo.is(layer, "KL", None, None);
+        if !klic || data_value(e, "thema").as_deref() == Some("graafpolygoon") || memo.is(layer, "ZZ", None, None) {
             continue;
         }
         let v = vertices(e);
@@ -3049,17 +3050,23 @@ pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn
     let ctx = Ctx::new(opt)?;
     let doc = super::document(&["riool"], &[])?;
     let sel: HashSet<Handle> = bridge::selection().unwrap_or_default().into_iter().collect();
-    let gwsw_entity = |e: &EntityType| data_value(e, "riool").is_none() && data_value(e, "naam").is_some() && e.common().layer.contains("-RI-");
+    // Sewer layers of NLCS by their parts, of other layer standards by their mapping.
+    let memo = std::cell::RefCell::new(crate::nlcs::LayerMemo::default());
+    let object_of = |e: &EntityType| -> String {
+        let l = &e.common().layer;
+        memo.borrow_mut().other(l).map(|(_, o)| o.name.clone()).unwrap_or_else(|| l.clone())
+    };
+    let gwsw_entity = |e: &EntityType| data_value(e, "riool").is_none() && data_value(e, "naam").is_some() && memo.borrow_mut().is(&e.common().layer, "RI", None, None);
     let pipe_ents: Vec<&EntityType> = doc
         .model_space_entities()
-        .filter(|e| gwsw_entity(e) && vertices(e).len() >= 2 && (data_value(e, "beginpunt").is_some() || data_value(e, "bob_beginpunt_leiding").is_some() || e.common().layer.contains("LEIDING")))
+        .filter(|e| gwsw_entity(e) && vertices(e).len() >= 2 && (data_value(e, "beginpunt").is_some() || data_value(e, "bob_beginpunt_leiding").is_some() || object_of(e).contains("LEIDING")))
         .filter(|e| sel.is_empty() || sel.contains(&e.common().handle))
         .collect();
     if pipe_ents.is_empty() {
         return Err(tr("geen GWSW-leidingen in de tekening (of de selectie): haal ze op met GIS_Q_GWSW of CIV_RIOOL_IMPORT", "no GWSW pipes in the drawing (or the selection): fetch them with GIS_Q_GWSW or CIV_RIOOL_IMPORT").into());
     }
     progress(t!("{} GWSW-leidingen overnemen …", "Taking over {} GWSW pipes …", pipe_ents.len()));
-    let put_ents: Vec<&EntityType> = doc.model_space_entities().filter(|e| gwsw_entity(e) && matches!(e, EntityType::Circle(_)) && e.common().layer.contains("RIOOLPUT")).collect();
+    let put_ents: Vec<&EntityType> = doc.model_space_entities().filter(|e| gwsw_entity(e) && matches!(e, EntityType::Circle(_)) && object_of(e).contains("RIOOLPUT")).collect();
     // Manholes by name.
     struct Raw {
         naam: String,

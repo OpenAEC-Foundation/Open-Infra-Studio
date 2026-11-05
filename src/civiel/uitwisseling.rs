@@ -114,7 +114,7 @@ pub enum LineKind {
 
 impl LineKind {
     pub fn from_layer(layer: &str) -> LineKind {
-        let l = layer.to_ascii_uppercase();
+        let l = crate::nlcs::as_nlcs(layer).to_ascii_uppercase();
         if l.contains("-AM-AS-") {
             LineKind::Axis
         } else if l.contains("VERHARDING") {
@@ -298,7 +298,7 @@ pub fn gather_from(
     // Survey points: on OG-HOOGTEPUNT, or with a point number.
     let survey: HashSet<Handle> = doc
         .model_space_entities()
-        .filter(|e| matches!(e, EntityType::Point(_)) && (e.common().layer.contains("-OG-HOOGTEPUNT-") || data_value(e, "puntnummer").is_some()))
+        .filter(|e| matches!(e, EntityType::Point(_)) && (crate::nlcs::as_nlcs(&e.common().layer).contains("-OG-HOOGTEPUNT-") || data_value(e, "puntnummer").is_some()))
         .map(|e| e.common().handle)
         .filter(|h| scope.wants([h]))
         .collect();
@@ -311,8 +311,11 @@ pub fn gather_from(
     progress(tr("Oppervlakken lezen…", "Reading surfaces…").into());
     let mut groups: Vec<(char, String, Vec<Handle>, &EntityType)> = Vec::new();
     for e in doc.model_space_entities() {
-        let layer = &e.common().layer;
-        if !matches!(e, EntityType::Mesh(_) | EntityType::Face3D(_)) || !layer.contains("-OG-TRIANGULATIE-") {
+        if !matches!(e, EntityType::Mesh(_) | EntityType::Face3D(_)) {
+            continue;
+        }
+        let layer = crate::nlcs::as_nlcs(&e.common().layer);
+        if !layer.contains("-OG-TRIANGULATIE-") {
             continue;
         }
         let status = layer.chars().next().unwrap_or('B').to_ascii_uppercase();
@@ -351,7 +354,7 @@ pub fn gather_from(
     let mut axes_drawing: HashMap<String, Alignment> = HashMap::new();
     let has_b_tin = model.surfaces.iter().any(|s| s.status == 'B');
     for e in doc.model_space_entities() {
-        if !matches!(e, EntityType::LwPolyline(_)) || !e.common().layer.contains("-AM-AS-") {
+        if !matches!(e, EntityType::LwPolyline(_)) || !crate::nlcs::as_nlcs(&e.common().layer).contains("-AM-AS-") {
             continue;
         }
         if data_value(e, "as").is_none() || ["ontwerpprofiel", "verschuiving_m", "lengteprofiel", "corridor"].iter().any(|k| data_value(e, k).is_some()) {

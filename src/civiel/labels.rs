@@ -845,7 +845,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
     // The design line: the selected one, or the newest of the axis.
     let design: Option<&EntityType> = selected.iter().copied().find(|e| data_value(e, "ontwerpprofiel").is_some()).or_else(|| axis.and_then(|_| design_line(&doc, &axis_name)));
     let points: Vec<&EntityType> = {
-        let all: Vec<&EntityType> = doc.model_space_entities().filter(|e| matches!(e, EntityType::Point(_)) && e.common().layer.contains("-OG-HOOGTEPUNT-")).collect();
+        let all: Vec<&EntityType> = doc.model_space_entities().filter(|e| matches!(e, EntityType::Point(_)) && crate::nlcs::as_nlcs(&e.common().layer).contains("-OG-HOOGTEPUNT-")).collect();
         let picked: Vec<&EntityType> = all.iter().copied().filter(|e| sel.contains(&e.common().handle)).collect();
         if picked.is_empty() { all } else { picked }
     };

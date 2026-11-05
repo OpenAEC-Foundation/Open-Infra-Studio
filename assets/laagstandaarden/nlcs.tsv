@@ -1,0 +1,9 @@
+#id	nlcs
+#name	NLCS 5.02 — Nederlandse CAD Standaard (GWW)
+#region	NL
+#kind	nlcs
+#source	https://www.digigo.nu/standaarden/nlcs/
+# The NLCS layers come from the NLCS tables in assets/nlcs (CC BY 4.0,
+# DigiGO / Stichting NLCS): STATUS-DISCIPLINE-HOOFDGROEP-OBJECT-ELEMENT with
+# the pen of the object per status. This file has no rows: Open Infra's
+# semantic keys are NLCS objects, so NLCS maps to itself.

@@ -101,7 +101,7 @@ pub fn cuttables(doc: &CadDocument) -> Vec<Cuttable> {
         } else if source.eq_ignore_ascii_case("KLIC") && !closed {
             // Casings and cable beds wrap the cables: not a crossing of their own.
             let kind = data.get("type").map(String::as_str).unwrap_or("");
-            if matches!(kind, "Mantelbuis" | "Kabelbed") || layer.contains("MANTELBUIS") {
+            if matches!(kind, "Mantelbuis" | "Kabelbed") || nlcs::as_nlcs(&layer).contains("MANTELBUIS") {
                 continue;
             }
             let thema = data.get("thema").cloned().unwrap_or_default();
