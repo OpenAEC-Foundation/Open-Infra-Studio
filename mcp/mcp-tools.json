@@ -731,7 +731,7 @@
   "name": "infra_civ_length_profile"
  },
  {
-  "description": "Design (vertical) profile of an axis from PVIs [station, height] with parabolic vertical curves; drawn in its length profile.",
+  "description": "Design (vertical) profile of an axis from PVIs [station, height] or [station, height, curve length] with parabolic vertical curves; drawn in its length profile.",
   "inputSchema": {
    "type": "object",
    "properties": {
@@ -747,7 +747,7 @@
        "type": "number"
       },
       "minItems": 2,
-      "maxItems": 2
+      "maxItems": 3
      }
     },
     "curve_length": {
@@ -1553,6 +1553,90 @@
    "required": []
   },
   "name": "infra_civ_landxml_export"
+ },
+ {
+  "description": "Run every design check in one go (alignment curves that do not fit, design criteria, vertical curves, sewers, grading, corridors, out-of-date profiles, NLCS) and list the problems: code, severity, message (nl/en), required vs found, the object, its location, computed fixes and whether it was accepted. Draws markers on layer OI-PROBLEMEN.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "selection": {
+     "type": "boolean",
+     "description": "only the objects of the selected entities"
+    },
+    "checks": {
+     "type": "array",
+     "items": {
+      "type": "string",
+      "enum": [
+       "alignment",
+       "criteria",
+       "profile",
+       "sewer",
+       "grading",
+       "corridor",
+       "products",
+       "nlcs"
+      ]
+     }
+    },
+    "markers": {
+     "type": "boolean",
+     "description": "draw markers (default true)"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_problems_list"
+ },
+ {
+  "description": "Apply a fix of a design problem (one undo step): the object is checked again first, then once more after; data.solved tells whether the problem is gone.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "code": {
+     "type": "string",
+     "description": "The problem's code, e.g. alignment.curve_overlap (from problems_list)"
+    },
+    "object": {
+     "type": "string",
+     "description": "The problem's object reference, e.g. as:E9E/PI1-PI2 (from problems_list)"
+    },
+    "fix": {
+     "type": "string",
+     "description": "the fix id or its number (1 = the first); default the first"
+    }
+   },
+   "required": [
+    "code",
+    "object"
+   ]
+  },
+  "name": "infra_problem_fix"
+ },
+ {
+  "description": "Accept a design problem with a reason. The acceptance is kept in the drawing (with the date and the author from the settings) and holds until the object changes.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "code": {
+     "type": "string",
+     "description": "The problem's code, e.g. alignment.curve_overlap (from problems_list)"
+    },
+    "object": {
+     "type": "string",
+     "description": "The problem's object reference, e.g. as:E9E/PI1-PI2 (from problems_list)"
+    },
+    "reason": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "code",
+    "object",
+    "reason"
+   ]
+  },
+  "name": "infra_problem_accept"
  },
  {
   "description": "Set the view: preset (TOP, SWISO, SEISO, NEISO, NWISO, FRONT…), visual style (GOURAUDSHADED, FLATSHADED, WIREFRAME2D, HIDDENLINE…) and zoom to extents.",

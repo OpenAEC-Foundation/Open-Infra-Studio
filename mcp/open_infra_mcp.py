@@ -520,10 +520,10 @@ def t_length_profile(a):
     return OCS.run(f"CIV_LENGTEPROFIEL {_kv(AS=a.get('axis'), PLAATS=a.get('at') and _pt(a['at']), STAP=a.get('step'), OVERHOGING=a.get('exaggeration'))}")
 
 
-@tool("civ_design_profile", "Design (vertical) profile of an axis from PVIs [station, height] with parabolic vertical curves; drawn in its length profile.",
-      {"axis": AXIS, "pvis": {"type": "array", "items": {"type": "array", "items": NUM, "minItems": 2, "maxItems": 2}}, "curve_length": NUM}, ["pvis"])
+@tool("civ_design_profile", "Design (vertical) profile of an axis from PVIs [station, height] or [station, height, curve length] with parabolic vertical curves; drawn in its length profile.",
+      {"axis": AXIS, "pvis": {"type": "array", "items": {"type": "array", "items": NUM, "minItems": 2, "maxItems": 3}}, "curve_length": NUM}, ["pvis"])
 def t_design(a):
-    pvi = ";".join(f"{_num(s)}:{_num(z)}" for s, z in a["pvis"])
+    pvi = ";".join(":".join(_num(v) for v in p) for p in a["pvis"])
     return OCS.run(f"CIV_ONTWERPPROFIEL {_kv(AS=a.get('axis'), PVI=pvi, BOOG=a.get('curve_length'))}")
 
 
@@ -734,6 +734,37 @@ EXPORT = {"path": {"type": "string", "description": "Output file; empty = beside
 def t_landxml_export(a):
     return OCS.run(f"CIV_LANDXML_EXPORT {_kv(BESTAND=a.get('path'))}{' ALLES' if a.get('all', True) else ''}")
 
+
+
+# Design problems: every check in one list, with fixes the program computes.
+PROBLEM_CODE = {"type": "string", "description": "The problem's code, e.g. alignment.curve_overlap (from problems_list)"}
+PROBLEM_OBJECT = {"type": "string", "description": "The problem's object reference, e.g. as:E9E/PI1-PI2 (from problems_list)"}
+
+
+@tool("problems_list", "Run every design check in one go (alignment curves that do not fit, design criteria, vertical curves, sewers, grading, corridors, "
+      "out-of-date profiles, NLCS) and list the problems: code, severity, message (nl/en), required vs found, the object, its location, "
+      "computed fixes and whether it was accepted. Draws markers on layer OI-PROBLEMEN.",
+      {"selection": {"type": "boolean", "description": "only the objects of the selected entities"},
+       "checks": {"type": "array", "items": {"type": "string", "enum": ["alignment", "criteria", "profile", "sewer", "grading", "corridor", "products", "nlcs"]}},
+       "markers": {"type": "boolean", "description": "draw markers (default true)"}})
+def t_problems_list(a):
+    checks = ";".join(a.get("checks") or [])
+    return OCS.run("CIV_PROBLEMEN " + ("SELECTIE " if a.get("selection") else "") + _kv(CONTROLES=checks, MARKERINGEN=a.get("markers")))
+
+
+@tool("problem_fix", "Apply a fix of a design problem (one undo step): the object is checked again first, then once more after; "
+      "data.solved tells whether the problem is gone.",
+      {"code": PROBLEM_CODE, "object": PROBLEM_OBJECT, "fix": {"type": "string", "description": "the fix id or its number (1 = the first); default the first"}},
+      ["code", "object"])
+def t_problem_fix(a):
+    return OCS.run("CIV_PROBLEEM_HERSTEL " + _kv(CODE=a["code"], OBJECT=a["object"], FIX=a.get("fix")))
+
+
+@tool("problem_accept", "Accept a design problem with a reason. The acceptance is kept in the drawing (with the date and the author from the settings) "
+      "and holds until the object changes.",
+      {"code": PROBLEM_CODE, "object": PROBLEM_OBJECT, "reason": STR}, ["code", "object", "reason"])
+def t_problem_accept(a):
+    return OCS.run("CIV_PROBLEEM_ACCEPTEER " + _kv(CODE=a["code"], OBJECT=a["object"], REDEN=a["reason"]))
 
 
 @tool("oi_view", "Set the view: preset (TOP, SWISO, SEISO, NEISO, NWISO, FRONT…), visual style (GOURAUDSHADED, FLATSHADED, WIREFRAME2D, HIDDENLINE…) and zoom to extents.",
