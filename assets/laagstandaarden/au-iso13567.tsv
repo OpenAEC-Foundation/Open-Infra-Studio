@@ -1,0 +1,283 @@
+#id	au-iso13567
+#name	Australia — AS 13567 / ISO 13567 (AEC (UK) profile, Uniclass 2015)
+#region	AU
+#source	https://shop.standards.ie/en-ie/standards/as-13567-2-1999-127916_saig_as_as_270349
+#source	https://www.bim.natspec.org/images/NATSPEC_Documents/NATSPEC_BIM_Reference_Schedule_v1.0_Sep_2011.pdf
+#source	https://thenbs.com/knowledge/the-adoption-of-uniclass-2015-in-australia
+#source	https://aecuk.wordpress.com/wp-content/uploads/2018/06/aecukprotocolforlayernaming-v4-1.pdf
+#status	B=Existing	N=	T=Temporary	V=ExistingToBeRemoved
+#element	G=M	S=M	T=T	A=H
+# AS 13567.2-1999 (= ISO 13567-2) in the profile NATSPEC refers to: the
+# AEC (UK) Protocol for Layer Naming v4.1 (BS 1192 field order, as TfNSW): Role-Classification-Presentation_Description.
+# Classification: Uniclass 2015 (Ss, Pr, SL) and the AEC (UK) Zz table.
+# Presentation M model, T text, H hatching, D dimensions, P paper.
+# BS 1192 has no status field: the status goes in front of the CamelCase
+# description (Existing…, Temporary…, ExistingToBeRemoved…; new work none).
+# No colours in BS 1192 / AEC (UK): empty colour and lineweight cells keep
+# the NLCS pen of the object; linetypes are ISO 128 dash patterns.
+group	name	layer	annotation	color	linetype	lineweight_mm	note
+*	*	Z-Zz_30_60-{element}_{status}Object			CONTINUOUS		Uniclass 2015 / AEC (UK) Zz: Zz_30_60
+ZZ	*	Z-Zz_20_10-{element}_Annotation					Uniclass 2015 / AEC (UK) Zz: Zz_20_10
+AL	*	Z-Zz_10-P_DrawingSheet					Uniclass 2015 / AEC (UK) Zz: Zz_10
+KG	*	G-Zz_50_10-{element}_{status}Boundary			ISO05W100		Uniclass 2015 / AEC (UK) Zz: Zz_50_10
+KL	*	E-Ss_75-{element}_{status}UtilityCable					Uniclass 2015 / AEC (UK) Zz: Ss_75
+KW	*	S-Ss_20-{element}_{status}Structure					Uniclass 2015 / AEC (UK) Zz: Ss_20
+MO	*	C-Ss_15_10-{element}_{status}EnvironmentalSurvey					Uniclass 2015 / AEC (UK) Zz: Ss_15_10
+OB	*	C-Ss_25_16_50-{element}_{status}BankProtection					Uniclass 2015 / AEC (UK) Zz: Ss_25_16_50
+OG	*	G-Zz_40-{element}_{status}Topography					Uniclass 2015 / AEC (UK) Zz: Zz_40
+RI	*	D-Ss_50-{element}_{status}Drainage					Uniclass 2015 / AEC (UK) Zz: Ss_50
+VH	*	D-Ss_30_14-{element}_{status}Paving					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VV	*	C-Ss_40_10-{element}_{status}WaterwaySign					Uniclass 2015 / AEC (UK) Zz: Ss_40_10
+VW	*	D-Ss_40_10_90-{element}_{status}TrafficSign					Uniclass 2015 / AEC (UK) Zz: Ss_40_10_90
+WH	*	D-Ss_50_70-{element}_{status}WaterManagement					Uniclass 2015 / AEC (UK) Zz: Ss_50_70
+BC	*	S-Ss_20-{element}_{status}ConcreteStructure					Uniclass 2015 / AEC (UK) Zz: Ss_20
+FC	*	S-Ss_20_05-{element}_{status}Foundation					Uniclass 2015 / AEC (UK) Zz: Ss_20_05
+GC	*	S-Ss_20_60-{element}_{status}EarthRetainingStructure					Uniclass 2015 / AEC (UK) Zz: Ss_20_60
+HC	*	S-Ss_20-{element}_{status}TimberStructure					Uniclass 2015 / AEC (UK) Zz: Ss_20
+HU	*	S-Ss_20_95-{element}_{status}TemporaryStructure					Uniclass 2015 / AEC (UK) Zz: Ss_20_95
+MC	*	S-Ss_20-{element}_{status}MechanicalStructure					Uniclass 2015 / AEC (UK) Zz: Ss_20
+SC	*	S-Ss_20-{element}_{status}SteelStructure					Uniclass 2015 / AEC (UK) Zz: Ss_20
+KC	*	S-Ss_20-{element}_{status}PlasticStructure					Uniclass 2015 / AEC (UK) Zz: Ss_20
+MW	*	S-Ss_20-{element}_{status}MasonryStructure					Uniclass 2015 / AEC (UK) Zz: Ss_20
+AM	*	D-Zz_35_10-{element}_{status}Alignment			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_10
+IW	*	E-Ss_75-{element}_{status}RoadInstallation					Uniclass 2015 / AEC (UK) Zz: Ss_75
+IV	*	E-Ss_75-{element}_{status}WaterwayInstallation					Uniclass 2015 / AEC (UK) Zz: Ss_75
+OV	*	E-Ss_70_80_25-{element}_{status}StreetLighting					Uniclass 2015 / AEC (UK) Zz: Ss_70_80_25
+BV	*	D-Ss_25_16_94-{element}_{status}VehicleRestraint					Uniclass 2015 / AEC (UK) Zz: Ss_25_16_94
+FV	*	L-Ss_45_55-{element}_{status}FaunaProvision					Uniclass 2015 / AEC (UK) Zz: Ss_45_55
+GK	*	S-Ss_20_60-{element}_{status}RetainingWall					Uniclass 2015 / AEC (UK) Zz: Ss_20_60
+GR	*	L-Ss_45_35-{element}_{status}Planting					Uniclass 2015 / AEC (UK) Zz: Ss_45_35
+GW	*	C-Ss_15_10-{element}_{status}Earthworks					Uniclass 2015 / AEC (UK) Zz: Ss_15_10
+IE	*	L-Ss_40_15-{element}_{status}StreetFurniture					Uniclass 2015 / AEC (UK) Zz: Ss_40_15
+RI	DWA*	D-Ss_50_35_08_30-{element}_{status}FoulSewer					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_30
+RI	DWA_RIOOLLEIDING*	D-Ss_50_35_08_30-{element}_{status}FoulSewer					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_30
+RI	DWA_TRANSPORTLEIDING*	D-Ss_50_35_08_30-{element}_{status}FoulSewerTrunk					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_30
+RI	DWA_PERCEELAANSLUITLEIDING*	D-Ss_50_35_08_30-{element}_{status}FoulSewerConnection					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_30
+RI	DWA_RIOOLPUT*	D-Ss_50_35_06-{element}_{status}FoulManhole					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_06
+RI	DWA_STROMINGSRICHTING	D-Zz_60_30-{element}_{status}FoulFlowDirection					Uniclass 2015 / AEC (UK) Zz: Zz_60_30
+RI	HWA*	D-Ss_50_35_08_85-{element}_{status}SurfaceWaterSewer					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_85
+RI	HWA_RIOOLLEIDING*	D-Ss_50_35_08_85-{element}_{status}SurfaceWaterSewer					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_85
+RI	HWA_TRANSPORTLEIDING*	D-Ss_50_35_08_85-{element}_{status}SurfaceWaterSewerTrunk					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_85
+RI	HWA_PERCEELAANSLUITLEIDING*	D-Ss_50_35_08_85-{element}_{status}SurfaceWaterConnection					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_85
+RI	HWA_KOLKAANSLUITLEIDING*	D-Ss_50_35_08_85-{element}_{status}GullyConnection					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_85
+RI	HWA_RIOOLPUT*	D-Ss_50_35_06-{element}_{status}SurfaceWaterManhole					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_06
+RI	HWA_KOLK*	D-Pr_65_52_24-{element}_{status}Gully					Uniclass 2015 / AEC (UK) Zz: Pr_65_52_24
+RI	HWA_GOOT*	D-Pr_65_52_24-{element}_{status}DrainageChannel					Uniclass 2015 / AEC (UK) Zz: Pr_65_52_24
+RI	HWA_STROMINGSRICHTING	D-Zz_60_30-{element}_{status}SurfaceWaterFlowDirection					Uniclass 2015 / AEC (UK) Zz: Zz_60_30
+RI	HWA_UITLAATCONSTRUCTIE	D-Ss_50_35_08_85-{element}_{status}Outfall					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_85
+RI	GWA*	D-Ss_50_35_08_15-{element}_{status}CombinedSewer					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_15
+RI	GWA_RIOOLLEIDING*	D-Ss_50_35_08_15-{element}_{status}CombinedSewer					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_15
+RI	GWA_TRANSPORTLEIDING*	D-Ss_50_35_08_15-{element}_{status}CombinedSewerTrunk					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_15
+RI	GWA_PERCEELAANSLUITLEIDING*	D-Ss_50_35_08_15-{element}_{status}CombinedSewerConnection					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_15
+RI	GWA_KOLKAANSLUITLEIDING*	D-Ss_50_35_08_15-{element}_{status}GullyConnection					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_08_15
+RI	GWA_RIOOLPUT*	D-Ss_50_35_06-{element}_{status}CombinedManhole					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_06
+RI	GWA_KOLK*	D-Pr_65_52_24-{element}_{status}Gully					Uniclass 2015 / AEC (UK) Zz: Pr_65_52_24
+RI	GWA_STROMINGSRICHTING	D-Zz_60_30-{element}_{status}CombinedFlowDirection					Uniclass 2015 / AEC (UK) Zz: Zz_60_30
+RI	ITR*	D-Ss_50_70_85-{element}_{status}InfiltrationSewer					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_85
+RI	ITR_RIOOLPUT*	D-Ss_50_35_06-{element}_{status}InfiltrationManhole					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_06
+RI	ITR_KOLK*	D-Pr_65_52_24-{element}_{status}InfiltrationGully					Uniclass 2015 / AEC (UK) Zz: Pr_65_52_24
+RI	ITR_STROMINGSRICHTING	D-Zz_60_30-{element}_{status}InfiltrationFlowDirection					Uniclass 2015 / AEC (UK) Zz: Zz_60_30
+RI	PERSLEIDING*	D-Ss_50_35_10-{element}_{status}RisingMain					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_10
+RI	PERSLEIDING_RIOOLPUT*	D-Ss_50_35_06-{element}_{status}RisingMainChamber					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_06
+RI	PERSLEIDING_GEMAAL*	D-Ss_50_35_10-{element}_{status}PumpingStation					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_10
+RI	PERSLEIDING_STROMINGSRICHTING	D-Zz_60_30-{element}_{status}RisingMainFlowDirection					Uniclass 2015 / AEC (UK) Zz: Zz_60_30
+RI	VACUUMLEIDING*	D-Ss_50_35_10-{element}_{status}VacuumSewer					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_10
+RI	VACUUMLEIDING_RIOOLPUT*	D-Ss_50_35_06-{element}_{status}VacuumSewerChamber					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_06
+RI	VACUUMLEIDING_GEMAAL*	D-Ss_50_35_10-{element}_{status}VacuumStation					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_10
+RI	DRAINAGE*	D-Ss_50_70_45-{element}_{status}LandDrain					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_45
+RI	DRAINAGE_PUT*	D-Ss_50_35_06-{element}_{status}LandDrainChamber					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_06
+RI	OVERIG*	D-Ss_50-{element}_{status}OtherSewer					Uniclass 2015 / AEC (UK) Zz: Ss_50
+RI	OVERIG_LOZEPUT	D-Ss_50_35_06-{element}_{status}DummyManhole					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_06
+RI	OVERIG_RIOOLPUT*	D-Ss_50_35_06-{element}_{status}OtherManhole					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_06
+RI	OVERIG_DUIKER*	D-Ss_50_70_80-{element}_{status}Culvert					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_80
+RI	RWZI*	D-Ss_50-{element}_{status}TreatmentPlantPipe					Uniclass 2015 / AEC (UK) Zz: Ss_50
+KL	ET*	E-Ss_70_30-{element}_{status}PowerCable					Uniclass 2015 / AEC (UK) Zz: Ss_70_30
+KL	ET_LS*	E-Ss_70_30_45_45-{element}_{status}LVCable					Uniclass 2015 / AEC (UK) Zz: Ss_70_30_45_45
+KL	ET_MS*	E-Ss_70_30_50_55-{element}_{status}MVCable					Uniclass 2015 / AEC (UK) Zz: Ss_70_30_50_55
+KL	ET_HS*	E-Ss_70_30_35_35-{element}_{status}HVCable					Uniclass 2015 / AEC (UK) Zz: Ss_70_30_35_35
+KL	ET_ZHS*	E-Ss_70_20-{element}_{status}EHVCable					Uniclass 2015 / AEC (UK) Zz: Ss_70_20
+KL	ET_MANTELBUIS*	E-Ss_70_30-{element}_{status}PowerDuct					Uniclass 2015 / AEC (UK) Zz: Ss_70_30
+KL	ET_HULPSTUK*	E-Ss_70_30-{element}_{status}PowerFitting					Uniclass 2015 / AEC (UK) Zz: Ss_70_30
+KL	ET_AARDING*	E-Ss_70_30-{element}_{status}Earthing					Uniclass 2015 / AEC (UK) Zz: Ss_70_30
+KL	DATA*	E-Ss_75_10_21_88-{element}_{status}TelecomCable					Uniclass 2015 / AEC (UK) Zz: Ss_75_10_21_88
+KL	DATA_MANTELBUIS*	E-Ss_75_10_21_88-{element}_{status}TelecomDuct					Uniclass 2015 / AEC (UK) Zz: Ss_75_10_21_88
+KL	DATA_HULPSTUK*	E-Ss_75_10_21_88-{element}_{status}TelecomFitting					Uniclass 2015 / AEC (UK) Zz: Ss_75_10_21_88
+KL	DATA_KAST*	E-Ss_75_10_21_88-{element}_{status}TelecomCabinet					Uniclass 2015 / AEC (UK) Zz: Ss_75_10_21_88
+KL	CCTV*	E-Ss_75-{element}_{status}CCTVCable					Uniclass 2015 / AEC (UK) Zz: Ss_75
+KL	GAS*	C-Ss_55_20_33_56-{element}_{status}GasMain					Uniclass 2015 / AEC (UK) Zz: Ss_55_20_33_56
+KL	GAS_LD*	C-Ss_55_20_33_56-{element}_{status}GasMainLowPressure					Uniclass 2015 / AEC (UK) Zz: Ss_55_20_33_56
+KL	GAS_HD*	C-Ss_55_20_33_56-{element}_{status}GasMainHighPressure					Uniclass 2015 / AEC (UK) Zz: Ss_55_20_33_56
+KL	GAS_MANTELBUIS*	C-Ss_55_20_33_56-{element}_{status}GasDuct					Uniclass 2015 / AEC (UK) Zz: Ss_55_20_33_56
+KL	GAS_HULPSTUK*	C-Ss_55_20_33_56-{element}_{status}GasFitting					Uniclass 2015 / AEC (UK) Zz: Ss_55_20_33_56
+KL	GAS_STATION*	C-Ss_55_20_33_56-{element}_{status}GasStation					Uniclass 2015 / AEC (UK) Zz: Ss_55_20_33_56
+KL	WATER*	C-Ss_55_70_95_50-{element}_{status}WaterMain					Uniclass 2015 / AEC (UK) Zz: Ss_55_70_95_50
+KL	WATER_HUISAANSLUITING*	C-Ss_55_70_95_50-{element}_{status}WaterServicePipe					Uniclass 2015 / AEC (UK) Zz: Ss_55_70_95_50
+KL	WATER_MANTELBUIS*	C-Ss_55_70_95_50-{element}_{status}WaterDuct					Uniclass 2015 / AEC (UK) Zz: Ss_55_70_95_50
+KL	WATER_HULPSTUK*	C-Ss_55_70_95_50-{element}_{status}WaterFitting					Uniclass 2015 / AEC (UK) Zz: Ss_55_70_95_50
+KL	WATER_PUT*	C-Ss_55_70_95_50-{element}_{status}WaterChamber					Uniclass 2015 / AEC (UK) Zz: Ss_55_70_95_50
+KL	WATER_BRANDLEIDING*	C-Ss_55_70_95_50-{element}_{status}FireMain					Uniclass 2015 / AEC (UK) Zz: Ss_55_70_95_50
+KL	WATER_BRANDLEIDING_BRANDHYDRANT	C-Ss_55_70_95_50-{element}_{status}FireHydrant					Uniclass 2015 / AEC (UK) Zz: Ss_55_70_95_50
+KL	WATER_BEREGENING*	L-Ss_55_70-{element}_{status}IrrigationPipe					Uniclass 2015 / AEC (UK) Zz: Ss_55_70
+KL	WARMTENET*	M-Ss_60_40_84_22-{element}_{status}DistrictHeatingPipe					Uniclass 2015 / AEC (UK) Zz: Ss_60_40_84_22
+KL	WARMTENET_AANSLUITLEIDING*	M-Ss_60_40_84_22-{element}_{status}DistrictHeatingConnection					Uniclass 2015 / AEC (UK) Zz: Ss_60_40_84_22
+KL	WARMTENET_HULPSTUK*	M-Ss_60_40_84_22-{element}_{status}DistrictHeatingFitting					Uniclass 2015 / AEC (UK) Zz: Ss_60_40_84_22
+KL	WARMTENET_MANTELBUIS*	M-Ss_60_40_84_22-{element}_{status}DistrictHeatingDuct					Uniclass 2015 / AEC (UK) Zz: Ss_60_40_84_22
+KL	CV*	M-Ss_60_40_84_22-{element}_{status}HeatingPipe					Uniclass 2015 / AEC (UK) Zz: Ss_60_40_84_22
+KL	KOUDENET*	M-Ss_60-{element}_{status}DistrictCoolingPipe					Uniclass 2015 / AEC (UK) Zz: Ss_60
+KL	OLIE*	C-Ss_55-{element}_{status}OilPipeline					Uniclass 2015 / AEC (UK) Zz: Ss_55
+KL	CHEMIE*	C-Ss_55-{element}_{status}ChemicalPipeline					Uniclass 2015 / AEC (UK) Zz: Ss_55
+KL	CHEMIE_HULPSTUK*	C-Ss_55-{element}_{status}ChemicalPipelineFitting					Uniclass 2015 / AEC (UK) Zz: Ss_55
+KL	CHEMIE_MANTELBUIS*	C-Ss_55-{element}_{status}ChemicalPipelineDuct					Uniclass 2015 / AEC (UK) Zz: Ss_55
+KL	BRANDSTOF*	C-Ss_55-{element}_{status}FuelPipeline					Uniclass 2015 / AEC (UK) Zz: Ss_55
+KL	MANTELBUIS*	E-Ss_70_30-{element}_{status}Duct					Uniclass 2015 / AEC (UK) Zz: Ss_70_30
+KL	SCHEMA*	E-Zz_20_80-{element}_Schematic					Uniclass 2015 / AEC (UK) Zz: Zz_20_80
+KL	TRACE*	C-Zz_50_95-{element}_{status}UtilityCorridor					Uniclass 2015 / AEC (UK) Zz: Zz_50_95
+KL	WEESLEIDING	E-Ss_75-{element}_{status}AbandonedCable					Uniclass 2015 / AEC (UK) Zz: Ss_75
+OV	KABEL*	E-Ss_70_80_25-{element}_{status}StreetLightingCable					Uniclass 2015 / AEC (UK) Zz: Ss_70_80_25
+OV	LICHTMAST	E-Ss_70_80_25-{element}_{status}LightingColumn					Uniclass 2015 / AEC (UK) Zz: Ss_70_80_25
+OV	ARMATUUR*	E-Ss_70_80_25-{element}_{status}Luminaire					Uniclass 2015 / AEC (UK) Zz: Ss_70_80_25
+OV	KAST*	E-Ss_70_80_25-{element}_{status}LightingCabinet					Uniclass 2015 / AEC (UK) Zz: Ss_70_80_25
+VH	GESLOTENVERHARDING*	D-Ss_30_14_05-{element}_{status}AsphaltPaving					Uniclass 2015 / AEC (UK) Zz: Ss_30_14_05
+VH	GESLOTENVERHARDING_BETON*	D-Ss_30_14-{element}_{status}ConcretePaving					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VH	OPENVERHARDING*	D-Ss_30_14-{element}_{status}BlockPaving					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VH	HALFVERHARDING*	D-Ss_30_14-{element}_{status}SemiPaved					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VH	ONVERHARD*	D-Ss_30_14-{element}_{status}Unpaved					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VH	KANTOPSLUITING*	D-Ss_30_60_45-{element}_{status}Kerb					Uniclass 2015 / AEC (UK) Zz: Ss_30_60_45
+VH	KANTVERHARDING*	D-Ss_30_14-{element}_{status}PavingEdge					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VH	GOOT*	D-Ss_30_75-{element}_{status}Gutter					Uniclass 2015 / AEC (UK) Zz: Ss_30_75
+VH	FUNDERING*	D-Ss_30_14-{element}_{status}PavementBase					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VH	DREMPEL*	D-Ss_30_14-{element}_{status}SpeedHump					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VH	VERKANTING	D-Zz_35_10_80-{element}_{status}SuperElevation					Uniclass 2015 / AEC (UK) Zz: Zz_35_10_80
+VH	BEDRIJFSVLOERPLAAT*	D-Ss_30_14-{element}_{status}Slab					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VH	SPECIAAL_SPORT*	L-Ss_30_14-{element}_{status}SportsSurface					Uniclass 2015 / AEC (UK) Zz: Ss_30_14
+VW	MARKERING*	D-Ss_40_10_90-{element}_{status}RoadMarking					Uniclass 2015 / AEC (UK) Zz: Ss_40_10_90
+VW	BEWEGWIJZERING*	D-Ss_40_10_90-{element}_{status}DirectionSign					Uniclass 2015 / AEC (UK) Zz: Ss_40_10_90
+VW	VERKEERSTEKEN*	D-Ss_40_10_90-{element}_{status}TrafficSign					Uniclass 2015 / AEC (UK) Zz: Ss_40_10_90
+VW	AFZETTING*	D-Ss_25_36-{element}_{status}TrafficBarrier					Uniclass 2015 / AEC (UK) Zz: Ss_25_36
+VV	MARKERING*	C-Ss_40_10-{element}_{status}WaterwayMarking					Uniclass 2015 / AEC (UK) Zz: Ss_40_10
+AM	AS	D-Zz_35_10_40-{element}_{status}HorizontalAlignment			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_10_40
+AM	AS_WEG*	D-Zz_35_20-{element}_{status}RoadCentreline			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_20
+AM	AS_PAD*	D-Zz_35_20-{element}_{status}PathCentreline			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_20
+AM	AS_SPOOR*	C-Zz_35_20-{element}_{status}RailCentreline			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_20
+AM	AS_WATERGANG*	C-Zz_35_20-{element}_{status}WatercourseCentreline			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_20
+AM	AS_WATERWEG*	C-Zz_35_20-{element}_{status}WaterwayCentreline			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_20
+AM	AS_DIJK*	C-Zz_35_20-{element}_{status}EmbankmentCentreline			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_20
+AM	AS_KUNSTWERK*	S-Zz_35_20-{element}_{status}StructureCentreline			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_20
+AM	KILOMETRERING	D-Zz_35_10_40-{element}_{status}Chainage			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_10_40
+AM	TANGENTPUNT	D-Zz_35_10_40-{element}_{status}TangentPoint			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_10_40
+AM	STRING*	C-Zz_35_10-{element}_{status}String			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_10
+OG	HOOGTELIJN	G-Zz_40_15-{element}_{status}Contour					Uniclass 2015 / AEC (UK) Zz: Zz_40_15
+OG	HOOGTELIJN_MINOR	G-Zz_40_15_55-{element}_{status}MinorContour					Uniclass 2015 / AEC (UK) Zz: Zz_40_15_55
+OG	HOOGTELIJN_MAJOR	G-Zz_40_15_50-{element}_{status}MajorContour					Uniclass 2015 / AEC (UK) Zz: Zz_40_15_50
+OG	HOOGTEPUNT	G-Zz_40_50-{element}_{status}LevelIndicator					Uniclass 2015 / AEC (UK) Zz: Zz_40_50
+OG	TRIANGULATIE	G-Zz_40-{element}_{status}GroundModelTriangle					Uniclass 2015 / AEC (UK) Zz: Zz_40
+OG	DTM	G-Zz_40-{element}_{status}TerrainModel					Uniclass 2015 / AEC (UK) Zz: Zz_40
+OG	BREUKLIJN	G-Zz_40-{element}_{status}Breakline					Uniclass 2015 / AEC (UK) Zz: Zz_40
+OG	GRENS	G-Zz_50_10-{element}_{status}SurveyBoundary					Uniclass 2015 / AEC (UK) Zz: Zz_50_10
+OG	BEBOUWING*	G-Zz_50_30_30-{element}_{status}BuildingOutline					Uniclass 2015 / AEC (UK) Zz: Zz_50_30_30
+OG	BEBOUWING_STRAATNAAM	G-Zz_20_10_45-{element}_{status}StreetName					Uniclass 2015 / AEC (UK) Zz: Zz_20_10_45
+OG	BEBOUWING_HUISNUMMER	G-Zz_20_10_45-{element}_{status}HouseNumber					Uniclass 2015 / AEC (UK) Zz: Zz_20_10_45
+OG	WEG*	G-SL_80_35_13-{element}_{status}Carriageway					Uniclass 2015 / AEC (UK) Zz: SL_80_35_13
+OG	WEG_VOETPAD*	G-SL_80_40_60-{element}_{status}Path					Uniclass 2015 / AEC (UK) Zz: SL_80_40_60
+OG	WEG_RIJWIELPAD*	G-SL_80_35_20-{element}_{status}CycleLane					Uniclass 2015 / AEC (UK) Zz: SL_80_35_20
+OG	WEG_PARKEERPLAATS*	G-SL_80_35_13-{element}_{status}Parking					Uniclass 2015 / AEC (UK) Zz: SL_80_35_13
+OG	WEG_SPOORBAAN	G-Ss_80_70_70-{element}_{status}RailTrack					Uniclass 2015 / AEC (UK) Zz: Ss_80_70_70
+OG	SPOORBAAN	G-Ss_80_70_70-{element}_{status}RailTrack					Uniclass 2015 / AEC (UK) Zz: Ss_80_70_70
+OG	WATER*	G-Zz_40-{element}_{status}WaterEdge					Uniclass 2015 / AEC (UK) Zz: Zz_40
+OG	GREPPEL	G-Ss_50_70_45-{element}_{status}Ditch					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_45
+OG	TERREIN*	G-Zz_50_20_30-{element}_{status}LandUse					Uniclass 2015 / AEC (UK) Zz: Zz_50_20_30
+OG	TOPOGRAFIE*	G-Zz_40-{element}_{status}TopographicFeature					Uniclass 2015 / AEC (UK) Zz: Zz_40
+OG	ZONE*	G-Zz_50_95-{element}_{status}Zone					Uniclass 2015 / AEC (UK) Zz: Zz_50_95
+OG	KADASTRAAL	G-Zz_50_60-{element}_{status}Parcel					Uniclass 2015 / AEC (UK) Zz: Zz_50_60
+OG	GRID	G-Zz_35_40-{element}_Gridline					Uniclass 2015 / AEC (UK) Zz: Zz_35_40
+OG	COORDINAAT	G-Zz_35_40_45-{element}_GridLabel					Uniclass 2015 / AEC (UK) Zz: Zz_35_40_45
+OG	HULPLIJN	G-Zz_90_20-{element}_ConstructionLine			ISO02W100		Uniclass 2015 / AEC (UK) Zz: Zz_90_20
+OG	GRONDGEBRUIK*	G-Zz_50_20_30-{element}_{status}LandUse					Uniclass 2015 / AEC (UK) Zz: Zz_50_20_30
+KG	GRENS_PERCEEL	G-Zz_50_60-{element}_{status}Parcel			ISO05W100		Uniclass 2015 / AEC (UK) Zz: Zz_50_60
+KG	KADASTRAAL*	G-Zz_50_60-{element}_{status}Parcel			ISO05W100		Uniclass 2015 / AEC (UK) Zz: Zz_50_60
+KG	GRONDVERWERVING*	G-Zz_50_10-{element}_{status}LandAcquisition			ISO05W100		Uniclass 2015 / AEC (UK) Zz: Zz_50_10
+KG	GRONDEIGENDOM*	G-Zz_50_50-{element}_{status}Ownership			ISO05W100		Uniclass 2015 / AEC (UK) Zz: Zz_50_50
+KG	BEHEERGRENS*	G-Zz_50_10-{element}_{status}ManagementBoundary			ISO05W100		Uniclass 2015 / AEC (UK) Zz: Zz_50_10
+KG	ONDERHOUDGRENS*	G-Zz_50_10-{element}_{status}MaintenanceBoundary			ISO05W100		Uniclass 2015 / AEC (UK) Zz: Zz_50_10
+GW	TALUD*	C-Zz_40_20-{element}_{status}Slope					Uniclass 2015 / AEC (UK) Zz: Zz_40_20
+GW	TALUD_KRUIN	C-Zz_40_20-{element}_{status}TopOfSlope					Uniclass 2015 / AEC (UK) Zz: Zz_40_20
+GW	TALUD_TEEN	C-Zz_40_20-{element}_{status}ToeOfSlope					Uniclass 2015 / AEC (UK) Zz: Zz_40_20
+GW	TALUDARCERING*	C-Zz_40_20-{element}_{status}SlopeHatching					Uniclass 2015 / AEC (UK) Zz: Zz_40_20
+GW	GRONDWERKLIJN*	C-Zz_40_20-{element}_{status}EarthworksLine					Uniclass 2015 / AEC (UK) Zz: Zz_40_20
+GW	DIJK*	C-Ss_15_10_30_27-{element}_{status}Embankment					Uniclass 2015 / AEC (UK) Zz: Ss_15_10_30_27
+GW	DIJK_KRUIN	C-Zz_40_20-{element}_{status}EmbankmentCrest					Uniclass 2015 / AEC (UK) Zz: Zz_40_20
+GW	DIJK_TEEN	C-Zz_40_20-{element}_{status}EmbankmentToe					Uniclass 2015 / AEC (UK) Zz: Zz_40_20
+GW	WAL*	C-Ss_15_10_30_27-{element}_{status}Bund					Uniclass 2015 / AEC (UK) Zz: Ss_15_10_30_27
+GW	OPHOGING*	C-Ss_15_10_30_27-{element}_{status}Fill					Uniclass 2015 / AEC (UK) Zz: Ss_15_10_30_27
+GW	ONTGRAVINGSVAK*	C-Ss_15_10_30-{element}_{status}Excavation					Uniclass 2015 / AEC (UK) Zz: Ss_15_10_30
+GW	CUNET*	C-Ss_15_10_30-{element}_{status}Formation					Uniclass 2015 / AEC (UK) Zz: Ss_15_10_30
+GW	CUNET_BODEM	C-Ss_15_10_30-{element}_{status}FormationBottom					Uniclass 2015 / AEC (UK) Zz: Ss_15_10_30
+GW	SLEUF*	C-Ss_15_10_30-{element}_{status}Trench					Uniclass 2015 / AEC (UK) Zz: Ss_15_10_30
+GW	WATERGANG*	C-Ss_50_70_45-{element}_{status}Ditch					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_45
+GW	WATERGANG_SLOOT*	C-Ss_50_70_45-{element}_{status}Ditch					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_45
+GW	WATERGANG_SLOOT_BODEM	C-Ss_50_70_45-{element}_{status}DitchBottom					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_45
+GW	WATERGANG_BODEM	C-Ss_50_70_45-{element}_{status}DitchBottom					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_45
+GW	WATERGANG_SLOOT_INSTEEK	C-Ss_50_70_45-{element}_{status}DitchTopOfBank					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_45
+GW	WATERGANG_INSTEEK	C-Ss_50_70_45-{element}_{status}DitchTopOfBank					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_45
+GW	WATERGANG_WATERLIJN	C-Ss_50_70_45-{element}_{status}DitchWaterLine					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_45
+GW	HOOGTE*	C-Zz_60_45-{element}_{status}Level					Uniclass 2015 / AEC (UK) Zz: Zz_60_45
+GW	HOOGTE_AFWERKHOOGTE	C-Zz_60_45_70-{element}_{status}FinishedLevel					Uniclass 2015 / AEC (UK) Zz: Zz_60_45_70
+GW	MAAIVELD	C-Zz_60_45_60-{element}_{status}OriginalGroundLevel					Uniclass 2015 / AEC (UK) Zz: Zz_60_45_60
+GW	GROND*	C-Ss_15_10-{element}_{status}SoilMaterial					Uniclass 2015 / AEC (UK) Zz: Ss_15_10
+GR	BOOM*	L-Ss_45_35_30-{element}_{status}Tree					Uniclass 2015 / AEC (UK) Zz: Ss_45_35_30
+GR	BOMENRIJ	L-Ss_45_35_30-{element}_{status}TreeLine					Uniclass 2015 / AEC (UK) Zz: Ss_45_35_30
+GR	BOS*	L-Ss_45_35_30-{element}_{status}Woodland					Uniclass 2015 / AEC (UK) Zz: Ss_45_35_30
+GR	HOUTOPSTAND*	L-Ss_45_35_30-{element}_{status}Woodland					Uniclass 2015 / AEC (UK) Zz: Ss_45_35_30
+GR	HAAG*	L-Ss_45_35_30-{element}_{status}Hedge					Uniclass 2015 / AEC (UK) Zz: Ss_45_35_30
+GR	GRAS*	L-Ss_45_35_45-{element}_{status}Grass					Uniclass 2015 / AEC (UK) Zz: Ss_45_35_45
+GR	BEPLANTING*	L-Ss_45_35_05-{element}_{status}Planting					Uniclass 2015 / AEC (UK) Zz: Ss_45_35_05
+GR	HEESTER*	L-Ss_45_35_05-{element}_{status}Shrub					Uniclass 2015 / AEC (UK) Zz: Ss_45_35_05
+GR	STRUIK*	L-Ss_45_35_05-{element}_{status}Shrub					Uniclass 2015 / AEC (UK) Zz: Ss_45_35_05
+KW	KUNSTWERK_BRUG*	S-Ss_20_50-{element}_{status}Bridge					Uniclass 2015 / AEC (UK) Zz: Ss_20_50
+KW	KUNSTWERK_VIADUCT*	S-Ss_20_50-{element}_{status}Viaduct					Uniclass 2015 / AEC (UK) Zz: Ss_20_50
+KW	KUNSTWERK_TUNNEL*	S-Ss_37-{element}_{status}Tunnel					Uniclass 2015 / AEC (UK) Zz: Ss_37
+KW	KUNSTWERK_DUIKER*	S-Ss_50_70_80-{element}_{status}Culvert					Uniclass 2015 / AEC (UK) Zz: Ss_50_70_80
+KW	KUNSTWERK_GEMAAL*	S-Ss_50_35_10-{element}_{status}PumpingStation					Uniclass 2015 / AEC (UK) Zz: Ss_50_35_10
+KW	ZICHTRUIMTE	D-Zz_50_95-{element}_{status}SightTriangle					Uniclass 2015 / AEC (UK) Zz: Zz_50_95
+KW	PROFIELVRIJERUIMTE	D-Zz_50_90-{element}_{status}ClearanceEnvelope					Uniclass 2015 / AEC (UK) Zz: Zz_50_90
+GK	BESCHOEIING*	S-Ss_25_16_50-{element}_{status}BankRevetment					Uniclass 2015 / AEC (UK) Zz: Ss_25_16_50
+BV	OBSTAKELBEVEILIGER*	D-Ss_25_16_94-{element}_{status}CrashCushion					Uniclass 2015 / AEC (UK) Zz: Ss_25_16_94
+IE	TERREINAFSCHEIDING*	L-Ss_25_14-{element}_{status}Fence					Uniclass 2015 / AEC (UK) Zz: Ss_25_14
+MO	ONDERZOEK*	C-Ss_15_10-{element}_{status}GroundInvestigation					Uniclass 2015 / AEC (UK) Zz: Ss_15_10
+MO	ONDERZOEK_SONDERING	C-Ss_15_10-{element}_{status}ConePenetrationTest					Uniclass 2015 / AEC (UK) Zz: Ss_15_10
+MO	ONDERZOEK_BORING	C-Ss_15_10-{element}_{status}Borehole					Uniclass 2015 / AEC (UK) Zz: Ss_15_10
+MO	BODEM*	C-Ss_15_10_35-{element}_{status}SoilContamination					Uniclass 2015 / AEC (UK) Zz: Ss_15_10_35
+MO	ARCHEOLOGIE*	C-Zz_50_95-{element}_{status}Archaeology					Uniclass 2015 / AEC (UK) Zz: Zz_50_95
+AL	TEKENBLAD*	Z-Zz_10_20-P_DrawingFrame					Uniclass 2015 / AEC (UK) Zz: Zz_10_20
+AL	TEKENBLAD_KADER*	Z-Zz_10_20_25-P_DrawingFrameOutline					Uniclass 2015 / AEC (UK) Zz: Zz_10_20_25
+AL	TEKENBLAD_DEELKADER	Z-Zz_10_20_25-P_DrawingFrameOutline					Uniclass 2015 / AEC (UK) Zz: Zz_10_20_25
+AL	TEKENBLAD_TITELBLOK*	Z-Zz_10_20_85-P_TitleBlock					Uniclass 2015 / AEC (UK) Zz: Zz_10_20_85
+AL	TEKENBLAD_VIEWPORT	Z-Zz_10_20_95-P_Viewport					Uniclass 2015 / AEC (UK) Zz: Zz_10_20_95
+AL	TEKENBLAD_SCHAALBALK	Z-Zz_20_80_10-P_Barscale					Uniclass 2015 / AEC (UK) Zz: Zz_20_80_10
+AL	TEKENBLAD_VERKLARING	Z-Zz_20_80_50-P_Legend					Uniclass 2015 / AEC (UK) Zz: Zz_20_80_50
+AL	TEKENBLAD_WIJZIGINGSBLOK	Z-Zz_10_70-P_Revision					Uniclass 2015 / AEC (UK) Zz: Zz_10_70
+AL	TEKENBLAD_HULPLIJN	Z-Zz_90_20-P_ConstructionLine					Uniclass 2015 / AEC (UK) Zz: Zz_90_20
+AL	TEKENBLADGRENS	Z-Zz_10_20_25-P_SheetBoundary					Uniclass 2015 / AEC (UK) Zz: Zz_10_20_25
+AL	LEGENDA	Z-Zz_20_80_50-P_Legend					Uniclass 2015 / AEC (UK) Zz: Zz_20_80_50
+AL	ORIENTATIE	Z-Zz_20_80_55-P_NorthPoint					Uniclass 2015 / AEC (UK) Zz: Zz_20_80_55
+AL	AANKLEDING	Z-Zz_10-P_SheetDressing					Uniclass 2015 / AEC (UK) Zz: Zz_10
+AL	VERWIJZING*	Z-Zz_20_80_15-P_CrossReference					Uniclass 2015 / AEC (UK) Zz: Zz_20_80_15
+AL	VERWIJZING_DOORSNEDE	Z-Zz_60_50_80-P_SectionMark					Uniclass 2015 / AEC (UK) Zz: Zz_60_50_80
+AL	BLADVERWIJZING*	Z-Zz_60_55-P_MatchLine					Uniclass 2015 / AEC (UK) Zz: Zz_60_55
+AL	PROFIELBALK	Z-Zz_30_90_60-P_ProfileBand					Uniclass 2015 / AEC (UK) Zz: Zz_30_90_60
+AL	COORDINAATPUNT	Z-Zz_35_40_45-P_GridLabel					Uniclass 2015 / AEC (UK) Zz: Zz_35_40_45
+AL	REFERENTIE	Z-Zz_30_30-P_ExternalReference					Uniclass 2015 / AEC (UK) Zz: Zz_30_30
+ZZ	(T*	Z-Zz_20_10_90-T_Text					Uniclass 2015 / AEC (UK) Zz: Zz_20_10_90
+ZZ	(M)	Z-Zz_20_20-D_Dimension					Uniclass 2015 / AEC (UK) Zz: Zz_20_20
+ZZ	GRENS*	Z-Zz_50_10-{element}_{status}Boundary					Uniclass 2015 / AEC (UK) Zz: Zz_50_10
+ZZ	GRENS_WERK	Z-Zz_50_10_10-{element}_{status}WorksBoundary					Uniclass 2015 / AEC (UK) Zz: Zz_50_10_10
+ZZ	HULPLIJN	Z-Zz_90_20-{element}_ConstructionLine			ISO02W100		Uniclass 2015 / AEC (UK) Zz: Zz_90_20
+ZZ	CONSTRUCTIELIJN	Z-Zz_90_20-{element}_ConstructionLine			ISO02W100		Uniclass 2015 / AEC (UK) Zz: Zz_90_20
+ZZ	NAP	Z-Zz_60_45_20-{element}_Datum					Uniclass 2015 / AEC (UK) Zz: Zz_60_45_20
+ZZ	PEIL*	Z-Zz_60_45-{element}_{status}Level					Uniclass 2015 / AEC (UK) Zz: Zz_60_45
+ZZ	HOOGTELABEL*	Z-Zz_60_45-{element}_{status}LevelLabel					Uniclass 2015 / AEC (UK) Zz: Zz_60_45
+ZZ	DETAIL*	Z-Zz_60_20-{element}_DetailCallUp					Uniclass 2015 / AEC (UK) Zz: Zz_60_20
+ZZ	AFBREEKLIJN	Z-Zz_60_50_10-{element}_BreakMark					Uniclass 2015 / AEC (UK) Zz: Zz_60_50_10
+ZZ	AANPIJLING	Z-Zz_20_10_50-{element}_Leader					Uniclass 2015 / AEC (UK) Zz: Zz_20_10_50
+ZZ	HARTLIJN	Z-Zz_35_20-{element}_{status}Centreline			ISO04W100		Uniclass 2015 / AEC (UK) Zz: Zz_35_20
+ZZ	STRAMIENLIJN	Z-Zz_35_40-{element}_Gridline					Uniclass 2015 / AEC (UK) Zz: Zz_35_40

@@ -310,12 +310,24 @@ pub fn ensure_nlcs_layer(spec: &crate::nlcs::LayerSpec) {
         }),
         linetype,
         lineweight: spec.lineweight.map(LineWeight::from_value),
-        description: Some(format!("NLCS object {}", spec.object_id)),
+        description: Some(layer_description(spec)),
         ..Default::default()
     };
     let made = matches!(request(PluginRequest::AddLayer(config(linetype.clone()))), Ok(PluginResponse::OptHandle(Some(_))));
     if !made && linetype.is_some() {
         let _ = request(PluginRequest::AddLayer(config(None)));
+    }
+}
+
+/// The layer's description: its NLCS object, also under another standard.
+fn layer_description(spec: &crate::nlcs::LayerSpec) -> String {
+    let standard = crate::laagstandaard::current();
+    if standard.is_nlcs() {
+        return format!("NLCS object {}", spec.object_id);
+    }
+    match crate::nlcs::object(spec.object_id) {
+        Some(o) => format!("{} — Open Infra {} {} (NLCS {})", standard.name, o.group, o.name, o.id),
+        None => standard.name.clone(),
     }
 }
 
@@ -326,7 +338,14 @@ fn ensure_linetype(tab: u64, name: &str) -> Option<String> {
     if !shared().lock().unwrap().made.insert((tab, format!("LT:{name}"))) {
         return Some(name.to_string());
     }
-    let description = if crate::nlcs::linetype_is_complex(name) { format!("NLCS {name} (vereenvoudigd, zonder symbolen)") } else { format!("NLCS {name}") };
+    let generic = crate::laagstandaard::LINETYPES.lines().skip(1).any(|l| l.split('\t').next().is_some_and(|n| n.eq_ignore_ascii_case(name)));
+    let description = if crate::nlcs::linetype_is_complex(name) {
+        format!("NLCS {name} (vereenvoudigd, zonder symbolen)")
+    } else if generic {
+        name.to_string()
+    } else {
+        format!("NLCS {name}")
+    };
     let op = TableOperation::LinetypeCreate { name: name.to_string(), description, pattern };
     match request(PluginRequest::TableOperation { operation: op }) {
         Ok(PluginResponse::TableResult(Ok(_))) => Some(name.to_string()),

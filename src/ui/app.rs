@@ -2115,6 +2115,10 @@ impl App {
         if self.controle.job.is_some() {
             return;
         }
+        if let Some(note) = crate::laagstandaard::nlcs_check_note() {
+            self.message = Some((false, note));
+            return;
+        }
         let opt = nlcs_check::Options {
             scale: self.controle.scale,
             unit_factor: bridge::target().map(|t| t.unit_factor).unwrap_or(1.0),
@@ -3005,8 +3009,11 @@ impl eframe::App for App {
             egui::ScrollArea::vertical().scroll_source(egui::scroll_area::ScrollSource::MOUSE_WHEEL).auto_shrink([false, false]).show(ui, |ui| {
                 ui.set_max_width(ui.available_width() - 6.0);
                 let project_region=bridge::site().map(|s|s.region).unwrap_or(crate::localisation::current());
-                if project_region!=crate::localisation::Region::Netherlands && matches!(self.tab,Tab::Civiel|Tab::Library|Tab::Controle|Tab::Hoeveelheden) {
-                    ui.colored_label(WARN,crate::lang::tr("De civiele ontwerptools en infra-bibliotheek gebruiken momenteel NLCS-lagen. Voor dit project is een afzonderlijke mapping naar de opleverstandaard nodig.","Civil design tools and the infrastructure library currently use NLCS layers. This project needs a separate mapping to its delivery standard."));
+                let standard = crate::laagstandaard::current();
+                if self.tab == Tab::Controle && !standard.is_nlcs() {
+                    ui.colored_label(WARN, crate::laagstandaard::nlcs_check_note().unwrap_or_default());
+                } else if project_region!=crate::localisation::Region::Netherlands && standard.is_nlcs() && matches!(self.tab,Tab::Civiel|Tab::Library|Tab::Hoeveelheden) {
+                    ui.colored_label(WARN,crate::lang::tr("Open Infra tekent op NLCS-lagen, de actieve laagstandaard. Kies bij Localisatie een andere laagstandaard (of GIS_LAAGSTANDAARD).","Open Infra draws on NLCS layers, the active layer standard. Choose another layer standard under Localisation (or GIS_LAAGSTANDAARD)."));
                 }
                 match self.tab {
                     Tab::Location => self.location(ui),

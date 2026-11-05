@@ -52,6 +52,15 @@ class InfraMcpTest(unittest.TestCase):
             mcp.t_3d_import({'path': '/data/brug.stl', 'place': [105000, 425000, 1.5], 'scale': 0.001, 'rotation': 90})
             self.assertEqual(run.call_args.args[0], 'CIV_3D_IMPORT /data/brug.stl PLAATS=105000,425000,1.5 SCHAAL=0.001 ROTATIE=90')
 
+    def test_layer_standard_show_and_set(self):
+        with patch.object(mcp.OCS, 'run', return_value={'ok': True}) as run:
+            mcp.t_layer_standard({})
+            self.assertEqual(run.call_args.args[0], 'GIS_LAAGSTANDAARD')
+            mcp.t_layer_standard({'id': 'ncs-us'})
+            self.assertEqual(run.call_args.args[0], 'GIS_LAAGSTANDAARD ncs-us')
+            with self.assertRaises(ValueError):
+                mcp.t_layer_standard({'id': 'nlcs ID=x'})
+
     def test_service_country_filter_is_explicit(self):
         with patch.object(mcp.OCS, 'run', return_value={'ok':True}) as run:
             mcp.t_services({'country':'US;GLOBAL','query':'elevation'})

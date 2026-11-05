@@ -407,7 +407,7 @@ pub fn track(opt: &super::CivielOptions, req: RailRequest) -> Result<String, Str
         ("verkanting_mm".to_string(), cant_text),
         ("spoorafstand_m".to_string(), format!("{distance:.3}")),
     ];
-    let drawn = !src_layer.contains("-AM-AS_SPOOR");
+    let drawn = !crate::nlcs::as_nlcs(&src_layer).contains("-AM-AS_SPOOR");
     as_profiel::draw_axis(&ctx, &al, &axis, &axis_t, drawn, &data, &mut out)?;
     // The cant of each curve beside it, on the outside.
     for c in &plan.curves {

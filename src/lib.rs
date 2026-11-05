@@ -31,6 +31,7 @@ pub mod library;
 pub mod riolering;
 pub mod bgt_mutatie;
 pub mod planning_commands;
+pub mod laagstandaard;
 pub mod nlcs;
 pub mod nlcs_check;
 pub mod tekenblad;
@@ -533,6 +534,11 @@ fn nlcs_command(host: &mut dyn HostApi, verb: &str) {
             let t = bridge::target().ok_or("geen tekening actief")?;
             let doc = bridge::snapshot()?;
             let opt = nlcs_check::Options { unit_factor: t.unit_factor, layer_props: !bridge::partial(), ..Default::default() };
+            if verb != "GIS_HOEVEELHEDEN" {
+                if let Some(note) = laagstandaard::nlcs_check_note() {
+                    return Ok(note);
+                }
+            }
             match verb.as_str() {
                 "GIS_NLCS_HERSTEL" => {
                     let r = nlcs_check::check(&doc, &opt);
@@ -1262,6 +1268,22 @@ impl BuiltinPlugin for OpenInfra {
                 nlcs_command(host, v);
             }
             "GIS_HOEVEELHEDEN_TABEL" => host.start_interactive(Box::new(TableCmd)),
+            "GIS_LAAGSTANDAARD" | "GIS_LAYER_STANDARD" => {
+                // `GIS_LAAGSTANDAARD [<id>]`: show the layer standards, or switch.
+                let arg = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim()).unwrap_or("");
+                match laagstandaard::command(arg) {
+                    Ok(m) => {
+                        for line in m.lines() {
+                            host.push_info(&format!("[Open Infra] {line}"));
+                        }
+                        bridge::reply(true, &m);
+                    }
+                    Err(e) => {
+                        host.push_error(&format!("[Open Infra] GIS_LAAGSTANDAARD: {e}"));
+                        bridge::reply(false, &e);
+                    }
+                }
+            }
             "GIS_BGT_MUTATIE" => mutation_command(host, cmd),
             "GIS_IFC" => ifc_command(host, cmd),
             "GIS_NLCSPP_IMPORT" | "GIS_NLCSPP_EXPORT" | "GIS_NLCSPP_CONTROLE" => nlcspp_command(host, &verb, cmd),
@@ -1420,6 +1442,7 @@ impl BuiltinPlugin for OpenInfra {
                  GIS_SITE <lon> <lat> [b] [h] [EPSG:code] [RELATIEF] [naam] | GIS_SITE RD <x> <y> [b] [h] [RELATIEF] [naam]; \
                  diensten / services: GIS_SERVICES | GIS_DIENSTEN (venster) of [ZOEK=<tekst>] [CATEGORIE=kadaster] [TYPE=WMS|WFS|XYZ] [HIER | LON= LAT=] [LIMIET=50], \
                  GIS_SERVICE_LOAD | GIS_DIENST_LADEN DIENST=<id> [LAAG=<laag>] [RESOLUTIE=0.25] [LIMIET=5000]; \
+                 laagstandaard / layer standard: GIS_LAAGSTANDAARD | GIS_LAYER_STANDARD [nlcs|ncs-us|uk-iso13567|au-iso13567|iso13567|<eigen id>]; \
                  NLCS: GIS_NLCS_CONTROLE, GIS_NLCS_RAPPORT, GIS_NLCS_HERSTEL, GIS_HOEVEELHEDEN, GIS_HOEVEELHEDEN_CSV, GIS_HOEVEELHEDEN_TABEL, GIS_BGT_MUTATIE [BRONHOUDER=G0505] [GEREALISEERD] [SELECTIE]; \
                  IFC 4x3: GIS_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee]; \
                  AHN: GIS_AHN (venster), GIS_HOOGTEPUNTEN, GIS_HOOGTELIJNEN, GIS_PROFIEL, GIS_PUNTENWOLK; \

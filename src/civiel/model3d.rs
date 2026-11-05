@@ -1412,13 +1412,15 @@ pub fn see_through(pct: f64, all: bool) -> Result<String, String> {
     let doc = crate::bridge::snapshot()?;
     let t = if pct <= 0.0 { Transparency::ByLayer } else { Transparency::from_percent(pct.min(95.0) / 100.0) };
     let mut changed = Vec::new();
+    let mut memo = crate::nlcs::LayerMemo::default();
     for e in doc.model_space_entities() {
         // Meshes only, and none the host would refuse back (fewer than three corners).
         if !matches!(e, EntityType::Mesh(m) if m.vertices.len() >= 3 && !m.faces.is_empty()) {
             continue;
         }
         let l = e.common().layer.as_str();
-        if l.contains("-KL-") || l.contains("-MO-") || (!all && l.contains("BEBOUWING")) {
+        let building = l.contains("BEBOUWING") || memo.other(l).is_some_and(|(_, o)| o.name.starts_with("BEBOUWING"));
+        if memo.is(l, "KL", None, None) || memo.is(l, "MO", None, None) || (!all && building) {
             continue;
         }
         if e.common().transparency != t {

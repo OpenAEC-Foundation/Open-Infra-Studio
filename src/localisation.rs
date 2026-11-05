@@ -44,16 +44,16 @@ impl Region {
         match self {
             Self::Netherlands => "NLCS",
             Self::UnitedStates => crate::lang::tr(
-                "NCS / A/E/C / State DOT — projectspecifiek",
-                "NCS / A/E/C / State DOT — project-specific",
+                "NCS (standaard-laagstandaard); A/E/C of State DOT projectspecifiek",
+                "NCS (default layer standard); A/E/C or State DOT project-specific",
             ),
-            Self::International => crate::lang::tr("Projectspecifiek", "Project-specific"),
+            Self::International => crate::lang::tr("ISO 13567 (standaard-laagstandaard); projectspecifiek", "ISO 13567 (default layer standard); project-specific"),
         }
     }
     pub fn guidance(self) -> &'static str {
         match self {
         Self::Netherlands=>crate::lang::tr("RD New en NAP; PDOK, BAG, BGT, BRK, KLIC, AHN, BRO en IMRO. NLCS-hulpmiddelen zijn beschikbaar.","RD New and NAP; PDOK, BAG, BGT, BRK, KLIC, AHN, BRO and IMRO. NLCS tools are available."),
-        Self::UnitedStates=>crate::lang::tr("USGS/3DEP, Census TIGERweb, NRCS-bodemdata en lokale registers. Kies de juiste State Plane- of UTM-zone en het horizontale/verticale datum. Gebruik een metrisch project-CRS; de tekening kan in feet staan. Een Amerikaans CAD-standaardprofiel is nog niet geïmplementeerd.","USGS/3DEP, Census TIGERweb, NRCS soils and local records. Select the correct State Plane or UTM zone and horizontal/vertical datum. Use a metric project CRS; the drawing can use feet. A US CAD-standard profile is not implemented yet."),
+        Self::UnitedStates=>crate::lang::tr("USGS/3DEP, Census TIGERweb, NRCS-bodemdata en lokale registers. Kies de juiste State Plane- of UTM-zone en het horizontale/verticale datum. Gebruik een metrisch project-CRS; de tekening kan in feet staan. De lagen volgen standaard de U.S. National CAD Standard (laagstandaard ncs-us); een State DOT-standaard kan als eigen laagstandaard worden toegevoegd.","USGS/3DEP, Census TIGERweb, NRCS soils and local records. Select the correct State Plane or UTM zone and horizontal/vertical datum. Use a metric project CRS; the drawing can use feet. Layers follow the U.S. National CAD Standard by default (layer standard ncs-us); a State DOT standard can be added as an own layer standard."),
         Self::International=>crate::lang::tr("Wereldwijde en eigen WMS/WFS/XYZ-services, OpenStreetMap en open bestandsformaten. Kies project-CRS, eenheden, hoogtereferentie en opleverstandaard expliciet.","Worldwide and custom WMS/WFS/XYZ services, OpenStreetMap and open file formats. Select project CRS, units, vertical reference and delivery standard explicitly."),
     }
     }

@@ -19,6 +19,32 @@ impl App {
             super::super::library::language_switch(ui);
             ui.label(tr("De standaardregio bepaalt het lint na herstart. Taal en regio zijn onafhankelijk.","The default region sets the ribbon after restart. Language and region are independent."));
         });
+        group(ui, tr("Laagstandaard", "Layer standard"), |ui| {
+            let current = crate::laagstandaard::current();
+            let mut chosen = current.id.clone();
+            egui::ComboBox::from_id_salt("layer-standard")
+                .selected_text(&current.name)
+                .width(ui.available_width().min(420.0))
+                .show_ui(ui, |ui| {
+                    for s in crate::laagstandaard::all() {
+                        ui.selectable_value(&mut chosen, s.id.clone(), &s.name);
+                    }
+                });
+            if chosen != current.id {
+                match crate::laagstandaard::set(&chosen) {
+                    Ok(s) => self.ok(format!("{}: {}", tr("Laagstandaard", "Layer standard"), s.name)),
+                    Err(e) => self.err(e),
+                }
+            }
+            ui.label(tr(
+                "Nieuwe lagen volgen de gekozen standaard; bestaande lagen blijven zoals ze zijn. Objectdata en de mapping herkennen ze in elke standaard.",
+                "New layers follow the chosen standard; existing layers stay as they are. Object data and the mapping recognise them in every standard.",
+            ));
+            for (label, name) in crate::laagstandaard::examples(crate::laagstandaard::current()) {
+                ui.label(egui::RichText::new(format!("{label}: {name}")).small().monospace().weak());
+            }
+            ui.label(egui::RichText::new(format!("{} {}", tr("Eigen standaarden (TSV, na herstart):", "Own standards (TSV, after a restart):"), crate::laagstandaard::user_dir().display())).small().weak());
+        });
         let site = bridge::site();
         let mut region = site
             .as_ref()
@@ -66,6 +92,11 @@ impl App {
                 "{}: {}",
                 tr("Tekenstandaard", "Drawing standard"),
                 region.standard()
+            ));
+            ui.label(format!(
+                "{}: {}",
+                tr("Actieve laagstandaard", "Active layer standard"),
+                crate::laagstandaard::current().name
             ));
             if let Some(target) = bridge::target() {
                 ui.label(format!(

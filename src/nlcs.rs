@@ -80,8 +80,67 @@ pub struct LayerName {
     pub element: String,
 }
 
-/// Why a layer name is not an NLCS name, or its parts.
+/// The parts of a layer name: an NLCS name, or else a name of a layer
+/// standard (`laagstandaard`) taken back to its NLCS object (discipline
+/// `XX`). Why it is neither when it is not.
 pub fn parse_layer(name: &str) -> Result<LayerName, String> {
+    let nlcs = parse_nlcs_layer(name);
+    if nlcs.is_ok() {
+        return nlcs;
+    }
+    match crate::laagstandaard::recognise(name) {
+        Some((obj, status, element)) => Ok(LayerName { status, discipline: "XX".into(), group: obj.group.clone(), object: obj.name.clone(), element: element.code().into() }),
+        None => nlcs,
+    }
+}
+
+/// Layer names of other layer standards taken back to their NLCS object,
+/// remembered per name, for loops over many entities. NLCS names are
+/// matched by their parts, as the code always did.
+#[derive(Default)]
+pub struct LayerMemo(HashMap<String, Option<(Status, u32)>>);
+
+impl LayerMemo {
+    /// The status and object of a layer of another standard.
+    pub fn other(&mut self, name: &str) -> Option<(Status, &'static Object)> {
+        if !self.0.contains_key(name) {
+            let found = crate::laagstandaard::recognise(name).map(|(o, s, _)| (s, o.id));
+            self.0.insert(name.to_string(), found);
+        }
+        self.0.get(name).copied().flatten().and_then(|(s, id)| Some((s, object(id)?)))
+    }
+
+    /// Whether the layer is of main group `group`, and of object `object`
+    /// and drawing status `status` when given: `S-..-GROUP-OBJECT-..` in an
+    /// NLCS name, else by the mapping of the layer standards.
+    pub fn is(&mut self, name: &str, group: &str, object: Option<&str>, status: Option<Status>) -> bool {
+        let parts = match object {
+            Some(o) => name.contains(&format!("-{group}-{o}-")),
+            None => name.contains(&format!("-{group}-")),
+        };
+        if parts && status.is_none_or(|s| name.starts_with(&format!("{}-", s.code()))) {
+            return true;
+        }
+        self.other(name).is_some_and(|(s, o)| o.group == group && object.is_none_or(|x| o.name == x) && status.is_none_or(|st| st == s))
+    }
+}
+
+/// A layer name in NLCS form, for code that recognises layers by the parts
+/// of NLCS names (`-OG-TRIANGULATIE-`): another layer standard's name
+/// becomes the NLCS name of its object (`S-XX-GROUP-OBJECT-E`); any other
+/// name stays as it is.
+pub fn as_nlcs(name: &str) -> std::borrow::Cow<'_, str> {
+    if parse_nlcs_layer(name).is_ok() {
+        return std::borrow::Cow::Borrowed(name);
+    }
+    match crate::laagstandaard::recognise(name) {
+        Some((o, s, e)) => std::borrow::Cow::Owned(format!("{}-XX-{}-{}-{}", s.code(), o.group, o.name, e.code())),
+        None => std::borrow::Cow::Borrowed(name),
+    }
+}
+
+/// Why a layer name is not an NLCS name, or its parts (NLCS only).
+pub fn parse_nlcs_layer(name: &str) -> Result<LayerName, String> {
     let parts: Vec<&str> = name.split('-').collect();
     if parts.len() < 5 {
         return Err("geen NLCS-laagnaam (STATUS-DISCIPLINE-HOOFDGROEP-OBJECT-ELEMENT)".into());
@@ -221,6 +280,19 @@ fn tables() -> &'static Tables {
     })
 }
 
+/// Every NLCS object, by id.
+pub fn objects() -> impl Iterator<Item = &'static Object> {
+    static SORTED: OnceLock<Vec<u32>> = OnceLock::new();
+    SORTED
+        .get_or_init(|| {
+            let mut ids: Vec<u32> = tables().by_id.keys().copied().collect();
+            ids.sort_unstable();
+            ids
+        })
+        .iter()
+        .filter_map(|id| object(*id))
+}
+
 pub fn object(id: u32) -> Option<&'static Object> {
     tables().by_id.get(&id)
 }
@@ -249,8 +321,16 @@ pub struct LayerSpec {
     pub object_id: u32,
 }
 
-/// The NLCS layer for an object, drawing status, discipline and element type.
+/// The layer for an object, drawing status, discipline and element type in
+/// the active layer standard (`laagstandaard::current`): the NLCS layer when
+/// that is NLCS. `object_id` keeps the semantic object either way.
 pub fn layer(obj: &Object, status: Status, discipline: &str, element: Element) -> LayerSpec {
+    let spec = nlcs_layer(obj, status, discipline, element);
+    crate::laagstandaard::current().spec(obj, status, element, spec)
+}
+
+/// The NLCS layer for an object, drawing status, discipline and element type.
+pub fn nlcs_layer(obj: &Object, status: Status, discipline: &str, element: Element) -> LayerSpec {
     // A table that leaves the requested status empty falls back to nieuw
     // werk, then to the other statuses (the AL objects only fill bestaand).
     let order = [status.index(), Status::N.index(), Status::B.index(), Status::T.index(), Status::V.index()];
@@ -277,9 +357,12 @@ pub fn linetype_pattern(name: &str) -> Option<Vec<f64>> {
     if name.is_empty() || name.eq_ignore_ascii_case("CONTINUOUS") {
         return None;
     }
-    let def = LINETYPES.lines().skip(1).find_map(|l| {
-        let mut c = l.split('\t');
-        if c.next()?.eq_ignore_ascii_case(name) { c.nth(1) } else { None }
+    // The NLCS table, then the generic ones the layer standards use.
+    let def = [LINETYPES, crate::laagstandaard::LINETYPES].into_iter().find_map(|table| {
+        table.lines().skip(1).find_map(|l| {
+            let mut c = l.split('\t');
+            if c.next()?.eq_ignore_ascii_case(name) { c.nth(1) } else { None }
+        })
     })?;
     parse_pattern(def)
 }

@@ -432,14 +432,16 @@ fn object_data(e: &EntityType) -> HashMap<String, String> {
 
 /// Status letter and NLCS object of a layer. NLCS 5 also has R (revisie)
 /// and X; the rest of the name is checked as usual.
+/// Other layer standards' names are taken back to their NLCS object.
 fn layer_object(layer: &str) -> Option<(char, u32, String)> {
     let status = layer.chars().next()?;
-    if !"BNTVRX".contains(status) || layer.chars().nth(1) != Some('-') {
-        return None;
+    if "BNTVRX".contains(status) && layer.chars().nth(1) == Some('-') {
+        if let Some(obj) = nlcs::parse_nlcs_layer(&format!("B{}", &layer[1..])).ok().and_then(|p| Some((nlcs::object_by_name(&p.group, &p.object)?, p.element))) {
+            return Some((status, obj.0.id, obj.1));
+        }
     }
-    let p = nlcs::parse_layer(&format!("B{}", &layer[1..])).ok()?;
-    let obj = nlcs::object_by_name(&p.group, &p.object)?;
-    Some((status, obj.id, p.element))
+    let (obj, status, element) = crate::laagstandaard::recognise(layer)?;
+    Some((status.code().chars().next()?, obj.id, element.code().into()))
 }
 
 /// Arc points of a bulge segment, without the start, with the end.

@@ -424,6 +424,18 @@ def t_nlcs(a):
     return OCS.run("GIS_NLCS_HERSTEL" if a.get("repair") else "GIS_NLCS_RAPPORT")
 
 
+@tool("layer_standard", "The CAD layer standard new layers follow: nlcs (Dutch NLCS), ncs-us (U.S. National CAD Standard), "
+      "uk-iso13567 (BS EN ISO 13567 / BS 1192 with Uniclass 2015), au-iso13567 (AS ISO 13567 with Uniclass 2015), "
+      "iso13567 (generic ISO 13567), or a user's own TSV. Without `id` lists the standards with example layer names; "
+      "with `id` makes it the active one (stored in settings.json).",
+      {"id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"}})
+def t_layer_standard(a):
+    sid = a.get("id")
+    if sid is not None and (not sid or not all(c.isascii() and (c.isalnum() or c in "-_") for c in sid)):
+        raise ValueError("id: letters, digits, - and _ only")
+    return OCS.run("GIS_LAAGSTANDAARD" + (f" {sid}" if sid else ""))
+
+
 @tool("bgt_mutation", "The NLCS design as a BGT mutation (IMGeo-GML 2.1.1) with a report, beside the drawing. "
       "Layers N become plan topography (as_built=true: built), R built (changed when it carries a BGT lokaal_id), "
       "V ends the BGT object. Type and function come from the BGT object data, the BGT object beneath or the NLCS layer; "
