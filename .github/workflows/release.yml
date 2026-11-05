@@ -41,12 +41,21 @@ jobs:
               dist/plugin.toml
               dist/*.asc
               dist/openaec-signing-fingerprint.txt
+          # ARM Linux, for the OpenAEC SuperCloud's streamed desktops (#75).
+          - os: ubuntu-22.04-arm
+            lib: libopen_infra.so
+            civiel: libopen_infra_civiel.so
+            asset: openaec.open-infra-linux-aarch64.so
+            zip: open-infra-civiel-linux-aarch64.zip
+            extra: |
+              dist/openaec.open-infra-linux-aarch64.so.asc
+              dist/open-infra-civiel-linux-aarch64.zip.asc
           - os: windows-latest
             lib: open_infra.dll
             civiel: open_infra_civiel.dll
             asset: openaec.open-infra-windows-x86_64.dll
             zip: open-infra-civiel-windows-x86_64.zip
-          - os: macos-14       # Apple Silicon, as the host release
+          - os: macos-15       # Apple Silicon, as the host release (macos-14 is retired)
             lib: libopen_infra.dylib
             civiel: libopen_infra_civiel.dylib
             asset: openaec.open-infra-macos-aarch64.dylib
