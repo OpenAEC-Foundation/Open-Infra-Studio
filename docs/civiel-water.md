@@ -1,4 +1,4 @@
-# Water: watercourses, storage and pressure networks
+# Water: watercourses, storage, pressure networks and storms on the ground
 
 Three Civiel commands calculate water in the design: the water surface along a watercourse (`CIV_WATERLOOP`, issue #74), a storage facility with a design storm routed through it (`CIV_BERGING`, #64), and a drinking-water or pressure network with a fire-flow check (`CIV_DRUKNET`, #67). They sit in the ribbon under **Terrein → Water** (*Waterlijn watergang*, *Berging*) and **Riolering → Riool** (*Drukleidingnet*).
 
@@ -164,3 +164,31 @@ A new run replaces the labels of the previous one (the index kind `druknet`).
 - Pressure is at ground level, not at the pipe; the demand is the same per node or spread by pipe length, not from connections or dwellings.
 - Pipes that cross without a shared end or vertex within 0.5 m are not connected (as on site: a crossing is not a junction).
 - Minimum service pressures for customers are reported (lowest and highest) but not checked against a norm.
+
+## `CIV_BUI`: a storm on the ground (stress test)
+
+A design storm falls on the ground grid and is simulated in time (issue #63): water flows to the low spots, fills them and spills over to the next. The scheme is local-inertial overland flow (Bates et al. 2010, as in LISFLOOD-FP, with the θ-weighting of de Almeida et al. 2012) on a regular grid from the TIN in the drawing, or else AHN or the worldwide terrain, the same grid as `CIV_STROOMGEBIED`. The kernel is `rekenkern::bui`. Mass is conserved to round-off, and the report states the water balance.
+
+| Argument | Meaning | Default |
+|---|---|---|
+| `BUI=` | `T100` (70 mm in 1 h), `T250` (90 mm in 1 h), `T1000` (155 mm in 2 h), `48h` (200 mm in 48 h), `R100`/`R250`/`R1000` (regional 48 h events): the stress test events for climate 2050 of the Deltaplan Ruimtelijke Adaptatie (*Stresstest wateroverlast*, November 2024). Also `01`–`10` (the standard storms of Leidraad Riolering C2100), `<mm>/<minutes>` (a uniform block) or a CSV file (minutes, mm or mm/h). | `T100` |
+| `BRON=TIN\|AHN`, `CEL=` | The ground and the cell size (m). | TIN if present, 2 m |
+| `INFILTRATIE=` | Infiltration capacity (mm/h) everywhere. | 0 |
+| `RUWHEID=` | Manning's n. | 0.030 (Chow 1959, short grass) |
+| `RAND=open\|dicht` | Water may leave over the edge of the model, or not. | open |
+| `KOLKEN=x,y;…` or `LAAG=*KOLK*`, `KOLK=` | Gullies or sewer inlets and the l/s each takes away. | none, 5 l/s |
+| `NA=` | Minutes simulated after the rain stops. | 30 |
+
+What it draws:
+- **Maximum water depth** in classes from 5, 10, 15, 20 and 30 cm, as closed outlines on `OI-BUI-DIEPTE-05CM` … `-30CM`. These are the depth classes of the Klimaateffectatlas.
+- **Ponds** at the highest water, labelled with their volume and depth on `OI-BUI-PLAS`.
+- **Overflow points:** for each pond, where it overflows, marked with the overflow level on `OI-BUI-OVERLOOP`.
+
+The report `bui.md` beside the drawing gives the area per depth class and the water balance: rain, storage on the ground, infiltration, over the edge, into gullies, and the error. The JSON (`ID=`) holds the ponds and the balance.
+
+Limits:
+- **Grid size:** at most 400,000 cells. A 500 × 500 grid takes about 1.5 minutes of computing for a 1.5 h storm in a release build.
+- **Infiltration:** a constant capacity, with no decrease in time.
+- **Gullies:** they never surcharge, so no water comes back from the sewer.
+
+It is a stress test indication. It does not replace a calibrated 2D model coupled to the sewer.
