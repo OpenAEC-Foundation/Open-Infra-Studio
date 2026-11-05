@@ -33,6 +33,10 @@ pub mod uitwisseling;
 pub mod ontwerpcriteria;
 pub mod spoor;
 pub mod zicht;
+// Water: open-channel profiles, storage, pressure networks (#74, #64, #67).
+pub mod waterloop;
+pub mod berging;
+pub mod druknet;
 
 use std::sync::{Mutex, OnceLock};
 

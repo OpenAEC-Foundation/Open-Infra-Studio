@@ -941,7 +941,7 @@ pub struct Outlets {
     pub layers: Vec<String>,
 }
 
-fn layer_matches(pattern: &str, layer: &str) -> bool {
+pub(crate) fn layer_matches(pattern: &str, layer: &str) -> bool {
     let (p, l) = (pattern.to_ascii_uppercase(), layer.to_ascii_uppercase());
     let parts: Vec<&str> = p.split('*').collect();
     if parts.len() == 1 {
