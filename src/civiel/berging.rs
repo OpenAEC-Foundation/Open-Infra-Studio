@@ -690,6 +690,7 @@ pub fn berging(opt: &super::CivielOptions, b: Berging, progress: &dyn Fn(String)
                 step: 1.0,
                 name: Some(format!("{name} TIN")),
                 join: true,
+                auto: None,
             };
             match super::grading::plateau(&o, req, progress) {
                 Ok(m) => notes.push(m),
