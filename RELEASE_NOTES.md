@@ -25,7 +25,8 @@ The libraries are signed: Authenticode with a timestamp on Windows (publisher Im
 - **KLIC request prepared and checked** (#4): `GIS_KLIC_AANVRAAG` makes an oriëntatieverzoek, graafmelding or calamiteitenmelding for the selected polyline. The address and BAG id come from PDOK. It checks the request locally against the Kadaster's B2B rules (polygon, fields, dates, code lists, with the Kadaster's error codes) and writes the GIA-POST message beside the drawing. It is **not sent**: submitting needs your own Kadaster OAuth client, and is your decision.
 - **KLIC deliveries read in by themselves** (#4): `GIS_KLIC_VOLGEN` follows a folder (by default Downloads) and draws every new `Levering_*.zip` into the drawing; each notification is drawn once.
 - **CityJSON**: one unreadable city object or CityJSONSeq line no longer rejects the whole file. The readable objects are drawn, and each skipped one is named in the progress, as CityGML already does.
-- **Building from source**: the codec comes from `hakanaktt/acadrust`, because `HakanSeven12/acadrust` is gone from GitHub.
+- **OpenAEC SuperCloud** (#75): Linux arm64 builds of both plugins (`linux-aarch64`). The MCP server also runs over streamable HTTP (`--http`), with every tool under the prefix `infra_` in the SuperCloud (`OPENAEC_BEHEERD=1`), plus `infra_stand`, `infra_open` and `infra_opslaan` for files from Docs. The plugins take the language from `OPENAEC_TAAL`.
+- **Building from source**: the codec comes from `hakanaktt/acadrust`, because `HakanSeven12/acadrust` is gone from GitHub. macOS builds run on GitHub's macos-15 image.
 
 **Fixed in 2026.45.3**
 
