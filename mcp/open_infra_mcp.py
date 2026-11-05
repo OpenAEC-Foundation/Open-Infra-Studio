@@ -608,6 +608,76 @@ def t_mass_haul(a):
                                            VRIJ=a.get("free_haul"), PLAATS=a.get("at") and _pt(a["at"])))
 
 
+# Water: open-channel profiles (#74), storage (#64), pressure networks (#67).
+CULVERT = {"type": "object", "properties": {"station": NUM, "diameter": {"type": "number", "description": "m (or mm from 20 up)"},
+           "width": {"type": "number", "description": "box culvert width (m), with height instead of diameter"}, "height": NUM,
+           "length": NUM, "invert_in": {"type": "number", "description": "upstream invert (m)"}, "invert_out": {"type": "number", "description": "downstream invert (m)"}},
+           "required": ["station", "length", "invert_in", "invert_out"]}
+WEIR = {"type": "object", "properties": {"station": NUM, "crest": NUM, "width": NUM}, "required": ["station", "crest", "width"]}
+
+
+def _culvert(c):
+    size = f"{_num(c['width'])}x{_num(c['height'])}" if c.get("width") else _num(c["diameter"])
+    return ",".join([_num(c["station"]), size, _num(c["length"]), _num(c["invert_in"]), _num(c["invert_out"])])
+
+
+@tool("civ_water_profile", "Steady water surface profile of a watercourse along an axis (standard step, Manning) at discharge q (m³/s): cross sections "
+      "from the TIN (else AHN), culverts and weirs as structures. Draws the water line in the axis's length profile and the inundation boundary "
+      "in plan (GW WATERGANG_WATERLIJN); returns level, depth, velocity and width per section and a Markdown/JSON report path.",
+      {"axis": AXIS, "q": NUM, "roughness": {"type": "number", "description": "Manning n (< 1, default 0.035) or k_M = 1/n (≥ 1)"},
+       "downstream_level": {"type": "number", "description": "known downstream water level (m); else see downstream"},
+       "downstream": {"type": "string", "enum": ["NORMAAL", "KRITIEK"], "description": "normal depth on the bed slope (default) or critical depth"},
+       "interval": {"type": "number", "description": "cross section spacing (m)"}, "half_width": {"type": "number", "description": "section width each side of the axis (m)"},
+       "culverts": {"type": "array", "items": CULVERT}, "weirs": {"type": "array", "items": WEIR},
+       "direction": {"type": "string", "enum": ["AUTO", "MEE", "TEGEN"], "description": "flow along (MEE) or against (TEGEN) the axis; AUTO from the bed"}},
+      ["q"])
+def t_water_profile(a):
+    return OCS.run("CIV_WATERLOOP " + _kv(AS=a.get("axis"), Q=a.get("q"), RUWHEID=a.get("roughness"),
+                                         BENEDENSTROOMS=a.get("downstream_level") if a.get("downstream_level") is not None else a.get("downstream"),
+                                         INTERVAL=a.get("interval"), BREEDTE=a.get("half_width"),
+                                         DUIKER=";".join(_culvert(c) for c in a.get("culverts") or []),
+                                         STUW=";".join(",".join(_num(w[k]) for k in ("station", "crest", "width")) for w in a.get("weirs") or []),
+                                         RICHTING=a.get("direction")))
+
+
+@tool("civ_storage", "Storage facility (wadi, pond or crate system) from a closed bottom outline: draws bottom and top outlines with side slopes, builds "
+      "the stage–storage curve, routes a design storm (Leidraad bui 01–10, stress test T100/T250/T1000/48H/R100/R250/R1000, 'mm:min' or a CSV path) "
+      "through an orifice, a weir and infiltration, and draws a level–time graph. Returns max level, overflow, drain time and the series.",
+      {"line": LINE, "kind": {"type": "string", "enum": ["wadi", "vijver", "krat"]}, "bottom": {"type": "number", "description": "bottom level (m)"},
+       "depth": NUM, "side_slope": {"type": "number", "description": "n of 1:n (default 3; crates vertical)"},
+       "orifice_mm": NUM, "orifice_invert": NUM, "weir_level": NUM, "weir_width": NUM, "infiltration_mm_h": NUM,
+       "storm": {"type": "string", "description": "08 (default), T100, R100, '40:60' (mm:min) or a CSV path"},
+       "area_m2": {"type": "number", "description": "connected paved area draining into it (m²)"}, "name": STR,
+       "tin": {"type": "boolean", "description": "cut the design TIN to the basin, as civ_plateau"}, "at": PT},
+      ["kind", "bottom", "depth"])
+def t_storage(a):
+    knijp = None
+    if a.get("orifice_mm"):
+        knijp = _num(a["orifice_mm"]) + ("," + _num(a["orifice_invert"]) if a.get("orifice_invert") is not None else "")
+    drempel = f"{_num(a['weir_level'])},{_num(a['weir_width'])}" if a.get("weir_level") is not None and a.get("weir_width") else None
+    return OCS.run("CIV_BERGING " + _kv(LIJN=a.get("line"), SOORT=a.get("kind"), BODEM=a.get("bottom"), DIEPTE=a.get("depth"),
+                                       TALUD=a.get("side_slope") and f"1:{_num(a['side_slope'])}", KNIJP=knijp, DREMPEL=drempel,
+                                       INFILTRATIE=a.get("infiltration_mm_h"), BUI=a.get("storm"), OPPERVLAK=a.get("area_m2"), NAAM=a.get("name"),
+                                       TIN=a.get("tin"), PLAATS=a.get("at") and _pt(a["at"])))
+
+
+@tool("civ_pressure_network", "Drinking-water / pressure network from the selected lines (or a layer, or the library's water mains): ends within 0.5 m "
+      "join, tees split; node levels from the ground; solved with the gradient method (Hazen-Williams or Darcy-Weisbach). Labels pressure per "
+      "node and flow/velocity per pipe, checks the fire flow per hydrant (library hydrants and given points) and returns all results.",
+      {"layer": {"type": "string", "description": "layer pattern(s) with * wildcards, ';'-separated; empty = the selection or the water mains"},
+       "sources": {"type": "array", "items": {"type": "array", "items": NUM, "minItems": 3, "maxItems": 3}, "description": "[x, y, head m] per source"},
+       "demand_ls": {"type": "number", "description": "demand per node (l/s)"}, "demand_total_ls": {"type": "number", "description": "total demand (l/s), spread by pipe length"},
+       "diameter_mm": {"type": "number", "description": "internal diameter for pipes without one in their object data"},
+       "roughness": {"type": "number", "description": "Hazen-Williams C (≥ 20, default 130) or Darcy-Weisbach k in mm (< 20)"},
+       "hydrants": PTS, "min_pressure_kpa": NUM, "fire_flow_m3h": NUM},
+      ["sources"])
+def t_pressure_network(a):
+    vraag = f"TOTAAL:{_num(a['demand_total_ls'])}" if a.get("demand_total_ls") is not None else a.get("demand_ls")
+    return OCS.run("CIV_DRUKNET " + _kv(LAAG=a.get("layer"), BRON=";".join(_pt(s) for s in a.get("sources") or []), VRAAG=vraag,
+                                       DIAMETER=a.get("diameter_mm"), RUWHEID=a.get("roughness"), BRANDKRAAN=a.get("hydrants") and _pts(a["hydrants"]),
+                                       MINDRUK=a.get("min_pressure_kpa"), BLUSDEBIET=a.get("fire_flow_m3h")))
+
+
 # Corridor stream: assemblies (JSON), junctions and roundabouts.
 @tool("civ_assemblies", "The corridor assemblies (profieltypen): presets and the user's JSON files in <config>/OpenCADStudio/open-infra/assemblies/, "
       "with their parts per side (lanes, gutters, kerbs, footways, cycle paths, parking, verges, central reserve, ditches), pavement layers, "

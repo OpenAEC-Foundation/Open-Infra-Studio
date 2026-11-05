@@ -1176,6 +1176,257 @@
   "name": "infra_civ_mass_haul"
  },
  {
+  "description": "Steady water surface profile of a watercourse along an axis (standard step, Manning) at discharge q (m³/s): cross sections from the TIN (else AHN), culverts and weirs as structures. Draws the water line in the axis's length profile and the inundation boundary in plan (GW WATERGANG_WATERLIJN); returns level, depth, velocity and width per section and a Markdown/JSON report path.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "q": {
+     "type": "number"
+    },
+    "roughness": {
+     "type": "number",
+     "description": "Manning n (< 1, default 0.035) or k_M = 1/n (≥ 1)"
+    },
+    "downstream_level": {
+     "type": "number",
+     "description": "known downstream water level (m); else see downstream"
+    },
+    "downstream": {
+     "type": "string",
+     "enum": [
+      "NORMAAL",
+      "KRITIEK"
+     ],
+     "description": "normal depth on the bed slope (default) or critical depth"
+    },
+    "interval": {
+     "type": "number",
+     "description": "cross section spacing (m)"
+    },
+    "half_width": {
+     "type": "number",
+     "description": "section width each side of the axis (m)"
+    },
+    "culverts": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "station": {
+        "type": "number"
+       },
+       "diameter": {
+        "type": "number",
+        "description": "m (or mm from 20 up)"
+       },
+       "width": {
+        "type": "number",
+        "description": "box culvert width (m), with height instead of diameter"
+       },
+       "height": {
+        "type": "number"
+       },
+       "length": {
+        "type": "number"
+       },
+       "invert_in": {
+        "type": "number",
+        "description": "upstream invert (m)"
+       },
+       "invert_out": {
+        "type": "number",
+        "description": "downstream invert (m)"
+       }
+      },
+      "required": [
+       "station",
+       "length",
+       "invert_in",
+       "invert_out"
+      ]
+     }
+    },
+    "weirs": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "properties": {
+       "station": {
+        "type": "number"
+       },
+       "crest": {
+        "type": "number"
+       },
+       "width": {
+        "type": "number"
+       }
+      },
+      "required": [
+       "station",
+       "crest",
+       "width"
+      ]
+     }
+    },
+    "direction": {
+     "type": "string",
+     "enum": [
+      "AUTO",
+      "MEE",
+      "TEGEN"
+     ],
+     "description": "flow along (MEE) or against (TEGEN) the axis; AUTO from the bed"
+    }
+   },
+   "required": [
+    "q"
+   ]
+  },
+  "name": "infra_civ_water_profile"
+ },
+ {
+  "description": "Storage facility (wadi, pond or crate system) from a closed bottom outline: draws bottom and top outlines with side slopes, builds the stage–storage curve, routes a design storm (Leidraad bui 01–10, stress test T100/T250/T1000/48H/R100/R250/R1000, 'mm:min' or a CSV path) through an orifice, a weir and infiltration, and draws a level–time graph. Returns max level, overflow, drain time and the series.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "line": {
+     "type": "string",
+     "description": "Handle of a line, polyline or feature line (hex); empty = the selection or points"
+    },
+    "kind": {
+     "type": "string",
+     "enum": [
+      "wadi",
+      "vijver",
+      "krat"
+     ]
+    },
+    "bottom": {
+     "type": "number",
+     "description": "bottom level (m)"
+    },
+    "depth": {
+     "type": "number"
+    },
+    "side_slope": {
+     "type": "number",
+     "description": "n of 1:n (default 3; crates vertical)"
+    },
+    "orifice_mm": {
+     "type": "number"
+    },
+    "orifice_invert": {
+     "type": "number"
+    },
+    "weir_level": {
+     "type": "number"
+    },
+    "weir_width": {
+     "type": "number"
+    },
+    "infiltration_mm_h": {
+     "type": "number"
+    },
+    "storm": {
+     "type": "string",
+     "description": "08 (default), T100, R100, '40:60' (mm:min) or a CSV path"
+    },
+    "area_m2": {
+     "type": "number",
+     "description": "connected paved area draining into it (m²)"
+    },
+    "name": {
+     "type": "string"
+    },
+    "tin": {
+     "type": "boolean",
+     "description": "cut the design TIN to the basin, as civ_plateau"
+    },
+    "at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    }
+   },
+   "required": [
+    "kind",
+    "bottom",
+    "depth"
+   ]
+  },
+  "name": "infra_civ_storage"
+ },
+ {
+  "description": "Drinking-water / pressure network from the selected lines (or a layer, or the library's water mains): ends within 0.5 m join, tees split; node levels from the ground; solved with the gradient method (Hazen-Williams or Darcy-Weisbach). Labels pressure per node and flow/velocity per pipe, checks the fire flow per hydrant (library hydrants and given points) and returns all results.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "layer": {
+     "type": "string",
+     "description": "layer pattern(s) with * wildcards, ';'-separated; empty = the selection or the water mains"
+    },
+    "sources": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+     },
+     "description": "[x, y, head m] per source"
+    },
+    "demand_ls": {
+     "type": "number",
+     "description": "demand per node (l/s)"
+    },
+    "demand_total_ls": {
+     "type": "number",
+     "description": "total demand (l/s), spread by pipe length"
+    },
+    "diameter_mm": {
+     "type": "number",
+     "description": "internal diameter for pipes without one in their object data"
+    },
+    "roughness": {
+     "type": "number",
+     "description": "Hazen-Williams C (≥ 20, default 130) or Darcy-Weisbach k in mm (< 20)"
+    },
+    "hydrants": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    },
+    "min_pressure_kpa": {
+     "type": "number"
+    },
+    "fire_flow_m3h": {
+     "type": "number"
+    }
+   },
+   "required": [
+    "sources"
+   ]
+  },
+  "name": "infra_civ_pressure_network"
+ },
+ {
   "description": "The corridor assemblies (profieltypen): presets and the user's JSON files in <config>/OpenCADStudio/open-infra/assemblies/, with their parts per side (lanes, gutters, kerbs, footways, cycle paths, parking, verges, central reserve, ditches), pavement layers, conditions (cut/fill) and targets. With name: one in detail; copy_to copies it as a start for your own; at draws it as a template section.",
   "inputSchema": {
    "type": "object",
