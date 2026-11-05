@@ -13,13 +13,7 @@ Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v20
 
 The libraries are signed: Authenticode with a timestamp on Windows (publisher Impertio Studio B.V.), Developer ID and notarized by Apple on macOS, and a detached OpenPGP signature of the OpenAEC Foundation (`.asc`) per Linux file. Check those with `gpg --verify <file>.asc <file>` against `openaec-signing-public-key.asc` (fingerprint `13F6D414ADEE4ED4CD09AC60601D86C93C504D29`).
 
-**Fixed in 2026.45.3**
-
-- **Quantities:** arcs are always counted again. In 2026.45.2 two different arcs on the same layer could be taken for one double-drawn line, so a length could drop out of the total (with a 1000 m radius, two arcs 40 mm apart counted as one).
-- **KLIC attachments:** a file now opens from its own place in the delivery. In 2026.45.2 two attachments with the same name (for example `voorwaarden.pdf` from two network operators) both opened the first one. Each delivery keeps its own folder, and attachments always stay inside it.
-- **KLIC extra detailinfo:** details drawn as a line are shown as a line on ZZ-DETAIL1, and the file of a line or point detail is listed with the attachments. In 2026.45.2 a line detail gave no outline and no attachment.
-
-**New in 2026.45.3 — the rest of the roadmap: NLCS++, HydX, geodata export, trial trenches**
+**New in 2026.45.4 — the rest of the roadmap: NLCS++, HydX, geodata export, trial trenches, GEODATA and KLIC requests**
 
 - **NLCS++ Netbeheer** (V11–V12.1, all three operators): read deliveries onto their layers with Z and all fields; the layer grammar both ways; the operators' own code lists; a check at the levels Fout, Waarschuwing and Informerend that finds on the official examples exactly what the operator's XSD finds; and the delivery as V12.1 XML linked to the DWG by CAD handle, valid against the operator's XSD. The full content rules of the operators run with `tools/nlcspp_schematron.py`. New host-independent crate `nlcspp`.
 - **Cross sections show what they cut**: BGT surfaces as a coloured band on the ground, KLIC cables and pipes as circles at their assumed depth with a short theme label, and survey points within 1 m at their measured height. The **trial-trench workflow** (KLIC + survey + AHN → cross sections) is an e2e test on a real cable of the Dordrecht sample delivery.
@@ -30,6 +24,14 @@ The libraries are signed: Authenticode with a timestamp on Windows (publisher Im
 - **GEODATA for AutoCAD, Civil 3D and BricsCAD** (#8): `GIS_GEODATA` (Output → Export → *DWG with GEODATA*) writes a copy of the drawing with the GEODATA object for the project location: the CRS as MapGuide XML with its EPSG code, base point, north and units, as GEOGRAPHICLOCATION writes it. ezdxf reads the copy back with the right CRS and transformation. The open drawing keeps its own location, because the plugin API cannot add GEODATA to it yet. Reading GEODATA now also understands the form AutoCAD writes.
 - **KLIC request prepared and checked** (#4): `GIS_KLIC_AANVRAAG` makes an oriëntatieverzoek, graafmelding or calamiteitenmelding for the selected polyline. The address and BAG id come from PDOK. It checks the request locally against the Kadaster's B2B rules (polygon, fields, dates, code lists, with the Kadaster's error codes) and writes the GIA-POST message beside the drawing. It is **not sent**: submitting needs your own Kadaster OAuth client, and is your decision.
 - **KLIC deliveries read in by themselves** (#4): `GIS_KLIC_VOLGEN` follows a folder (by default Downloads) and draws every new `Levering_*.zip` into the drawing; each notification is drawn once.
+- **CityJSON**: one unreadable city object or CityJSONSeq line no longer rejects the whole file. The readable objects are drawn, and each skipped one is named in the progress, as CityGML already does.
+- **Building from source**: the codec comes from `hakanaktt/acadrust`, because `HakanSeven12/acadrust` is gone from GitHub.
+
+**Fixed in 2026.45.3**
+
+- **Quantities:** arcs are always counted again. In 2026.45.2 two different arcs on the same layer could be taken for one double-drawn line, so a length could drop out of the total (with a 1000 m radius, two arcs 40 mm apart counted as one).
+- **KLIC attachments:** a file now opens from its own place in the delivery. In 2026.45.2 two attachments with the same name (for example `voorwaarden.pdf` from two network operators) both opened the first one. Each delivery keeps its own folder, and attachments always stay inside it.
+- **KLIC extra detailinfo:** details drawn as a line are shown as a line on ZZ-DETAIL1, and the file of a line or point detail is listed with the attachments. In 2026.45.2 a line detail gave no outline and no attachment.
 
 **New in 2026.45.2 — terrain with its photo anywhere in the world**
 
