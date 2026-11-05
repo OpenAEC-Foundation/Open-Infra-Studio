@@ -867,6 +867,7 @@ fn riool_tools() -> Vec<RibbonItem> {
     let mut items = vec![
         ("CIV_RIOOL_PROFIEL", tr("Lengteprofiel", "Length profile"), I_RIOOL_PROFIEL),
         ("CIV_RIOOL_TOETS", tr("Toetsen", "Check"), I_RIOOL_TOETS),
+        ("CIV_RIOOL_HYDRAULICA", tr("Hydraulica", "Hydraulics"), I_RIOOL_TOETS),
         ("CIV_RIOOL_BIJWERKEN", tr("Bijwerken", "Update"), I_RIOOL_BIJWERKEN),
         ("CIV_RIOOL_EXPORT", tr("Exporteren", "Export"), I_RIOOL_EXPORT),
     ];
@@ -1681,6 +1682,12 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let naam = args.str("RIOOL").map(str::to_string);
             job(host, open_infra::lang::tr("Riooltoets", "Sewer check"), id, move |p| riool::toets(&o, naam, t, p));
         }
+        "CIV_RIOOL_HYDRAULICA" => {
+            let o = opt(riool::HYDRAULICA_ARGS)?;
+            let h = riool::Hydraulica::from_args(args)?;
+            let naam = args.str("RIOOL").map(str::to_string);
+            job(host, open_infra::lang::tr("Rioolhydraulica", "Sewer hydraulics"), id, move |p| riool::hydraulica(&o, naam, h, p));
+        }
         "CIV_RIOOL_EXPORT" => {
             // FORMAAT= is this command's own (GWSW or CSV), not the point file format.
             let o = args.without(&["FORMAAT"]).apply(&base, &["RIOOL", "PAD"])?;
@@ -1707,7 +1714,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             "[Open Infra — Riolering / Sewers] CIV_RIOOL [LIJN=<handle> | PUNTEN=x,y;x,y;… | selectie | klikken] [STELSEL=DWA|HWA|GWA|ITR] [DIAMETER=mm] [MATERIAAL=beton|PVC|PP|PE|gres] \
              [DEKKING=m] [VERHANG=1:250|4 (‰)] [BOB=m NAP|AUTO] [PUT=800|800x1000] [PUTNR=P101] [NAAM=] [OMKEREN=ja] [MAAIVELD=AUTO|ONTWERP|AHN]; \
              CIV_RIOOL_BIJWERKEN [RIOOL=] [PUTNR= BOB=|MAAIVELD=|PUT=] [LEIDING=P101-P102 DIAMETER=|MATERIAAL=|VERHANG=|DEKKING=] [INVOEGEN=x,y]; \
-             CIV_RIOOL_PROFIEL [RIOOL=] [VAN=] [NAAR=] [PLAATS=x,y]; CIV_RIOOL_TOETS [RIOOL=] [Q=l/s | OPPERVLAK=m² of ha [REGEN=l/s/ha] | INWONERS=] [PUTAFSTAND=] [VRIJ=] [RUWHEID=mm]; \
+             CIV_RIOOL_PROFIEL [RIOOL=] [VAN=] [NAAR=] [PLAATS=x,y]; CIV_RIOOL_TOETS [RIOOL=] [Q=l/s | OPPERVLAK=m² of ha [REGEN=l/s/ha] | INWONERS=] [PUTAFSTAND=] [VRIJ=] [RUWHEID=mm]; CIV_RIOOL_HYDRAULICA [RIOOL=] [OPPERVLAK=m² of ha] [REGEN=l/s/ha] [INWONERS= | WONINGEN=] [UITLAATPEIL=m] [DIAMETER=AUTO] [VULLING=h/D] [PUTVERLIES=ξ]; \
              CIV_RIOOL_EXPORT [RIOOL=] [FORMAAT=GWSW|CSV|HYDX] [PAD=]; CIV_RIOOL_IMPORT <pad.orox.ttl>; CIV_RIOOL_GWSW [NAAM=].",
         ),
         // Design criteria, sight distance and rail (as-spoor).
