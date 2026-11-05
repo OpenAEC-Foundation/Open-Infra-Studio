@@ -55,7 +55,7 @@ jobs:
             civiel: open_infra_civiel.dll
             asset: openaec.open-infra-windows-x86_64.dll
             zip: open-infra-civiel-windows-x86_64.zip
-          - os: macos-14       # Apple Silicon, as the host release
+          - os: macos-15       # Apple Silicon, as the host release (macos-14 is retired)
             lib: libopen_infra.dylib
             civiel: libopen_infra_civiel.dylib
             asset: openaec.open-infra-macos-aarch64.dylib
