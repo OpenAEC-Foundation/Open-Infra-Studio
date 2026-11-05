@@ -2362,6 +2362,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nlcspp"
+version = "2026.45.3"
+dependencies = [
+ "roxmltree 0.21.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2760,6 +2769,7 @@ dependencies = [
  "klic2geo",
  "las",
  "las-crs",
+ "nlcspp",
  "ocs_plugin_api",
  "pointcloud-core",
  "proj4rs",

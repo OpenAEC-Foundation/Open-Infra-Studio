@@ -2576,6 +2576,8 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
 pub enum Formaat {
     Gwsw,
     Csv,
+    /// GWSW-HydX: the CSV set for hydraulic models.
+    Hydx,
 }
 
 impl Formaat {
@@ -2583,6 +2585,7 @@ impl Formaat {
         Some(match s.trim().to_ascii_lowercase().as_str() {
             "gwsw" | "orox" | "ttl" | "gwsw-orox" | "rdf" => Formaat::Gwsw,
             "csv" => Formaat::Csv,
+            "hydx" | "gwsw-hydx" | "hyd" => Formaat::Hydx,
             _ => return None,
         })
     }
@@ -2711,8 +2714,9 @@ pub fn csv_of(nets: &[&Net], rd: &dyn Fn(XY) -> Result<XY, String>) -> Result<(S
     Ok((puts, pipes))
 }
 
-/// `CIV_RIOOL_EXPORT`: networks to GWSW-OroX (`FORMAAT=GWSW`, the default)
-/// or to two CSV tables (`FORMAAT=CSV`), beside the drawing or at `PAD=`.
+/// `CIV_RIOOL_EXPORT`: networks to GWSW-OroX (`FORMAAT=GWSW`, the default),
+/// to two CSV tables (`FORMAAT=CSV`) or to a GWSW-HydX folder for hydraulic
+/// models (`FORMAAT=HYDX`), beside the drawing or at `PAD=`.
 pub fn export(opt: &super::CivielOptions, naam: Option<String>, formaat: Formaat, pad: Option<std::path::PathBuf>) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let doc = super::document(&["riool"], &[])?;
@@ -2738,6 +2742,14 @@ pub fn export(opt: &super::CivielOptions, naam: Option<String>, formaat: Formaat
             api::note("bestand", path.to_string_lossy().into_owned());
             api::note("gwsw_versie", gwsw::OROX_VERSIE);
             Ok(t!("GWSW-OroX (GWSW {}): {} putten, {} leidingen → {}", "GWSW-OroX (GWSW {}): {} manholes, {} pipes → {}", gwsw::OROX_VERSIE, n_put, n_pipe, path.display()))
+        }
+        Formaat::Hydx => {
+            let dir = pad.unwrap_or_else(|| bridge::beside_drawing(&format!("{slug}_hydx")));
+            let desc = nets.iter().map(|n| n.naam.clone()).collect::<Vec<_>>().join(", ");
+            let t = super::hydx::tables(&nets, &*rd, &super::hydx::today(), &desc)?;
+            let files = super::hydx::write(&dir, &t)?;
+            api::note("bestanden", files.iter().map(|f| f.to_string_lossy().into_owned()).collect::<Vec<_>>());
+            Ok(t!("GWSW-HydX: {} putten, {} leidingen, {} bestanden → {}", "GWSW-HydX: {} manholes, {} pipes, {} files → {}", n_put, n_pipe, files.len(), dir.display()))
         }
         Formaat::Csv => {
             let base = pad.unwrap_or_else(|| bridge::beside_drawing(&format!("{slug}.csv")));

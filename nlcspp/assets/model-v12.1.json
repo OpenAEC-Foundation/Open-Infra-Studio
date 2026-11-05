@@ -1,0 +1,10046 @@
+{
+"bron": "mijnaansluiting/NLCSpp schemas/V12.1 (Apache-2.0)",
+"keuzelijsten": {
+"Bedrijfstoestand": [
+"GEEN",
+"IN BEDRIJF",
+"RESERVE",
+"VERLATEN"
+],
+"BestandMediaTypeValue": [
+"DWG",
+"JPEG",
+"JSON",
+"PDF",
+"PNG",
+"TIFF",
+"XML"
+],
+"Bewerking": [
+"IG NEMEN",
+"OPVULLEN",
+"RS STELLEN",
+"TE VERWIJDEREN",
+"VERLATEN",
+"VERPLAATSEN"
+],
+"BewerkingGas": [
+"IB STELLEN",
+"IG NEMEN",
+"RELINEN",
+"RS STELLEN",
+"TE VERWIJDEREN",
+"VERLATEN",
+"VERPLAATSEN"
+],
+"BijlageTypeValue": [
+"Aardingsrapport",
+"Foto",
+"Gestuurde boring",
+"Zinkertekening"
+],
+"DraaiwijzeGasAfsluiter": [
+"Linksom",
+"Rechtsom"
+],
+"EigenaarBeheerder": [
+"Derden",
+"Gemeente",
+"Netbeheerder"
+],
+"Faseaanduiding": [
+"3 Fasen",
+"L1",
+"L2",
+"L3",
+"N"
+],
+"FunctieElectraStation": [
+"HOOFDSTATION LNB",
+"KLANTSTATION",
+"NETSTATION",
+"OVERIG",
+"VERDEELSTATION"
+],
+"FunctieGasIsolatiestuk": [
+"Netscheiding",
+"Ringscheiding",
+"Sectiescheiding"
+],
+"FunctieHSmof": [
+"3FASE 3x1FASE",
+"EINDDOP",
+"EINDMOF",
+"LOODKOP",
+"MANTELREPARATIE",
+"VERBINDING",
+"ZEGELWIJZIGING"
+],
+"FunctieLSKabel": [
+"LS",
+"LSOV",
+"OV"
+],
+"FunctieLSmof": [
+"AANSLUIT AFTAK",
+"AFTAK EINDMOF",
+"AFTAK NIET SPLITSEND",
+"AFTAK SPLITSEND",
+"COMBI LS OV",
+"EINDMOF",
+"LOODKOP",
+"VERBINDING"
+],
+"FunctieMSmof": [
+"3FASE 3x1FASE",
+"AFTAK SPLITSEND",
+"EIND GEAARD",
+"EINDDOP",
+"EINDMOF",
+"LOODKOP",
+"MANTELREPARATIE",
+"VERBINDING",
+"ZEGELWIJZIGING"
+],
+"FunctieTelecomMof": [
+"AFTAKMOF",
+"EINDDOP",
+"EINDMOF",
+"OVERGANGSMOF",
+"VERBINDINGSMOF"
+],
+"InUit": [
+"Intredepunt",
+"Uittredepunt"
+],
+"Inmeetwijze": [
+"GPS",
+"Laser",
+"Meetlint",
+"Tachymeter"
+],
+"JaNee": [
+"Ja",
+"Nee"
+],
+"KBaanwezig": [
+"Ja",
+"N.v.t. - geen staal",
+"Nee"
+],
+"KleurTelecombuis": [
+"Blauw",
+"Bruin",
+"Geel",
+"Grijs",
+"Groen",
+"Oranje",
+"Paars",
+"Rood",
+"Wit",
+"Zwart"
+],
+"MateriaalBehuizingKBgelijkrichter": [
+"Keuze ontbreekt in lijst",
+"Kunststof",
+"RVS",
+"Staal"
+],
+"NauwkeurigheidXYvalue": [
+"onbekend",
+"tot 100cm",
+"tot 10cm",
+"tot 30cm",
+"tot 3cm",
+"tot 50cm"
+],
+"Netbeheerder": [
+"Enexis",
+"Liander",
+"Stedin"
+],
+"NetvlakElektra": [
+"HS",
+"LHS",
+"LS",
+"MS"
+],
+"NetvlakGas": [
+"HD",
+"LD"
+],
+"ObjectType": [
+"Amantelbuis",
+"Eaarddraad",
+"Eoliedrukleiding",
+"Gleiding",
+"HSkabel",
+"KBmeetdraad",
+"LSkabel",
+"MSkabel",
+"Tbuis",
+"Tkabel"
+],
+"SchakelingOvl": [
+"Avond",
+"Avond en nacht",
+"N.v.t.",
+"Nacht"
+],
+"SituatieVerplaatsing": [
+"Na verplaatsing",
+"Voor verplaatsing"
+],
+"Status": [
+"BESTAAND",
+"NIEUW",
+"REVISIE",
+"VERWIJDERD"
+],
+"StroomsoortKBdrainage": [
+"AC",
+"DC"
+],
+"Subnettype": [
+"AANSLUITNET",
+"DISTRIBUTIE",
+"TRANSPORT"
+],
+"SubnettypeLS": [
+"AANSLUITNET",
+"DISTRIBUTIE"
+],
+"Tekeningtype": [
+"BESTAANDE SITUATIE",
+"DEELREVISIE",
+"DEFINITIEF ONTWERP",
+"EINDREVISIE",
+"VOORONTWERP"
+],
+"Thema": [
+"BUISLEIDING GEVAARLIJKE INHOUD",
+"CHEMIE",
+"DATA",
+"ET_HS",
+"ET_LHS",
+"ET_LS",
+"ET_MS",
+"GAS_HD",
+"GAS_LD",
+"OVERIG",
+"PERSLEIDING",
+"VRIJVERVAL",
+"WARMTENET",
+"WATER",
+"WEESLEIDING"
+],
+"Voorkeurstand": [
+"Dicht",
+"Open"
+]
+},
+"laagnaam_posities": {
+"Aaanlegtechniek": {
+"SoortAanlegTechniek": 2
+},
+"AbeschermingVlak": {
+"SoortBescherming": 2
+},
+"Akunstwerk": {
+"SoortKunstwerk": 2
+},
+"Amantelbuis": {
+"Diameter": 4,
+"Materiaal": 3
+},
+"Amarkeringsobject": {
+"Thema": 1
+},
+"Eaarddraad": {
+"Doorsnede": 4,
+"Geleidermateriaal": 3,
+"Netvlak": 1
+},
+"Eaardmof": {
+"Netvlak": 1
+},
+"Eaardpen": {
+"Netvlak": 1
+},
+"Gafsluiter": {
+"Netvlak": 1
+},
+"Gaftakzadel": {
+"Netvlak": 1
+},
+"GappendageOverig": {
+"Netvlak": 1
+},
+"Gblaasgatzadel": {
+"Netvlak": 1
+},
+"Geindstuk": {
+"Netvlak": 1
+},
+"Gisolatiestuk": {
+"Netvlak": 1
+},
+"Gleiding": {
+"BuitenDiameter": 6,
+"Druk": 4,
+"Materiaal": 5,
+"Netvlak": 2,
+"Subnettype": 3
+},
+"Gleidingafblaas": {
+"Netvlak": 1
+},
+"Gmeetpunt": {
+"Netvlak": 1
+},
+"Goverdrachtspunt": {
+"Netvlak": 1
+},
+"Govergangsstuk": {
+"Netvlak": 1
+},
+"Gsifon": {
+"Netvlak": 1
+},
+"GtStuk": {
+"Netvlak": 1
+},
+"GverticaleBocht": {
+"Netvlak": 1
+},
+"HSkabel": {
+"Spanningsniveau": 3,
+"Uitvoering": 4
+},
+"HSstation": {
+"Functie": 3
+},
+"KBanode": {
+"Thema": 2
+},
+"KBdrainage": {
+"Thema": 2
+},
+"KBgelijkrichter": {
+"Thema": 2
+},
+"KBmeetdraad": {
+"Thema": 2
+},
+"KBmeetpaal": {
+"Thema": 2
+},
+"KBobject": {
+"Thema": 2
+},
+"LSkabel": {
+"Functie": 1,
+"Spanningsniveau": 3,
+"Subnettype": 2,
+"Uitvoering": 4
+},
+"MSkabel": {
+"Spanningsniveau": 3,
+"Subnettype": 2,
+"Uitvoering": 4
+},
+"MSstation": {
+"Functie": 3
+},
+"Tbuis": {
+"Diameter": 5,
+"Materiaal": 4,
+"Subnettype": 2
+},
+"Tkabel": {
+"Subnettype": 2
+}
+},
+"namespace": "NS_NLCSnetbeheer",
+"netbeheerders": {
+"Alliander": {
+"keuzelijsten": {
+"AansluitsetOvl": [
+"AK OVL",
+"Keuze ontbreekt in lijst",
+"LS-94 Faget",
+"LS-94 Faget +City Zenz",
+"LS-94 Faget +TF",
+"LS-94 Faget +Timeswitch"
+],
+"AansluitwijzeOvl": [
+"Aftak",
+"Mini-ster",
+"Rijgaansluiting"
+],
+"Aardingsysteem": [
+"Keuze ontbreekt in lijst",
+"TN",
+"TT"
+],
+"AppendagebekledingGas": [
+"Keuze ontbreekt in lijst",
+"Onbekleed"
+],
+"BuisbekledingGas": [
+"Bitumen",
+"Gegalvaniseerd",
+"Keuze ontbreekt in lijst",
+"Onbekleed",
+"PE bandage",
+"PE extrusie",
+"PE gesinterd",
+"Sleeve"
+],
+"BuitenDiameterGasleiding": [
+"110",
+"114.3",
+"15",
+"160",
+"168.3",
+"200",
+"219.1",
+"22",
+"25",
+"250",
+"273.0",
+"28",
+"315",
+"32",
+"323.9",
+"33.7",
+"35",
+"40",
+"400",
+"406.4",
+"42",
+"42.4",
+"48.3",
+"50",
+"54",
+"60.3",
+"63",
+"75",
+"88.9",
+"Keuze ontbreekt in lijst"
+],
+"DiameterMantelbuis": [
+"100",
+"107",
+"108",
+"110",
+"114",
+"114.3",
+"120",
+"125",
+"133",
+"140",
+"150",
+"159",
+"160",
+"165",
+"168.3",
+"175",
+"180",
+"200",
+"216",
+"219.1",
+"225",
+"250",
+"260",
+"267",
+"273",
+"280",
+"300",
+"315",
+"32",
+"323.9",
+"350",
+"368",
+"40",
+"400",
+"406.4",
+"419",
+"42.4",
+"48.3",
+"50",
+"500",
+"508",
+"521",
+"558",
+"60.3",
+"600",
+"609",
+"616",
+"63",
+"63.5",
+"70",
+"700",
+"75",
+"76.1",
+"762",
+"80",
+"800",
+"812.8",
+"88.9",
+"90",
+"914.4",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"DiameterTelecomBuis": [
+"32",
+"40",
+"50",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"Doorlaatwaarde": [
+"100",
+"125",
+"16",
+"160",
+"200",
+"25",
+"250",
+"35",
+"4",
+"40",
+"50",
+"6",
+"63",
+"80",
+"Keuze ontbreekt in lijst"
+],
+"DoorsnedeAarddraad": [
+"25",
+"35",
+"50",
+"6",
+"70",
+"95"
+],
+"DoorsnedeAardpen": [
+"12.0 mm",
+"12.5 mm",
+"12.7 mm",
+"16.0 mm"
+],
+"Druk": [
+"1 BAR",
+"100 MBAR",
+"2 BAR",
+"200 MBAR",
+"3 BAR",
+"30 MBAR",
+"4 BAR",
+"8 BAR"
+],
+"DrukklasseGasAfsluiter": [
+"PN 10",
+"PN 16",
+"PN 40",
+"PN 8"
+],
+"FabrikantGasAfsluiter": [
+"AVK",
+"Flowserve",
+"Hawle",
+"Keuze ontbreekt in lijst",
+"RMA/Rheinau"
+],
+"FabrikantGasAppendage": [
+"Keuze ontbreekt in lijst",
+"KZ"
+],
+"FabrikantGasLeiding": [
+"Keuze ontbreekt in lijst"
+],
+"FabrikantHSMof": [
+"Felten en Guilleaume",
+"Keuze ontbreekt in lijst",
+"NKF",
+"Pfisterer",
+"Pirelli",
+"Prysmian"
+],
+"FabrikantKBdrainage": [
+"Keuze ontbreekt in lijst"
+],
+"FabrikantKBgelijkrichter": [
+"Hellas",
+"Keuze ontbreekt in lijst",
+"Van der Heide"
+],
+"FabrikantKabel": [
+"Eldra",
+"Energocomplekt",
+"Hellenic",
+"Keuze ontbreekt in lijst",
+"Nexans Nederland B.V.",
+"NKF",
+"NKT",
+"Pirelli",
+"Prysmian",
+"Tele-fonika",
+"TKF",
+"Waskonig en Walter (WenW)"
+],
+"FabrikantLSMof": [
+"Filoform",
+"Keuze ontbreekt in lijst"
+],
+"FunctieGasAfsluiter": [
+"Aansluitleiding",
+"Afblaas",
+"Eind",
+"Scheidingafsluiter",
+"Sectie",
+"StationsAfsluiterinlaat",
+"StationsAfsluiteruitlaat"
+],
+"FunctieGasStation": [
+"Afleverstation",
+"Boosterstation",
+"District- en Afleverstation",
+"District- en Overslagstation",
+"District-, Overslag- en Afleverstation",
+"districtstation",
+"Gas Ontvangststation",
+"Groen gas invoedstation",
+"Hoge druk aflever- en Afleverstation",
+"Hoge druk afleverstation",
+"Net Koppelpunt Leverend",
+"Net Koppelpunt Ontvangend",
+"Net Koppelpunt Ontvangend/Net Koppelpunt Leverend",
+"Noodset",
+"Open eind levering",
+"Open eind levering en afleverstation",
+"Open eind levering, aflever- en hd afleverstation",
+"Overslag- en Afleverstation",
+"Overslagstation",
+"Signaalkast",
+"Waterstof Ontvangststation"
+],
+"FunctieKBdraad": [
+"Aarding",
+"Anders",
+"Coupon",
+"Damwand",
+"Diepte-anodebed",
+"Doorverbinding",
+"Gelijkrichter",
+"HD-leiding",
+"KB-object derden",
+"Keuze ontbreekt in lijst",
+"Kwelscherm",
+"LD-Leiding",
+"Leiding",
+"Leiding AC drainage",
+"leiding DC drainage",
+"Magnesiumanode",
+"Magnesiumlint anode",
+"Mantelbuis",
+"Onbeschermde zijde",
+"PBU",
+"Permanente referentie elektrode",
+"Shunt",
+"Spoor"
+],
+"FunctieKBmeetpaal": [
+"Eindpunt route/netscheiding",
+"Keuze ontbreekt in lijst",
+"Magnesiumlint vaste meetcel",
+"MP kruisende e/o parallel leiding",
+"MP met ´anode´ aansluiting",
+"MP met ´vaste meetcel´ aansluiting",
+"MP met Coupon",
+"MP met Coupon en Meetcel",
+"MP met deelnet",
+"MP met drie isolatiestukken",
+"MP met isolatiestuk",
+"MP met onbeschermde zijde",
+"MP met twee isolatiestukken",
+"MP Standaard",
+"MP Station met onbescherm. zijde",
+"Netscheiding Alliander-derden",
+"Overbrugging",
+"Ringscheiding"
+],
+"FunctieLSkast": [
+"FLATKAST",
+"OV VOEDINGPUNT",
+"VERDEELKAST"
+],
+"FunctieLSoverdrachtspunt": [
+"Aansluiting via kast",
+"Aansluitingbox",
+"Abri",
+"Bedrijf",
+"Betaalautomaat",
+"Bouw Aansluiting",
+"Brug",
+"CAI kast",
+"Camping",
+"Centrale Voorziening",
+"Detectiekast",
+"Diversen (niet gebouwen)",
+"E-station",
+"Feestverlichting",
+"Flitspaal",
+"Garage",
+"Gas Signaalkast",
+"Gasstation",
+"Gasunie met Odorant",
+"Geldautomaat",
+"Gemaal",
+"GK-gasregelr.",
+"Glasvezel verdeelkast",
+"GSM mast",
+"GVB huisje",
+"HA-noodschool, HA-brugw.",
+"Havenlicht",
+"Huisaansluiting",
+"Huisvuilcontainer",
+"IJsbaan",
+"Informatiebord",
+"Internetcel",
+"Kermiskast",
+"Keuze ontbreekt in lijst",
+"Klok",
+"Krib verlichting",
+"KTA-verst.kast",
+"Lift Aansluiting",
+"Lokaal Duurzame Energie",
+"Loods, stal, schuur",
+"Marktkast",
+"Marktverlichting",
+"Matrixbord",
+"NS",
+"Olie druk huisje",
+"Onbekend",
+"Oplaadpunt E-auto",
+"OV Kast",
+"Parkeer verwijzing",
+"Parkeerautomaat",
+"Portaal Autosnelweg",
+"Praatpaal",
+"Putkast",
+"PW Huisje",
+"Reclamebord",
+"Rioolgemaal",
+"Rioolpomp",
+"RWS-kast",
+"Seizoen aansluiting",
+"Signaleringskast NS",
+"Sirene",
+"Sportpark",
+"Stadsverwarming",
+"Stuw",
+"Telecom stationsgebouw",
+"Telefooncel",
+"Telefoonkast",
+"Toiletgebouw",
+"Tunnel",
+"TV-Camera",
+"Verkeersregelinstallatie",
+"Vorstmelder",
+"Waarschuwingslicht",
+"Walkast",
+"Warmte kracht installatie",
+"Weide aansluiting",
+"Windturbine",
+"Wissel verwarming",
+"Woonboot",
+"Woonwagen",
+"Ziekenhuis"
+],
+"FunctieOvlOverdrachtspunt": [
+"AANSLUITKASTJE",
+"LICHTMAST",
+"MAST PRIMAIR"
+],
+"Geleidermateriaal": [
+"Cu",
+"Cu Vertind"
+],
+"IsolatiemateriaalAarddraad": [
+"Blank",
+"Geel/Groen VD",
+"PE"
+],
+"KabelkleurKBdraad": [
+"Blank-koper",
+"Blauw",
+"Geel",
+"Geel-Groen",
+"Groen",
+"Rood",
+"Rood-Zwart",
+"Wit",
+"Zwart"
+],
+"Kabelmontage": [
+"Geen stekker",
+"Stekker handmatige montage",
+"Stekker prefab af fabriek"
+],
+"KoppelingAansluitleidingOSE": [
+"Kniekoppeling",
+"MFK",
+"Spie eind"
+],
+"KoppelingGeveldoorvoerOSE": [
+"Clickmoer",
+"Kniekoppeling",
+"PE onder fundatie",
+"Vast"
+],
+"MateriaalAardpen": [
+"Koper",
+"Koper vertint",
+"Staal gegalvaniseerd",
+"Staal verkoperd",
+"Staal verzinkt"
+],
+"MateriaalGasAfsluiter": [
+"GGG",
+"GIJ",
+"HPE",
+"Keuze ontbreekt in lijst",
+"PE",
+"PE 100",
+"PE+GGG",
+"POM",
+"ST"
+],
+"MateriaalGasleiding": [
+"CU",
+"KEUZE ONTBREEKT IN LIJST",
+"KOUSIJZER",
+"PE 100",
+"PE 100RC",
+"PE 80",
+"PECu",
+"PEKO",
+"PVCsv",
+"ST",
+"ST PE"
+],
+"MateriaalKBanode": [
+"CuSO4",
+"Keuze ontbreekt in lijst",
+"Magnesium",
+"Silicium-IJzer"
+],
+"MateriaalMantelbuis": [
+"GV EPOXY",
+"HDPE DEELBAAR DN100",
+"HDPE DEELBAAR DN150",
+"HDPE FLEXIBEL",
+"KEUZE ONTBREEKT IN LIJST",
+"PE 100 SDR 11",
+"PE 100 SDR 17.6",
+"PE 80 SDR 11",
+"PE 80 SDR 17.6",
+"PE 80 SDR 26",
+"PVC",
+"PVC O SDR 41",
+"PVC SV",
+"ST"
+],
+"MateriaalTelecomBuis": [
+"HDPE",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"OpbouwHSKabel": [
+"EYLKrvdlwd",
+"EYLKrvlwd",
+"GYLKRV",
+"Keuze ontbreekt in lijst",
+"XLPE",
+"YMeKrvas",
+"YMeKrvasdlwd",
+"YMeKrvaslqwd",
+"YMeKrvaslwd",
+"YMeKrvasqlwd",
+"YMeKrvasqwd",
+"YMeKrvc",
+"YMeKrvdlwdas",
+"YMeKrvl",
+"YMvkKrvc",
+"YMvKrvas"
+],
+"OpbouwLSKabel": [
+"Keuze ontbreekt in lijst",
+"VG-YMvK-asmb",
+"VO-YMvK-asmb",
+"V-VMvKh-sas",
+"V-VMvKsas",
+"YMz1Kmbzh"
+],
+"OpbouwMSKabel": [
+"Keuze ontbreekt in lijst",
+"p1mekrvas lqwd",
+"ymekrvas lqwd"
+],
+"RedenNietVerwijdering": [
+"Asfalt",
+"Boom/bomen",
+"Geen toestemming",
+"Grond Derden",
+"Keuze ontbreekt in lijst",
+"Ligt onder gebouw",
+"Ligt te diep",
+"Niet te vinden",
+"Onder water",
+"Ondergrondse Infra",
+"Te verwijderen door derden",
+"Vervuilde grond",
+"Wegverharding"
+],
+"SDRgas": [
+"11",
+"17.6",
+"33",
+"41"
+],
+"SoortAanlegTechniek": [
+"GESTUURDE TECHNIEK",
+"KEUZE ONTBREEKT IN LIJST",
+"PIPEBURSTING"
+],
+"SoortBescherming": [
+"AFDEKPLAAT",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"SoortGas": [
+"Aardgas",
+"Hoogcalorisch gas",
+"Keuze ontbreekt in lijst",
+"Waterstof"
+],
+"SoortGasAansluiting": [
+"Keuze ontbreekt in lijst",
+"Primaire aansluiting",
+"Secundaire aansluiting"
+],
+"SoortGasAfsluiter": [
+"Kogel",
+"Schuif",
+"Vlinderklep"
+],
+"SoortGasAfsluiterAfblaas": [
+"Kogel-Flens",
+"Kogel-Las",
+"Schuif-Flens",
+"Schuif-Las"
+],
+"SoortGasAppendage": [
+"Electrolasmof",
+"Flensverbinding",
+"Keuze ontbreekt in lijst",
+"Lock Joint Steekfitting 110",
+"Lock Joint Steekfitting 63",
+"Mantelbuisafdichting LMI_DMI",
+"Reparatiestuk",
+"Stoppel",
+"Tornippel",
+"Tornippel  2&amp;quot;"
+],
+"SoortGasLeidingafblaas": [
+"Keuze ontbreekt in lijst",
+"Prefab",
+"Samengesteld"
+],
+"SoortGasMeetpunt": [
+"Druk meting",
+"Flow meting",
+"Gasdetectie meting",
+"Keuze ontbreekt in lijst",
+"Temperatuur meting",
+"THT meting"
+],
+"SoortKBanode": [
+"Anodebed (AN)",
+"Diepte Anodebed",
+"Keuze ontbreekt in lijst"
+],
+"SoortKBobject": [
+"Aarding",
+"Keuze ontbreekt in lijst",
+"Referentiecel Cu (RF-CU)",
+"Referentiecel Fe (RF-Fe)",
+"Referentiecel Zn (RF-ZN)",
+"Steraarde"
+],
+"SoortKunstwerk": [
+"KATTENRUG",
+"KEUZE ONTBREEKT IN LIJST",
+"ZINKER",
+"ZINKER_BOOG"
+],
+"SoortLSAansluiting": [
+"Keuze ontbreekt in lijst",
+"Primaire aansluiting",
+"Secundaire aansluiting"
+],
+"SoortTelecomBuisAppendage": [
+"BUISKOPPELING",
+"EINDKAP",
+"HANDHOLE",
+"Keuze ontbreekt in lijst"
+],
+"SpanningsniveauHSKabel": [
+"50 kV"
+],
+"SpanningsniveauLSKabel": [
+"230 V",
+"400 V"
+],
+"SpanningsniveauMSKabel": [
+"10 kV",
+"20 kV",
+"3 kV",
+"6 kV"
+],
+"SubfunctieKBdraad": [
+"2e meetpunt",
+"2e meetpunt kathodezijde gelijkrichter",
+"2e meetpunt zijde mg-anode",
+"3e meetpunt",
+"Anode meetpunt",
+"Flexibele slang",
+"Gelijkrichter 2e meetpunt",
+"Gietijzer",
+"Inlaat",
+"Kathode meetpunt",
+"Kathodezijde gelijkrichter",
+"KB binnen mantelbuis",
+"Keuze ontbreekt in lijst",
+"Niet elektrisch doorverbonden",
+"Staal",
+"Staal 2e meetpunt",
+"Uitlaat",
+"Zijde mg-anode",
+"Zinker"
+],
+"ThemaKB": [
+"GAS_HD",
+"GAS_LD"
+],
+"TypeKBbehuizingGelijkrichter": [
+"Beton",
+"Kast",
+"Keuze ontbreekt in lijst",
+"Kunststof",
+"RVS",
+"RVS kast",
+"Straatpot"
+],
+"TypeKBbehuizingMeetpaal": [
+"Aluminium meetpaal",
+"Betonnen meetpaal",
+"Keuze ontbreekt in lijst",
+"Kunststof meetpaal",
+"RVS meetpaal"
+],
+"TypeKBdrainage": [
+"DR-AC",
+"DR-DC",
+"Keuze ontbreekt in lijst"
+],
+"TypeKBmeetelectrode": [
+"Keuze ontbreekt in lijst"
+],
+"TypeLSMof": [
+"AVM 58-220",
+"Keuze ontbreekt in lijst",
+"Krimpdop",
+"Tweelingmof",
+"Wikkelmof"
+],
+"UitvoeringAftakzadel": [
+"Autoperf",
+"Keuze ontbreekt in lijst",
+"Mueller-T",
+"Weldolet",
+"Zadel aftak blaasgat PVC SV",
+"Zadel aftak GGG tbv Polsafe",
+"Zadel aftak PE las +opzet",
+"Zadel aftak PE100 El las",
+"Zadel aftak PVC SV",
+"Zadel aftak PVC SV+opzet",
+"Zadel aftak RVS",
+"Zadel aftak RVS tbv Polsafe",
+"Zadel aftak T-stuk RVS"
+],
+"UitvoeringEindstuk": [
+"Blindflens",
+"Dop",
+"Eindkap CU",
+"Eindkap PE100 EL-las",
+"Eindkap Primofit",
+"Eindkap PVCsv",
+"Eindkap steek Hawle POM",
+"E-stuk Blindflens",
+"Gedemmerd/Gemetseld",
+"Keuze ontbreekt in lijst",
+"Lasbodem bol",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 104-132",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 132-155",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 154-192",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 192-232",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 230-268",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 267-310",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 315-356",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 392-433",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 46-71",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 63-90",
+"MJ-Koppeling Mof-Blind/Tv NGIJ 84-105"
+],
+"UitvoeringGasIsolatiestuk": [
+"Isolatieflens PVCsv",
+"Isolatieflens ST",
+"Isolatiestuk PERTINAX",
+"Isolatiestuk ST",
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringGasOvergangsstuk": [
+"BRS Pers koppeling Brons Spie Pers",
+"El-las PE 100 Mof",
+"El-las sdr11 +Stb PE 100 Mof",
+"Hawle K6225 POM Mof Draad",
+"Hawle K6325 POM Mof",
+"Hawle K6335 POM Mof",
+"Hawle K6385 POM Mof",
+"Hawle K6386 POM Mof",
+"HSF PeCu koppeling PE 100 Mof",
+"Keuze ontbreekt in lijst",
+"Leeftijdsovergang",
+"Mall. St TV+ PE 100 - ST Flex",
+"Mall. St TV+ PE 80 - ST Flex",
+"MJ 3007+Tv NGIJ Mof",
+"MJ 3057+Tv NGIJ Flens Mof",
+"MJ 3067+Tv NGIJ-PE 100 Mof Spie",
+"MJ 3080+ NGIJ Mof Spie",
+"MJ 3107+Tv NGIJ Mof",
+"MJ 3180+ NGIJ Mof Spie",
+"M-M 230-268 x 192 - 232 TV",
+"Overgang Mof PVC-SV Mof",
+"Overschuif PVCsv Mof",
+"Overschuif smu ST Mof",
+"PE 100 - RVS Spie Draad",
+"PE 100 - ST Flens Spie",
+"PE 100 - ST Spie",
+"PE 100 Spie",
+"PE 80 - ST Flens Spie",
+"PE 80 - ST Spie",
+"PeCu Mof",
+"PVCsv Spie",
+"ST Spie",
+"Steek las PE 100 Spie",
+"Verlengd PVCsv Mof"
+],
+"UitvoeringGasTstuk": [
+"Keuze ontbreekt in lijst",
+"Las T-stuk",
+"MMB GY",
+"MMB PVCsv",
+"Stuiklas PE 100",
+"Stuiklas PE 80",
+"T-klem RVS",
+"T-stuk EL-las PE 100",
+"T-stuk Hawle",
+"T-stuk PE 100 spie-eind",
+"T-stuk PE Steek"
+],
+"UitvoeringHSKabel": [
+"1x1200Al",
+"1x1200Cu",
+"1x1600Al",
+"1x1600Cu",
+"1x240Al",
+"1x400Al",
+"1x400Alrm",
+"1x630Al",
+"1x630Alrm",
+"3x1200Al",
+"3x1600Al",
+"3x240Al",
+"3x400Al",
+"3x400Alrm",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"UitvoeringHSMof": [
+"Eindmof/Krimpdop",
+"Eindmof/Loodkap",
+"Keuze ontbreekt in lijst",
+"Spreidmof/CFTJX-72-3",
+"Verbindingsmof/461/KG",
+"Verbindingsmof/CFJ-72",
+"Verbindingsmof/CFJ-72-T",
+"Verbindingsmof/MOA-5000",
+"Verbindingsmof/MSA72-DOS"
+],
+"UitvoeringKBdraad": [
+"10mm",
+"16mm",
+"25mm",
+"50mm",
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringKBgelijkrichter": [
+"Hellas AM1 25V",
+"Hellas AM2 50V",
+"Keuze ontbreekt in lijst",
+"Van der Heide H-84-025-10"
+],
+"UitvoeringLSKabel": [
+"2x2.5Cu as2.5",
+"3x10Cu as10",
+"3x2.5Cu as2.5",
+"3x6Cu as6",
+"4x10Cu as10",
+"4x150Al 4x6Cu as50Cu",
+"4x150Al as50Cu",
+"4x16Cu as16",
+"4x2.5Cu as2.5",
+"4x50Al 4x2.5Cu as25Cu",
+"4x6Cu as6",
+"4x95Al 4x6Cu as35Cu",
+"5x10Cu",
+"5x16Cu",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"UitvoeringLSoverdrachtspunt": [
+"AANSLK 63A V/FLAT HJ-5560",
+"AANSLK 63A V/FLAT HJ-5560 OenK",
+"AANSLK AK250 ≥3X80A T/M 160KVA",
+"AANSLK AK250 ≥3X80A T/M 160KVA C4",
+"AANSLK AK250 ≥3X80A T/M 160KVA GE",
+"AANSLK AK250 ≥3X80A T/M 160KVA GE POWER",
+"AANSLK AK250 ≥3X80A T/M 160KVA HOLEC",
+"AANSLK AK250 ≥3X80A T/M 160KVA OenK",
+"AANSLK AK250 ≥3X80A T/M 160KVA pfisterer",
+"AK Onbemand Breed",
+"AK Onbemand Smal",
+"FLATKAST KST     12 PATR.H VCK",
+"FLATKAST KST     18 PATR.H VCK",
+"HAK 1X25 A GIETIJZER MT",
+"HAK 1X25 A GIETIJZER ZT",
+"HAK 3X25 A GIETIJZER MT",
+"HAK 3X25 A GIETIJZER ZT",
+"HAK 3X25 A KUNSTSTOF MT",
+"HAK 3X25 A KUNSTSTOF ZT",
+"HAK 3X25 A KUNSTSTOF ZT OenK",
+"HAK 3X60 A GIETIJZER MT",
+"HAK 3X60 A GIETIJZER ZT",
+"HAK KST 3X60 A 4X6 VW NEN",
+"HAK.KST 3X60 A 4X6/10 TVW NEN",
+"HAK.KST 3X63 A 4X6/10 TVW NEN",
+"HAK.KST M/DIN 00",
+"Hemaf",
+"HH",
+"KABELINV-KST EG-404/160 HH",
+"KABELINV-KST EG-404/260 HH",
+"Keuze ontbreekt in lijst",
+"OenK",
+"Pfisterer"
+],
+"UitvoeringMSKabel": [
+"1x240Alrm as25",
+"1x400Cu 50as",
+"1x630Alrm as35",
+"1x630Alrm as50",
+"1x630Cu as35",
+"1x630Cu as50",
+"1x630Cu as70",
+"1x800Alrm as35",
+"1x800Alrm as50",
+"3x240Alrm as35",
+"3x240Alrm as50",
+"3x95Alrm as50",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"UitvoeringMSMof": [
+"10-20kV GPLK 3x35-70/XLPE 3x240 Cellpack",
+"10-20kV GPLK 3x35-70/XLPE 3x240 Raychem",
+"10-20kV GPLK 3x95-240/XLPE 3x240 Cellpack",
+"10-20kV XLPE 1x630 NKT",
+"10-20kV XLPE 1x630 Raychem",
+"10-20kV XLPE 1x630-800/20kV 1x800 NKT",
+"10-20kV XLPE 1x630-800/20kV 1x800 Raychem",
+"10-20kV XLPE 3x240/20kV 3x1x630 3M",
+"10-20kV XLPE 3x240/20kV 3x1x630 Raychem",
+"10-20kV XLPE 3X95-240 3M",
+"10-20kV XLPE 3x95-240 Raychem",
+"10-20kV XLPE 3x95-240/20kV 3x1x240 3M",
+"10-20kV XLPE 3x95-240/20kV 3x1x240 Raychem",
+"10kV GPLK 10-35 SMOE 63911 Raychem",
+"10kV GPLK 10-35/XLPE 95 SMOE 63901 Raychem",
+"10kV GPLK 120-185 50kV/20kV XLPE 3x240 Cellpack",
+"10kV GPLK 120-185 50kV/20kV XLPE 3x240 Raychem",
+"10kV GPLK 25-70/XLPE 20kV 3x1x240Al Raychem",
+"10kV GPLK 35-95 Cellpack",
+"10kV GPLK 35-95 SMOE 63912 Raychem",
+"10kV GPLK 3x240-300/20kV XLPE 3x1x630 Cellpack",
+"10kV GPLK 3x240-300/20kV XLPE 3x1x630 Raychem",
+"10kV GPLK 3x300/10-20kV XLPE 3x240 Cellpack",
+"10kV GPLK 3x300/10-20kV XLPE 3x240 Raychem",
+"10kV GPLK 50-95/XLPE 95 SMOE 63902",
+"10kV GPLK 95-240 Cellpack",
+"10kV GPLK 95-240 SMOE 63913 Raychem",
+"10kV GPLK 95-240/XLPE 20kV 3x1x240Al Cellpack",
+"10kV GPLK 95-240/XLPE 20kV 3x1x240Al Raychem",
+"10kV GPLK 95-240/XLPE 95-240 SM63903 Raychem",
+"10kV XLPE 1x400/20kV 1x630 NKT",
+"10kV XLPE 1x400/20kV 1x630 Raychem",
+"20kV XLPE 1x150-240 NKT",
+"20kV XLPE 1x150-240 Raychem",
+"20kV XLPE 1x240 / 20kV 1x630 NKT",
+"Keuze ontbreekt in lijst",
+"KRIMPDOP",
+"REP 10-20kV XLPE 3x95-240 Raychem",
+"REP 10kV GPLK 10-35 SMOE 63921 Raychem",
+"REP 10kV GPLK 35-95 Cellpack",
+"REP 10kV GPLK 35-95 Raychem",
+"REP 10kV GPLK 95-240 Cellpack",
+"REP 10kV GPLK 95-240 SMOE 63923 Raychem",
+"WIKKELMOF  Filoform"
+],
+"UitvoeringOntspanningselement": [
+"Keuze ontbreekt in lijst",
+"Nieuw HSF PE 32 mm SDR: 3 Armlengte: 800 mm",
+"Nieuw HSF PE 40 mm SDR: 3.7 Armlengte: 800 mm",
+"Renovatie HSF PE 32 mm SDR: 3 Armlengte: 800 mm",
+"Renovatie HSF PE 40 mm SDR: 3.7 Armlengte: 800 mm",
+"Renovatie op bestaand HSF PE 32 mm SDR: 3 Armlengte: 800 mm",
+"Renovatie op bestaand HSF PE 40 mm SDR: 3.7 Armlengte: 800 mm",
+"Verticaal ZGC Pipelife PE100 110 mm SDR: 17.6 Armlengte: 800 mm",
+"Verticaal ZGC Pipelife PE100 63 mm SDR: 17.6 Armlengte: 800 mm"
+],
+"VerbindingbekledingGas": [
+"Densoleen",
+"Enkapress",
+"Keuze ontbreekt in lijst",
+"Krimpmof Dirax",
+"Onbekleed",
+"PE bandage",
+"Polyurethaan"
+],
+"VerbindingstechniekGas": [
+"Elektrolas",
+"HSF Peko koppeling TV",
+"Las",
+"Mof",
+"Spiegellas"
+],
+"VerbindingstechniekGasAfsluiter": [
+"Elektrolas",
+"Flens",
+"Las",
+"Mof",
+"Spiegellas"
+],
+"VoedingEnSturingOvl": [
+"LS gevoed met relais op OV-net",
+"OV gevoed en geschakeld",
+"OV gevoed met TF ontv in mast"
+]
+},
+"namespace": "NS_NLCSnetbeheer",
+"xsd": "NLCS_NetbeheerAllianderV12.1Import_Keuzelijst.xsd"
+},
+"Enexis": {
+"keuzelijsten": {
+"AansluitsetOvl": [
+"AK OVL",
+"Keuze ontbreekt in lijst",
+"LS-94 Faget",
+"LS-94 Faget +City Zenz",
+"LS-94 Faget +TF",
+"LS-94 Faget +Timeswitch"
+],
+"AansluitwijzeOvl": [
+"Aftak",
+"Mini-ster",
+"Rijgaansluiting",
+"Sectionering"
+],
+"Aardingsysteem": [
+"Keuze ontbreekt in lijst",
+"TN",
+"TT"
+],
+"AppendagebekledingGas": [
+"Epoxy",
+"Keuze ontbreekt in lijst",
+"Onbekleed",
+"Polyurethaan coating"
+],
+"BuisbekledingGas": [
+"Keuze ontbreekt in lijst",
+"Onbekleed",
+"PE extrusie"
+],
+"BuitenDiameterGasleiding": [
+"100",
+"110",
+"114.3",
+"15",
+"160",
+"168.3",
+"200",
+"219.1",
+"22",
+"25",
+"250",
+"273.0",
+"28",
+"315",
+"32",
+"323.9",
+"33.7",
+"35",
+"40",
+"400",
+"406.4",
+"42",
+"42.4",
+"48.3",
+"50",
+"54",
+"60.3",
+"63",
+"75",
+"88.9",
+"90",
+"Keuze ontbreekt in lijst"
+],
+"DiameterMantelbuis": [
+"100",
+"107",
+"108",
+"110",
+"114",
+"114.3",
+"120",
+"125",
+"133",
+"140",
+"150",
+"159",
+"160",
+"165",
+"168.3",
+"175",
+"180",
+"200",
+"216",
+"219.1",
+"225",
+"250",
+"260",
+"267",
+"273",
+"280",
+"300",
+"315",
+"32",
+"323.9",
+"350",
+"368",
+"40",
+"400",
+"406.4",
+"419",
+"42.4",
+"48.3",
+"50",
+"500",
+"508",
+"521",
+"558",
+"60.3",
+"600",
+"609",
+"616",
+"63",
+"63.5",
+"70",
+"700",
+"75",
+"76.1",
+"762",
+"80",
+"800",
+"812.8",
+"88.9",
+"90",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"DiameterTelecomBuis": [
+"KEUZE ONTBREEKT IN LIJST"
+],
+"Doorlaatwaarde": [
+"100",
+"125",
+"16",
+"160",
+"200",
+"25",
+"250",
+"35",
+"4",
+"40",
+"50",
+"6",
+"63",
+"80",
+"Keuze ontbreekt in lijst"
+],
+"DoorsnedeAarddraad": [
+"25",
+"50",
+"95"
+],
+"DoorsnedeAardpen": [
+"12.0 mm",
+"12.5 mm",
+"12.7 mm",
+"16.0 mm"
+],
+"Druk": [
+"1 BAR",
+"100 MBAR",
+"200 MBAR",
+"30 MBAR",
+"4 BAR",
+"8 BAR"
+],
+"DrukklasseGasAfsluiter": [
+"PN 10",
+"PN 16",
+"PN 40",
+"PN 6",
+"PN 8"
+],
+"FabrikantGasAfsluiter": [
+"AVK",
+"George Fisher",
+"Hawle",
+"Keuze ontbreekt in lijst"
+],
+"FabrikantGasAppendage": [
+"Keuze ontbreekt in lijst"
+],
+"FabrikantGasLeiding": [
+"Imbema",
+"Keuze ontbreekt in lijst",
+"OCI",
+"Wavin"
+],
+"FabrikantHSMof": [
+"Felten en Guilleaume",
+"Keuze ontbreekt in lijst",
+"NKF",
+"Pfisterer",
+"Pirelli",
+"Prysmian"
+],
+"FabrikantKBdrainage": [
+"Keuze ontbreekt in lijst"
+],
+"FabrikantKBgelijkrichter": [
+"Amstel",
+"Delta",
+"Eltek",
+"Hommema",
+"Keuze ontbreekt in lijst",
+"Merrem en la Porte",
+"Van der Heide",
+"Van der Velde"
+],
+"FabrikantKabel": [
+"AEG",
+"Eupen",
+"Hellenic",
+"Kaiser",
+"Keuze ontbreekt in lijst",
+"NKF",
+"NKT",
+"Pirelli",
+"Prysmian",
+"Siemens",
+"Sterling",
+"TF Kable",
+"TKF",
+"Waskonig en Walter (WenW)"
+],
+"FabrikantLSMof": [
+"3M",
+"Cellpack",
+"Filoform",
+"Keuze ontbreekt in lijst",
+"Lovink"
+],
+"FunctieGasAfsluiter": [
+"Aansluitleiding",
+"Afblaas",
+"Scheidingafsluiter",
+"Sectie"
+],
+"FunctieGasStation": [
+"Afleverstation",
+"Afleverstation klein",
+"District- en Afleverstation",
+"districtstation",
+"Drukbewakingsstation",
+"Gas Ontvangststation",
+"Huisaansluitset",
+"Open eind levering",
+"Overslagstation",
+"Reinigings- droog station"
+],
+"FunctieKBdraad": [
+"Aarding",
+"Anders",
+"Coupon",
+"Damwand",
+"Diepte-anodebed",
+"Doorverbinding",
+"Gelijkrichter",
+"HD-leiding",
+"KB-object derden",
+"Keuze ontbreekt in lijst",
+"Kwelscherm",
+"LD-Leiding",
+"Leiding",
+"Leiding AC drainage",
+"leiding DC drainage",
+"Magnesiumanode",
+"Magnesiumlint anode",
+"Mantelbuis",
+"Onbeschermde zijde",
+"PBU",
+"Permanente referentie elektrode",
+"Shunt",
+"Spoor"
+],
+"FunctieKBmeetpaal": [
+"Diode in meetpaal aanwezig t.b.v. stroomrichting",
+"Drainage AC",
+"Drainage DC",
+"Kathodische bescherming d.m.v. mg-anode(n)",
+"KB lage druk gasleiding (druk≤201 mbar)",
+"KB-netscheiding (elektrische scheiding tussen twee gasnetten)",
+"KB-ringonderbreking (elektrische scheiding in een zelfde gasnet om ring te splitsen)",
+"Keuze ontbreekt in lijst",
+"Meetpaal  t.b.v. zwerfstroommetingen",
+"Meetpaal heeft geen functie",
+"Meetpaal heeft Remote monitoring / sensor",
+"Meetpaal is een straatpot",
+"Meetpaal met doorverbinding(en) naar andere meetpaal",
+"Meetpaal met één of meerdere meetpunt(en) op leiding (tussen meetpaal)",
+"Meetpaal met meetpunt coupon",
+"Meetpaal met meetpunt op eindpunt leiding waarbij de afstand (aftakking) ≤500 meter t.o.v. vorig meetpunt nabij isolatiekoppeling c.q. -flens.",
+"Meetpaal met meetpunt op eindpunt leiding waarbij de afstand (aftakking) ≤500 meter t.o.v. vorig meetpunt.",
+"Meetpaal met meetpunt(en) damwand(en)",
+"Meetpaal met meetpunt(en) derden",
+"Meetpaal met meetpunt(en) derden waarbij KB door opdrachtgever gerealiseerd wordt",
+"Meetpaal met meetpunt(en) mg-lint(en) elektrisch verbonden in meetpaal met de leiding",
+"Meetpaal met meetpunt(en) mg-lint(en) niet elektrisch verbonden in meetpaal met de leiding",
+"Meetpaal met meetpunt(en) nabij kruising van Stedin stalen leiding met stalen leiding derden.",
+"Meetpaal met meetpunt(en) referentie-elektrod(en)",
+"Meetpaal met meetpunt(en) stalen mantelbuis",
+"Meetpaal met meetpunten t.b.v. elektrische overbrugging isolatiekoppeling(en)",
+"Meetpaal met meetpunten t.b.v. elektrische overbrugging parallel en/of naast liggende leiding.",
+"Meetpaal nabij hoogspanningskabel c.q. lijn",
+"Meetpaal nabij of tussen zonnepanelen park.",
+"Meetpaal nabij spoor",
+"Meetpaal nabij tram",
+"Meetpaal op eindpunt leiding",
+"Meetpaal op privé terrein / voorafgaand aan meting een afspraak maken, KB via gelijkrichter",
+"OAM heeft vastgesteld dat voor meetpaal geen herstelactie of meting nodig is",
+"Uitlaat lage druk (≤ 201 mbar) meebeschermd (korte leiding)",
+"Uitlaat lage druk (≤ 201mbar) niet meebeschermd (korte leiding), alleen benoemen mits meetpunt in meetpaal",
+"Verdeelkast tbv anode en/of kathode",
+"Weerstand in meetpaal aanwezig i.v.m. potentiaalverlaging"
+],
+"FunctieLSkast": [
+"FLATKAST",
+"NULPUNTSTRANSFORMATOR",
+"OV SECTIONERING",
+"OV VOEDINGPUNT",
+"REGELTRANSFORMATOR",
+"VERDEELKAST",
+"ZELFOPWEKKER"
+],
+"FunctieLSoverdrachtspunt": [
+"Aansluiting via kast",
+"Aansluitingbox",
+"Abri",
+"Bedrijf",
+"Betaalautomaat",
+"Bouw Aansluiting",
+"Brug",
+"CAI kast",
+"Camping",
+"Centrale Voorziening",
+"Detectiekast",
+"Diversen (niet gebouwen)",
+"E-station",
+"Feestverlichting",
+"Flitspaal",
+"Garage",
+"Gas Signaalkast",
+"Gasstation",
+"Gasunie met Odorant",
+"Geldautomaat",
+"Gemaal",
+"GK-gasregelr.",
+"Glasvezel verdeelkast",
+"GSM mast",
+"GVB huisje",
+"HA-noodschool, HA-brugw.",
+"Havenlicht",
+"Huisaansluiting",
+"Huisvuilcontainer",
+"IJsbaan",
+"Informatiebord",
+"Internetcel",
+"Kermiskast",
+"Keuze ontbreekt in lijst",
+"Klok",
+"Krib verlichting",
+"KTA-verst.kast",
+"Lift Aansluiting",
+"Lokaal Duurzame Energie",
+"Loods, stal, schuur",
+"Marktkast",
+"Marktverlichting",
+"Matrixbord",
+"NS",
+"Olie druk huisje",
+"Onbekend",
+"Oplaadpunt E-auto",
+"OV Kast",
+"Parkeer verwijzing",
+"Parkeerautomaat",
+"Portaal Autosnelweg",
+"Praatpaal",
+"Putkast",
+"PW Huisje",
+"Reclamebord",
+"Rioolgemaal",
+"Rioolpomp",
+"RWS-kast",
+"Seizoen aansluiting",
+"Signaleringskast NS",
+"Sirene",
+"Sportpark",
+"Stadsverwarming",
+"Stuw",
+"Telecom stationsgebouw",
+"Telefooncel",
+"Telefoonkast",
+"Toiletgebouw",
+"Tunnel",
+"TV-Camera",
+"Verkeersregelinstallatie",
+"Vorstmelder",
+"Waarschuwingslicht",
+"Walkast",
+"Warmte kracht installatie",
+"Weide aansluiting",
+"Windturbine",
+"Wissel verwarming",
+"Woonboot",
+"Woonwagen",
+"Ziekenhuis"
+],
+"FunctieOvlOverdrachtspunt": [
+"AANSLUITKASTJE",
+"LICHTMAST",
+"MAST PRIMAIR"
+],
+"Geleidermateriaal": [
+"Al",
+"Cu"
+],
+"IsolatiemateriaalAarddraad": [
+"Blank",
+"Geel/Groen VD",
+"PE"
+],
+"KabelkleurKBdraad": [
+"Blauw",
+"Bruin",
+"Geel",
+"Geel-Groen",
+"Geen",
+"Grijs",
+"Groen",
+"Onbekend",
+"Oranje",
+"Paars",
+"Rood",
+"Rood-Zwart",
+"Wit",
+"Zwart"
+],
+"Kabelmontage": [
+"Geen stekker",
+"Stekker handmatige montage",
+"Stekker prefab af fabriek"
+],
+"KoppelingAansluitleidingOSE": [
+"Kniekoppeling",
+"MFK",
+"Spie eind"
+],
+"KoppelingGeveldoorvoerOSE": [
+"Clickmoer",
+"Kniekoppeling",
+"PE onder fundatie",
+"Vast"
+],
+"MateriaalAardpen": [
+"Koper",
+"Koper vertint",
+"Staal gegalvaniseerd",
+"Staal verkoperd",
+"Staal verzinkt"
+],
+"MateriaalGasAfsluiter": [
+"Keuze ontbreekt in lijst"
+],
+"MateriaalGasleiding": [
+"CU",
+"KEUZE ONTBREEKT IN LIJST",
+"KOUSIJZER",
+"MULTILAYER",
+"PE 100",
+"PE 100RC",
+"PE 100RCB",
+"PE 100RCM",
+"PE 80",
+"PECu",
+"PEKO",
+"PVC CPE",
+"ST",
+"ST PE"
+],
+"MateriaalKBanode": [
+"Aluminium",
+"Keuze ontbreekt in lijst",
+"Silicium-IJzer"
+],
+"MateriaalMantelbuis": [
+"GIJ",
+"KEUZE ONTBREEKT IN LIJST",
+"PE 100 SDR 11",
+"PE 80",
+"PVC",
+"ST"
+],
+"MateriaalTelecomBuis": [
+"KEUZE ONTBREEKT IN LIJST"
+],
+"OpbouwHSKabel": [
+"EYLKrvasdlwd",
+"Keuze ontbreekt in lijst",
+"YMeKrvasdlwd",
+"YMeKrvaslqwd Fca"
+],
+"OpbouwLSKabel": [
+"Keuze ontbreekt in lijst",
+"VO-YMvKas Dca-s2,d2,a3",
+"VO-YMvKhas Dca-s2,d2,a3",
+"V-VMvKh-sas",
+"V-VMvKhsas Eca",
+"V-VMvKsas",
+"V-VMvKsas Eca",
+"Z1G-YMz1Kas B2ca-s1,d1,a1",
+"Z1O-YMz1Kas B2ca-s1,d1,a1"
+],
+"OpbouwMSKabel": [
+"Keuze ontbreekt in lijst",
+"YMeKrvaslqwd",
+"YMeKrvaslqwd Fca",
+"YMvKrvas Eca"
+],
+"RedenNietVerwijdering": [
+"Asfalt",
+"Boom/bomen",
+"Geen toestemming",
+"Grond Derden",
+"Keuze ontbreekt in lijst",
+"Ligt onder gebouw",
+"Ligt te diep",
+"Niet te vinden",
+"Onder water",
+"Ondergrondse Infra",
+"Te verwijderen door derden",
+"Vervuilde grond",
+"Wegverharding"
+],
+"SDRgas": [
+"11",
+"17.6",
+"33",
+"41"
+],
+"SoortAanlegTechniek": [
+"GESTUURDE TECHNIEK",
+"KEUZE ONTBREEKT IN LIJST",
+"PIPEBURSTING"
+],
+"SoortBescherming": [
+"AFDEKPLAAT",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"SoortGas": [
+"Aardgas",
+"Biogas",
+"Hoogcalorisch gas",
+"Keuze ontbreekt in lijst",
+"Waterstof"
+],
+"SoortGasAansluiting": [
+"Aansluiting op hoofdleiding",
+"Afgedopte aansluiting",
+"Aftakaansluiting",
+"Hoofdaansluiting Hoogbouw",
+"Hoofdaansluiting met aftak",
+"Hoofdaansluiting met rijg",
+"Hoofdaansluiting met sec",
+"Keuze ontbreekt in lijst",
+"Regelinstallatie",
+"Rijgaansluiting",
+"Secundair",
+"Secundair binnen",
+"Secundair buiten",
+"Via stijgleiding"
+],
+"SoortGasAfsluiter": [
+"Klep",
+"Kogel",
+"Kogelkraan/Las",
+"Schuif"
+],
+"SoortGasAfsluiterAfblaas": [
+"Kogel-Flens",
+"Kogel-Las",
+"Schuif-Flens",
+"Schuif-Las"
+],
+"SoortGasAppendage": [
+"Electrolasmof",
+"Flens-Steekschijf",
+"Flensverbinding",
+"Flex / N-Flex",
+"Keuze ontbreekt in lijst",
+"Knevelplek",
+"Komeetmof",
+"Las",
+"Lasmof",
+"Lasnippel",
+"Overschuifmof",
+"Reparatie: Encapress",
+"Reparatie: Klem",
+"Reparatie: Klem met aftak",
+"Reparatie: Lekbeugel",
+"Reukpot",
+"Schuifstuk",
+"Shortstop",
+"Sok, Stop of Nippel",
+"Split Tee",
+"Steekmof",
+"Steekschijf",
+"Stoppel"
+],
+"SoortGasLeidingafblaas": [
+"Afblaas",
+"Keuze ontbreekt in lijst",
+"Ontluchter"
+],
+"SoortGasMeetpunt": [
+"Druk meting",
+"Flow meting",
+"Keuze ontbreekt in lijst"
+],
+"SoortKBanode": [
+"Anodebed (AN)",
+"Diepte Anodebed",
+"Keuze ontbreekt in lijst"
+],
+"SoortKBobject": [
+"Coupon",
+"Keuze ontbreekt in lijst",
+"Meetcel"
+],
+"SoortKunstwerk": [
+"BRUGBUIS",
+"DOORVOERLEIDING PARKEERGARAGE",
+"KEUZE ONTBREEKT IN LIJST",
+"KRUISING_WATER",
+"TUNNELLEIDING",
+"ZINKER",
+"ZINKER_BOOG",
+"ZINKER_SLEEP"
+],
+"SoortLSAansluiting": [
+"Keuze ontbreekt in lijst"
+],
+"SoortTelecomBuisAppendage": [
+"Keuze ontbreekt in lijst"
+],
+"SpanningsniveauHSKabel": [
+"30 kV"
+],
+"SpanningsniveauLSKabel": [
+"230 V",
+"400 V",
+"600 V"
+],
+"SpanningsniveauMSKabel": [
+"10 kV",
+"20 kV",
+"3 kV"
+],
+"SubfunctieKBdraad": [
+"2e meetpunt",
+"2e meetpunt kathodezijde gelijkrichter",
+"2e meetpunt zijde mg-anode",
+"3e meetpunt",
+"Anode meetpunt",
+"Flexibele slang",
+"Gelijkrichter 2e meetpunt",
+"Gietijzer",
+"Inlaat",
+"Kathode meetpunt",
+"Kathodezijde gelijkrichter",
+"KB binnen mantelbuis",
+"Keuze ontbreekt in lijst",
+"Niet elektrisch doorverbonden",
+"Staal",
+"Staal 2e meetpunt",
+"Uitlaat",
+"Zijde mg-anode",
+"Zinker"
+],
+"ThemaKB": [
+"BUISLEIDING GEVAARLIJKE INHOUD",
+"CHEMIE",
+"GAS_HD",
+"GAS_LD",
+"OVERIG",
+"PERSLEIDING",
+"VRIJVERVAL",
+"WARMTENET",
+"WATER",
+"WEESLEIDING"
+],
+"TypeKBbehuizingGelijkrichter": [
+"Keuze ontbreekt in lijst",
+"Kunstof Kast",
+"Orlite OR-2852",
+"Phisterer KVS103",
+"Phisterer Polyester",
+"RVS kast"
+],
+"TypeKBbehuizingMeetpaal": [
+"Betonnen meetpaal",
+"Keuze ontbreekt in lijst",
+"Kunststof meetpaal",
+"RVS meetpaal"
+],
+"TypeKBdrainage": [
+"DR-AC",
+"DR-DC-10A",
+"DR-DC-25A",
+"DR-DC-50A",
+"Hellas AMAC-40A",
+"Hellas AMAC-80A",
+"Keuze ontbreekt in lijst"
+],
+"TypeKBmeetelectrode": [
+"Combi",
+"Keuze ontbreekt in lijst",
+"Meetcel gel",
+"Meetcel kristal",
+"Zink"
+],
+"TypeLSMof": [
+"FiloSlim Spuit-wikkelmof P2662",
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringAftakzadel": [
+"Aanboring",
+"Aanboring-eindkap",
+"Keuze ontbreekt in lijst",
+"T",
+"Weldolet"
+],
+"UitvoeringEindstuk": [
+"Blindflens",
+"Eindkap",
+"Keuze ontbreekt in lijst",
+"Lasbodem bol"
+],
+"UitvoeringGasIsolatiestuk": [
+"Isolatieflens",
+"Isolatiekoppeling",
+"Isolatiestuk",
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringGasOvergangsstuk": [
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringGasTstuk": [
+"Aanboring",
+"Bolfitting",
+"Keuze ontbreekt in lijst",
+"Las T-stuk",
+"MMB GY",
+"MMB PVCsv",
+"T-Stuk"
+],
+"UitvoeringHSKabel": [
+"1x1200Alrm",
+"1x400Alrm",
+"1x630Alrm",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"UitvoeringHSMof": [
+"Eindmof/Krimpdop",
+"Eindmof/Loodkap",
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringKBdraad": [
+"1 x 10 Cu, met mantel",
+"1 x 6 Cu, met mantel",
+"3 x 35Cu halogeenvrij klasse B2ca",
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringKBgelijkrichter": [
+"Amstel 25V/5A",
+"Amstel AM2N-50V-10A",
+"Delta ES030-5",
+"Eltek 802-EWB-110-33",
+"Hommema 48V/10A-RVS-VAR",
+"Hommema 48V/5A-RVS-VAR",
+"Keuze ontbreekt in lijst",
+"Van der Heide H-00-00-025-002-00",
+"Van der Heide H-03-00-025-02-05-12-12",
+"Van der Heide H-84-025-10"
+],
+"UitvoeringLSKabel": [
+"3x10Cu",
+"3x2.5Cu",
+"4x10Cu",
+"4x150Al",
+"4x150Al 4x6Cu",
+"4x16Cu",
+"4x16Cu 4x2.5Cu",
+"4x2.5Cu",
+"4x240Al",
+"4x240Al 4x6Cu",
+"4x50Al 4x2.5Cu",
+"4x6Cu",
+"4x6Cu 4x1.5Cu",
+"4x6Cu 4x2.5Cu",
+"4x95Al",
+"4x95Al 4x6Cu",
+"4x95Cu",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"UitvoeringLSoverdrachtspunt": [
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringMSKabel": [
+"1x16Cu as16",
+"1x240Alrm as35",
+"1x25Cu as16",
+"1x400Alrm as35",
+"1x630Alrm as35",
+"1x630Cu as50",
+"1x800Alrm as35",
+"1x95Alrm as50",
+"3x240Alrm as35",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"UitvoeringMSMof": [
+"3M QS200 93-AK 220-3/ADS1",
+"3M QS200 93-AK 221-3/ADS1",
+"3M QS200 93-AK 241-3/ADS1NL",
+"3M QS200 93-KK 221-3 NL Eindmof",
+"Keuze ontbreekt in lijst",
+"Lovink vloeistofmof Lovisil M105",
+"Lovink vloeistofmof Lovisil M75",
+"Lovink vloeistofmof Lovisil M85",
+"Lovisil MK 125",
+"TE Koudkr EM 1f CSJA-24C 25-240",
+"TE Koudkr EM 1f CSJA-24E 240-630+800RE",
+"TE Koudkrimp 1f CSJA-24C 25-240",
+"TE Koudkrimp 1f CSJA-24E 240-630+800RE",
+"TE Koudkrimp 1f CSJA-24F 240-800RE+RM",
+"TE Koudkrimp 1f CSJA-36E 240-800RE",
+"TE Koudkrimp 1f CSJA-36F 800RE+RM"
+],
+"UitvoeringOntspanningselement": [
+"Keuze ontbreekt in lijst"
+],
+"VerbindingbekledingGas": [
+"Keuze ontbreekt in lijst",
+"Onbekleed"
+],
+"VerbindingstechniekGas": [
+"Draadverbinding",
+"Elektrolas",
+"Elektrolasmof",
+"Flensverbinding",
+"HSF Peko koppeling TV",
+"Koppeling",
+"Las",
+"Lasverbinding",
+"Mof",
+"Mof overschuif HPE",
+"Mof overschuif PVC-SV",
+"Mof PE100 El-las",
+"Multi-joint",
+"Pvp koppeling",
+"Spie verl PE100 PVC-SV",
+"Spiegellas",
+"Verlengde U2 koppeling",
+"Voorlasflens ST"
+],
+"VerbindingstechniekGasAfsluiter": [
+"Flens",
+"Las",
+"Mof"
+],
+"VoedingEnSturingOvl": [
+"LS gevoed met LCU",
+"LS gevoed met relais op OV-net",
+"OV gevoed en geschakeld",
+"OV gevoed met TF ontv in mast"
+]
+},
+"namespace": "NS_NLCSnetbeheer",
+"xsd": "NLCS_NetbeheerEnexisV12.1Import_Keuzelijst.xsd"
+},
+"Stedin": {
+"keuzelijsten": {
+"AansluitsetOvl": [
+"Keuze ontbreekt in lijst"
+],
+"AansluitwijzeOvl": [
+"Aftak",
+"Mini-ster",
+"Rijgaansluiting"
+],
+"Aardingsysteem": [
+"Aarding 0 koppeling (TN)",
+"Aarding 0 koppeling klantaarding (TN) onderst.",
+"Keuze ontbreekt in lijst",
+"TN aarding met hulpelektrode Stedin biedt aan",
+"TN aarding Stedin biedt aan",
+"TNC",
+"TNC-Extra",
+"TT"
+],
+"AppendagebekledingGas": [
+"Epoxy",
+"Keuze ontbreekt in lijst",
+"Kunststof",
+"Onbekleed",
+"PE",
+"Polyurethaan coating",
+"Vetband"
+],
+"BuisbekledingGas": [
+"Bitumen",
+"Keuze ontbreekt in lijst",
+"Onbekleed"
+],
+"BuitenDiameterGasleiding": [
+"110",
+"114.3",
+"15",
+"160",
+"168.3",
+"200",
+"219.1",
+"22",
+"25",
+"250",
+"273.0",
+"28",
+"315",
+"32",
+"323.9",
+"33.7",
+"35",
+"40",
+"400",
+"406.4",
+"42",
+"42.4",
+"48.3",
+"50",
+"54",
+"60.3",
+"63",
+"75",
+"88.9",
+"Keuze ontbreekt in lijst"
+],
+"DiameterMantelbuis": [
+"110",
+"114.3",
+"125",
+"160",
+"168.3",
+"200",
+"219.1",
+"250",
+"250.3",
+"315",
+"50",
+"60.3",
+"63",
+"75",
+"90",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"DiameterTelecomBuis": [
+"40",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"Doorlaatwaarde": [
+"10",
+"100",
+"125",
+"16",
+"160",
+"200",
+"25",
+"250",
+"315",
+"35",
+"4",
+"40",
+"400",
+"50",
+"500",
+"6",
+"63",
+"80",
+"groter dan 500",
+"Keuze ontbreekt in lijst"
+],
+"DoorsnedeAarddraad": [
+"150",
+"185",
+"25",
+"50",
+"95"
+],
+"DoorsnedeAardpen": [
+"12.0 mm",
+"12.5 mm",
+"12.7 mm",
+"16.0 mm"
+],
+"Druk": [
+"1 BAR",
+"100 MBAR",
+"120 MBAR",
+"150 MBAR",
+"2 BAR",
+"200 MBAR",
+"3 BAR",
+"30 MBAR",
+"4 BAR",
+"8 BAR"
+],
+"DrukklasseGasAfsluiter": [
+"PN 10",
+"PN 16",
+"PN 40",
+"PN 8"
+],
+"FabrikantGasAfsluiter": [
+"Adams",
+"Agru",
+"Argus",
+"Arog",
+"Audco India Limited",
+"AVK",
+"BAC",
+"Beta",
+"Bobb. en Reuter",
+"Broen",
+"Bryan Donkin",
+"Cockburns",
+"Crane",
+"Denver",
+"Diskoter",
+"Doyer",
+"Draga",
+"Emgo",
+"Estoseal",
+"Friatec",
+"GasUnie",
+"George Fisher",
+"Hawle",
+"Holland",
+"Keuze ontbreekt in lijst",
+"Kolk",
+"Merwede",
+"Mokveld Valves BV",
+"Mueller",
+"Multamed",
+"Newman Milliken",
+"ODS",
+"Rega",
+"RMA/Rheinau",
+"Robert Cort",
+"Schmitz Schulte",
+"Tormene",
+"Ubel",
+"VAG",
+"Vag-Beta",
+"WAGA",
+"Werner Bohmer GmbH",
+"Wouter Witzel",
+"Zwaga Holland"
+],
+"FabrikantGasAppendage": [
+"BELU",
+"ENCAPRESS",
+"HUWA",
+"Keuze ontbreekt in lijst",
+"Metalyte Pipeworks",
+"Stopaq"
+],
+"FabrikantGasLeiding": [
+"De Jongh",
+"Keuze ontbreekt in lijst",
+"Pipelife",
+"Wavin",
+"Zuid Nederlandse Buizen"
+],
+"FabrikantHSMof": [
+"Keuze ontbreekt in lijst",
+"Lovink",
+"NKT",
+"Pfisterer",
+"Tyco - Raychem"
+],
+"FabrikantKBdrainage": [
+"Hommema",
+"Keuze ontbreekt in lijst"
+],
+"FabrikantKBgelijkrichter": [
+"Amstel",
+"Das",
+"Delta",
+"Eldon",
+"ETI",
+"Hellas",
+"Hommema",
+"Huizinga",
+"Keuze ontbreekt in lijst",
+"Merrem en la Porte",
+"Van der Heide"
+],
+"FabrikantKabel": [
+"Draka",
+"Keuze ontbreekt in lijst",
+"NKF",
+"Pirelli",
+"Prysmian",
+"Reka",
+"TKF"
+],
+"FabrikantLSMof": [
+"Filoform",
+"Keuze ontbreekt in lijst"
+],
+"FunctieGasAfsluiter": [
+"Aansluitleiding",
+"Afblaas",
+"Eind",
+"Scheidingafsluiter",
+"Sectie",
+"StationsAfsluiterinlaat",
+"StationsAfsluiteruitlaat"
+],
+"FunctieGasStation": [
+"Afleverstation",
+"districtstation",
+"Gas Ontvangststation",
+"Huisaansluitset",
+"Lagedrukinstallatie",
+"Overslagstation"
+],
+"FunctieKBdraad": [
+"Aarding",
+"Anders",
+"Coupon",
+"Damwand",
+"Diepte-anodebed",
+"Doorverbinding",
+"Gelijkrichter",
+"HD-leiding",
+"KB-object derden",
+"Keuze ontbreekt in lijst",
+"Kwelscherm",
+"LD-Leiding",
+"Leiding",
+"Leiding AC drainage",
+"leiding DC drainage",
+"Magnesiumanode",
+"Magnesiumlint anode",
+"Mantelbuis",
+"Onbeschermde zijde",
+"PBU",
+"Permanente referentie elektrode",
+"Shunt",
+"Spoor"
+],
+"FunctieKBmeetpaal": [
+"Diode in meetpaal aanwezig t.b.v. stroomrichting",
+"Drainage AC",
+"Drainage DC",
+"Kathodische bescherming d.m.v. mg-anode(n)",
+"KB lage druk gasleiding (druk≤201 mbar)",
+"KB-netscheiding (elektrische scheiding tussen twee gasnetten)",
+"KB-ringonderbreking (elektrische scheiding in een zelfde gasnet om ring te splitsen)",
+"Keuze ontbreekt in lijst",
+"Meetpaal  t.b.v. zwerfstroommetingen",
+"Meetpaal heeft geen functie",
+"Meetpaal heeft Remote monitoring / sensor",
+"Meetpaal is een straatpot",
+"Meetpaal met doorverbinding(en) naar andere meetpaal",
+"Meetpaal met één of meerdere meetpunt(en) op leiding (tussen meetpaal)",
+"Meetpaal met meetpunt coupon",
+"Meetpaal met meetpunt op eindpunt leiding waarbij de afstand (aftakking) ≤500 meter t.o.v. vorig meetpunt nabij isolatiekoppeling c.q. -flens.",
+"Meetpaal met meetpunt op eindpunt leiding waarbij de afstand (aftakking) ≤500 meter t.o.v. vorig meetpunt.",
+"Meetpaal met meetpunt(en) damwand(en)",
+"Meetpaal met meetpunt(en) derden",
+"Meetpaal met meetpunt(en) derden waarbij KB door opdrachtgever gerealiseerd wordt",
+"Meetpaal met meetpunt(en) mg-lint(en) elektrisch verbonden in meetpaal met de leiding",
+"Meetpaal met meetpunt(en) mg-lint(en) niet elektrisch verbonden in meetpaal met de leiding",
+"Meetpaal met meetpunt(en) nabij kruising van Stedin stalen leiding met stalen leiding derden.",
+"Meetpaal met meetpunt(en) referentie-elektrod(en)",
+"Meetpaal met meetpunt(en) stalen mantelbuis",
+"Meetpaal met meetpunten t.b.v. elektrische overbrugging isolatiekoppeling(en)",
+"Meetpaal met meetpunten t.b.v. elektrische overbrugging parallel en/of naast liggende leiding.",
+"Meetpaal nabij hoogspanningskabel c.q. lijn",
+"Meetpaal nabij of tussen zonnepanelen park.",
+"Meetpaal nabij spoor",
+"Meetpaal nabij tram",
+"Meetpaal op eindpunt leiding",
+"Meetpaal op privé terrein / voorafgaand aan meting een afspraak maken, KB via gelijkrichter",
+"OAM heeft vastgesteld dat voor meetpaal geen herstelactie of meting nodig is",
+"Uitlaat lage druk (≤ 201 mbar) meebeschermd (korte leiding)",
+"Uitlaat lage druk (≤ 201mbar) niet meebeschermd (korte leiding), alleen benoemen mits meetpunt in meetpaal",
+"Verdeelkast tbv anode en/of kathode",
+"Weerstand in meetpaal aanwezig i.v.m. potentiaalverlaging"
+],
+"FunctieLSkast": [
+"FLATKAST",
+"OV VOEDINGPUNT",
+"VERDEELKAST"
+],
+"FunctieLSoverdrachtspunt": [
+"Aansluiting via kast",
+"Aansluitingbox",
+"Abri",
+"Bedrijf",
+"Betaalautomaat",
+"Bouw Aansluiting",
+"Brug",
+"CAI kast",
+"Camping",
+"Centrale Voorziening",
+"Detectiekast",
+"Diversen (niet gebouwen)",
+"E-station",
+"Feestverlichting",
+"Flitspaal",
+"Garage",
+"Gas Signaalkast",
+"Gasstation",
+"Gasunie met Odorant",
+"Geldautomaat",
+"Gemaal",
+"GK-gasregelr.",
+"Glasvezel verdeelkast",
+"GSM mast",
+"GVB huisje",
+"HA-noodschool, HA-brugw.",
+"Havenlicht",
+"Huisaansluiting",
+"Huisvuilcontainer",
+"IJsbaan",
+"Informatiebord",
+"Internetcel",
+"Kermiskast",
+"Keuze ontbreekt in lijst",
+"Klok",
+"Krib verlichting",
+"KTA-verst.kast",
+"Lift Aansluiting",
+"Lokaal Duurzame Energie",
+"Loods, stal, schuur",
+"Marktkast",
+"Marktverlichting",
+"Matrixbord",
+"NS",
+"Olie druk huisje",
+"Onbekend",
+"Oplaadpunt E-auto",
+"OV Kast",
+"Parkeer verwijzing",
+"Parkeerautomaat",
+"Portaal Autosnelweg",
+"Praatpaal",
+"Putkast",
+"PW Huisje",
+"Reclamebord",
+"Rioolgemaal",
+"Rioolpomp",
+"RWS-kast",
+"Seizoen aansluiting",
+"Signaleringskast NS",
+"Sirene",
+"Sportpark",
+"Stadsverwarming",
+"Stuw",
+"Telecom stationsgebouw",
+"Telefooncel",
+"Telefoonkast",
+"Toiletgebouw",
+"Tunnel",
+"TV-Camera",
+"Verkeersregelinstallatie",
+"Vorstmelder",
+"Waarschuwingslicht",
+"Walkast",
+"Warmte kracht installatie",
+"Weide aansluiting",
+"Windturbine",
+"Wissel verwarming",
+"Woonboot",
+"Woonwagen",
+"Ziekenhuis"
+],
+"FunctieOvlOverdrachtspunt": [
+"AANSLUITKASTJE",
+"LICHTMAST",
+"MAST PRIMAIR"
+],
+"Geleidermateriaal": [
+"Al",
+"Cu"
+],
+"IsolatiemateriaalAarddraad": [
+"Blank",
+"Geel/Groen VD",
+"PE"
+],
+"KabelkleurKBdraad": [
+"Blauw",
+"Bruin",
+"Geel",
+"Geel-Groen",
+"Geen",
+"Grijs",
+"Groen",
+"Onbekend",
+"Oranje",
+"Paars",
+"Rood",
+"Rood-Zwart",
+"Wit",
+"Zwart"
+],
+"Kabelmontage": [
+"N.v.t."
+],
+"KoppelingAansluitleidingOSE": [
+"Kniekoppeling",
+"MFK",
+"Spie eind"
+],
+"KoppelingGeveldoorvoerOSE": [
+"Clickmoer",
+"Kniekoppeling",
+"PE onder fundatie",
+"Vast"
+],
+"MateriaalAardpen": [
+"Koper",
+"Koper vertint",
+"Staal gegalvaniseerd",
+"Staal verkoperd",
+"Staal verzinkt"
+],
+"MateriaalGasAfsluiter": [
+"Keuze ontbreekt in lijst"
+],
+"MateriaalGasleiding": [
+"CU",
+"KEUZE ONTBREEKT IN LIJST",
+"KOUSIJZER",
+"PE 100",
+"PE 100RC",
+"PE 80",
+"PECu",
+"PEKO",
+"PVC CPE",
+"ST",
+"ST PE"
+],
+"MateriaalKBanode": [
+"Keuze ontbreekt in lijst",
+"Magnesium -1500 mV",
+"Magnesium -1700 mV High Potential",
+"Silicium-IJzer"
+],
+"MateriaalMantelbuis": [
+"GIJ",
+"HDPE",
+"KEUZE ONTBREEKT IN LIJST",
+"PE",
+"PE 80",
+"PVC",
+"PVC FLEX",
+"ST"
+],
+"MateriaalTelecomBuis": [
+"DB7",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"OpbouwHSKabel": [
+"EMvKrvas",
+"EMvKrvc",
+"EYLKrv",
+"EYLKrvasdlwd",
+"EYLKrvdlwd",
+"EYLKrvlwd",
+"Keuze ontbreekt in lijst",
+"PEX-AL-LRT",
+"PEX-M-AL-LRT",
+"XLPE",
+"YMeKrvasdlwd",
+"YMeKrvasdlwd Fca",
+"YMeKrvaslqwd",
+"YMeKrvaslqwd Fca",
+"YMeKrvaslwd",
+"YMeKrvaslwd Fca",
+"YMeKrvaslwdgv",
+"YMeKrvc",
+"YMvKrvas"
+],
+"OpbouwLSKabel": [
+"BAXB",
+"Keuze ontbreekt in lijst",
+"VO-YMvKas",
+"VO-YMvKhas",
+"V-VMvKhsas",
+"V-VMvKsas",
+"YMvKasmb",
+"YMvKh",
+"YMz1K",
+"YMz1Kas"
+],
+"OpbouwMSKabel": [
+"EYLKrvlwd",
+"Keuze ontbreekt in lijst",
+"PEX-AL-LRT",
+"PEX-M-AL-LRT",
+"RM-EYLKrv",
+"RM-EYLKrvlwd",
+"VG-YMvKrvasmb",
+"YMeKrvasdlwd",
+"YMeKrvaslwd",
+"YMz1Krvasdlwd-mbzh"
+],
+"RedenNietVerwijdering": [
+"N.v.t."
+],
+"SDRgas": [
+"11",
+"17.6",
+"33",
+"41"
+],
+"SoortAanlegTechniek": [
+"GESTUURDE TECHNIEK",
+"KEUZE ONTBREEKT IN LIJST",
+"PERSING",
+"PIPEBURSTING"
+],
+"SoortBescherming": [
+"AFDEKPLAAT",
+"KEUZE ONTBREEKT IN LIJST",
+"RIJPLAAT"
+],
+"SoortGas": [
+"Aardgas",
+"Hoogcalorisch gas",
+"Keuze ontbreekt in lijst",
+"Waterstof"
+],
+"SoortGasAansluiting": [
+"Buitenkast",
+"Keuze ontbreekt in lijst",
+"Primaire aansluiting",
+"Secundaire aansluiting"
+],
+"SoortGasAfsluiter": [
+"Axiaal",
+"Diafragma",
+"Kogel",
+"Kogelkraan met reductie",
+"Kogelkraan/Las",
+"Membraan",
+"O-Ring",
+"Plugkraan",
+"Schuif",
+"Schuif/Klep",
+"Vlinderklep"
+],
+"SoortGasAfsluiterAfblaas": [
+"Kogel-Flens",
+"Kogel-Las",
+"Schuif-Flens",
+"Schuif-Las"
+],
+"SoortGasAppendage": [
+"Expansiestuk",
+"Keuze ontbreekt in lijst",
+"Reparatiestuk",
+"Stoppel"
+],
+"SoortGasLeidingafblaas": [
+"Keuze ontbreekt in lijst"
+],
+"SoortGasMeetpunt": [
+"Keuze ontbreekt in lijst"
+],
+"SoortKBanode": [
+"Diepte Anodebed",
+"Keuze ontbreekt in lijst"
+],
+"SoortKBobject": [
+"Damwand",
+"Keuze ontbreekt in lijst",
+"Kwelscherm",
+"Leiding derden",
+"Onbekend"
+],
+"SoortKunstwerk": [
+"\tKRUISING_RIOOL",
+"BRUGBUIS",
+"KEUZE ONTBREEKT IN LIJST",
+"KRUISING_DIJK",
+"KWELSCHERM",
+"ZINKER",
+"ZINKER_BOOG",
+"ZINKER_OMGEKEERD",
+"ZINKER_SLEEP",
+"ZINKER_SPUIT"
+],
+"SoortLSAansluiting": [
+"Keuze ontbreekt in lijst",
+"Primaire aansluiting",
+"Secundaire aansluiting"
+],
+"SoortTelecomBuisAppendage": [
+"CONDUIT TERMINUS",
+"HANDHOLE",
+"Keuze ontbreekt in lijst",
+"MANHOLE"
+],
+"SpanningsniveauHSKabel": [
+"25 kV",
+"30 kV",
+"50 kV",
+"66 kV"
+],
+"SpanningsniveauLSKabel": [
+"230 V",
+"400 V"
+],
+"SpanningsniveauMSKabel": [
+"10 kV",
+"13 kV",
+"20 kV",
+"23 kV",
+"6 kV"
+],
+"SubfunctieKBdraad": [
+"2e meetpunt",
+"2e meetpunt kathodezijde gelijkrichter",
+"2e meetpunt zijde mg-anode",
+"3e meetpunt",
+"Anode meetpunt",
+"Flexibele slang",
+"Gelijkrichter 2e meetpunt",
+"Gietijzer",
+"Inlaat",
+"Kathode meetpunt",
+"Kathodezijde gelijkrichter",
+"KB binnen mantelbuis",
+"Keuze ontbreekt in lijst",
+"Niet elektrisch doorverbonden",
+"Staal",
+"Staal 2e meetpunt",
+"Uitlaat",
+"Zijde mg-anode",
+"Zinker"
+],
+"ThemaKB": [
+"BUISLEIDING GEVAARLIJKE INHOUD",
+"CHEMIE",
+"GAS_HD",
+"GAS_LD",
+"OVERIG",
+"PERSLEIDING",
+"VRIJVERVAL",
+"WARMTENET",
+"WATER",
+"WEESLEIDING"
+],
+"TypeKBbehuizingGelijkrichter": [
+"Keuze ontbreekt in lijst",
+"Kunstof Kast",
+"RVS kast",
+"Straatpot"
+],
+"TypeKBbehuizingMeetpaal": [
+"Aluminium meetpaal",
+"Betonnen meetpaal",
+"Keuze ontbreekt in lijst",
+"Kunststof meetpaal",
+"RVS meetpaal"
+],
+"TypeKBdrainage": [
+"Keuze ontbreekt in lijst"
+],
+"TypeKBmeetelectrode": [
+"AgAgCl WE 200-cel",
+"AgAgCl-cel",
+"Cu/CuSo4",
+"Keuze ontbreekt in lijst"
+],
+"TypeLSMof": [
+"Keuze ontbreekt in lijst",
+"Wikkelmof Slim PUR2662"
+],
+"UitvoeringAftakzadel": [
+"Aftakking",
+"Hodra 2&amp;quot;",
+"Hodra 4&amp;quot;",
+"Keuze ontbreekt in lijst",
+"Oplas",
+"Split-T",
+"Stoppel-T",
+"T",
+"T (RVS/Flensklem)",
+"Weldolet"
+],
+"UitvoeringEindstuk": [
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringGasIsolatiestuk": [
+"EK-koppeling",
+"IK PN25",
+"Isolatieflens",
+"Isolatiestuk",
+"Isolatiestuk LAS",
+"Isolatiestuk PR G1 5/4",
+"Keuze ontbreekt in lijst",
+"Linea"
+],
+"UitvoeringGasOvergangsstuk": [
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringGasTstuk": [
+"B-Stuk",
+"EL T-Stuk",
+"Elektrolas",
+"K6525",
+"K6555",
+"Keuze ontbreekt in lijst",
+"Las T-stuk",
+"MFA",
+"MMA",
+"MMB GY",
+"MMB PVCsv",
+"PA-Stuk",
+"PB-Stuk",
+"RMP",
+"SSB",
+"T-Stuk"
+],
+"UitvoeringHSKabel": [
+"1x1000Al",
+"1x1200Al",
+"1x1200Alrm as120",
+"1x1200Cu",
+"1x1600Al",
+"1x1600Alrm as120",
+"1x240Al",
+"1x400Al",
+"1x630Al",
+"1x630Alrm as120",
+"1x800Al",
+"1x800Cu",
+"3x1x1000Al",
+"3x1x1200Cu",
+"3x1x240Al",
+"3x1x400Al",
+"3x1x630Al",
+"3x1x800Al",
+"3x1x800Alrm as50",
+"3x240Al",
+"3x400Al",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"UitvoeringHSMof": [
+"CSJR-24C",
+"CSJR-24D",
+"Eindmof/Krimpdop",
+"Eindmof/Loodkap",
+"JC 42-E",
+"JC 42-HS",
+"Keuze ontbreekt in lijst",
+"Lovisil KB 85 3C Lusmof",
+"Lovisil M105",
+"Lovisil M75",
+"Lovisil M85",
+"SOJH 243-1"
+],
+"UitvoeringKBdraad": [
+"1 x 10 Cu, met mantel",
+"1 x 16 Cu, met mantel",
+"1 x 2.5 Cu, met mantel",
+"1 x 25 Cu, Blank Koper",
+"1 x 25 Cu, met mantel",
+"1 x 50 Cu, Blank Koper",
+"1 x 50 Cu, met mantel",
+"1 x 6 Cu, met mantel",
+"4 x 2.5 Cu, met mantel",
+"Keuze ontbreekt in lijst"
+],
+"UitvoeringKBgelijkrichter": [
+"Amstel 1",
+"Das Zelfbouw",
+"Delta ES030-5",
+"Delta UD5-500",
+"ETI CT243VN",
+"Hellas V5",
+"Hommema 10.24a",
+"Hommema 10.28a",
+"Hommema 10.28d",
+"Huizinga 42/10",
+"Keuze ontbreekt in lijst",
+"Merrem en la Porte SVT",
+"Van der Heide H/A3/TY",
+"Van der Heide H-00-00-025-002-00",
+"Van der Heide H-00-00-025-02-00",
+"Van der Heide H-02-025-010-05",
+"Van der Heide H-03-00-025-002-05/2x12",
+"Van der Heide H-03-00-025-02-05-12-12",
+"Van der Heide H-84-025-02 Electronic"
+],
+"UitvoeringLSKabel": [
+"3x10Cu",
+"3x2.5Cu",
+"4x10Cu",
+"4x10Cu 4x2.5Cu",
+"4x150Al",
+"4x150Al 4x6Cu",
+"4x150Cu 4x2.5Cu",
+"4x16Cu",
+"4x16Cu 2x1.5Cu",
+"4x16Cu 4x2.5Cu",
+"4x2.5Cu",
+"4x25Cu",
+"4x25Cu 2x2.5Cu",
+"4x25Cu 4x2.5Cu",
+"4x50Al 4x6Cu",
+"4x50Cu 4x6Cu",
+"4x6Cu",
+"4x6Cu 4x2.5Cu",
+"4x6Cu 4x2.5Cu as6",
+"4x95Al 4x6Cu",
+"4x95Cu",
+"4x95Cu 4x6Cu",
+"7x2.5Cu",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"UitvoeringLSoverdrachtspunt": [
+"Keuze ontbreekt in lijst",
+"N.v.t."
+],
+"UitvoeringMSKabel": [
+"1x1000Al",
+"1x1200Al",
+"1x1200Alrm as120",
+"1x1200Cu",
+"1x150Al",
+"1x1600Al",
+"1x1600Alrm as120",
+"1x240Al",
+"1x400Al",
+"1x50Cu",
+"1x630Al",
+"1x630Alrm as120",
+"1x800Al",
+"1x800Cu",
+"3x1x1000Al",
+"3x1x1200Cu",
+"3x1x150Al",
+"3x1x150Cu",
+"3x1x240Al",
+"3x1x400Al",
+"3x1x630Al",
+"3x1x800Al",
+"3x1x800Alrm as50",
+"3x50Cu",
+"3x95Al",
+"KEUZE ONTBREEKT IN LIJST"
+],
+"UitvoeringMSMof": [
+"CSJR-24C",
+"JC 42-E",
+"JC 42-HS",
+"Keuze ontbreekt in lijst",
+"Lovink vloeistofmof Lovisil M105",
+"Lovink vloeistofmof Lovisil M75",
+"Lovink vloeistofmof Lovisil M85",
+"Lovisil KB 85 3C Lusmof",
+"SOJH 243-1"
+],
+"UitvoeringOntspanningselement": [
+"Keuze ontbreekt in lijst"
+],
+"VerbindingbekledingGas": [
+"Keuze ontbreekt in lijst",
+"Onbekleed"
+],
+"VerbindingstechniekGas": [
+"Draadverbinding",
+"Elektrolas",
+"Elektrolasmof",
+"Flensverbinding",
+"HSF Peko koppeling TV",
+"Koppeling",
+"Las",
+"Lasverbinding",
+"Mof",
+"Mof overschuif HPE",
+"Mof overschuif PVC-SV",
+"Mof PE100 El-las",
+"Multi-joint",
+"Pvp koppeling",
+"Spie verl PE100 PVC-SV",
+"Spiegellas",
+"Verlengde U2 koppeling",
+"Voorlasflens ST"
+],
+"VerbindingstechniekGasAfsluiter": [
+"Elektrolas",
+"Flens",
+"Las",
+"Mof",
+"Spiegellas"
+],
+"VoedingEnSturingOvl": [
+"LS gevoed met relais op OV-net",
+"OV gevoed en geschakeld",
+"OV gevoed met TF ontv in mast"
+]
+},
+"namespace": "NS_NLCSnetbeheer",
+"xsd": "NLCS_NetbeheerStedinV12.1Import_Keuzelijst.xsd"
+}
+},
+"objecten": {
+"Aaanlegtechniek": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortAanlegTechniek",
+"name": "SoortAanlegTechniek",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Thema",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"AbeschermingVlak": {
+"geometrie": "surface",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortBescherming",
+"name": "SoortBescherming",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Thema",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"AbestandBijlage": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "BijlageTypeValue",
+"name": "SoortBestand",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 250,
+"name": "Bestandsnaam",
+"required": false,
+"type": "string"
+},
+{
+"list": "BestandMediaTypeValue",
+"name": "TypeBestand",
+"required": false,
+"type": "list"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Thema",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Kijkhoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "AssetObjectID",
+"required": false,
+"type": "IDREF"
+},
+{
+"name": "Geometry",
+"required": false,
+"type": "geometry"
+}
+]
+},
+"AinUittredepunt": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "InUit",
+"name": "Richting",
+"required": false,
+"type": "list"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Kunstwerknummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AanlegtechniekID",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Akunstwerk": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortKunstwerk",
+"name": "SoortKunstwerk",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Kunstwerknummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "Thema",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"name": "StraalBoogzinker",
+"required": false,
+"type": "decimal"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Amaaiveldhoogte": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Thema",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Amantelbuis": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "MateriaalMantelbuis",
+"name": "Materiaal",
+"required": false,
+"type": "list"
+},
+{
+"list": "DiameterMantelbuis",
+"name": "Diameter",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "KathodischBeschermd",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "BovengrondsGemarkeerd",
+"required": false,
+"type": "list"
+},
+{
+"list": "Thema",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"AmantelbuisInhoud": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"list": "ObjectType",
+"name": "ObjectTypeInhoud",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"name": "MantelbuisID",
+"required": false,
+"type": "IDREF"
+},
+{
+"name": "InhoudID",
+"required": false,
+"type": "IDREF"
+},
+{
+"max_length": 30,
+"name": "Labeltekst",
+"required": false,
+"type": "string"
+},
+{
+"name": "Geometry",
+"required": false,
+"type": "geometry"
+}
+]
+},
+"Amarkeringsobject": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Nummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "Thema",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "Opmerking",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Aopmerking": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 50,
+"name": "Omschrijving",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Thema",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Averplaatsing": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SituatieVerplaatsing",
+"name": "Situatie",
+"required": false,
+"type": "list"
+},
+{
+"list": "ObjectType",
+"name": "ObjectType",
+"required": false,
+"type": "list"
+},
+{
+"name": "AssetObjectID",
+"required": false,
+"type": "IDREF"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Eaarddraad": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "DoorsnedeAarddraad",
+"name": "Doorsnede",
+"required": false,
+"type": "list"
+},
+{
+"list": "Geleidermateriaal",
+"name": "Geleidermateriaal",
+"required": false,
+"type": "list"
+},
+{
+"list": "IsolatiemateriaalAarddraad",
+"name": "Isolatiemateriaal",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakElektra",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Eaardmof": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakElektra",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Eaardpen": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "DoorsnedeAardpen",
+"name": "Doorsnede",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "MateriaalAardpen",
+"name": "Materiaal",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakElektra",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Eoliedrukinstallatie": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 50,
+"name": "OmschrijvingUitvoering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"name": "DatumFabricage",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Volgnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Sectienummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Eoliedrukleiding": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 50,
+"name": "OmschrijvingUitvoering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"name": "DatumFabricage",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Sectienummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gafsluiter": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortGasAfsluiter",
+"name": "SoortAfsluiter",
+"required": false,
+"type": "list"
+},
+{
+"list": "BuitenDiameterGasleiding",
+"name": "Diameter",
+"required": false,
+"type": "list"
+},
+{
+"list": "MateriaalGasAfsluiter",
+"name": "Materiaal",
+"required": false,
+"type": "list"
+},
+{
+"list": "DraaiwijzeGasAfsluiter",
+"name": "Draaiwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "DrukklasseGasAfsluiter",
+"name": "Drukklasse",
+"required": false,
+"type": "list"
+},
+{
+"list": "FabrikantGasAfsluiter",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieGasAfsluiter",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "Steekflens",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Nummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "VerbindingstechniekGasAfsluiter",
+"name": "Verbindingstechniek",
+"required": false,
+"type": "list"
+},
+{
+"list": "Voorkeurstand",
+"name": "Voorkeurstand",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "AfblaasOpgebouwd",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Serienummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "Subnettype",
+"name": "Subnettype",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gaftakzadel": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringAftakzadel",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"GappendageOverig": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortGasAppendage",
+"name": "Soort",
+"required": false,
+"type": "list"
+},
+{
+"list": "FabrikantGasAppendage",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gblaasgatzadel": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Geindstuk": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringEindstuk",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gisolatiestuk": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringGasIsolatiestuk",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieGasIsolatiestuk",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "AppendagebekledingGas",
+"name": "BekledingAchteraf",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gleiding": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "BuitenDiameterGasleiding",
+"name": "BuitenDiameter",
+"required": false,
+"type": "list"
+},
+{
+"list": "MateriaalGasleiding",
+"name": "Materiaal",
+"required": false,
+"type": "list"
+},
+{
+"list": "SDRgas",
+"name": "SDR",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "OmschrijvingUitvoering",
+"required": false,
+"type": "string"
+},
+{
+"list": "FabrikantGasLeiding",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "RedenNietVerwijdering",
+"name": "RedenNietVerwijdering",
+"required": false,
+"type": "list"
+},
+{
+"list": "SoortGas",
+"name": "SoortGas",
+"required": false,
+"type": "list"
+},
+{
+"list": "VerbindingstechniekGas",
+"name": "Verbindingstechniek",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "Subnettype",
+"name": "Subnettype",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "Trekvast",
+"required": false,
+"type": "list"
+},
+{
+"list": "KBaanwezig",
+"name": "KBaanwezig",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "KBsectie",
+"required": false,
+"type": "string"
+},
+{
+"list": "BuisbekledingGas",
+"name": "BuisbekledingAchteraf",
+"required": false,
+"type": "list"
+},
+{
+"list": "VerbindingbekledingGas",
+"name": "BuisverbindingBekleding",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gleidingafblaas": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortGasLeidingafblaas",
+"name": "Soort",
+"required": false,
+"type": "list"
+},
+{
+"list": "BuitenDiameterGasleiding",
+"name": "Diameter",
+"required": false,
+"type": "list"
+},
+{
+"list": "SoortGasAfsluiterAfblaas",
+"name": "SoortAfsluiter",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "VerbindingstechniekGasAfsluiter",
+"name": "Verbindingstechniek",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gmeetpunt": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortGasMeetpunt",
+"name": "SoortMeetpunt",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gontspanningselement": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringOntspanningselement",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"list": "KoppelingAansluitleidingOSE",
+"name": "KoppelingAansluitleiding",
+"required": false,
+"type": "list"
+},
+{
+"list": "KoppelingGeveldoorvoerOSE",
+"name": "KoppelingGeveldoorvoer",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Goverdrachtspunt": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortGasAansluiting",
+"name": "SoortAansluiting",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "BAGid",
+"required": false,
+"type": "string"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"name": "InpandigeLeidinglengte",
+"required": false,
+"type": "decimal"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Govergangsstuk": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringGasOvergangsstuk",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "OmschrijvingUitvoering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "AppendagebekledingGas",
+"name": "BekledingAchteraf",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gsifon": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "Standpijp",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Gstation": {
+"geometrie": "surface",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Naam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Nummer",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieGasStation",
+"name": "StationFunctie",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "GasunieCode",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Straatnaam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "Huisnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "HuisnummerToevoeging",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 7,
+"name": "Postcode",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Plaatsnaam",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "BAGid",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"GtStuk": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "ID",
+"required": true,
+"type": "string"
+},
+{
+"list": "UitvoeringGasTstuk",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"GverticaleBocht": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Druk",
+"name": "Druk",
+"required": false,
+"type": "list"
+},
+{
+"list": "NetvlakGas",
+"name": "Netvlak",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"HSkabel": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringHSKabel",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"list": "OpbouwHSKabel",
+"name": "Kabelopbouw",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "OmschrijvingUitvoering",
+"required": false,
+"type": "string"
+},
+{
+"list": "FabrikantKabel",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"name": "DatumFabricage",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "SpanningsniveauHSKabel",
+"name": "Spanningsniveau",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "RedenNietVerwijdering",
+"name": "RedenNietVerwijdering",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Verbindingnummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "Faseaanduiding",
+"name": "FaseAanduiding",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Zegeltekst",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"HSmof": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringHSMof",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"list": "FabrikantHSMof",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieHSmof",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "Faseaanduiding",
+"name": "FaseAanduiding",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Mofnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Verbindingnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "NaamMonteur",
+"required": false,
+"type": "string"
+},
+{
+"list": "JaNee",
+"name": "CrossBondingAanwezig",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"HSstation": {
+"geometrie": "surface",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 50,
+"name": "Naam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Nummer",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieElectraStation",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Straatnaam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "Huisnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "HuisnummerToevoeging",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 7,
+"name": "Postcode",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Plaatsnaam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "BGTid",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"KBanode": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortKBanode",
+"name": "SoortAnode",
+"required": false,
+"type": "list"
+},
+{
+"name": "AantalAnodes",
+"required": false,
+"type": "integer"
+},
+{
+"list": "MateriaalKBanode",
+"name": "Materiaal",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Nummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBnet",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "GewichtPerAnode",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "LengteKolom",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Boordiepte",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBsectie",
+"required": false,
+"type": "string"
+},
+{
+"list": "ThemaKB",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"KBdrainage": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "TypeKBdrainage",
+"name": "Type",
+"required": false,
+"type": "list"
+},
+{
+"list": "FabrikantKBdrainage",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Nummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBnet",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBsectie",
+"required": false,
+"type": "string"
+},
+{
+"list": "StroomsoortKBdrainage",
+"name": "DrainageStroomsoort",
+"required": false,
+"type": "list"
+},
+{
+"name": "InstelwaardeGedraineerdeStroom",
+"required": false,
+"type": "integer"
+},
+{
+"max_length": 50,
+"name": "VeroorzakerZwerfstroom",
+"required": false,
+"type": "string"
+},
+{
+"name": "Zekeringswaarde",
+"required": false,
+"type": "integer"
+},
+{
+"list": "JaNee",
+"name": "ReservekabelAanwezig",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "ReservekabelInGebruik",
+"required": false,
+"type": "list"
+},
+{
+"list": "ThemaKB",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"KBgelijkrichter": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringKBgelijkrichter",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"list": "FabrikantKBgelijkrichter",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"name": "AantalAnodes",
+"required": false,
+"type": "integer"
+},
+{
+"name": "OvergangsweerstandAnodebed",
+"required": false,
+"type": "integer"
+},
+{
+"max_length": 50,
+"name": "Naam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Meetpuntnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBnet",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBsectie",
+"required": false,
+"type": "string"
+},
+{
+"list": "JaNee",
+"name": "Signalering",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "Onderbreker",
+"required": false,
+"type": "list"
+},
+{
+"name": "CapaciteitSpanning",
+"required": false,
+"type": "integer"
+},
+{
+"name": "CapaciteitStroom",
+"required": false,
+"type": "integer"
+},
+{
+"max_length": 50,
+"name": "SerienummerVoeding",
+"required": false,
+"type": "string"
+},
+{
+"list": "MateriaalBehuizingKBgelijkrichter",
+"name": "MateriaalBehuizing",
+"required": false,
+"type": "list"
+},
+{
+"list": "TypeKBbehuizingGelijkrichter",
+"name": "TypeBehuizing",
+"required": false,
+"type": "list"
+},
+{
+"list": "ThemaKB",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"KBmeetdraad": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringKBdraad",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieKBdraad",
+"name": "FunctieVerbondenObject",
+"required": false,
+"type": "list"
+},
+{
+"list": "SubfunctieKBdraad",
+"name": "Subfunctie",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "KabelkleurKBdraad",
+"name": "Kabelkleur",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "Omschrijving",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "ExtraCodering",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "CoderingVerbondenObject",
+"required": false,
+"type": "string"
+},
+{
+"list": "JaNee",
+"name": "Doorverbonden",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "KBnet",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBsectie",
+"required": false,
+"type": "string"
+},
+{
+"list": "ThemaKB",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"name": "Lengte",
+"required": false,
+"type": "integer"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"KBmeetpaal": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "TypeKBbehuizingMeetpaal",
+"name": "TypeBehuizing",
+"required": false,
+"type": "list"
+},
+{
+"list": "TypeKBmeetelectrode",
+"name": "TypeMeetelectrode",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieKBmeetpaal",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Meetpuntnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "NummerFysiekOpMeetpaal",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBnet",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBsectie",
+"required": false,
+"type": "string"
+},
+{
+"list": "JaNee",
+"name": "WeerstandAanwezig",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "DiodeAanwezig",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "BeschermbeugelAanwezig",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "NadereToegangsaanduiding",
+"required": false,
+"type": "list"
+},
+{
+"name": "AantalStiften",
+"required": false,
+"type": "integer"
+},
+{
+"list": "JaNee",
+"name": "Telemeting",
+"required": false,
+"type": "list"
+},
+{
+"list": "ThemaKB",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"KBobject": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortKBobject",
+"name": "SoortObject",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "BewerkingGas",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Objectnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBnet",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "KBsectie",
+"required": false,
+"type": "string"
+},
+{
+"list": "ThemaKB",
+"name": "Thema",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"LSkabel": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringLSKabel",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"list": "OpbouwLSKabel",
+"name": "Kabelopbouw",
+"required": false,
+"type": "list"
+},
+{
+"list": "FabrikantKabel",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "OmschrijvingUitvoering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"name": "DatumFabricage",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieLSKabel",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "SpanningsniveauLSKabel",
+"name": "Spanningsniveau",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "RedenNietVerwijdering",
+"name": "RedenNietVerwijdering",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Verbindingnummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "SubnettypeLS",
+"name": "Subnettype",
+"required": false,
+"type": "list"
+},
+{
+"list": "Aardingsysteem",
+"name": "Aardingsysteem",
+"required": false,
+"type": "list"
+},
+{
+"list": "Faseaanduiding",
+"name": "FaseAanduiding",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "Bovengronds",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Zegeltekst",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"LSkast": {
+"geometrie": "surface",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 50,
+"name": "Naam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Nummer",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieLSkast",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Straatnaam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "Huisnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "HuisnummerToevoeging",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 7,
+"name": "Postcode",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Plaatsnaam",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "BAGid",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"LSmof": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "TypeLSMof",
+"name": "Type",
+"required": false,
+"type": "list"
+},
+{
+"list": "FabrikantLSMof",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieLSmof",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "Faseaanduiding",
+"name": "FaseAanduiding",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Verbindingnummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "SubnettypeLS",
+"name": "Subnettype",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "DoorverbindingAardeNul",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "AardeGekoppeld",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "NetGekoppeld",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "OvlGekoppeld",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "TariefGekoppeld",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "NulGekoppeld",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "Bovengronds",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"LSoverdrachtspunt": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringLSoverdrachtspunt",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "EigenRichting",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "SoortLSAansluiting",
+"name": "SoortAansluiting",
+"required": false,
+"type": "list"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieLSoverdrachtspunt",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "Faseaanduiding",
+"name": "FaseAanduiding",
+"required": false,
+"type": "list"
+},
+{
+"name": "InpandigeKabellengte",
+"required": false,
+"type": "decimal"
+},
+{
+"list": "Aardingsysteem",
+"name": "Aardingsysteem",
+"required": false,
+"type": "list"
+},
+{
+"list": "Doorlaatwaarde",
+"name": "Doorlaatwaarde",
+"required": false,
+"type": "list"
+},
+{
+"list": "Kabelmontage",
+"name": "Kabelmontage",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "BAGid",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "BGTid",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"MSkabel": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringMSKabel",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"list": "OpbouwMSKabel",
+"name": "Kabelopbouw",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "OmschrijvingUitvoering",
+"required": false,
+"type": "string"
+},
+{
+"list": "FabrikantKabel",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"name": "DatumFabricage",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "SpanningsniveauMSKabel",
+"name": "Spanningsniveau",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "RedenNietVerwijdering",
+"name": "RedenNietVerwijdering",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Verbindingnummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "Subnettype",
+"name": "Subnettype",
+"required": false,
+"type": "list"
+},
+{
+"list": "Faseaanduiding",
+"name": "FaseAanduiding",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Zegeltekst",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"MSmof": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "UitvoeringMSMof",
+"name": "Uitvoering",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieMSmof",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "Faseaanduiding",
+"name": "FaseAanduiding",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Verbindingnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Mofnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "NaamMonteur",
+"required": false,
+"type": "string"
+},
+{
+"list": "JaNee",
+"name": "CrossBondingAanwezig",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"MSoverdrachtspunt": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Identificatie",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"MSstation": {
+"geometrie": "surface",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Naam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Nummer",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieElectraStation",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Straatnaam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "Huisnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "HuisnummerToevoeging",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 7,
+"name": "Postcode",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Plaatsnaam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "BAGid",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"OVLoverdrachtspunt": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "AansluitsetOvl",
+"name": "Aansluitset",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Mastnummer",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieOvlOverdrachtspunt",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "SpanningsniveauLSKabel",
+"name": "Spanningsniveau",
+"required": false,
+"type": "list"
+},
+{
+"list": "Doorlaatwaarde",
+"name": "Doorlaatwaarde",
+"required": false,
+"type": "list"
+},
+{
+"list": "JaNee",
+"name": "DoorverbindingAardeNul",
+"required": false,
+"type": "list"
+},
+{
+"list": "AansluitwijzeOvl",
+"name": "Aansluitwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "VoedingEnSturingOvl",
+"name": "VoedingEnSturing",
+"required": false,
+"type": "list"
+},
+{
+"list": "SchakelingOvl",
+"name": "Schakeling",
+"required": false,
+"type": "list"
+},
+{
+"list": "Kabelmontage",
+"name": "Kabelmontage",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Tbuis": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "MateriaalTelecomBuis",
+"name": "Materiaal",
+"required": false,
+"type": "list"
+},
+{
+"list": "DiameterTelecomBuis",
+"name": "Diameter",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "OmschrijvingUitvoering",
+"required": false,
+"type": "string"
+},
+{
+"list": "FabrikantKabel",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"name": "DatumFabricage",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "RedenNietVerwijdering",
+"name": "RedenNietVerwijdering",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Buisnummer",
+"required": false,
+"type": "string"
+},
+{
+"list": "KleurTelecombuis",
+"name": "Kleur",
+"required": false,
+"type": "list"
+},
+{
+"list": "Subnettype",
+"name": "Subnettype",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"TbuisAppendage": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "SoortTelecomBuisAppendage",
+"name": "Soort",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Subnettype",
+"name": "Subnettype",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "TypeOmschrijving",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Tkabel": {
+"geometrie": "curve",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 50,
+"name": "OmschrijvingUitvoering",
+"required": false,
+"type": "string"
+},
+{
+"list": "FabrikantKabel",
+"name": "Fabrikant",
+"required": false,
+"type": "list"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"name": "DatumFabricage",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "Inmeetwijze",
+"name": "Inmeetwijze",
+"required": false,
+"type": "list"
+},
+{
+"list": "NauwkeurigheidXYvalue",
+"name": "Nauwkeurigheid",
+"required": false,
+"type": "list"
+},
+{
+"list": "RedenNietVerwijdering",
+"name": "RedenNietVerwijdering",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Verbindingnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Zegeltekst",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "Subnettype",
+"name": "Subnettype",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Tmof": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 50,
+"name": "TypeOmschrijving",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"list": "FunctieTelecomMof",
+"name": "Functie",
+"required": false,
+"type": "list"
+},
+{
+"list": "Subnettype",
+"name": "Subnettype",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Toverdrachtspunt": {
+"geometrie": "point",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "BAGid",
+"required": false,
+"type": "string"
+},
+{
+"name": "InpandigeKabellengte",
+"required": false,
+"type": "decimal"
+},
+{
+"max_length": 50,
+"name": "BGTid",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Hoek",
+"required": false,
+"type": "decimal"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+},
+"Tstation": {
+"geometrie": "surface",
+"velden": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 50,
+"name": "Naam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Nummer",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumAanleg",
+"required": false,
+"type": "date"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Status",
+"name": "Status",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bedrijfstoestand",
+"name": "Bedrijfstoestand",
+"required": true,
+"type": "list"
+},
+{
+"list": "Bewerking",
+"name": "Bewerking",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "Straatnaam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "Huisnummer",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 15,
+"name": "HuisnummerToevoeging",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 7,
+"name": "Postcode",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Plaatsnaam",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "BAGid",
+"required": false,
+"type": "string"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Eigenaar",
+"required": false,
+"type": "list"
+},
+{
+"list": "EigenaarBeheerder",
+"name": "Beheerder",
+"required": false,
+"type": "list"
+},
+{
+"max_length": 255,
+"name": "GisId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "AssetId",
+"required": false,
+"type": "string"
+},
+{
+"max_length": 50,
+"name": "Artikelcodering",
+"required": false,
+"type": "string"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+]
+}
+},
+"project": [
+{
+"name": "Handle",
+"required": false,
+"type": "string"
+},
+{
+"name": "ID",
+"required": true,
+"type": "ID"
+},
+{
+"max_length": 50,
+"name": "Projectnummer",
+"required": true,
+"type": "string"
+},
+{
+"max_length": 255,
+"name": "Toelichting",
+"required": false,
+"type": "string"
+},
+{
+"list": "Netbeheerder",
+"name": "Netbeheerder",
+"required": true,
+"type": "list"
+},
+{
+"max_length": 50,
+"name": "NaamAannemer",
+"required": true,
+"type": "string"
+},
+{
+"name": "Volgnummer",
+"required": false,
+"type": "integer"
+},
+{
+"name": "DatumTijdMutatie",
+"required": false,
+"type": "dateTime"
+},
+{
+"list": "Tekeningtype",
+"name": "Tekeningtype",
+"required": true,
+"type": "list"
+},
+{
+"name": "Geometry",
+"required": true,
+"type": "geometry"
+}
+],
+"root": "NLCSnetbeheer",
+"symboolnaam_posities": {
+"AbestandBijlage": {
+"Thema": 1
+},
+"AinUittredepunt": {
+"Richting": 1
+},
+"Aopmerking": {
+"Thema": 1
+},
+"HSmof": {
+"Functie": 1
+},
+"LSkast": {
+"Functie": 1
+},
+"LSmof": {
+"Functie": 1
+},
+"MSmof": {
+"Functie": 1
+},
+"OVLoverdrachtspunt": {
+"Functie": 1
+},
+"TbuisAppendage": {
+"Soort": 3
+},
+"Tmof": {
+"Functie": 1
+}
+},
+"versie": "12.1"
+}

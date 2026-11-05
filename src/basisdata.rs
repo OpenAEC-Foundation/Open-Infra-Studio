@@ -49,18 +49,18 @@ fn target() -> Result<Target, String> {
 }
 
 /// Collects entities per layer and writes them as one undo step.
-struct Batch {
+pub(crate) struct Batch {
     entities: Vec<EntityType>,
     layers: BTreeMap<String, usize>,
     first_data: Option<ExtendedDataRecord>,
 }
 
 impl Batch {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { entities: Vec::new(), layers: BTreeMap::new(), first_data: None }
     }
 
-    fn push(&mut self, spec: &LayerSpec, ents: Vec<EntityType>, data: Option<&ExtendedDataRecord>) {
+    pub(crate) fn push(&mut self, spec: &LayerSpec, ents: Vec<EntityType>, data: Option<&ExtendedDataRecord>) {
         if ents.is_empty() {
             return;
         }
@@ -74,7 +74,7 @@ impl Batch {
         self.entities.extend(ents);
     }
 
-    fn write(self, label: &str) -> Result<(usize, usize), String> {
+    pub(crate) fn write(self, label: &str) -> Result<(usize, usize), String> {
         let n = self.entities.len();
         let handles = bridge::add_entities_handles(label, self.entities)?;
         if let (Some(h), Some(r)) = (handles.first(), self.first_data) {
@@ -379,6 +379,25 @@ fn klic_extras(site: &Site, lev: &klic::Levering, opt: &KlicOptions, to_site: &d
         let d = record(o.object_data, pairs);
         let feat = Feature { lines: a.polygons.iter().flatten().map(|r| (r.clone(), true)).chain(a.lines.iter().map(|r| (r.clone(), false))).collect(), points: a.points.clone(), props: Default::default() };
         let (lines, points) = vector::feature_to_drawing(site, &feat, to_site, f, o.clip);
+        // Areas go to the project area: an operator's detail area can be a
+        // whole region of 18 km, which would swamp the drawing.
+        // Only closed areas are clipped, and only to a project area that has a size.
+        let rect = site.drawing_rect(f);
+        let has_area = rect[2] > rect[0] && rect[3] > rect[1];
+        let lines: Vec<(Vec<XY>, bool)> = lines
+            .into_iter()
+            .filter_map(|(r, closed)| {
+                if !(closed && has_area) {
+                    return Some((r, closed));
+                }
+                let mut r = crate::civiel::model3d::clip_ring(&r, rect);
+                if r.len() > 2 && r.first() != r.last() {
+                    r.push(r[0]);
+                }
+                (r.len() >= 3).then_some((r, closed))
+            })
+            .collect();
+        let points: Vec<XY> = if has_area { points.into_iter().filter(|p| vector::inside(*p, rect)).collect() } else { points };
         if lines.is_empty() && points.is_empty() {
             continue;
         }

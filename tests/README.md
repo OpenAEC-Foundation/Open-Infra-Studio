@@ -113,6 +113,12 @@ Met `--profile ui-test` in plaats van `--release` komen er regelnummers in backt
 
 `tests/e2e/ui_wereld.py` is een scenario zoals een gebruiker het doet: een plaatsnaam typen in het zoekveld van het GIS-venster (met echte toetsaanslagen; alleen als het testvenster de focus heeft), op Zoeken klikken, de plaats kiezen, OK, en dan `CIV_FOTOTERREIN` met een 3D-beeld. Standaard Half Dome (Verenigde Staten: USGS-luchtfoto); `--plaats Matterhorn --verwacht sentinel --hoogte 3900:4500` voor de Alpen. Rapport en beeld: `target/e2e/ui/wereld.md` en `wereld-3d.png`.
 
+## 5b. Proefsleuf, NLCS++ en afhankelijkheden
+
+- `tests/e2e/proefsleuf_e2e.py`: BGT en de KLIC-voorbeeldlevering in Dordrecht, een as over een echte laagspanningskabel, meetpunten, dwarsprofielen die BGT-vlakken, kabels en meetpunten snijden, de afhankelijkheidsgraaf (`CIV_BIJWERKEN` na een nieuwe TIN) en een GeoPackage.
+- `tests/e2e/nlcspp_e2e.py`: de officiële Enexis-voorbeeldlevering in, controleren, als V12.1 weer uit, en (met `xmlschema`) tegen de XSD van Enexis.
+- `tests/nlcspp.rs` en `tests/test_nlcspp_xsd.py` (zonder Open CAD Studio): de officiële voorbeelden als golden files: alle objecten gelezen, de laaggrammatica tegen de lagen van de voorbeeldtekeningen, de geschreven V12.1 geldig tegen de XSD's en dezelfde keuzelijstfouten als de XSD.
+
 ## 6. BGT-mutatie
 
 `tests/e2e/bgt_mutatie_e2e.py` importeert de BGT rond de Grote Kerk en maakt een ontwerp: een wegdeel krijgt nieuw asfalt (oud object op V, nieuw vlak op R), een tweede wegdeel is gewijzigd (R) en een fietspad is gepland (N). `GIS_BGT_MUTATIE` moet dan 2 nieuwe, 1 gewijzigd en 1 beëindigd object geven. Met `--xsd` wordt de GML ook getoetst aan het IMGeo 2.1.1-schema (lxml).

@@ -19,6 +19,7 @@ pub mod geodata;
 pub mod gwsw;
 pub mod http;
 pub mod klic;
+pub mod klic_aanvraag;
 pub mod klic_extra;
 pub mod ogcapi;
 pub mod osm;

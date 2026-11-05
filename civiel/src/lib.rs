@@ -267,6 +267,7 @@ impl CadModule for CivielModule {
                             ("CIV_BLADEN_PDF", tr("Bladen naar PDF", "Sheets to PDF"), I_SHEETS_PDF),
                             ("CIV_LABELS", "Labels", I_LABELS),
                             ("CIV_LABELS_BIJWERKEN", tr("Labels bijwerken", "Update labels"), I_LABELS_UPDATE),
+                            ("CIV_BIJWERKEN", tr("Profielen bijwerken", "Update profiles"), I_LABELS_UPDATE),
                         ], "CIV_BLADEN_PDF"),
                         file_tool("CIV_CITYGML", "CityGML/JSON", I_CITYGML, tr("CityGML of CityJSON openen", "Open CityGML or CityJSON"), "CityGML / CityJSON", &["gml", "xml", "citygml", "json", "jsonl"], false),
                         menu("CIV_MENU_WEERGAVE", tr("Weergave", "View"), I_PHOTO, vec![
@@ -1630,6 +1631,11 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let req = civiel::labels::Request { kinds, axis: args.handle("AS")?, points, grid: args.f64("RASTER")?, surface };
             job(host, "Labels", id, move |p| civiel::labels::create(&o, req, p));
         }
+        "CIV_BIJWERKEN" => {
+            let o = opt(&["CONTROLE"])?;
+            let only = args.words.iter().any(|w| w.eq_ignore_ascii_case("CONTROLE") || w.eq_ignore_ascii_case("CHECK"));
+            job(host, "Bijwerken", id, move |p| civiel::graaf::update(&o, only, p));
+        }
         "CIV_LABELS_BIJWERKEN" => {
             let o = opt(&[])?;
             job(host, open_infra::lang::tr("Labels bijwerken", "Update labels"), id, move |p| civiel::labels::update(&o, p));
@@ -1702,7 +1708,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              [DEKKING=m] [VERHANG=1:250|4 (‰)] [BOB=m NAP|AUTO] [PUT=800|800x1000] [PUTNR=P101] [NAAM=] [OMKEREN=ja] [MAAIVELD=AUTO|ONTWERP|AHN]; \
              CIV_RIOOL_BIJWERKEN [RIOOL=] [PUTNR= BOB=|MAAIVELD=|PUT=] [LEIDING=P101-P102 DIAMETER=|MATERIAAL=|VERHANG=|DEKKING=] [INVOEGEN=x,y]; \
              CIV_RIOOL_PROFIEL [RIOOL=] [VAN=] [NAAR=] [PLAATS=x,y]; CIV_RIOOL_TOETS [RIOOL=] [Q=l/s | OPPERVLAK=m² of ha [REGEN=l/s/ha] | INWONERS=] [PUTAFSTAND=] [VRIJ=] [RUWHEID=mm]; \
-             CIV_RIOOL_EXPORT [RIOOL=] [FORMAAT=GWSW|CSV] [PAD=]; CIV_RIOOL_IMPORT <pad.orox.ttl>; CIV_RIOOL_GWSW [NAAM=].",
+             CIV_RIOOL_EXPORT [RIOOL=] [FORMAAT=GWSW|CSV|HYDX] [PAD=]; CIV_RIOOL_IMPORT <pad.orox.ttl>; CIV_RIOOL_GWSW [NAAM=].",
         ),
         // Design criteria, sight distance and rail (as-spoor).
         "CIV_ONTWERPCRITERIA" => {
@@ -1787,7 +1793,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
         "CIV_HELP" => {
             host.push_info(open_infra::lang::tr(
                 "[Open Infra — Civiel] Puntenwolk: CIV_TIN BRON=PUNTENWOLK [BESTAND=las/laz/e57/ply/pts/xyz] [EDITIE=AHN5|AHN4] [GEBIED=x,y;x,y] [KLASSEN=2;9|AUTO] [CEL=0.5] [TOL=0.10] [MAX=200000] [GAT=2] [HELLING=0.3] [VENSTER=18]; \
-                 CIV_LENGTEPROFIEL / CIV_DWARSPROFIELEN AS= BRON=PUNTENWOLK [STROOK=1] [BESTAND=] [KLASSEN=]; \
+                 CIV_LENGTEPROFIEL / CIV_DWARSPROFIELEN AS= BRON=PUNTENWOLK [STROOK=1] [BESTAND=] [KLASSEN=]; CIV_BIJWERKEN [CONTROLE] (profielen van een gewijzigde as of maaiveld opnieuw); \
                  CIV_MESH [GEBIED=x,y;x,y] [BESTAND=] [ZMIN=] [ZMAX=] [KLASSEN=] [VOXEL=] [GAT=1] [MAX=400000] [SOORT=kunstwerk|brug|viaduct|tunnel|sluis|steiger|pijler|landhoofd|kademuur] [ZIJDE=BOVEN|MIDDEN|x,y,z] [NAAM=].",
                 "[Open Infra — Civil] Point clouds: CIV_TIN BRON=PUNTENWOLK [BESTAND=las/laz/e57/ply/pts/xyz] [EDITIE=AHN5|AHN4] [GEBIED=x,y;x,y] [KLASSEN=2;9|AUTO] [CEL=0.5] [TOL=0.10] [MAX=200000] [GAT=2] [HELLING=0.3] [VENSTER=18]; \
                  CIV_LENGTEPROFIEL / CIV_DWARSPROFIELEN AS= BRON=PUNTENWOLK [STROOK=1] [BESTAND=] [KLASSEN=]; \

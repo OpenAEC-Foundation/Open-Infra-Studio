@@ -13,8 +13,11 @@
 pub mod bridge;
 pub mod civiel;
 pub mod emit;
+pub mod geoexport;
+pub mod nlcspp_host;
 pub mod hoeveelheden;
 pub mod hoogte;
+pub mod klic_map;
 pub mod ifc;
 pub mod gis;
 pub mod import;
@@ -211,7 +214,16 @@ impl CadModule for GisModule {
                 },
                 RibbonGroup {
                     title: tr("Uitvoer", "Output"),
-                    tools: vec![tool("GIS_TEKENBLAD", tr("Tekenblad", "Drawing sheet"), I_SHEET), small("GIS_IFC", "IFC 4x3", I_IFC), small("GIS_SERVERS", "Servers", I_SERVER)],
+                    tools: vec![
+                        tool("GIS_TEKENBLAD", tr("Tekenblad", "Drawing sheet"), I_SHEET),
+                        menu("GIS_MENU_EXPORT", tr("Exporteren", "Export"), I_IFC, vec![
+                            ("GIS_IFC", "IFC 4x3", I_IFC),
+                            ("GIS_EXPORT_GPKG", "GeoPackage", I_FILE),
+                            ("GIS_EXPORT_GEOJSON", "GeoJSON", I_FILE),
+                            ("GIS_GEODATA", tr("DWG met GEODATA", "DWG with GEODATA"), I_LOCATION),
+                        ], "GIS_IFC"),
+                        small("GIS_SERVERS", "Servers", I_SERVER),
+                    ],
                 },
                 // Block libraries (vehicles), like the vehicle sets of
                 // swept-path software.
@@ -243,6 +255,8 @@ impl CadModule for GisModule {
                                     ("GIS_BGT_BIJWERKEN", tr("BGT bijwerken", "Update BGT"), I_BGT),
                                     ("GIS_Q_BRK", tr("Kadaster importeren", "Import cadastre"), I_KADASTER),
                                     ("GIS_KLIC", tr("KLIC-levering", "KLIC delivery"), I_KLIC),
+                                    ("GIS_KLIC_AANVRAAG", tr("KLIC-aanvraag voorbereiden", "Prepare KLIC request"), I_KLIC),
+                                    ("GIS_KLIC_VOLGEN", tr("KLIC-leveringen automatisch inlezen", "Read KLIC deliveries automatically"), I_KLIC),
                                     ("GIS_Q_GWSW", tr("GWSW-riolering", "GWSW sewers"), I_BGT),
                                     ("GIS_Q_SONDERINGEN", tr("Sonderingen en boringen (BRO)", "CPTs and boreholes (BRO)"), I_CPT),
                                     ("GIS_AHN", tr("AHN (venster)", "AHN (window)"), I_AHN),
@@ -263,6 +277,8 @@ impl CadModule for GisModule {
                                     ("GIS_HOEVEELHEDEN", tr("Hoeveelheden", "Quantities"), I_QUANTITIES),
                                     ("GIS_HOEVEELHEDEN_TABEL", tr("Hoeveelhedenstaat", "Bill of quantities"), I_TABLE),
                                     ("GIS_BGT_MUTATIE", tr("BGT-mutatie", "BGT mutation"), I_MUTATION),
+                                    ("GIS_NLCSPP_CONTROLE", tr("NLCS++-controle (netbeheer)", "NLCS++ check (utilities)"), I_CHECK),
+                                    ("GIS_NLCSPP_EXPORT", tr("NLCS++-levering (XML)", "NLCS++ delivery (XML)"), I_FILE),
                                 ],
                                 "GIS_NLCS_CONTROLE",
                             ),
@@ -606,6 +622,198 @@ fn ifc_command(host: &mut dyn HostApi, cmd: &str) {
         match ifc::command(path, selection, texts, &|_| {}) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("GIS_IFC: {e}")),
+        }
+    });
+}
+
+/// `GIS_GEODATA [<pad.dwg|pad.dxf>]`: a copy of the drawing with a GEODATA
+/// object for the project location (as AutoCAD's GEOGRAPHICLOCATION writes
+/// it), for AutoCAD, Civil 3D and BricsCAD. The open drawing keeps its
+/// OPENINFRA/SITE: the plugin API cannot add GEODATA to it yet.
+fn geodata_command(host: &mut dyn HostApi, cmd: &str) {
+    let Some(site) = require_site(host) else { return };
+    let arg = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim().trim_matches('"').to_string()).unwrap_or_default();
+    host.push_info(&format!("[Open Infra] GEODATA {} …", lang::tr("schrijven", "writing")));
+    std::thread::spawn(move || {
+        let run = || -> Result<String, String> {
+            let t = bridge::target().ok_or("geen tekening actief")?;
+            let mut doc = bridge::snapshot()?;
+            if bridge::partial() {
+                return Err(lang::tr("de tekening is te groot om in zijn geheel te lezen; start Open CAD Studio met OCS_V4_SNAPSHOT_SEGMENT_SIZE=268435456", "the drawing is too large to read whole; start Open CAD Studio with OCS_V4_SNAPSHOT_SEGMENT_SIZE=268435456").into());
+            }
+            gis::geodata::set_geodata(&mut doc, &site, t.unit_factor)?;
+            let path = if arg.is_empty() { bridge::beside_drawing("geodata.dwg") } else { std::path::PathBuf::from(&arg) };
+            let dxf = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("dxf"));
+            if dxf {
+                ocs_plugin_api::host::codec::DxfWriter::new(&doc).write_to_file(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            } else {
+                ocs_plugin_api::host::codec::DwgWriter::write_to_file(&path, &doc).map_err(|e| format!("{}: {e}", path.display()))?;
+            }
+            civiel::api::note("bestand", path.to_string_lossy().into_owned());
+            Ok(format!(
+                "{} {} ({}, {} {:.3} {:.3}{}): {}",
+                lang::tr("Kopie met GEODATA geschreven", "Copy with GEODATA written"),
+                if dxf { "DXF" } else { "DWG" },
+                site.crs,
+                lang::tr("basispunt", "base point"),
+                site.origin_e,
+                site.origin_n,
+                if site.absolute { lang::tr(", absoluut", ", absolute") } else { "" },
+                path.display()
+            ))
+        };
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|p| Err(panic_text(p.as_ref()))) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&format!("GIS_GEODATA: {e}")),
+        }
+    });
+}
+
+/// `GIS_KLIC_AANVRAAG [SOORT=orientatie|graaf|calamiteit] [REFERENTIE=]
+/// [START=jjjj-mm-dd] [EIND=] [WERK=proefsleuvenGraven,…] [OMSCHRIJVING=]
+/// [LOCATIE=] [PAD=]`: a KLIC request for the selected closed polyline (else
+/// the project's import extent), checked against the Kadaster's rules and
+/// written as the GIA-POST message beside the drawing. Never sent.
+fn klic_aanvraag_command(host: &mut dyn HostApi, cmd: &str) {
+    let Some(site) = require_site(host) else { return };
+    let args = civiel::api::Args::parse(cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or(""));
+    let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
+    let sel = host.selection();
+    let drawn = (sel.len() == 1).then(|| host.document().get_entity(sel[0]).and_then(civiel::puntenwolk::closed_ring)).flatten();
+    let ring: Vec<[f64; 2]> = match &drawn {
+        Some(r) => r.iter().map(|p| site.from_drawing(*p, unit)).collect(),
+        None => {
+            let [a, b, c, d] = site.bbox();
+            vec![[a, b], [c, b], [c, d], [a, d]]
+        }
+    };
+    let ring: Result<Vec<[f64; 2]>, String> = if site.crs.eq_ignore_ascii_case("EPSG:28992") { Ok(ring) } else { ring.iter().map(|p| gis::crs::transform(&site.crs, "EPSG:28992", *p)).collect() };
+    let ring = match ring {
+        Ok(r) => r,
+        Err(e) => {
+            host.push_error(&format!("[Open Infra] GIS_KLIC_AANVRAAG: {e}"));
+            bridge::reply(false, &e);
+            return;
+        }
+    };
+    host.push_info(&format!(
+        "[Open Infra] {} ({}) …",
+        lang::tr("KLIC-aanvraag voorbereiden", "Preparing KLIC request"),
+        if drawn.is_some() { lang::tr("geselecteerde polylijn", "selected polyline") } else { lang::tr("importgebied van het project", "project import extent") }
+    ));
+    let path = args.str("PAD").map(std::path::PathBuf::from).unwrap_or_else(|| bridge::beside_drawing("klic-aanvraag.json"));
+    let fallback = site.label.clone();
+    std::thread::spawn(move || {
+        let a = gis::klic_aanvraag::from_args(&args, ring, &fallback);
+        match gis::klic_aanvraag::prepare(a, &path) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&format!("GIS_KLIC_AANVRAAG: {e}")),
+        }
+    });
+}
+
+/// `GIS_NLCSPP_IMPORT <levering.xml>`; `GIS_NLCSPP_EXPORT` and
+/// `GIS_NLCSPP_CONTROLE` with `[NETBEHEERDER=Enexis|Liander|Stedin]
+/// [PROJECTNUMMER=] [AANNEMER=] [TEKENINGTYPE=] [VOLGNUMMER=] [PAD=]`:
+/// NLCS++ Netbeheer deliveries (see `nlcspp_host`).
+fn nlcspp_command(host: &mut dyn HostApi, verb: &str, cmd: &str) {
+    let Some(site) = require_site(host) else { return };
+    let rest = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim()).unwrap_or("");
+    let args = civiel::api::Args::parse(rest);
+    let verb = verb.to_string();
+    let operator = args.str("NETBEHEERDER").and_then(nlcspp::model::operator).unwrap_or("Enexis").to_string();
+    let project = nlcspp_host::Project {
+        nummer: args.str("PROJECTNUMMER").map(str::to_string).unwrap_or_else(|| site.label.clone()),
+        aannemer: args.str("AANNEMER").map(str::to_string).unwrap_or_default(),
+        tekeningtype: args.str("TEKENINGTYPE").map(|t| t.replace('_', " ").to_uppercase()).unwrap_or_else(|| "DEFINITIEF ONTWERP".into()),
+        volgnummer: args.str("VOLGNUMMER").and_then(|v| v.parse().ok()),
+        toelichting: String::new(),
+    };
+    let path = args.str("PAD").map(str::to_string).or_else(|| (verb == "GIS_NLCSPP_IMPORT").then(|| rest.trim_matches('"').to_string()));
+    host.push_info(&format!("[Open Infra] {verb} …"));
+    std::thread::spawn(move || {
+        let run = || -> Result<String, String> {
+            let t = bridge::target().ok_or("geen tekening actief")?;
+            if verb == "GIS_NLCSPP_IMPORT" {
+                let p = path.filter(|p| !p.is_empty()).ok_or("GIS_NLCSPP_IMPORT <levering.xml>")?;
+                return nlcspp_host::import(&site, std::path::Path::new(&p), t.unit_factor);
+            }
+            let doc = bridge::snapshot()?;
+            let (xml, findings, n) = nlcspp_host::delivery(&doc, &site, t.unit_factor, &operator, &project)?;
+            if n == 0 {
+                return Err(lang::tr("geen NLCS++-objecten in de tekening (lagen *-OI-KL-* of objectdata nlcspp_object)", "no NLCS++ objects in the drawing (layers *-OI-KL-* or object data nlcspp_object)").into());
+            }
+            let (a, b, c) = nlcspp::check::counts(&findings);
+            civiel::api::note("objecten", n);
+            civiel::api::note("fouten", a);
+            civiel::api::note("waarschuwingen", b);
+            civiel::api::note("informerend", c);
+            let report = bridge::beside_drawing("nlcspp-controle.md");
+            std::fs::write(&report, nlcspp::check::markdown(&findings, &format!("{} ({operator})", bridge::drawing_name()))).map_err(|e| format!("{}: {e}", report.display()))?;
+            let summary = format!("NLCS++ ({operator}, V12.1): {n} objecten — {a} fout(en), {b} waarschuwing(en), {c} informerend. Rapport: {}", report.display());
+            if verb == "GIS_NLCSPP_CONTROLE" {
+                return Ok(summary);
+            }
+            let out = path.map(std::path::PathBuf::from).unwrap_or_else(|| bridge::beside_drawing("nlcspp.xml"));
+            std::fs::write(&out, xml).map_err(|e| format!("{}: {e}", out.display()))?;
+            civiel::api::note("bestand", out.to_string_lossy().into_owned());
+            Ok(format!("{summary} Levering: {} (met de DWG, minimaal R2000, als tekening; Handle = CAD-handle).", out.display()))
+        };
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|p| Err(panic_text(p.as_ref()))) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&format!("{verb}: {e}")),
+        }
+    });
+}
+
+/// `GIS_EXPORT [<pad.gpkg|pad.geojson>] [LAGEN=<tekst>] [SELECTIE] [ALLES]`
+/// (and `GIS_EXPORT_GPKG`, `GIS_EXPORT_GEOJSON` from the menu): the drawing's
+/// elements with their object data as geodata, beside the drawing by default.
+fn export_command(host: &mut dyn HostApi, verb: &str, cmd: &str) {
+    let Some(site) = require_site(host) else { return };
+    let args = civiel::api::Args::parse(cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or(""));
+    let flag = |k: &str| args.words.iter().any(|w| w.eq_ignore_ascii_case(k));
+    let given = args.words.iter().find(|w| w.contains('.') || w.contains('/') || w.contains('\\')).cloned();
+    let ext = if verb == "GIS_EXPORT_GEOJSON" { "geojson" } else { "gpkg" };
+    let path = given.map(std::path::PathBuf::from).unwrap_or_else(|| bridge::beside_drawing(&format!("export.{ext}")));
+    let opt = geoexport::Options { selection: None, layers: args.str("LAGEN").map(str::to_string), annotation: flag("ALLES") || flag("ALL") };
+    let selection = flag("SELECTIE") || flag("SELECTION");
+    host.push_info(&format!("[Open Infra] {} {} …", lang::tr("Exporteren naar", "Exporting to"), path.display()));
+    std::thread::spawn(move || {
+        let run = || -> Result<String, String> {
+            let t = bridge::target().ok_or("geen tekening actief")?;
+            let doc = bridge::snapshot()?;
+            let mut opt = opt;
+            if selection {
+                opt.selection = Some(bridge::selection()?.into_iter().collect());
+            }
+            let feats = geoexport::features(&doc, &site, t.unit_factor, &opt);
+            if feats.is_empty() {
+                return Err(lang::tr("niets om te exporteren (lege tekening, selectie of filter)", "nothing to export (empty drawing, selection or filter)").into());
+            }
+            let geojson = path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "geojson" | "json"));
+            if geojson {
+                std::fs::write(&path, geoexport::geojson(&feats, &site)?).map_err(|e| format!("{}: {e}", path.display()))?;
+            } else {
+                geoexport::geopackage(&feats, &site, &path)?;
+            }
+            let (p, l, a) = geoexport::counts(&feats);
+            civiel::api::note("punten", p);
+            civiel::api::note("lijnen", l);
+            civiel::api::note("vlakken", a);
+            Ok(format!(
+                "{} {}: {p} {}, {l} {}, {a} {} ({}).",
+                if geojson { "GeoJSON" } else { "GeoPackage" },
+                path.display(),
+                lang::tr("punten", "points"),
+                lang::tr("lijnen", "lines"),
+                lang::tr("vlakken", "areas"),
+                if geojson { "WGS 84".to_string() } else { site.crs.clone() }
+            ))
+        };
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).unwrap_or_else(|p| Err(panic_text(p.as_ref()))) {
+            Ok(m) => bridge::info(&m),
+            Err(e) => bridge::error(&format!("GIS_EXPORT: {e}")),
         }
     });
 }
@@ -1056,6 +1264,8 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_HOEVEELHEDEN_TABEL" => host.start_interactive(Box::new(TableCmd)),
             "GIS_BGT_MUTATIE" => mutation_command(host, cmd),
             "GIS_IFC" => ifc_command(host, cmd),
+            "GIS_NLCSPP_IMPORT" | "GIS_NLCSPP_EXPORT" | "GIS_NLCSPP_CONTROLE" => nlcspp_command(host, &verb, cmd),
+            "GIS_EXPORT" | "GIS_EXPORT_GPKG" | "GIS_EXPORT_GEOJSON" => export_command(host, &verb, cmd),
             "GIS_HOOGTEPUNTEN" | "GIS_HOOGTELIJNEN" | "GIS_PUNTENWOLK" => ahn_command(host, &verb),
             "GIS_PROFIEL" => {
                 let Some(site) = require_site(host) else { return true };
@@ -1069,6 +1279,20 @@ impl BuiltinPlugin for OpenInfra {
                 }
             }
             "GIS_SITE" => site_command(host, cmd),
+            "GIS_GEODATA" => geodata_command(host, cmd),
+            "GIS_KLIC_AANVRAAG" => klic_aanvraag_command(host, cmd),
+            "GIS_KLIC_MAP" | "GIS_KLIC_VOLGEN" => {
+                // `GIS_KLIC_MAP [MAP=<map>|<map>] [VOLGEN=ja|nee]`; the ribbon's GIS_KLIC_VOLGEN follows.
+                let Some(site) = require_site(host) else { return true };
+                let args = civiel::api::Args::parse(cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or(""));
+                let dir = args.str("MAP").map(str::to_string).or_else(|| (!args.words.is_empty()).then(|| args.words.join(" "))).map(|d| std::path::PathBuf::from(d.trim_matches('"')));
+                let follow = args.str("VOLGEN").map(|v| matches!(v.to_ascii_lowercase().as_str(), "ja" | "yes" | "aan" | "on" | "1" | "true")).or((verb == "GIS_KLIC_VOLGEN").then_some(true));
+                host.push_info("[Open Infra] GIS_KLIC_MAP …");
+                std::thread::spawn(move || match klic_map::command(site, dir, follow) {
+                    Ok(m) => bridge::info(&m),
+                    Err(e) => bridge::error(&format!("GIS_KLIC_MAP: {e}")),
+                });
+            }
             "GIS_Q_SERVER" => server_command(host, cmd),
             "GIS_Q_BGT" | "GIS_Q_BRK" | "GIS_TEKENBLAD" | "GIS_KLIC_IMPORT" => {
                 let arg = cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or("");
@@ -1077,7 +1301,10 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_KLIC" => {
                 // From the ribbon's file dialog: "GIS_KLIC <path>" (original case).
                 let arg = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim().trim_matches('"')).unwrap_or("");
-                if arg.is_empty() {
+                // The same file button opens NLCS++ deliveries of the operators.
+                if !arg.is_empty() && nlcspp_host::is_delivery(std::path::Path::new(arg)) {
+                    nlcspp_command(host, "GIS_NLCSPP_IMPORT", &format!("GIS_NLCSPP_IMPORT {arg}"));
+                } else if arg.is_empty() {
                     open(host, ui::Tab::Nlcs);
                 } else if ui::open(ui::Tab::Nlcs).is_ok() {
                     ui::send(ui::UiMsg::Klic(arg.into()));
@@ -1196,7 +1423,7 @@ impl BuiltinPlugin for OpenInfra {
                  NLCS: GIS_NLCS_CONTROLE, GIS_NLCS_RAPPORT, GIS_NLCS_HERSTEL, GIS_HOEVEELHEDEN, GIS_HOEVEELHEDEN_CSV, GIS_HOEVEELHEDEN_TABEL, GIS_BGT_MUTATIE [BRONHOUDER=G0505] [GEREALISEERD] [SELECTIE]; \
                  IFC 4x3: GIS_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee]; \
                  AHN: GIS_AHN (venster), GIS_HOOGTEPUNTEN, GIS_HOOGTELIJNEN, GIS_PROFIEL, GIS_PUNTENWOLK; \
-                 NLCS: GIS_BGT (venster), GIS_Q_BGT, GIS_BGT_BIJWERKEN | GIS_BGT_UPDATE, GIS_Q_BRK, GIS_Q_GWSW, GIS_Q_SONDERINGEN [BRON=sonderingen|boringen] (BRO), GIS_KLIC [bestand], GIS_KLIC_IMPORT <bestand>, GIS_TEKENBLAD [onderwerp]; \
+                 NLCS: GIS_BGT (venster), GIS_Q_BGT, GIS_BGT_BIJWERKEN | GIS_BGT_UPDATE, GIS_Q_BRK, GIS_Q_GWSW, GIS_Q_SONDERINGEN [BRON=sonderingen|boringen] (BRO), GIS_KLIC [bestand], GIS_KLIC_IMPORT <bestand>, GIS_KLIC_AANVRAAG [SOORT=orientatie|graaf|calamiteit] [REFERENTIE=] [START=] [EIND=] [WERK=] (voorbereiden, niet indienen), GIS_KLIC_MAP [MAP=] [VOLGEN=ja|nee], GIS_KLIC_VOLGEN, GIS_TEKENBLAD [onderwerp]; \
                  Bibliotheek / library: GIS_VOERTUIGEN | GIS_VEHICLES (venster), GIS_VOERTUIG | GIS_VEHICLE <id> [ZIJ|SIDE], \
                  GIS_VOERTUIGOVERZICHT | GIS_VEHICLE_CATALOG [categorie] [ZIJ|SIDE], \
                  GIS_VEEGPAD | GIS_SWEPT_PATH <id> [interval m] [ACHTERUIT|REVERSE] [KNIK=graden] [PAD=x,y;x,y] (geselecteerde lijn of punten); \

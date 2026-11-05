@@ -5,6 +5,8 @@
 pub mod api;
 pub mod as_profiel;
 pub mod corridor;
+pub mod doorsnede;
+pub mod graaf;
 pub mod grading;
 pub mod massa;
 pub mod landmeten;
@@ -20,6 +22,7 @@ pub mod labels;
 pub mod kruispunt;
 pub mod profieltype;
 pub mod hydrologie;
+pub mod hydx;
 pub mod percelen;
 // Point clouds: TIN, profiles, ground filter (puntenwolk) and 3D meshes (mesh).
 pub mod mesh;
