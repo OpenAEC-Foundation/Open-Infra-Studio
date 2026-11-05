@@ -1,7 +1,7 @@
 [plugin]
 id = "openaec.open-infra"
 name = "Open Infra — GIS"
-version = "2026.45.3"
+version = "2026.45.4"
 description = "GIS-workbench en NLCS-basisdata voor infra en civiele techniek: projectlocatie, WMS/WFS-servers, OpenStreetMap, BGT, kadaster en KLIC conform NLCS. Nederland (PDOK) en wereldwijd."
 author = "OpenAEC Foundation"
 license = "GPL-3.0-only"
@@ -10,7 +10,7 @@ repository = "OpenAEC-Foundation/Open-Infra-Studio"
 [opencad]
 api_version = 14
 # Filled at build time (scripts/install.sh, release workflow) from the
-# compiler that built the library and the opencadcodec source in Cargo.lock.
+# compiler that built the library and the acadrust (codec) git source in Cargo.lock.
 # The host loads the plugin only when both match its own build.
 rustc_version = "__RUSTC_VERSION__"
 acadrust_source = "__ACADRUST_SOURCE__"

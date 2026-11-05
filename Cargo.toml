@@ -1,6 +1,6 @@
 [package]
 name = "open-infra"
-version = "2026.45.3"
+version = "2026.45.4"
 edition = "2021"
 description = "Open Infra — GIS-workbench voor Open CAD Studio (infra en civiele techniek, NL en wereldwijd)."
 license = "GPL-3.0-only"
@@ -86,7 +86,8 @@ opt-level = 3
 inherits = "release"
 debug = "line-tables-only"
 
-# The codec's own repository (HakanSeven12/acadrust, used by opencaddocument)
-# is gone from GitHub; the same commit lives on in hakanaktt/acadrust (#75).
+# HakanSeven12/acadrust no longer exists (404), but Open CAD Studio v2026.44
+# and opencaddocument still name it. hakanaktt/acadrust holds the same commit,
+# so fetch it from there (#75). Same commit hash, so the host sees the same codec.
 [patch."https://github.com/HakanSeven12/acadrust.git"]
-acadrust = { git = "https://github.com/hakanaktt/acadrust.git", rev = "53e6420" }
+acadrust = { git = "https://github.com/hakanaktt/acadrust.git", rev = "53e6420c4df4d207409798c2719d32fc6cf2811d" }

@@ -99,7 +99,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p civiel-pkg/openaec.open-infra-civiel
-          acadrust_source=$(awk '/^name = "acadrust"$/{f=1} f&&/^source = /{if ($0 ~ /opencadcodec/) {gsub(/^source = "|"$/,""); print; exit} f=0}' Cargo.lock)
+          acadrust_source=$(awk '/^name = "acadrust"$/{f=1} f&&/^source = /{if ($0 ~ /^source = "git\+/) {gsub(/^source = "|"$/,""); print; exit} f=0}' Cargo.lock)
           stamp() { sed -e "s|__RUSTC_VERSION__|$(rustc --version)|" -e "s|__ACADRUST_SOURCE__|$acadrust_source|" "$1"; }
           stamp plugin.toml > dist/plugin.toml
           # The Civiel plugin as a folder for <config>/OpenCADStudio/plugins/.
