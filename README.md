@@ -259,6 +259,8 @@ CIV_CORRIDOR AS=<handle> SJABLOON=weg RIJSTROOK=3.5 TALUD=3 DWARSPROFIELEN=ja ID
 
 The [MCP server](mcp/README.md) (`mcp/open_infra_mcp.py`, Python standard library only) offers about 30 tools on top of this, from `oi_site` to `civ_corridor`, `civ_bag3d` and `oi_capture`. It finds every Open CAD Studio window by itself.
 
+An assistant's edits come as proposals to accept or reject, with a plain-language activity log in the drawing: see [AI assistant proposals](docs/assistant-proposals.md).
+
 ## The workbench window
 
 Every page follows the FreeCAD GIS dialogs:

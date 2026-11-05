@@ -60,6 +60,19 @@ De infra-bibliotheek biedt daarnaast `infra_catalog`, `infra_place`, `infra_insp
 | Corridor | `civ_corridor`: sjabloon `weg`, `fietspad`, `snelweg` of `dijk`, met rijstrook, berm, helling, taluds, kruin, verkanting, aansluiting op maaiveld, ontwerp-TIN, kantlijnen, grondverzet per dwarsprofiel |
 | 3D-model | `civ_photo_terrain` (AHN met luchtfoto), `civ_bag3d` (3D BAG LoD 1.2/1.3/2.2, stijl mooi of maquette), `civ_bgt3d` (BGT in 3D), `civ_water_level` (waterpeil), `civ_subsurface` (BRO-sonderingen en -boringen als 3D-kolommen met grondsoorten), `civ_klic3d` (KLIC als 3D-buizen), `civ_see_through` (maaiveld doorzichtig), `civ_citygml` (CityGML/CityJSON) |
 | Beeld | `oi_view` (aanzicht en visuele stijl), `oi_capture` (PNG terug als afbeelding), `oi_save`, `oi_open` |
+| Review | `proposals_list`, `activity_log`, `proposal_accept` and `proposal_reject` (scripted tests only, with `OI_MCP_REVIEW=1`) |
+
+## Tool classes, proposals and the activity log
+
+Every tool has a class: **read** (looks, changes nothing), **edit** (changes the drawing), **export** (writes a file from the drawing) or **save** (writes or switches the drawing file). `tools/list` gives it as the MCP tool annotations of the current specification (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) and as `_meta["org.openaec/class"]`. The table is `CLASS` in `open_infra_mcp.py`; `tests/test_mcp_assistant.py` fails when a new tool has none.
+
+- **Propose mode** (the default; `assistant` in `<config>/OpenCADStudio/open-infra/settings.json`, or the Assistant page, or `OI_ASSISTANT=propose|apply` for the server): an edit runs, but its change becomes a pending proposal the user accepts or rejects. The answer says so ("Proposal P3 is waiting for the user's review") and `structuredContent.proposal` has the id and handles. The change is in the drawing, so later steps can use it.
+- **Apply mode**: changes are done at once, as before.
+- **The request file**: before each edit, export or save the server writes `<config>/OpenCADStudio/open-infra/api/<id>.request.json` (client name and version from `initialize`, tool, class, mode, arguments); the plugins record the command's changes and log it.
+- **Activity log**: `activity_log` reads the drawing's log; `proposals_list` the pending proposals with their status (stale when edited since).
+- **Review is the user's**: `proposal_accept` and `proposal_reject` are refused unless the server runs with `OI_MCP_REVIEW=1` (scripted tests); `oi_command` refuses the review commands on the same terms, and the plugins refuse a review command sent for an assistant. In propose mode `oi_command` runs `GIS_`/`CIV_` commands and view commands only.
+
+See [the assistant proposals guide](../docs/assistant-proposals.md) for how proposals are kept, accepted and rejected, and their limits.
 
 ## Voorbeeld
 

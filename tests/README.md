@@ -119,6 +119,11 @@ Met `--profile ui-test` in plaats van `--release` komen er regelnummers in backt
 - `tests/e2e/nlcspp_e2e.py`: de officiële Enexis-voorbeeldlevering in, controleren, als V12.1 weer uit, en (met `xmlschema`) tegen de XSD van Enexis.
 - `tests/nlcspp.rs` en `tests/test_nlcspp_xsd.py` (zonder Open CAD Studio): de officiële voorbeelden als golden files: alle objecten gelezen, de laaggrammatica tegen de lagen van de voorbeeldtekeningen, de geschreven V12.1 geldig tegen de XSD's en dezelfde keuzelijstfouten als de XSD.
 
+## 5c. Assistant proposals and the activity log
+
+- `tests/test_mcp_assistant.py` (no Open CAD Studio): every MCP tool has a class (read, edit, export, save) and the MCP annotations follow it; the request file the server writes in propose and apply mode; the review guard (`OI_MCP_REVIEW`).
+- `tests/e2e/assistent_e2e.py`: through the MCP server against its own Open CAD Studio (`--port 18822`): a TIN and an alignment proposed, the alignment rejected, the TIN accepted, a feature line raised and rejected (the line and its labels back), the activity log, proposals and log after saving and reopening, a stale proposal, and captures in `target/e2e-assistent/`. See [docs/assistant-proposals.md](../docs/assistant-proposals.md).
+
 ## 6. BGT-mutatie
 
 `tests/e2e/bgt_mutatie_e2e.py` importeert de BGT rond de Grote Kerk en maakt een ontwerp: een wegdeel krijgt nieuw asfalt (oud object op V, nieuw vlak op R), een tweede wegdeel is gewijzigd (R) en een fietspad is gepland (N). `GIS_BGT_MUTATIE` moet dan 2 nieuwe, 1 gewijzigd en 1 beëindigd object geven. Met `--xsd` wordt de GML ook getoetst aan het IMGeo 2.1.1-schema (lxml).
