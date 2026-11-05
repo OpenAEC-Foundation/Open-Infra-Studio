@@ -137,7 +137,7 @@ const BE: &[[f64; 2]] = &[
     [5.80, 49.55], [5.47, 49.50], [4.85, 49.79], [4.80, 50.15], [4.20, 49.96], [3.60, 50.49], [2.85, 50.70],
 ];
 
-fn in_polygon(lon: f64, lat: f64, poly: &[[f64; 2]]) -> bool {
+pub fn in_polygon(lon: f64, lat: f64, poly: &[[f64; 2]]) -> bool {
     let mut inside = false;
     let mut j = poly.len() - 1;
     for i in 0..poly.len() {

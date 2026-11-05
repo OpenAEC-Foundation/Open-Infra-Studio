@@ -1,0 +1,153 @@
+{
+  "gis": {
+    "bytes": 22995456,
+    "raw_equal": false,
+    "normalized_equal": true,
+    "before_sha256": "79b267b1164cd3684f8e46652cbc52f08bedc0a1cd5440b8778ece78118880fc",
+    "after_sha256": "071f530478a3be19961a321826d2239ace8c2ee04993e59ee9feb2909c415cbe",
+    "normalized_before_sha256": "1e6a3c70f81d8ac1f923f5e8d60bfa1c31be2d0c707015fd2bd91174e5cfb808",
+    "normalized_after_sha256": "1e6a3c70f81d8ac1f923f5e8d60bfa1c31be2d0c707015fd2bd91174e5cfb808",
+    "metadata_differences": [
+      {
+        "field": "coff_timestamp",
+        "offset": 264,
+        "bytes": 4,
+        "before": "4906e96a",
+        "after": "0d07e96a"
+      },
+      {
+        "field": "debug_0_timestamp",
+        "offset": 20449652,
+        "bytes": 4,
+        "before": "4906e96a",
+        "after": "0d07e96a"
+      },
+      {
+        "field": "debug_0_codeview_guid_age",
+        "offset": 20450044,
+        "bytes": 20,
+        "before": "7c6e89298b97ae45aaf22c418a145c1301000000",
+        "after": "f5cec3b3c3973342a8cdd0d33c6ca06901000000"
+      },
+      {
+        "field": "debug_1_timestamp",
+        "offset": 20449680,
+        "bytes": 4,
+        "before": "4906e96a",
+        "after": "0d07e96a"
+      },
+      {
+        "field": "debug_2_timestamp",
+        "offset": 20449708,
+        "bytes": 4,
+        "before": "4906e96a",
+        "after": "0d07e96a"
+      }
+    ],
+    "debug_types": [
+      2,
+      12,
+      13
+    ],
+    "sections": [
+      {
+        "name": ".text",
+        "raw_bytes": 16260608
+      },
+      {
+        "name": ".rdata",
+        "raw_bytes": 6085632
+      },
+      {
+        "name": ".data",
+        "raw_bytes": 29184
+      },
+      {
+        "name": ".pdata",
+        "raw_bytes": 554496
+      },
+      {
+        "name": ".reloc",
+        "raw_bytes": 64512
+      }
+    ]
+  },
+  "civiel": {
+    "bytes": 23126528,
+    "raw_equal": false,
+    "normalized_equal": true,
+    "before_sha256": "e7b59f5219904b0ddecea29ac77174d1c07f49dfdd680169beba00c7ae5a4552",
+    "after_sha256": "f4f512b8bf788ef97855d625cf0da260d6b8990449ebf0b909643cd56f465a20",
+    "normalized_before_sha256": "e4212f4ec5e6e0cedacc7314d34041d94da1e1edfc6c690eb85f6f08ea90399f",
+    "normalized_after_sha256": "e4212f4ec5e6e0cedacc7314d34041d94da1e1edfc6c690eb85f6f08ea90399f",
+    "metadata_differences": [
+      {
+        "field": "coff_timestamp",
+        "offset": 264,
+        "bytes": 4,
+        "before": "9f06e96a",
+        "after": "6407e96a"
+      },
+      {
+        "field": "debug_0_timestamp",
+        "offset": 20556836,
+        "bytes": 4,
+        "before": "9f06e96a",
+        "after": "6407e96a"
+      },
+      {
+        "field": "debug_0_codeview_guid_age",
+        "offset": 20557188,
+        "bytes": 20,
+        "before": "70d073b1414b674186e87f7254d25b9b01000000",
+        "after": "72300cf63d9eb740b152b243bbc8f18f01000000"
+      },
+      {
+        "field": "debug_1_timestamp",
+        "offset": 20556864,
+        "bytes": 4,
+        "before": "9f06e96a",
+        "after": "6407e96a"
+      },
+      {
+        "field": "debug_2_timestamp",
+        "offset": 20556892,
+        "bytes": 4,
+        "before": "9f06e96a",
+        "after": "6407e96a"
+      }
+    ],
+    "debug_types": [
+      2,
+      12,
+      13
+    ],
+    "sections": [
+      {
+        "name": ".text",
+        "raw_bytes": 16380416
+      },
+      {
+        "name": ".rdata",
+        "raw_bytes": 6093312
+      },
+      {
+        "name": ".data",
+        "raw_bytes": 31232
+      },
+      {
+        "name": ".pdata",
+        "raw_bytes": 556544
+      },
+      {
+        "name": ".reloc",
+        "raw_bytes": 64000
+      }
+    ]
+  },
+  "source": "6566016ac75cffcf6ba22e6dde9b06ec9e00cf03",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "run": "https://github.com/OpenAEC-Foundation/Open-Infra-Studio/actions/runs/41530176291",
+  "workflow_commit": "0289b6d63e38c69798e0b8314f4201249c762526",
+  "job_id": 125568016583
+}

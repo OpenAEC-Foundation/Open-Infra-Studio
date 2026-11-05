@@ -1,10 +1,10 @@
-Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.43** (plugin API 13), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab. New in this release: the whole drawing as **IFC 4.3**.
+Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.44** (plugin API 14), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab. New in this release: the whole drawing as **IFC 4.3**.
 
-**Note:** this release is built for Open CAD Studio **v2026.43**. A plugin for v2026.42 does not load in v2026.43, and the other way round. So update Open Infra together with Open CAD Studio.
+**Note:** this release is built for Open CAD Studio **v2026.44** (plugin API 14). Open Infra 2026.45.0 and earlier do not load in v2026.44, and this release does not load in v2026.43. So update Open Infra together with Open CAD Studio. From API 14 on, the host no longer ties a plugin to its own compiler and codec commit, so later host updates should break the plugin far less often.
 
 **Installing**
 
-1. Update Open CAD Studio to [v2026.43](https://github.com/HakanSeven12/OpenCADStudio/releases/tag/v2026.43).
+1. Update Open CAD Studio to [v2026.44](https://github.com/HakanSeven12/OpenCADStudio/releases/tag/v2026.44).
 2. **GIS plugin:** in Open CAD Studio, run `PLUGINS` (Plugin Manager), pick **Open Infra Studio** from the list (or choose *Add a repository* and enter `OpenAEC-Foundation/Open-Infra-Studio`), pick this release and click *Install*. By hand: put `openaec.open-infra-<platform>` and `plugin.toml` from this release in `<config>/OpenCADStudio/plugins/openaec.open-infra/`.
 3. **Civiel plugin:** unzip `open-infra-civiel-<platform>.zip` into `<config>/OpenCADStudio/plugins/`. That gives the folder `openaec.open-infra-civiel` with its library and `plugin.toml`.
 4. Restart Open CAD Studio. The ribbon shows the tabs **GIS** and **Civiel**.
@@ -12,6 +12,60 @@ Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v20
 `<config>` is `%APPDATA%` on Windows, `~/.config` on Linux and `~/Library/Application Support` on macOS.
 
 The libraries are signed: Authenticode with a timestamp on Windows (publisher Impertio Studio B.V.), Developer ID and notarized by Apple on macOS, and a detached OpenPGP signature of the OpenAEC Foundation (`.asc`) per Linux file. Check those with `gpg --verify <file>.asc <file>` against `openaec-signing-public-key.asc` (fingerprint `13F6D414ADEE4ED4CD09AC60601D86C93C504D29`).
+
+**Fixed in 2026.45.3**
+
+- **Quantities:** arcs are always counted again. In 2026.45.2 two different arcs on the same layer could be taken for one double-drawn line, so a length could drop out of the total (with a 1000 m radius, two arcs 40 mm apart counted as one).
+- **KLIC attachments:** a file now opens from its own place in the delivery. In 2026.45.2 two attachments with the same name (for example `voorwaarden.pdf` from two network operators) both opened the first one. Each delivery keeps its own folder, and attachments always stay inside it.
+- **KLIC extra detailinfo:** details drawn as a line are shown as a line on ZZ-DETAIL1, and the file of a line or point detail is listed with the attachments. In 2026.45.2 a line detail gave no outline and no attachment.
+
+**New in 2026.45.3 — the rest of the roadmap: NLCS++, HydX, geodata export, trial trenches**
+
+- **NLCS++ Netbeheer** (V11–V12.1, all three operators): read deliveries onto their layers with Z and all fields; the layer grammar both ways; the operators' own code lists; a check at the levels Fout, Waarschuwing and Informerend that finds on the official examples exactly what the operator's XSD finds; and the delivery as V12.1 XML linked to the DWG by CAD handle, valid against the operator's XSD. The full content rules of the operators run with `tools/nlcspp_schematron.py`. New host-independent crate `nlcspp`.
+- **Cross sections show what they cut**: BGT surfaces as a coloured band on the ground, KLIC cables and pipes as circles at their assumed depth with a short theme label, and survey points within 1 m at their measured height. The **trial-trench workflow** (KLIC + survey + AHN → cross sections) is an e2e test on a real cable of the Dordrecht sample delivery.
+- **Dependency graph**: length profiles and cross sections remember their axis and ground; `CIV_BIJWERKEN` (Output → Sheets → *Update profiles*) makes again only those whose source changed, at the same place; `CIV_BIJWERKEN CONTROLE` only reports.
+- **GWSW-HydX** for hydraulic sewer models (`CIV_RIOOL_EXPORT FORMAAT=HYDX`), read back without errors by `hydxlib`.
+- **Geodata export** (GIS → Output → Export): every element with its layer, NLCS meaning and object data as a GeoPackage in the project CRS or GeoJSON in WGS 84.
+- KLIC precaution and detail areas are clipped to the project area.
+- **GEODATA for AutoCAD, Civil 3D and BricsCAD** (#8): `GIS_GEODATA` (Output → Export → *DWG with GEODATA*) writes a copy of the drawing with the GEODATA object for the project location: the CRS as MapGuide XML with its EPSG code, base point, north and units, as GEOGRAPHICLOCATION writes it. ezdxf reads the copy back with the right CRS and transformation. The open drawing keeps its own location, because the plugin API cannot add GEODATA to it yet. Reading GEODATA now also understands the form AutoCAD writes.
+- **KLIC request prepared and checked** (#4): `GIS_KLIC_AANVRAAG` makes an oriëntatieverzoek, graafmelding or calamiteitenmelding for the selected polyline. The address and BAG id come from PDOK. It checks the request locally against the Kadaster's B2B rules (polygon, fields, dates, code lists, with the Kadaster's error codes) and writes the GIA-POST message beside the drawing. It is **not sent**: submitting needs your own Kadaster OAuth client, and is your decision.
+- **KLIC deliveries read in by themselves** (#4): `GIS_KLIC_VOLGEN` follows a folder (by default Downloads) and draws every new `Levering_*.zip` into the drawing; each notification is drawn once.
+
+**New in 2026.45.2 — terrain with its photo anywhere in the world**
+
+- **Terrain + aerial photo worldwide** (Civiel → Output and 3D → View, `CIV_FOTOTERREIN`): the ground of any project location as a 3D surface coloured by its photo. Heights from AHN in the Netherlands and from the Terrain Tiles mosaic elsewhere (NASA SRTM, USGS 3DEP, GMTED2010, NOAA ETOPO). The photo is PDOK in the Netherlands, the USGS National Map imagery in the United States and Sentinel-2 cloudless (2016, CC BY 4.0) in the rest of the world; `FOTO=` chooses another one or a later Sentinel-2 year (non-commercial licence, stated in the result).
+- The command moved from the Dutch 3D menu to the View menu, so it is there without the Dutch modules too.
+- An automated GUI scenario (`tests/e2e/ui_wereld.py`) searches a place in the location window, saves it and lays the terrain with its photo; the button test (`tests/e2e/ui_knoppen.py`) runs on Open CAD Studio v2026.44.
+- **KLIC: eis voorzorgsmaatregel, detailinfo and attachments** (roadmap #1). Areas where an operator requires a precaution before digging are drawn with a red diagonal hatch on ZZ-GRENS, extra detailinfo as an outline or marker on ZZ-DETAIL1 with the name of its sketch; both carry their requirement or type, theme and operator as object data, and both can be switched off in the theme list. The delivery's attachments (letters, conditions, sketches) are listed on the BGT · Kadaster · KLIC page and open in the system viewer, straight from the Kadaster zip.
+- **Double-drawn lines in the quantities** (roadmap #1): an element drawn twice on the same layer (same shape to the millimetre, either direction or another start vertex, same object data) counts once. The result names them, the CSV has two extra columns, and *Select copies* selects them in the drawing for checking. Cables of a KLIC delivery that share a trench keep their own identifiers and all count.
+- `GIS_HOEVEELHEDEN` and `GIS_NLCS_CONTROLE` from a script (with `ID=`) answer on the command line instead of opening the window, so the MCP server gets the result.
+- Fix: the plugin built with `--features ui-test` compiles again.
+
+**New in 2026.45.1 — Open CAD Studio v2026.44 and QGIS connections**
+
+- **Open CAD Studio v2026.44** (plugin API 14): both plugins are built for the new host. The project location and units are read on the first command, because the host answers requests only after loading.
+- **Import QGIS connections** (Server management): read a WMS, WFS or XYZ connections file exported from QGIS, or drop it on the window, check the preview and add the chosen connections in one save. They appear in the service browser under *QGIS*. Connections that need a password, own HTTP headers, a different axis order or tiles Open Infra cannot draw are shown with the reason and not added; passwords are never read. Importing the same file again adds nothing.
+- **Tile addresses** with `{-y}` (TMS row order) and `{q}` (quadkey) now work, and a tile server's minimum zoom is respected.
+- Saving your own servers is atomic: a failed save leaves the previous list intact, and an unreadable server list is never overwritten.
+
+**New in 2026.45.0 — civil design closes the gaps**
+
+- **Point clouds** (Civiel → Terrain): a TIN from a point cloud (the AHN points of the project area, or a LAS, LAZ, COPC, E57, PLY, PTS or XYZ file), ground lines along an axis from a strip of points, a ground filter for unclassified scans, and a 3D mesh of an object such as a bridge or quay wall.
+- **Sewer design** (Civiel → Sewers): manholes and pipes along a polyline with invert levels from minimum cover and slope, length profile, checks (cover, slope, velocity, KLIC crossings), update after changes, and export to GWSW-OroX and CSV. In the Netherlands also the GWSW sewer data of the municipality as a starting point.
+- **LandXML 1.2 export** of points, TINs, alignments with ground and design profiles, and corridor feature lines, checked against the schema. The **IFC 4.3 export** now also writes a corridor as road parts with pavement courses and earthwork bodies, sewers with their invert levels, point-cloud meshes and survey symbols.
+- **Plan production**: sheet sets along an alignment, each a paper-space layout with the plan strip and length profile; every sheet to PDF; labels (stationing, curve data, PVIs, grades, spot heights) that update when their source changes.
+- **Alignments**: clothoids (computed exactly), design criteria per guideline, an alignment check, sight distance, and rail tracks with cant and turnouts.
+- **Corridors**: a parts library (kerbs, footways, cycle paths, ditches, pavement layers), your own assemblies as JSON, junctions and roundabouts.
+- **Grading**: feature lines, plateaus and slopes into one design surface, exact TIN-to-TIN volumes and a mass haul diagram.
+- **Survey and site**: survey point codes become linework and symbols, plots are divided into parcels, water drops, catchments and ponds on the terrain, reverse swept paths and parking bays.
+- **Calmer ribbon**: the Civiel tab has seven groups (Points, Terrain, Alignment and profile, Corridor, Grading, Sewers, Output and 3D) plus the Netherlands group on the right; related tools share a menu.
+
+**New in 2026.45.0 — regions, plans and objects**
+
+- **Regional profiles**: the Netherlands, the United States and International, each with its own data menu; the region is stored per drawing and is independent of the interface language. Twenty more countries are researched in `docs/localisations-20-landen.md`.
+- **Spatial plans (NL)**: search the plans at a location through the Ruimtelijke Plannen API (with your own key) or read a local IMRO GML, drawn with the official map styles.
+- **Infra library**: 94 parametric NLCS objects (pavements, kerbs, sewer and pressure pipes, drainage, cables and ducts, manholes, cabinets, lighting, green, street furniture) with smart connections.
+- **Service catalogue**: 612 checked services; `docs/servers-onderzoek-2026-11.md` lists 170 more checked on 2 November 2026 (3D Tiles, I3S, COPC, EPT, WCS, STAC and download services, including France's LiDAR HD, Japan's PLATEAU and Singapore's land parcels) for readers still to come.
 
 **New — IFC 4.3 export**
 

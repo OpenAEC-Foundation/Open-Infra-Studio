@@ -1,0 +1,68 @@
+{
+  "bron": "afgeleid uit de officiële voorbeeldleveringen V11 (Alliander demodataset, Enexis voorbeeld) van mijnaansluiting/NLCSpp, Apache-2.0",
+  "vaste_delen": {
+    "Aaanlegtechniek": {
+      "0": "ET",
+      "1": "AANLEGTECHNIEK"
+    },
+    "Amantelbuis": {
+      "0": "ET",
+      "1": "LS",
+      "2": "MANTELBUIS"
+    },
+    "LSkabel": {
+      "0": "ET"
+    },
+    "LSkast": {
+      "0": "ET",
+      "1": "LS",
+      "2": "KAST"
+    },
+    "LSmof": {
+      "0": "ET",
+      "1": "LS",
+      "2": "MOF"
+    },
+    "LSoverdrachtspunt": {
+      "0": "ET",
+      "1": "LS",
+      "2": "AANSLUITPUNT"
+    },
+    "MSkabel": {
+      "0": "ET",
+      "1": "MS"
+    },
+    "MSoverdrachtspunt": {
+      "0": "ET",
+      "1": "MS",
+      "2": "AANSLUITPUNT"
+    },
+    "MSstation": {
+      "0": "ET",
+      "1": "MS",
+      "2": "STATION"
+    },
+    "OVLoverdrachtspunt": {
+      "0": "ET",
+      "1": "OV",
+      "2": "AANSLUITPUNT"
+    }
+  },
+  "vaste_lagen": {
+    "LSkast": {
+      "GV": "ET_LS_KAST"
+    },
+    "LSmof": {
+      "S": "ET_LS_MOF"
+    },
+    "LSoverdrachtspunt": {
+      "S": "ET_LS_AANSLUITPUNT"
+    },
+    "MSoverdrachtspunt": {
+      "S": "ET_MS_AANSLUITPUNT"
+    },
+    "OVLoverdrachtspunt": {
+      "S": "ET_OV_AANSLUITPUNT"
+    }
+  }
+}

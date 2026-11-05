@@ -1,9 +1,9 @@
 //! Raster and point cloud files into the drawing: GeoTIFF (an orthophoto,
 //! or a height model in float or 16-bit), ESRI ASCII grids, JPG/PNG with a
-//! world file, and LAS/LAZ point clouds. Images are placed as raster images
-//! (warped to the project CRS when needed); height models become a shaded
-//! relief image and contour lines on NLCS layers; point clouds an RCS file
-//! attached to the drawing.
+//! world file, and point clouds (LAS/LAZ, E57, PLY, PTS, XYZ). Images are
+//! placed as raster images (warped to the project CRS when needed); height
+//! models become a shaded relief image and contour lines on NLCS layers;
+//! point clouds an RCS file attached to the drawing.
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -19,7 +19,7 @@ use crate::emit;
 use crate::nlcs::{self, Element};
 
 /// Extensions for the file dialog (lower case, without the dot).
-pub const EXTENSIONS: &[&str] = &["tif", "tiff", "asc", "jpg", "jpeg", "png", "las", "laz"];
+pub const EXTENSIONS: &[&str] = &["tif", "tiff", "asc", "jpg", "jpeg", "png", "las", "laz", "e57", "ply", "pts", "xyz"];
 
 /// What a raster file holds.
 pub enum Raster {
@@ -252,8 +252,7 @@ pub fn hillshade(g: &Grid) -> RgbaImage {
 
 /// `import_path`: place a raster or point cloud file in the project.
 pub fn import_path(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Result<String, String> {
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    if ext == "las" || ext == "laz" {
+    if super::pointcloud::is_point_file(path) {
         return point_cloud(site, path, progress);
     }
     let t = bridge::target().ok_or("geen tekening actief")?;
@@ -339,54 +338,134 @@ fn heights(site: &Site, grid: &Grid, crs: &str, name: &str, dir: &Path, f: f64, 
     ))
 }
 
-/// LAS/LAZ: points in the project (thinned to at most 30 million), written
-/// as RCS beside the drawing and attached.
+/// Most points an attached scan keeps.
+const MAX_SCAN_POINTS: usize = 30_000_000;
+
+/// The CRS of a point cloud file: what the file states, else a `.prj`
+/// beside it, else the project's.
+pub fn point_file_crs(site: &Site, path: &Path) -> (String, &'static str) {
+    match super::pointcloud::file_crs(path) {
+        Some(c) => (c, "bestand"),
+        None => match prj_crs(path) {
+            Some(c) => (c, ".prj"),
+            None => (site.crs.clone(), "project"),
+        },
+    }
+}
+
+/// A point cloud file (LAS/LAZ, E57, PLY, PTS, XYZ): points in the project
+/// (thinned to at most 30 million), written as RCS beside the drawing and
+/// attached. Colours: the file's RGB, else its classes, else intensity,
+/// else height.
 fn point_cloud(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Result<String, String> {
-    use las::Reader;
     let t = bridge::target().ok_or("geen tekening actief")?;
     let f = t.unit_factor;
-    let mut reader = Reader::from_path(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let header = reader.header().clone();
-    let crs = las_crs::parse_las_crs(&header).ok().map(|c| format!("EPSG:{}", c.horizontal)).unwrap_or_else(|| site.crs.clone());
-    let total = header.number_of_points() as usize;
-    let keep_every = total.div_ceil(30_000_000).max(1);
+    let (crs, crs_from) = point_file_crs(site, path);
     let to = super::vector::data_to_site(site, &crs, &[])?;
-    let (mut xyz, mut cols, mut inten) = (Vec::new(), Vec::new(), Vec::new());
-    for (i, p) in reader.points().enumerate() {
-        if i % 1_000_000 == 0 {
-            progress(format!("Puntenwolk: {i} van {total} punten…"));
+    // Thin as the file streams: every `stride`-th point; when the scan is
+    // full, every other one is dropped and the stride doubles.
+    let mut stride = 1u64;
+    let mut seen = 0u64;
+    let (mut xyz, mut rgb, mut class, mut inten) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut any_rgb, mut any_class, mut any_intensity) = (false, false, false);
+    progress(format!("{} …", path.display()));
+    let pass = super::pointcloud::stream_file(path, None, 0.0, progress, &mut |s| {
+        seen += 1;
+        if !seen.is_multiple_of(stride) {
+            return true;
         }
-        if i % keep_every != 0 {
-            continue;
-        }
-        let Ok(p) = p else { continue };
-        let Some(q) = to([p.x, p.y]) else { continue };
+        let Some(q) = to([s.xyz[0], s.xyz[1]]) else { return true };
         let d = site.to_drawing(q, f);
-        xyz.push([d[0], d[1], p.z * f]);
-        inten.push(p.intensity);
-        cols.push(match p.color {
-            Some(c) => [(c.red >> 8) as u8, (c.green >> 8) as u8, (c.blue >> 8) as u8],
-            None => {
-                let v = (p.intensity >> 8) as u8;
-                [v, v, v]
-            }
-        });
-    }
+        xyz.push([d[0], d[1], s.xyz[2] * f]);
+        any_rgb |= s.rgb.is_some();
+        rgb.push(s.rgb.unwrap_or([180, 180, 180]));
+        let c = s.class.unwrap_or(0);
+        any_class |= c > 1;
+        class.push(c);
+        any_intensity |= s.intensity > 0;
+        inten.push(s.intensity);
+        if xyz.len() >= MAX_SCAN_POINTS {
+            halve(&mut xyz);
+            halve(&mut rgb);
+            halve(&mut class);
+            halve(&mut inten);
+            stride *= 2;
+        }
+        true
+    })?;
     if xyz.is_empty() {
-        return Err("geen punten in het bestand".into());
+        return Err(crate::lang::tr("geen punten in het bestand", "no points in the file").into());
     }
+    let cols: Vec<[u8; 3]> = if any_rgb {
+        rgb
+    } else if any_class {
+        let by_class = |c: u8| super::pointcloud::CLASSES.iter().find(|k| k.0 == c).map(|k| k.2).unwrap_or([160, 160, 160]);
+        class.iter().map(|c| by_class(*c)).collect()
+    } else if any_intensity {
+        inten.iter().map(|i| [(i >> 8) as u8; 3]).collect()
+    } else {
+        height_colours(&xyz)
+    };
     let dir = bridge::image_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("puntenwolk");
     let file: PathBuf = dir.join(format!("{stem}.rcs"));
-    progress(format!("Puntenwolk schrijven ({} punten)…", xyz.len()));
+    progress(format!("{} ({})…", crate::lang::tr("Puntenwolk schrijven", "Writing the point cloud"), xyz.len()));
     super::pointcloud::write_rcs(&file, &xyz, &cols, &inten)?;
+    crate::civiel::api::note("punten", xyz.len());
+    crate::civiel::api::note("punten_bestand", pass.read);
+    crate::civiel::api::note("crs", crs.clone());
+    crate::civiel::api::note("rcs", file.to_string_lossy().into_owned());
     let p = file.to_string_lossy().into_owned();
     if p.contains(char::is_whitespace) {
-        return Ok(format!("{} punten opgeslagen in {p}. Het pad bevat spaties: koppel het bestand met POINTCLOUDATTACH.", xyz.len()));
+        return Ok(crate::civiel::puntenwolk::trf!(
+            "{} punten opgeslagen in {}. Het pad bevat spaties: koppel het bestand met POINTCLOUDATTACH.",
+            "{} points saved in {}. The path holds spaces: attach the file with POINTCLOUDATTACH.",
+            xyz.len(),
+            p
+        ));
     }
     bridge::execute(&format!("-POINTCLOUDATTACH {p} 0,0,0 1 0\n"))?;
-    Ok(format!("{stem}: {} van {total} punten ({crs}{}) gekoppeld als {}.", xyz.len(), if keep_every > 1 { format!(", elke {keep_every}e") } else { String::new() }, file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()))
+    let thinned = if stride > 1 { crate::civiel::puntenwolk::trf!(", elke {}e", ", every {}th", stride) } else { String::new() };
+    Ok(crate::civiel::puntenwolk::trf!(
+        "{}: {} van {} punten ({} uit {}{}) gekoppeld als {}.",
+        "{}: {} of {} points ({} from {}{}) attached as {}.",
+        stem,
+        xyz.len(),
+        pass.read,
+        crs,
+        crate::civiel::puntenwolk::crs_source(crs_from),
+        thinned,
+        file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    ))
+}
+
+/// Every other element.
+fn halve<T>(v: &mut Vec<T>) {
+    let mut i = 0;
+    v.retain(|_| {
+        i += 1;
+        i % 2 == 1
+    });
+}
+
+/// Colours by height (2nd to 98th percentile), for clouds without colour,
+/// class or intensity.
+fn height_colours(xyz: &[[f64; 3]]) -> Vec<[u8; 3]> {
+    let mut z: Vec<f64> = xyz.iter().map(|p| p[2]).collect();
+    z.sort_by(f64::total_cmp);
+    let lo = z[z.len() * 2 / 100];
+    let hi = z[(z.len() * 98 / 100).min(z.len() - 1)].max(lo + 1e-3);
+    let stops = [[40.0, 70.0, 200.0], [40.0, 190.0, 220.0], [70.0, 190.0, 80.0], [240.0, 220.0, 60.0], [220.0, 60.0, 50.0]];
+    xyz.iter()
+        .map(|p| {
+            let t = ((p[2] - lo) / (hi - lo)).clamp(0.0, 1.0) * (stops.len() - 1) as f64;
+            let i = (t.floor() as usize).min(stops.len() - 2);
+            let u = t - i as f64;
+            let mix = |k: usize| (stops[i][k] + (stops[i + 1][k] - stops[i][k]) * u).round() as u8;
+            [mix(0), mix(1), mix(2)]
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -476,8 +555,14 @@ mod tests {
     #[test]
     fn asc_rejects_empty_missing_and_truncated_input() {
         asc_error("");
-        for line in ["ncols 3\n", "nrows 2\n", "cellsize 5\n", "xllcorner 100\n", "yllcorner 200\n", "4 -9999 6\n"] {
-            asc_error(&ASC.replace(line, ""));
+        for ending in ["\n", "\r\n"] {
+            let source = ASC.lines().collect::<Vec<_>>().join(ending) + ending;
+            assert!(read_asc(&source).is_ok(), "geldige fixture met {ending:?}");
+            for line in ["ncols 3", "nrows 2", "cellsize 5", "xllcorner 100", "yllcorner 200", "4 -9999 6"] {
+                let incomplete = source.replace(&format!("{line}{ending}"), "");
+                assert_ne!(incomplete, source, "de test moet {line:?} met {ending:?} werkelijk verwijderen");
+                asc_error(&incomplete);
+            }
         }
     }
 

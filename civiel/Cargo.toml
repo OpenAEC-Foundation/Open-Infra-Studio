@@ -1,6 +1,6 @@
 [package]
 name = "open-infra-civiel"
-version = "2026.44.5"
+version = "2026.45.3"
 edition = "2021"
 description = "Open Infra — Civiel: civiele ontwerptools voor Open CAD Studio (punten, oppervlakken, assen, profielen, grondverzet)."
 license = "GPL-3.0-only"
@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Must be the same pin as the GIS plugin: the host checks the opencadcodec commit.
-ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "ece627c662b98316f33d22cc09695ad16a1a6816", features = ["host"] }
+ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "537ab37095b681cab899c1cf48b2927d06e194b9", features = ["host"] }
 # The engine, without the GIS plugin's entry points.
 open-infra = { path = "..", default-features = false }
 serde_json = "1"

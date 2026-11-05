@@ -1,0 +1,358 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<NLCSnetbeheerAlliander
+	xmlns:keuzelijst="NS_NLCSnetbeheerAllianderKL"
+	xmlns:gml="http://www.opengis.net/gml/3.2"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="NS_NLCSnetbeheerAlliander NLCS_NetbeheerAllianderV11Import.xsd"
+	xmlns="NS_NLCSnetbeheerAlliander">
+	<VersieNummer>11</VersieNummer>
+	<LSkabel>
+		<Handle>561D</Handle>
+		<Uitvoering>4x95Al 4x6Cu as35Cu</Uitvoering>
+		<Kabelopbouw>VO-YMvK-asmb</Kabelopbouw>
+		<Fabrikant>TKF</Fabrikant>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Functie>LSOV</Functie>
+		<Spanningsniveau>400 V</Spanningsniveau>
+		<Inmeetwijze>GPS</Inmeetwijze>
+		<Nauwkeurigheid>tot 3cm</Nauwkeurigheid>
+		<Verbindingnummer>VN245</Verbindingnummer>
+		<Subnettype>DISTRIBUTIE</Subnettype>
+		<Aardingsysteem>TN</Aardingsysteem>
+		<FaseAanduiding>3 Fasen</FaseAanduiding>
+		<Bovengronds>Nee</Bovengronds>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<AssetId>{8576C84A-398C-41D5-8DB3-AC6EB56C07F4}</AssetId>
+		<GisId>0864322</GisId>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162047.11740000173 498526.25450000167 0 162204.98649999872 498648.7567999996 0 162235.33260000125 498672.3046000004 0 162363.7335000001 498771.94040000066 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</LSkabel>
+	<LSkabel>
+		<Handle>5623</Handle>
+		<Uitvoering>4x10Cu as10</Uitvoering>
+		<Kabelopbouw>VO-YMvK-asmb</Kabelopbouw>
+		<Fabrikant>TKF</Fabrikant>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Functie>LS</Functie>
+		<Spanningsniveau>400 V</Spanningsniveau>
+		<Inmeetwijze>GPS</Inmeetwijze>
+		<Nauwkeurigheid>tot 3cm</Nauwkeurigheid>
+		<Verbindingnummer>VN4534</Verbindingnummer>
+		<Subnettype>AANSLUITNET</Subnettype>
+		<Aardingsysteem>TN</Aardingsysteem>
+		<FaseAanduiding>3 Fasen</FaseAanduiding>
+		<Bovengronds>Nee</Bovengronds>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<AssetId>{42882259-EB64-475E-B632-364194E39B32}</AssetId>
+		<GisId>3245789</GisId>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162235.33260000125 498672.3046000004 0 162265.74340000004 498639.1908 0 162281.2890000008 498653.5137999989 0 162294.2146999985 498640.5881999992 0 162293.1666000001 498626.43989999965 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</LSkabel>
+	<LSkabel>
+		<Handle>562A</Handle>
+		<Uitvoering>4x6Cu as6</Uitvoering>
+		<Kabelopbouw>VO-YMvK-asmb</Kabelopbouw>
+		<Fabrikant>TKF</Fabrikant>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Functie>OV</Functie>
+		<Spanningsniveau>400 V</Spanningsniveau>
+		<Inmeetwijze>GPS</Inmeetwijze>
+		<Nauwkeurigheid>tot 3cm</Nauwkeurigheid>
+		<Subnettype>AANSLUITNET</Subnettype>
+		<Aardingsysteem>TN</Aardingsysteem>
+		<FaseAanduiding>3 Fasen</FaseAanduiding>
+		<Bovengronds>Nee</Bovengronds>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<AssetId>{E7A370B9-901A-4D9E-ACB1-0D344737CB5B}</AssetId>
+		<GisId>12345</GisId>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162204.98649999872 498648.7567999996 0 162209.97679999843 498642.1270000003 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</LSkabel>
+	<LSkabel>
+		<Handle>562B</Handle>
+		<Uitvoering>KEUZE ONTBREEKT IN LIJST</Uitvoering>
+		<Kabelopbouw>Keuze ontbreekt in lijst</Kabelopbouw>
+		<Fabrikant>NKT</Fabrikant>
+		<OmschrijvingUitvoering>4x16Cu GPLK </OmschrijvingUitvoering>
+		<DatumAanleg>1950-01-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Bewerking>VERLATEN</Bewerking>
+		<Functie>LS</Functie>
+		<Spanningsniveau>400 V</Spanningsniveau>
+		<Inmeetwijze>Meetlint</Inmeetwijze>
+		<Nauwkeurigheid>tot 30cm</Nauwkeurigheid>
+		<Subnettype>AANSLUITNET</Subnettype>
+		<Aardingsysteem>TN</Aardingsysteem>
+		<FaseAanduiding>3 Fasen</FaseAanduiding>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<AssetId>{CA1A1322-C85F-4684-A2CB-4ADFA9043651}</AssetId>
+		<GisId>1834761</GisId>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162326.13369999826 498742.76399999857 0 162360.5249999985 498704.66369999945 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</LSkabel>
+	<LSkabel>
+		<Handle>562C</Handle>
+		<Uitvoering>4x10Cu as10</Uitvoering>
+		<Kabelopbouw>V-VMvKsas</Kabelopbouw>
+		<Fabrikant>Prysmian</Fabrikant>
+		<DatumAanleg>2024-03-01</DatumAanleg>
+		<Status>NIEUW</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Bewerking>IG NEMEN</Bewerking>
+		<Functie>LS</Functie>
+		<Spanningsniveau>400 V</Spanningsniveau>
+		<Subnettype>AANSLUITNET</Subnettype>
+		<Aardingsysteem>TN</Aardingsysteem>
+		<FaseAanduiding>3 Fasen</FaseAanduiding>
+		<Bovengronds>Nee</Bovengronds>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<AssetId>{3FE84F45-DC86-4256-B8E3-724581967270}</AssetId>
+		<GisId>765321</GisId>
+		<Artikelcodering>356455</Artikelcodering>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162299.75 498722.2908000015 0 162334.9860999994 498681.3792000003 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</LSkabel>
+	<MSkabel>
+		<Handle>562D</Handle>
+		<Uitvoering>3x240Alrm as50</Uitvoering>
+		<Kabelopbouw>ymekrvas lqwd</Kabelopbouw>
+		<Fabrikant>NKF</Fabrikant>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Spanningsniveau>10 kV</Spanningsniveau>
+		<Inmeetwijze>GPS</Inmeetwijze>
+		<Nauwkeurigheid>tot 3cm</Nauwkeurigheid>
+		<FaseAanduiding>3 Fasen</FaseAanduiding>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<GisId>83412</GisId>
+		<AssetId>{19361D8E-F151-4A38-8B35-054EB94F0F9B}</AssetId>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162048.97700000182 498524.01520000026 0 162053.6270999983 498527.4098000005 0 162058.8403000012 498520.6875 0 161969.25560000166 498450.72089999914 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</MSkabel>
+	<MSkabel>
+		<Handle>5633</Handle>
+		<Uitvoering>3x240Alrm as50</Uitvoering>
+		<Kabelopbouw>ymekrvas lqwd</Kabelopbouw>
+		<Fabrikant>NKF</Fabrikant>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Spanningsniveau>10 kV</Spanningsniveau>
+		<Inmeetwijze>GPS</Inmeetwijze>
+		<Nauwkeurigheid>tot 3cm</Nauwkeurigheid>
+		<FaseAanduiding>3 Fasen</FaseAanduiding>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<GisId>456234</GisId>
+		<AssetId>{1A167EEB-CC92-4948-AC0E-743966A262BF}</AssetId>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162047.9813000001 498525.2142000012 0 162109.68820000067 498572.6823000014 0 162155.78379999846 498519.8258999996 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</MSkabel>
+	<OVLoverdrachtspunt>
+		<Handle>55CF</Handle>
+		<Aansluitset>LS-94 Faget</Aansluitset>
+		<Mastnummer>12</Mastnummer>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Functie>LICHTMAST</Functie>
+		<Spanningsniveau>400 V</Spanningsniveau>
+		<Doorlaatwaarde>6</Doorlaatwaarde>
+		<Aansluitwijze>Aftak</Aansluitwijze>
+		<VoedingEnSturing>OV gevoed en geschakeld</VoedingEnSturing>
+		<Schakeling>Avond en nacht</Schakeling>
+		<Kabelmontage>Geen stekker</Kabelmontage>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<GisId>32454</GisId>
+		<AssetId>{6ADE1D06-DF02-4017-B9D4-542F53730C1F}</AssetId>
+		<Geometry>
+			<gml:Point
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:pos>162209.97679999843 498642.1270000003 0</gml:pos>
+			</gml:Point>
+		</Geometry>
+	</OVLoverdrachtspunt>
+	<LSoverdrachtspunt>
+		<Handle>55DC</Handle>
+		<Doorlaatwaarde>6</Doorlaatwaarde>
+		<Uitvoering>KABELINV-KST EG-404/160 HH</Uitvoering>
+		<EigenRichting>Nee</EigenRichting>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Functie>Huisaansluiting</Functie>
+		<FaseAanduiding>3 Fasen</FaseAanduiding>
+		<Aardingsysteem>TN</Aardingsysteem>
+		<Kabelmontage>Geen stekker</Kabelmontage>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<AssetId>{34F69E0C-4D47-41F3-9FD3-934DED5980E4}</AssetId>
+		<GisId>12345678</GisId>
+		<Hoek>0</Hoek>
+		<Geometry>
+			<gml:Point
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:pos>162293.1666000001 498626.43989999965 0</gml:pos>
+			</gml:Point>
+		</Geometry>
+	</LSoverdrachtspunt>
+	<MSstation>
+		<Handle>5638</Handle>
+		<Naam>MS-12345 Teststation</Naam>
+		<Nummer>12345</Nummer>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Functie>NETSTATION</Functie>
+		<Straatnaam>Straatnaam</Straatnaam>
+		<Huisnummer>100</Huisnummer>
+		<HuisnummerToevoeging>tv</HuisnummerToevoeging>
+		<Postcode>1234 AB</Postcode>
+		<Plaatsnaam>Plaatsnaam</Plaatsnaam>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<AssetId>{6D43A69E-C176-401A-8517-E2605079A344}</AssetId>
+		<Geometry>
+			<gml:Polygon
+				srsDimension="2"
+				srsName="EPSG:28992">
+				<gml:exterior>
+					<gml:LinearRing>
+						<gml:posList>162051.3975000009 498521.1004999988 162042.91010000184 498514.01579999924 162035.89719999954 498522.2153999992 162044.52840000018 498529.37209999934 162051.3975000009 498521.1004999988</gml:posList>
+					</gml:LinearRing>
+				</gml:exterior>
+			</gml:Polygon>
+		</Geometry>
+	</MSstation>
+	<MSoverdrachtspunt>
+		<Handle>55E9</Handle>
+		<DatumAanleg>2024-01-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Identificatie>MS-0123</Identificatie>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<GisId>6431</GisId>
+		<AssetId>{39437C1B-1F2C-4D8E-83CF-E55B6B9ADA57}</AssetId>
+		<Hoek>45</Hoek>
+		<Geometry>
+			<gml:Point
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:pos>162155.78379999846 498519.8258999996 0</gml:pos>
+			</gml:Point>
+		</Geometry>
+	</MSoverdrachtspunt>
+	<Amantelbuis>
+		<Handle>5639</Handle>
+		<Materiaal>PVC</Materiaal>
+		<Diameter>110</Diameter>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Inmeetwijze>GPS</Inmeetwijze>
+		<Nauwkeurigheid>tot 3cm</Nauwkeurigheid>
+		<Thema>ET_LS</Thema>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<GisId>875215</GisId>
+		<AssetId>{CF349FEA-642D-43F3-9D36-21F208DEDCB2}</AssetId>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162195.21200000122 498641.21990000084 0 162165.126600001 498617.8828999996 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</Amantelbuis>
+	<Aaanlegtechniek>
+		<Handle>563C</Handle>
+		<SoortAanlegTechniek>GESTUURDE TECHNIEK</SoortAanlegTechniek>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Thema>ET_LS</Thema>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<GisId>764159</GisId>
+		<AssetId>{3505EF29-8AD6-45EA-B3E4-1D1EF5C37E41}</AssetId>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162204.98649999872 498648.7567999996 0 162209.97679999843 498642.1270000003 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</Aaanlegtechniek>
+	<Aaanlegtechniek>
+		<Handle>563D</Handle>
+		<SoortAanlegTechniek>GESTUURDE TECHNIEK</SoortAanlegTechniek>
+		<DatumAanleg>2023-10-10</DatumAanleg>
+		<Status>BESTAAND</Status>
+		<Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+		<Thema>ET_LS</Thema>
+		<Eigenaar>Netbeheerder</Eigenaar>
+		<Beheerder>Netbeheerder</Beheerder>
+		<GisId>87542</GisId>
+		<AssetId>{30425982-EEDF-4A3D-A74C-EB56CC29B25D}</AssetId>
+		<Geometry>
+			<gml:LineString
+				srsDimension="3"
+				srsName="EPSG:28992">
+				<gml:posList>162248.19619999826 498658.2976000011 0 162263.80359999835 498641.3029999994 0</gml:posList>
+			</gml:LineString>
+		</Geometry>
+	</Aaanlegtechniek>
+</NLCSnetbeheerAlliander>

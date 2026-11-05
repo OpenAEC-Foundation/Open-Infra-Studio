@@ -1,0 +1,92 @@
+"""Behoud dependencyhergebruik voor iedere native releasecompilatie."""
+from pathlib import Path
+import re
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class ReleaseDependencyCacheTest(unittest.TestCase):
+    def assert_release_workflow(self, workflow):
+        steps = re.split(r'^      - ', workflow, flags=re.MULTILINE)[1:]
+        toolchains = [i for i, step in enumerate(steps) if 'uses: dtolnay/rust-toolchain@' in step]
+        caches = [i for i, step in enumerate(steps) if 'uses: Swatinem/rust-cache@' in step]
+        self.assertEqual(len(toolchains), 1)
+        self.assertEqual(len(caches), 1, 'alle native matrixjobs moeten dependencies kunnen herstellen')
+        cache = caches[0]
+        self.assertLess(toolchains[0], cache)
+        self.assertNotRegex(steps[cache], r'(?m)^\s+if:')
+        self.assertNotRegex(steps[cache], r'cache-targets:\s*[\x22\x27]?false')
+        self.assertRegex(steps[cache], r'uses: Swatinem/rust-cache@[0-9a-f]{40}\b')
+        self.assertRegex(steps[cache], r'(?m)^\s+shared-key: release\s*$')
+        self.assertNotRegex(steps[cache], r'(cache-workspace-crates|cache-on-failure):\s*[\x22\x27]?true')
+        cargo_steps = [i for i, step in enumerate(steps) if re.search(r'\bcargo (test|build)\b', step)]
+        self.assertEqual(len(cargo_steps), 3, 'behoud tests en de twee afzonderlijke pluginbuilds')
+        for i in cargo_steps:
+            self.assertLess(cache, i)
+            self.assertNotRegex(steps[i], r'(?m)^[ \t]*if:',
+                                'release-tests en beide pluginbuilds moeten onvoorwaardelijk draaien')
+
+    def test_restore_follows_the_pinned_toolchain_and_precedes_all_cargo_steps(self):
+        workflow = (ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8')
+        self.assert_release_workflow(workflow)
+
+    def test_cargo_conditions_are_rejected_regardless_of_key_order(self):
+        workflow = (ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8')
+        self.assert_release_workflow(workflow)
+        parts = re.split(r'^      - ', workflow, flags=re.MULTILINE)
+        cargo_steps = [i for i, part in enumerate(parts[1:], start=1)
+                       if re.search(r'\bcargo (test|build)\b', part)]
+        self.assertEqual(len(cargo_steps), 3)
+        for i in cargo_steps:
+            for condition_first in [True, False]:
+                with self.subTest(step=i, condition_first=condition_first):
+                    disabled = parts.copy()
+                    if condition_first:
+                        disabled[i] = 'if: false\n        ' + parts[i]
+                    else:
+                        disabled[i] = parts[i] + '        if: false\n'
+                    with self.assertRaises(AssertionError):
+                        self.assert_release_workflow('      - '.join(disabled))
+
+
+    def test_default_branch_prepares_the_cache_for_future_tags(self):
+        path = ROOT / '.github/workflows/native-cache.yml'
+        self.assertTrue(path.exists(), 'nieuwe tags kunnen caches van andere tags niet lezen')
+        workflow = path.read_text(encoding='utf-8')
+        self.assertRegex(workflow, r'(?m)^  push:\n    branches: \[main\]$')
+        self.assertNotRegex(workflow, r'(?m)^  (pull_request|pull_request_target|schedule):')
+        self.assertNotRegex(workflow, r'(?m)^    tags:')
+        for path in ['Cargo.toml', 'Cargo.lock', 'civiel/Cargo.toml',
+                     '.github/workflows/release.yml', '.github/workflows/native-cache.yml']:
+            self.assertIn(f'      - "{path}"', workflow)
+        self.assertIn('permissions:\n  contents: read', workflow)
+        self.assertNotRegex(workflow, r'secrets\.|action-gh-release|signing-action|notarytool|codesign')
+        release = (ROOT / '.github/workflows/release.yml').read_text(encoding='utf-8')
+        versions = [re.findall(r'^  RUST_TOOLCHAIN: "([^"]+)"$', text, re.MULTILINE)
+                    for text in [workflow, release]]
+        self.assertEqual(len(versions[0]), 1)
+        self.assertEqual(versions[0], versions[1])
+        self.assertEqual(set(re.findall(r'os: ([\w.-]+)', workflow)),
+                         set(re.findall(r'os: ([\w.-]+)', release)))
+        self.assertEqual(re.findall(r'^      - run: (cargo .+)$', workflow, re.MULTILINE),
+                         re.findall(r'^      - run: (cargo .+)$', release, re.MULTILINE))
+        steps = re.split(r'^      - ', workflow, flags=re.MULTILINE)[1:]
+        cache = [i for i, step in enumerate(steps) if 'uses: Swatinem/rust-cache@' in step]
+        self.assertEqual(len(cache), 1)
+        self.assertNotRegex(steps[cache[0]], r'(?m)^\s+if:')
+        self.assertNotRegex(steps[cache[0]], r'(cache-targets|save-if):\s*[\x22\x27]?false')
+        self.assertIn('id: cache', steps[cache[0]])
+        self.assertRegex(steps[cache[0]], r'Swatinem/rust-cache@[0-9a-f]{40}\b')
+        self.assertRegex(steps[cache[0]], r'(?m)^\s+shared-key: release\s*$')
+        self.assertNotRegex(steps[cache[0]], r'(cache-workspace-crates|cache-on-failure):\s*[\x22\x27]?true')
+        toolchain = next(i for i, step in enumerate(steps) if 'dtolnay/rust-toolchain@' in step)
+        self.assertLess(toolchain, cache[0])
+        for i, step in enumerate(steps):
+            if re.search(r'\bcargo (test|build)\b', step):
+                self.assertLess(cache[0], i)
+                self.assertIn("if: steps.cache.outputs.cache-hit != 'true'", step)
+
+
+if __name__ == '__main__':
+    unittest.main()

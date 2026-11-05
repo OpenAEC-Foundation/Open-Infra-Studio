@@ -1,0 +1,12 @@
+{
+  "naam": "woonstraat",
+  "omschrijving": "Woonstraat 30 km/u: rijbaan 2 × 2,50 m klinkers, langsparkeerstroken van 2,00 m, trottoirbanden en trottoirs van 2,00 m",
+  "bronnen": ["CROW ASVV 2021 (erftoegangsweg binnen de bebouwde kom); alle maten zijn schattingen", "Verhardingsopbouw: opbouw.json (schattingen)"],
+  "talud": 2, "ingraving": 2, "reikwijdte": 20, "verkanting": 0, "uitrol": 30,
+  "beide": [
+    {"type": "rijstrook", "breedte": 2.50, "helling": -2.5, "lagen": "klinkers"},
+    {"type": "parkeerstrook", "breedte": 2.00, "helling": -2.5, "lagen": "parkeren"},
+    {"type": "band", "naam": "trottoirband 13/15x25", "breedte": 0.15, "opstand": 0.10, "hoogte": 0.25, "schuinte": 0.02, "lagen": "band"},
+    {"type": "trottoir", "breedte": 2.00, "helling": 2.0, "lagen": "tegels"}
+  ]
+}

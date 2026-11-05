@@ -166,11 +166,11 @@ pub fn save_site(site: &Site) -> Result<(), String> {
     let entries = vec![XRecordEntry::string(1, json)];
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
     let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: SITE_RECORD.into(), entries: entries.clone() };
-    if let Ok(PluginResponse::XRecordUpdateResult(Ok(_))) = t.sender.request(update) {
+    if let Ok(PluginResponse::XRecordUpdateResult(Ok(_))) = traced(trace_on().then(|| "UpdateXRecord SITE".into()), || t.sender.request(update)) {
         return Ok(());
     }
     // Not there yet: create it (and the OPENINFRA dictionary).
-    match t.sender.request(PluginRequest::CreateXRecord { dictionary_path: path, name: SITE_RECORD.into(), entries }) {
+    match traced(trace_on().then(|| "CreateXRecord SITE".into()), || t.sender.request(PluginRequest::CreateXRecord { dictionary_path: path, name: SITE_RECORD.into(), entries })) {
         Ok(PluginResponse::XRecordCreateResult(Ok(_))) => Ok(()),
         Ok(PluginResponse::XRecordCreateResult(Err(e))) | Ok(PluginResponse::Error(e)) => Err(e),
         Ok(other) => Err(format!("onverwacht antwoord: {other:?}")),
@@ -178,9 +178,52 @@ pub fn save_site(site: &Site) -> Result<(), String> {
     }
 }
 
-fn request(req: PluginRequest) -> Result<PluginResponse, String> {
+/// Request tracing for diagnosis: on with `OI_BRIDGE_TRACE` or a file
+/// `<config>/OpenCADStudio/open-infra/bridge-trace`; every host request is
+/// written before and after, with its thread, to `bridge-trace.log` beside it.
+fn trace_on() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| {
+        let on = std::env::var_os("OI_BRIDGE_TRACE").is_some() || crate::gis::servers::config_dir().join("bridge-trace").exists();
+        if on {
+            crate::ui::allow_debugger();
+        }
+        on
+    })
+}
+
+fn trace_line(line: &str) {
+    use std::io::Write;
+    static FILE: OnceLock<Option<Mutex<std::fs::File>>> = OnceLock::new();
+    let file = FILE.get_or_init(|| {
+        let path = crate::gis::servers::config_dir().join("bridge-trace.log");
+        std::fs::OpenOptions::new().create(true).append(true).open(path).ok().map(Mutex::new)
+    });
+    if let Some(f) = file {
+        let _ = writeln!(f.lock().unwrap_or_else(|e| e.into_inner()), "{line}");
+    }
+}
+
+fn traced<R>(what: Option<String>, f: impl FnOnce() -> R) -> R {
+    let Some(what) = what else { return f() };
+    let th = std::thread::current();
+    let name = th.name().unwrap_or("?").to_string();
+    let t0 = std::time::Instant::now();
+    trace_line(&format!("{:?} {name} → {what}", std::time::SystemTime::now()));
+    let r = f();
+    trace_line(&format!("{:?} {name} ← {what} ({} ms)", std::time::SystemTime::now(), t0.elapsed().as_millis()));
+    r
+}
+
+/// The variant name of a request (its Debug output up to the first field).
+fn kind(req: &PluginRequest) -> String {
+    let d = format!("{req:?}");
+    d[..d.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(d.len())].to_string()
+}
+
+pub(crate) fn request(req: PluginRequest) -> Result<PluginResponse, String> {
     let t = target().ok_or("geen tekening actief — klik eerst in Open CAD Studio op het GIS-tabblad")?;
-    match t.sender.request(req) {
+    match traced(trace_on().then(|| kind(&req)), || t.sender.request(req)) {
         Ok(PluginResponse::Error(e)) => Err(e),
         Ok(r) => Ok(r),
         Err(e) => Err(e.to_string()),
@@ -207,6 +250,11 @@ fn pending_reply() -> &'static Mutex<Option<String>> {
 /// One command at a time, as a script runs them.
 pub fn expect_reply(id: Option<String>) {
     *pending_reply().lock().unwrap() = id;
+}
+
+/// A script waits for this command's answer (it carried `ID=`).
+pub fn scripted() -> bool {
+    COMMAND_CONTEXT.with(|c| c.borrow().as_ref().is_some_and(|v| v.reply.is_some())) || pending_reply().lock().unwrap().is_some()
 }
 
 /// Answer the waiting script now (argument errors, commands that finish at once).
@@ -363,7 +411,7 @@ pub fn snapshot() -> Result<ocs_plugin_api::host::codec::CadDocument, String> {
         Some((_, _, size)) if size < SNAPSHOT_SAFE => {
             PARTIAL.store(false, std::sync::atomic::Ordering::Relaxed);
             match request(PluginRequest::DocumentSnapshot)? {
-                PluginResponse::Document(doc) => Ok(*doc),
+                PluginResponse::Document(doc) => Ok((*doc).into()),
                 other => Err(format!("onverwacht antwoord op de tekeningopvraag: {other:?}")),
             }
         }
@@ -449,6 +497,36 @@ fn index_lock() -> &'static Mutex<()> {
 /// terrain status, …), kept in the drawing (NOD OPENINFRA/INDEX), so the
 /// civil commands fetch what they need by handle and never depend on the
 /// whole drawing, which may be too large to send.
+/// A JSON document kept in the drawing (NOD XRecord `OPENINFRA/<name>`), in
+/// pieces of at most 2000 characters; `None` when there is none.
+pub fn json_record_read(name: &str) -> Option<String> {
+    let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
+    let Ok(PluginResponse::XRecordEntries(Ok(entries))) = request(PluginRequest::ReadXRecord { dictionary_path: path, name: name.into() }) else {
+        return None;
+    };
+    let text: String = entries.into_iter().filter_map(|e| match e.value {
+        XRecordValue::String(s) => Some(s),
+        _ => None,
+    }).collect();
+    (!text.is_empty()).then_some(text)
+}
+
+/// Writes a JSON document into the drawing (see [`json_record_read`]).
+pub fn json_record_write(name: &str, json: &str) -> Result<(), String> {
+    let chars: Vec<char> = json.chars().collect();
+    let entries: Vec<XRecordEntry> = chars.chunks(2000).map(|c| XRecordEntry::string(1, c.iter().collect::<String>())).collect();
+    let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
+    let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: name.into(), entries: entries.clone() };
+    if matches!(request(update), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
+        return Ok(());
+    }
+    match request(PluginRequest::CreateXRecord { dictionary_path: path, name: name.into(), entries })? {
+        PluginResponse::XRecordCreateResult(Ok(_)) => Ok(()),
+        PluginResponse::XRecordCreateResult(Err(e)) => Err(e),
+        _ => Ok(()),
+    }
+}
+
 pub fn index_read() -> Vec<(String, String, Vec<Handle>)> {
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
     let Ok(PluginResponse::XRecordEntries(Ok(entries))) = request(PluginRequest::ReadXRecord { dictionary_path: path, name: INDEX_RECORD.into() }) else {
@@ -492,6 +570,40 @@ pub fn index_add(kind: &str, key: &str, handles: &[Handle], replace: bool) {
         for chunk in list.chunks(200) {
             entries.push(XRecordEntry::string(1, format!("{k}\t{n}\t{}", chunk.join(" "))));
         }
+    }
+    let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
+    let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: INDEX_RECORD.into(), entries: entries.clone() };
+    if !matches!(request(update), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
+        let _ = request(PluginRequest::CreateXRecord { dictionary_path: path, name: INDEX_RECORD.into(), entries });
+    }
+}
+
+/// Set many keys of one kind in a single write: each key gets exactly these
+/// handles, and a key with none is dropped from the index (labels that
+/// follow their source, `civiel::labels`).
+pub fn index_set_many(kind: &str, keys: &[(String, Vec<Handle>)]) {
+    if keys.is_empty() {
+        return;
+    }
+    let _one = index_lock().lock().unwrap_or_else(|e| e.into_inner());
+    let mut all = index_read();
+    for (key, handles) in keys {
+        all.retain(|(k, n, _)| !(k == kind && n == key));
+        if !handles.is_empty() {
+            all.push((kind.to_string(), key.clone(), handles.clone()));
+        }
+    }
+    let mut entries = Vec::new();
+    for (k, n, hs) in &all {
+        let mut seen = HashSet::new();
+        let list: Vec<String> = hs.iter().filter(|h| seen.insert(**h)).map(|h| format!("{:X}", u64::from(*h))).collect();
+        for chunk in list.chunks(200) {
+            entries.push(XRecordEntry::string(1, format!("{k}\t{n}\t{}", chunk.join(" "))));
+        }
+    }
+    if entries.is_empty() {
+        // An XRecord keeps at least one entry.
+        entries.push(XRecordEntry::string(1, "-\t-\t".to_string()));
     }
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
     let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: INDEX_RECORD.into(), entries: entries.clone() };

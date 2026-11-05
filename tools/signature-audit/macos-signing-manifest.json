@@ -1,0 +1,20 @@
+[
+  {
+    "tool": "Open Infra Studio",
+    "repo": "OpenAEC-Foundation/Open-Infra",
+    "tag": "v2026.44.2",
+    "name": "openaec.open-infra-macos-aarch64.dylib",
+    "sha256": "023a0a3c35490d86ab2c6e4406eedca7401a1a11cdd64f4ffe49724b3fe870b3",
+    "asset_id": 678128406,
+    "kind": "plugin"
+  },
+  {
+    "tool": "Open Infra Studio",
+    "repo": "OpenAEC-Foundation/Open-Infra",
+    "tag": "v2026.43",
+    "name": "openaec.open-infra-macos-aarch64.dylib",
+    "sha256": "222006358ced8a3fefc0621e99e196edc6392c9711363b4b4ae210153a8f2d53",
+    "asset_id": 670684992,
+    "kind": "plugin"
+  }
+]

@@ -1,0 +1,3 @@
+<!DOCTYPE connections>
+<qgsWMSConnections version="1.0">
+  <wms name="half" url="https://x/wms?a=1&b=2"

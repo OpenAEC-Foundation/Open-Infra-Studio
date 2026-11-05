@@ -1,0 +1,5 @@
+model-v12.1.json and lagen-*.txt are derived (tools/import_nlcspp.py) from the
+NLCS++ Netbeheer sources of mijnaansluiting.nl, https://github.com/mijnaansluiting/NLCSpp:
+schemas/V12.1 (NLCS_Netbeheer.xsd and the operator Keuzelijst XSDs),
+docs/InformatiemodelNetbeheerv11.xlsx and the V11 DWG templates of
+Alliander and Enexis. Licensed under the Apache License, Version 2.0.

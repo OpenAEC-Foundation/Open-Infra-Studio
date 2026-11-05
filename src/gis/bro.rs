@@ -10,6 +10,7 @@
 //! soil names (NEN-EN-ISO 14688 or NEN 5104), mapped by [`soil_of_name`].
 
 use roxmltree::{Document, Node};
+use crate::lang::tr;
 
 use super::crs::XY;
 
@@ -88,6 +89,36 @@ fn num_of(n: Node, local: &str) -> Option<f64> {
     text_of(n, local).and_then(|t| t.parse().ok())
 }
 
+/// Validate fields used by the geometry before optional-value extraction.
+/// Absent optional metadata and explicitly voidable nil values are allowed.
+fn validate_numbers(root: Node) -> Result<(), String> {
+    for n in root.descendants().filter(|n| n.is_element()) {
+        let name = n.tag_name().name();
+        if name == "pos" {
+            let values = n.text().unwrap_or("").split_whitespace().map(|t| t.parse::<f64>()).collect::<Result<Vec<_>, _>>().map_err(|_| tr("BRO: ongeldige locatiecoördinaten", "BRO: invalid location coordinates"))?;
+            if !(2..=3).contains(&values.len()) || !values.iter().all(|v| v.is_finite()) {
+                return Err(tr("BRO: onvolledige of niet-eindige locatiecoördinaten", "BRO: incomplete or non-finite location coordinates").into());
+            }
+        } else if matches!(name, "offset" | "finalDepth" | "finalDepthBoring" | "predrilledDepth" | "upperBoundary" | "lowerBoundary") {
+            if let Some(nil) = n.attribute(("http://www.w3.org/2001/XMLSchema-instance", "nil")) {
+                match nil.trim() {
+                    "true" | "1" => {
+                        if !matches!(name, "offset" | "predrilledDepth") || n.children().any(|c| c.is_element() || c.is_text()) {
+                            return Err(format!("BRO: {} {name}", tr("ongeldige ontbrekende waarde in", "invalid nil value in")));
+                        }
+                        continue;
+                    }
+                    "false" | "0" => {}
+                    _ => return Err(format!("BRO: {} {name}", tr("ongeldige xsi:nil in", "invalid xsi:nil in"))),
+                }
+            }
+            let value = n.text().unwrap_or("").trim().parse::<f64>().map_err(|_| format!("BRO: {} {name}", tr("ongeldig getal in", "invalid number in")))?;
+            if !value.is_finite() { return Err(format!("BRO: {} {name}", tr("niet-eindig getal in", "non-finite number in"))); }
+        }
+    }
+    Ok(())
+}
+
 fn pos(n: Node) -> Option<(XY, String)> {
     let p = first(n, "pos")?;
     let v: Vec<f64> = p.text()?.split_whitespace().filter_map(|t| t.parse().ok()).collect();
@@ -126,43 +157,60 @@ fn point_of(n: Node, cpt: bool) -> Point {
     p
 }
 
+#[derive(Debug, Default, PartialEq)]
+pub struct SearchResult {
+    pub points: Vec<Point>,
+    /// Skipped search objects, retained for callers; not displayed in the UI.
+    pub warnings: Vec<String>,
+}
+
 /// The objects of a characteristics search (deregistered ones left out).
-pub fn parse_characteristics(xml: &str) -> Result<Vec<Point>, String> {
+/// A damaged object is reported without hiding the other search hits.
+pub fn parse_characteristics(xml: &str) -> Result<SearchResult, String> {
     let doc = Document::parse(xml).map_err(|e| format!("BRO: onleesbaar antwoord ({e})"))?;
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
-    Ok(doc
-        .root_element()
+    let mut result = SearchResult::default();
+    for object in doc.root_element()
         .children()
         .filter(|c| c.is_element() && c.tag_name().name() == "dispatchDocument")
         .filter_map(|d| d.children().find(|c| c.is_element()))
-        .map(|o| point_of(o, o.tag_name().name().starts_with("CPT")))
-        .filter(|p| !p.id.is_empty() && !p.deregistered)
-        .collect())
+    {
+        let id = text_of(object, "broId").unwrap_or_default();
+        if id.is_empty() || text_of(object, "deregistered").as_deref() == Some("ja") { continue; }
+        if let Err(error) = validate_numbers(object) {
+            result.warnings.push(format!("BRO: object {id} {}: {error}", tr("overgeslagen", "skipped")));
+            continue;
+        }
+        result.points.push(point_of(object, object.tag_name().name().starts_with("CPT")));
+    }
+    Ok(result)
 }
 
 // ── Search ──────────────────────────────────────────────────────────────────
 
 /// All objects of `kind` in a WGS 84 box [w, s, e, n]. A box with more than
 /// the services' limit is split in four, up to four levels deep.
-pub fn search(kind: Kind, lonlat: [f64; 4]) -> Result<Vec<Point>, String> {
+pub fn search(kind: Kind, lonlat: [f64; 4]) -> Result<SearchResult, String> {
     let mut out = search_box(kind, lonlat, 0)?;
     let mut seen = std::collections::HashSet::new();
-    out.retain(|p| seen.insert(p.id.clone()));
+    out.points.retain(|p| seen.insert(p.id.clone()));
     Ok(out)
 }
 
-fn search_box(kind: Kind, b: [f64; 4], depth: u32) -> Result<Vec<Point>, String> {
+fn search_box(kind: Kind, b: [f64; 4], depth: u32) -> Result<SearchResult, String> {
     let body = serde_json::json!({"area": {"boundingBox": {"lowerCorner": {"lat": b[1], "lon": b[0]}, "upperCorner": {"lat": b[3], "lon": b[2]}}}});
     let url = format!("{}/characteristics/searches", kind.api());
     let r = super::http::post_json(&url, &body, 120).and_then(|f| String::from_utf8(f.body).map_err(|_| "BRO: geen UTF-8".to_string())).and_then(|t| parse_characteristics(&t));
     match r {
         Err(e) if e.contains(&SEARCH_LIMIT.to_string()) && depth < 4 => {
             let (mx, my) = ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0);
-            let mut all = Vec::new();
+            let mut all = SearchResult::default();
             for q in [[b[0], b[1], mx, my], [mx, b[1], b[2], my], [b[0], my, mx, b[3]], [mx, my, b[2], b[3]]] {
-                all.extend(search_box(kind, q, depth + 1)?);
+                let found = search_box(kind, q, depth + 1)?;
+                all.points.extend(found.points);
+                all.warnings.extend(found.warnings);
             }
             Ok(all)
         }
@@ -234,7 +282,9 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         return Err(format!("BRO: {r}"));
     }
     let root = doc.root_element();
-    let obj = first(root, "CPT_O").ok_or("BRO: geen sondering (CPT_O) in het antwoord")?;
+    let invalid = "BRO: geen sondering (CPT_O) in het antwoord";
+    validate_numbers(root).map_err(|_| invalid.to_string())?;
+    let obj = first(root, "CPT_O").ok_or(invalid)?;
     let point = point_of(obj, true);
     let columns: Vec<String> = match first(obj, "parameters") {
         Some(p) => p.children().filter(|c| c.is_element()).map(|c| c.tag_name().name().to_string()).collect(),
@@ -253,7 +303,11 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         .unwrap_or("");
     let mut rows: Vec<(f64, Sample)> = Vec::new();
     for r in values.split(block.as_str()).filter(|r| !r.trim().is_empty()) {
-        let v: Vec<f64> = r.split(tok.as_str()).map(|t| if dec == "." { t.trim().parse() } else { t.trim().replace(dec.as_str(), ".").parse() }.unwrap_or(VOID)).collect();
+        let v = r.split(tok.as_str()).map(|t| {
+            let value: f64 = if dec == "." { t.trim().parse() } else { t.trim().replace(dec.as_str(), ".").parse() }.map_err(|_| invalid.to_string())?;
+            if !value.is_finite() { return Err(invalid.to_string()); }
+            Ok(value)
+        }).collect::<Result<Vec<_>, String>>()?;
         let get = |i: Option<usize>| i.and_then(|i| v.get(i).copied()).filter(|x| *x > VOID + 1.0);
         let length = get(pl).or(get(dp));
         let (Some(length), Some(q)) = (length, get(Some(qc))) else { continue };
@@ -262,6 +316,7 @@ pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
         }
         let f = get(fs).filter(|f| *f >= 0.0);
         let ratio = get(rf).filter(|r| *r >= 0.0).or_else(|| f.map(|f| f / q * 100.0));
+        if ratio.is_some_and(|r| !r.is_finite()) { return Err(invalid.to_string()); }
         rows.push((length, Sample { depth: get(dp).unwrap_or(length), qc: q, fs: f, rf: ratio }));
     }
     // The block may hold the rod changes twice and be out of order.
@@ -571,7 +626,9 @@ pub fn parse_bhr(xml: &str) -> Result<Bhr, String> {
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
-    let obj = first(doc.root_element(), "BHR_GT_O").ok_or("BRO: geen boring (BHR_GT_O) in het antwoord")?;
+    let invalid = "BRO: geen boring (BHR_GT_O) in het antwoord";
+    validate_numbers(doc.root_element()).map_err(|_| invalid.to_string())?;
+    let obj = first(doc.root_element(), "BHR_GT_O").ok_or(invalid)?;
     let point = point_of(obj, false);
     let desc = first(obj, "boreholeSampleDescription");
     // A field log covers the whole boring; a lab log only its samples.
@@ -620,6 +677,220 @@ pub fn fetch_many<T: Send>(ids: &[String], f: fn(&str) -> Result<T, String>, pro
 mod tests {
     use super::*;
 
+    #[test]
+    fn one_bad_search_object_keeps_the_other_bro_points() {
+        let xml = fixture("cpt-characteristics.xml");
+        let bad = xml.replacen("<offset uom=\"m\">2.860</offset>", "<offset uom=\"m\">bad</offset>", 1);
+        assert_ne!(bad, xml);
+        let points = parse_characteristics(&bad).unwrap();
+        assert_eq!(points.points.len(), 2);
+        assert_eq!(points.warnings.len(), 1);
+        assert!(points.warnings[0].contains("CPT000000011051"));
+        assert!(points.warnings[0].contains(tr("overgeslagen", "skipped")));
+    }
+
+    #[test]
+    fn a_broken_middle_search_object_preserves_both_valid_neighbours() {
+        let original = fixture("cpt-characteristics.xml");
+        let mut expected = parse_characteristics(&original).unwrap().points;
+        assert_eq!(expected.len(), 3);
+        let bad_id = expected.remove(1).id;
+        let broken = original.replacen("<offset uom=\"m\">2.470</offset>", "<offset uom=\"m\">broken</offset>", 1);
+        assert_ne!(broken, original);
+        let result = parse_characteristics(&broken).unwrap();
+        assert_eq!(result.points, expected);
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.warnings[0].contains(&bad_id));
+        assert!(result.warnings[0].contains(crate::lang::tr("overgeslagen", "skipped")));
+    }
+
+    #[test]
+    fn bhr_broken_middle_search_object_preserves_both_valid_neighbours() {
+        let original = include_str!("../../tests/fixtures/bro-synthetic/borehole-characteristics.xml");
+        let complete = parse_characteristics(original).unwrap();
+        assert_eq!(complete.points.len(), 3);
+        assert!(complete.warnings.is_empty());
+        assert_eq!(complete.points[1].id, "BHR000000000102");
+        let expected = vec![
+            Point { id: "BHR000000000101".into(), cpt: false, rd: Some([100.0, 200.0]), lonlat: Some([4.1, 51.1]), surface: Some(1.25), datum: "NAP".into(), reference: "maaiveld".into(), end_depth: Some(5.5), date: "2026-01-02".into(), regime: "IMBRO".into(), deregistered: false },
+            Point { id: "BHR000000000103".into(), cpt: false, rd: Some([120.0, 220.0]), lonlat: Some([4.3, 51.3]), surface: Some(-0.75), datum: "NAP".into(), reference: "waterbodem".into(), end_depth: Some(7.5), date: "2026-01-04".into(), regime: "IMBRO/A".into(), deregistered: false },
+        ];
+        assert_eq!(vec![complete.points[0].clone(), complete.points[2].clone()], expected);
+        for (from, to) in [
+            ("<offset uom=\"m\">2.5</offset>", "<offset uom=\"m\">broken</offset>"),
+            ("<finalDepthBoring uom=\"m\">6.5</finalDepthBoring>", "<finalDepthBoring uom=\"m\">broken</finalDepthBoring>"),
+        ] {
+            assert_eq!(original.matches(from).count(), 1);
+            let broken = original.replacen(from, to, 1);
+            let result = parse_characteristics(&broken).unwrap();
+            assert_eq!(result.points, expected, "{from}");
+            assert_eq!(result.warnings.len(), 1);
+            assert!(result.warnings[0].contains("BHR000000000102"));
+            assert!(result.warnings[0].contains(tr("overgeslagen", "skipped")));
+        }
+    }
+
+    #[test]
+    fn internal_bro_diagnostics_follow_the_selected_language() {
+        let xml = SYNTHETIC_CPT.replace("<pos>100 200</pos>", "<pos>100 broken 200</pos>");
+        let doc = Document::parse(&xml).unwrap();
+        let error = validate_numbers(doc.root_element()).unwrap_err();
+        assert!(error.contains(crate::lang::tr("ongeldige locatiecoördinaten", "invalid location coordinates")), "{error}");
+        let xml = SYNTHETIC_CPT.replace("<offset>1</offset>", "<offset>broken</offset>");
+        let doc = Document::parse(&xml).unwrap();
+        let error = validate_numbers(doc.root_element()).unwrap_err();
+        assert!(error.contains(crate::lang::tr("ongeldig getal in", "invalid number in")), "{error}");
+    }
+
+    #[test]
+    fn unusable_bro_objects_use_the_existing_object_error() {
+        for text in [
+            SYNTHETIC_CPT.replace("<pos>100 200</pos>", "<pos>100 broken 200</pos>"),
+            SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,broken,0.01,0.5"),
+            SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,1e-300,1e100,-999999"),
+        ] {
+            assert_eq!(parse_cpt(&text).unwrap_err(), "BRO: geen sondering (CPT_O) in het antwoord");
+        }
+        let text = SYNTHETIC_BHR.replace("<lowerBoundary>2</lowerBoundary>", "<lowerBoundary>broken</lowerBoundary>");
+        assert_eq!(parse_bhr(&text).unwrap_err(), "BRO: geen boring (BHR_GT_O) in het antwoord");
+    }
+
+    #[test]
+    fn all_unreadable_search_objects_are_counted_in_the_result() {
+        let original = fixture("cpt-characteristics.xml");
+        let broken = ["2.860", "2.470", "3.800"].into_iter().fold(original, |text, value| text.replace(&format!("<offset uom=\"m\">{value}</offset>"), "<offset uom=\"m\">broken</offset>"));
+        let result = parse_characteristics(&broken).unwrap();
+        assert!(result.points.is_empty());
+        assert_eq!(result.warnings.len(), 3);
+    }
+
+    const SYNTHETIC_CPT: &str = include_str!("../../tests/fixtures/bro-synthetic/cpt.xml");
+    const SYNTHETIC_BHR: &str = include_str!("../../tests/fixtures/bro-synthetic/borehole.xml");
+
+    fn cpt_field(field: &str, replacement: &str) -> String {
+        let value = match field { "offset" => "1", "predrilledDepth" => "0", _ => panic!("unknown fixture field") };
+        let original = format!("<{field}>{value}</{field}>");
+        assert!(SYNTHETIC_CPT.contains(&original));
+        SYNTHETIC_CPT.replace("<response>", "<response xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">").replace(&original, replacement)
+    }
+
+    #[test]
+    fn cpt_nil_offset_preserves_samples_and_missing_surface_metadata() {
+        let expected = parse_cpt(SYNTHETIC_CPT).unwrap();
+        for nil in ["true", "1"] {
+            let text = cpt_field("offset", &format!("<offset xsi:nil=\"{nil}\"/>"));
+            let cpt = parse_cpt(&text).unwrap();
+            assert_eq!(cpt.samples, expected.samples);
+            assert_eq!(cpt.point.surface, None);
+            assert_eq!((cpt.point.rd, cpt.point.lonlat), (expected.point.rd, expected.point.lonlat));
+        }
+        assert_eq!(parse_cpt(&cpt_field("offset", "")).unwrap().point.surface, None);
+    }
+
+    #[test]
+    fn cpt_nil_predrilled_depth_preserves_samples_and_existing_default() {
+        let expected = parse_cpt(SYNTHETIC_CPT).unwrap();
+        for nil in ["true", "1"] {
+            let text = cpt_field("predrilledDepth", &format!("<predrilledDepth xsi:nil=\"{nil}\"/>"))
+                .replace("xmlns:xsi", "xmlns:missing").replace("xsi:nil", "missing:nil");
+            let cpt = parse_cpt(&text).unwrap();
+            assert_eq!(cpt.samples, expected.samples);
+            assert_eq!(cpt.point, expected.point);
+            assert_eq!(cpt.predrilled, 0.0);
+        }
+        assert_eq!(parse_cpt(&cpt_field("predrilledDepth", "")).unwrap().predrilled, 0.0);
+    }
+
+    #[test]
+    fn characteristics_nil_offset_preserves_all_three_objects() {
+        let original = fixture("cpt-characteristics.xml");
+        let text = original.replacen("<offset uom=\"m\">2.860</offset>", "<offset xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:nil=\"true\"/>", 1);
+        assert_ne!(text, original);
+        let mut expected = parse_characteristics(&original).unwrap().points;
+        assert_eq!(expected.len(), 3);
+        expected[0].surface = None;
+        assert_eq!(parse_characteristics(&text).unwrap().points, expected);
+    }
+
+    #[test]
+    fn nil_markers_do_not_hide_broken_text_or_nonfinite_metadata() {
+        for field in ["offset", "predrilledDepth"] {
+            for value in ["broken", "NaN", "inf", "1e999", "<unexpected/>"] {
+                for marker in ["", " xsi:nil=\"true\"", " xsi:nil=\"false\""] {
+                    let text = cpt_field(field, &format!("<{field}{marker}>{value}</{field}>"));
+                    assert!(parse_cpt(&text).is_err(), "{field}{marker}: {value}");
+                }
+            }
+            for marker in ["false", "0", "invalid"] {
+                let text = cpt_field(field, &format!("<{field} xsi:nil=\"{marker}\"/>"));
+                assert!(parse_cpt(&text).is_err(), "{field}: {marker}");
+            }
+            let wrong_namespace = cpt_field(field, &format!("<{field} xsi:nil=\"true\"/>"))
+                .replace("http://www.w3.org/2001/XMLSchema-instance", "urn:not-xml-schema-instance");
+            assert!(parse_cpt(&wrong_namespace).is_err());
+            assert!(parse_cpt(&cpt_field(field, &format!("<{field}/>"))).is_err());
+        }
+    }
+
+    #[test]
+    fn synthetic_bro_fixtures_preserve_positions_and_measurements() {
+        let cpt = parse_cpt(SYNTHETIC_CPT).unwrap();
+        assert_eq!(cpt.point.rd, Some([100.0, 200.0]));
+        assert_eq!(cpt.point.lonlat, Some([5.0, 52.0]));
+        assert_eq!(cpt.samples.len(), 2);
+        assert_eq!(cpt.samples[0].qc, 2.0);
+        let borehole = parse_bhr(SYNTHETIC_BHR).unwrap();
+        assert_eq!(borehole.layers.len(), 1);
+        assert_eq!((borehole.layers[0].top, borehole.layers[0].bottom), (0.0, 2.0));
+        let other_crs = parse_cpt(&SYNTHETIC_CPT.replace("EPSG:28992", "EPSG:25832")).unwrap();
+        assert_eq!(other_crs.point.rd, None);
+        assert_eq!(other_crs.point.lonlat, Some([5.0, 52.0]));
+    }
+
+    #[test]
+    fn bro_rejects_bad_positions_and_nonfinite_metadata() {
+        for text in [SYNTHETIC_CPT, SYNTHETIC_BHR] {
+            for position in ["100 broken 200", "NaN 200", "inf 200", "100"] {
+                let bad = text.replace("<pos>100 200</pos>", &format!("<pos>{position}</pos>"));
+                let result = if text == SYNTHETIC_CPT { parse_cpt(&bad).map(|_| ()) } else { parse_bhr(&bad).map(|_| ()) };
+                assert!(result.is_err(), "{position}");
+            }
+            for value in ["NaN", "inf", "broken", "1e999"] {
+                let bad = text.replace("<offset>1</offset>", &format!("<offset>{value}</offset>"));
+                let result = if text == SYNTHETIC_CPT { parse_cpt(&bad).map(|_| ()) } else { parse_bhr(&bad).map(|_| ()) };
+                assert!(result.is_err(), "{value}");
+            }
+        }
+    }
+
+    #[test]
+    fn bro_rejects_bad_measurements_instead_of_missing_or_infinite_samples() {
+        for row in ["1,1,inf,0.01,0.5", "1,1,broken,0.01,0.5", "1,NaN,2,0.01,0.5", "1,1,2,inf,0.5", "1,1,2,0.01,NaN"] {
+            assert!(parse_cpt(&SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", row)).is_err(), "{row}");
+        }
+        let void = parse_cpt(&SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,-999999,-999999,-999999")).unwrap();
+        assert_eq!(void.samples.len(), 1, "official missing-value sentinel stays supported");
+        let large = parse_cpt(&SYNTHETIC_CPT.replace("1,1,2,0.01,0.5", "1,1,1e100,0.01,0.5")).unwrap();
+        assert_eq!(large.samples[0].qc, 1e100);
+    }
+
+    #[test]
+    fn bro_rejects_nonfinite_borehole_boundaries() {
+        for value in ["NaN", "inf", "broken", "1e999"] {
+            let bad = SYNTHETIC_BHR.replace("<lowerBoundary>2</lowerBoundary>", &format!("<lowerBoundary>{value}</lowerBoundary>"));
+            assert!(parse_bhr(&bad).is_err(), "{value}");
+        }
+    }
+
+    #[test]
+    fn bro_reports_empty_wrong_root_and_truncated_objects() {
+        for text in ["", "<response/>", "<", &SYNTHETIC_CPT[..SYNTHETIC_CPT.len() / 2]] {
+            assert!(parse_cpt(text).is_err());
+            assert!(parse_bhr(text).is_err());
+        }
+        assert!(parse_characteristics("<response/>").unwrap().points.is_empty());
+    }
+
     const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/bro/");
 
     fn fixture(name: &str) -> String {
@@ -628,7 +899,7 @@ mod tests {
 
     #[test]
     fn characteristics_of_a_search() {
-        let pts = parse_characteristics(&fixture("cpt-characteristics.xml")).unwrap();
+        let pts = parse_characteristics(&fixture("cpt-characteristics.xml")).unwrap().points;
         assert_eq!(pts.len(), 3);
         let p = &pts[0];
         assert_eq!(p.id, "CPT000000011051");
@@ -638,7 +909,7 @@ mod tests {
         assert!((ll[0] - 4.656393150).abs() < 1e-9 && (ll[1] - 51.810978890).abs() < 1e-9, "{ll:?}");
         assert_eq!((p.surface, p.end_depth), (Some(2.86), Some(26.18)));
         assert_eq!((p.datum.as_str(), p.reference.as_str(), p.date.as_str(), p.regime.as_str()), ("NAP", "maaiveld", "1997-04-24", "IMBRO/A"));
-        let b = parse_characteristics(&fixture("bhrgt-characteristics.xml")).unwrap();
+        let b = parse_characteristics(&fixture("bhrgt-characteristics.xml")).unwrap().points;
         assert_eq!(b.len(), 2);
         assert_eq!((b[0].id.as_str(), b[0].cpt, b[0].rd, b[0].surface, b[0].end_depth), ("BHR000000360509", false, Some([104080.16, 424379.25]), Some(0.27), Some(11.6)));
         assert_eq!(b[0].date, "2020-11-05");
@@ -747,14 +1018,14 @@ mod tests {
     #[ignore]
     fn live_dordrecht() {
         let b = [4.656, 51.811, 4.665, 51.817];
-        let cpts = search(Kind::Cpt, b).unwrap();
+        let cpts = search(Kind::Cpt, b).unwrap().points;
         assert!(cpts.len() > 10, "{}", cpts.len());
         let c = fetch_cpt(&cpts[0].id).unwrap();
         assert!(!c.samples.is_empty());
         for l in cpt_intervals(&c.samples, 0.2) {
             eprintln!("{} {:6.2}–{:6.2} m NAP {:<28} qc {:5.2} Rf {:4.1}", c.point.id, c.point.surface.unwrap_or(0.0) - l.top, c.point.surface.unwrap_or(0.0) - l.bottom, l.name, l.qc.unwrap_or(0.0), l.rf.unwrap_or(0.0));
         }
-        let bhrs = search(Kind::Bhr, b).unwrap();
+        let bhrs = search(Kind::Bhr, b).unwrap().points;
         assert!(!bhrs.is_empty());
         let h = fetch_bhr(&bhrs[0].id).unwrap();
         assert!(!h.layers.is_empty());

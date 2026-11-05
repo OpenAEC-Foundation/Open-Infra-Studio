@@ -179,3 +179,50 @@ impl FilesPage {
         ui.label(RichText::new(format!("{} GIS_FILE_IMPORT <path> [EPSG:code]", tr("Commando:", "Command:"))).small().monospace().weak());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn load_page(text: &str, extension: &str) -> FilesPage {
+        let path = std::env::temp_dir().join(format!("oi-file-message-{}.{extension}", std::process::id()));
+        std::fs::write(&path, text).unwrap();
+        let ctx = egui::Context::default();
+        let mut page = FilesPage::default();
+        page.open(&ctx, path.clone());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while page.read.is_some() && std::time::Instant::now() < deadline {
+            let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| {
+                egui::CentralPanel::default().show(ui, |ui| page.page(ui));
+            });
+            // This headless test has no renderer. Explicitly consume its
+            // texture updates before dropping the completed frame.
+            frame.textures_delta.clear();
+            if page.read.is_some() { std::thread::sleep(std::time::Duration::from_millis(2)); }
+        }
+        std::fs::remove_file(path).unwrap();
+        assert!(page.read.is_none(), "bestandslezing niet binnen vijf seconden afgerond");
+        assert!(page.data.is_some(), "{:?}", page.message);
+        page
+    }
+
+    #[test]
+    fn sol_csv_file_page_keeps_read_diagnostics_out_of_the_visible_message() {
+        let page = load_page("x,y\n100,200\nbad,220\n", "csv");
+        let data = page.data.as_ref().unwrap();
+        assert_eq!((data.features.len(), data.skipped, data.warnings.len()), (1, 1, 1));
+        assert_eq!(page.message, Some((true, format!("CSV: 1 {}", tr("objecten gelezen", "features read")))));
+    }
+
+    #[test]
+    fn sol_imro_file_page_preserves_the_complete_original_read_message() {
+        let text = include_str!("../../tests/fixtures/planning/synthetic-imro.gml")
+            .replace("<imro:geometrie xlink:href=\"#polygon\"/>", "");
+        let page = load_page(&text, "gml");
+        let data = page.data.as_ref().unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert!(data.warnings.iter().any(|w| w == "zone: geen tekenbare geometrie"));
+        assert!(data.warnings.iter().any(|w| w == "maten: geen tekenbare geometrie"));
+        assert_eq!(page.message, Some((true, format!("IMRO: 2 {}", tr("objecten gelezen", "features read")))));
+    }
+}

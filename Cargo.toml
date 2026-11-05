@@ -1,6 +1,6 @@
 [package]
 name = "open-infra"
-version = "2026.44.5"
+version = "2026.45.3"
 edition = "2021"
 description = "Open Infra — GIS-workbench voor Open CAD Studio (infra en civiele techniek, NL en wereldwijd)."
 license = "GPL-3.0-only"
@@ -21,19 +21,20 @@ plugin = []
 ui-test = ["eframe/accesskit"]
 
 [workspace]
-members = [".", "civiel"]
+members = [".", "civiel", "nlcspp"]
 
 [dependencies]
-# Stable host contract, pinned to the Open CAD Studio v2026.43 release (API 13).
-# Pin the commit of the Open CAD Studio release you target:
-# it also pins the opencadcodec revision, and the host only loads a plugin built
-# against the same opencadcodec commit and rustc.
-ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "ece627c662b98316f33d22cc09695ad16a1a6816", features = ["host"] }
+# Stable host contract, pinned to the Open CAD Studio v2026.44 release tag (API 14).
+# From API 14 the plugin runs its own runner loop: the host no longer compares
+# compiler and opencadcodec commit, only the shape of the types on the wire.
+ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "537ab37095b681cab899c1cf48b2927d06e194b9", features = ["host"] }
 
 # GIS engine
 proj4rs = "0.2"
 ureq = "3"
 roxmltree = "0.21"
+nlcspp = { path = "nlcspp" }
+quick-xml = "0.41"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 # Large drawings: entities of the host's shared-memory view are bincode-encoded
@@ -45,7 +46,9 @@ klic2geo = { git = "https://github.com/OpenAEC-Foundation/crates-warehouse" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # AHN: height grids (WCS GeoTIFF float32) and point clouds (COPC)
 tiff = "0.11"
-copc-rs = "0.5"
+# copc-rs from git: the released 0.5 does not build against las 0.9.11 and
+# laz 0.12, which pointcloud-core needs (fixed upstream, not yet released).
+copc-rs = { git = "https://github.com/pka/copc-rs", rev = "1cff2a6be1f4d9a421610c22268af2a920cee1c8" }
 # Local GIS files: Shapefile, GeoPackage (SQLite, built in), KMZ (zip)
 shapefile = "0.9"
 rusqlite = { version = "0.41", features = ["bundled"] }
@@ -57,11 +60,33 @@ las-crs = "0.1"
 delaunator = "1"
 # 3D: triangulating planar polygons with holes (3D BAG surfaces, BGT areas)
 earcutr = "0.4"
+# Point clouds (Civiel → Puntenwolk): the E57, PLY, PTS and XYZ readers and
+# the closed mesher of OpenAEC's Open Pointcloud Studio (LGPL-3.0-or-later,
+# a GUI-free crate), and the E57 coordinate metadata (MIT).
+pointcloud-core = { git = "https://github.com/OpenAEC-Foundation/open-pointcloud-studio", rev = "b2735904020f38530376c26ce15ebf617021d429", default-features = false }
+e57 = "0.11"
 
 # Workbench window (runs in the plugin process, beside the host)
 eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
 winit = "0.30"
 egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
 
+[profile.dev]
+# Keep file/line backtraces without generating full type and variable debug
+# information. Tests inherit this profile; distribution builds do not.
+debug = "line-tables-only"
+
 [profile.release]
 opt-level = 3
+
+# The ui-test builds (CARGO_TARGET_DIR=target/ui-test … --profile ui-test):
+# release speed with function names in backtraces.
+[profile.ui-test]
+inherits = "release"
+debug = "line-tables-only"
+
+# HakanSeven12/acadrust no longer exists (404), but Open CAD Studio v2026.44
+# and opencaddocument still name it. hakanaktt/acadrust holds the same commit,
+# so fetch it from there (#75). Same commit hash, so the host sees the same codec.
+[patch."https://github.com/HakanSeven12/acadrust.git"]
+acadrust = { git = "https://github.com/hakanaktt/acadrust.git", rev = "53e6420c4df4d207409798c2719d32fc6cf2811d" }

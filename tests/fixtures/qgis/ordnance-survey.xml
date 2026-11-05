@@ -1,0 +1,5 @@
+<qgsXYZTilesConnections version="1.0">
+  <xyztiles name="OS key" url="https://api.os.uk/maps/raster/v1/zxy/Outdoor_3857/{z}/{x}/{y}.png?key=REVIEW_SECRET_55"/>
+  <xyztiles name="OS KEY" url="https://api.os.uk/maps/raster/v1/zxy/Outdoor_3857/{z}/{x}/{y}.png?KEY=REVIEW_SECRET_55"/>
+  <xyztiles name="OS %6Bey" url="https://api.os.uk/maps/raster/v1/zxy/Outdoor_3857/{z}/{x}/{y}.png?%6Bey=REVIEW_SECRET_55"/>
+</qgsXYZTilesConnections>

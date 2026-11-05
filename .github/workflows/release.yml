@@ -18,8 +18,8 @@ permissions:
   contents: write
 
 env:
-  # Must equal the rustc that built the Open CAD Studio release this plugin
-  # targets: the host compares plugin.toml's rustc_version byte for byte.
+  # Pinned for reproducible builds. Up to plugin API 13 this had to equal the
+  # host's rustc; from API 14 the host no longer compares compilers.
   RUST_TOOLCHAIN: "1.99.1"
   # The release to publish to: the pushed tag, or the tag given by hand.
   RELEASE_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
@@ -68,6 +68,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+      # Keep compiled dependencies separate from the offline test cache. The
+      # workspace plugins are rebuilt before staging and signing as before.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          shared-key: release
+          cache-bin: false
       - run: cargo test --lib --locked -p open-infra
       # Two plugins from one engine: separate builds, so the Civiel plugin
       # links the engine without the GIS plugin's entry points. That second
@@ -84,7 +90,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p civiel-pkg/openaec.open-infra-civiel
-          acadrust_source=$(awk '/^name = "acadrust"$/{f=1} f&&/^source = /{gsub(/^source = "|"$/,""); print; exit}' Cargo.lock)
+          acadrust_source=$(awk '/^name = "acadrust"$/{f=1} f&&/^source = /{if ($0 ~ /^source = "git\+/) {gsub(/^source = "|"$/,""); print; exit} f=0}' Cargo.lock)
           stamp() { sed -e "s|__RUSTC_VERSION__|$(rustc --version)|" -e "s|__ACADRUST_SOURCE__|$acadrust_source|" "$1"; }
           stamp plugin.toml > dist/plugin.toml
           # The Civiel plugin as a folder for <config>/OpenCADStudio/plugins/.

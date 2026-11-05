@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:imkl="http://www.geostandaarden.nl/imkl/2015/wion/2.0" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <gml:featureMember><imkl:Waterleiding gml:id="nl.imkl-KL9999.synthetic">
+    <imkl:thema xlink:href="https://example.invalid/water"/>
+    <imkl:ligging><gml:LineString srsName="EPSG:28992"><gml:posList>100 200 110 210</gml:posList></gml:LineString></imkl:ligging>
+  </imkl:Waterleiding></gml:featureMember>
+</gml:FeatureCollection>

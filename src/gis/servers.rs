@@ -1,9 +1,15 @@
 //! Map server catalogue: presets for the Netherlands (PDOK), Flanders and
 //! worldwide sources, plus servers the user adds (stored in the config dir).
 
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+#[path = "../../tests/support/server_saves.rs"]
+mod storage_tests;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -39,6 +45,9 @@ pub struct MapServer {
     /// XYZ only: highest zoom level the server provides.
     #[serde(default)]
     pub max_zoom: Option<u32>,
+    /// XYZ only: lowest zoom level the server provides (QGIS `zmin`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_zoom: Option<u32>,
     #[serde(skip)]
     pub builtin: bool,
 }
@@ -53,6 +62,7 @@ fn preset(id: &str, kind: ServerKind, region: &str, name: &str, url: &str, layer
         attribution: attribution.into(),
         default_layer: layer.into(),
         max_zoom: if kind == ServerKind::Xyz { Some(19) } else { None },
+        min_zoom: None,
         builtin: true,
     }
 }
@@ -115,6 +125,7 @@ pub fn presets() -> Vec<MapServer> {
         attribution: w.attribution.clone(),
         default_layer: w.default_layer.clone(),
         max_zoom: if w.kind == Xyz { Some(19) } else { None },
+        min_zoom: None,
         builtin: true,
     }));
     v
@@ -188,11 +199,70 @@ pub fn load_user() -> Vec<MapServer> {
         .unwrap_or_default()
 }
 
+/// The user's servers, or an error when the file exists but cannot be read:
+/// callers that write the list back must not replace a file they could not parse.
+fn read_user(path: &Path) -> Result<Vec<MapServer>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(s) => serde_json::from_str(&s).map_err(|e| format!("{}: {e}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(format!("{}: {e}", path.display())),
+    }
+}
+
+/// Change the current list while holding a lock shared by both plugin
+/// processes. Read, merge and save must all happen within this operation.
+pub fn update_user<T>(change: impl FnOnce(&mut Vec<MapServer>) -> T) -> Result<T, String> {
+    let path = user_file();
+    let dir = path.parent().unwrap();
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let lock = std::fs::OpenOptions::new().create(true).truncate(false).read(true).write(true)
+        .open(dir.join("servers.json.lock")).map_err(|e| e.to_string())?;
+    lock.lock().map_err(|e| e.to_string())?;
+    let mut servers = read_user(&path)?;
+    let result = change(&mut servers);
+    write_user(&path, &servers)?;
+    // Closing the lock file releases the lock, including on error paths.
+    Ok(result)
+}
+
+/// Replace the list; callers adding or removing servers use `update_user`
+/// so they do not write a snapshot read before another writer's change.
 pub fn save_user(servers: &[MapServer]) -> Result<(), String> {
-    let dir = config_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    update_user(|user| *user = servers.to_vec())
+}
+
+fn write_user(path: &Path, servers: &[MapServer]) -> Result<(), String> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let dir = path.parent().unwrap();
     let json = serde_json::to_string_pretty(servers).map_err(|e| e.to_string())?;
-    std::fs::write(user_file(), json).map_err(|e| e.to_string())
+    let (tmp, mut file) = loop {
+        let tmp = dir.join(format!(".servers-{}-{}.tmp", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        match options.open(&tmp) {
+            Ok(file) => break (tmp, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.to_string()),
+        }
+    };
+    let result = (|| -> std::io::Result<()> {
+        file.write_all(json.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&tmp, path)?;
+        #[cfg(unix)]
+        std::fs::File::open(dir)?.sync_all()?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result.map_err(|e| e.to_string())
 }
 
 pub fn all() -> Vec<MapServer> {

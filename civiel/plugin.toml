@@ -1,14 +1,14 @@
 [plugin]
 id = "openaec.open-infra-civiel"
 name = "Open Infra — Civiel"
-version = "2026.44.5"
+version = "2026.45.3"
 description = "Civiele ontwerptools: meetpunten (PNEZD, LandXML), terrein (TIN, hoogtelijnen, hoogteanalyse, grondverzet), assen met stationering, lengte-, ontwerp- en dwarsprofielen. Op NLCS-lagen, over AHN of een eigen TIN."
 author = "OpenAEC Foundation"
 license = "GPL-3.0-only"
 repository = "OpenAEC-Foundation/Open-Infra-Studio"
 
 [opencad]
-api_version = 13
+api_version = 14
 # Filled at build time (scripts/install.sh, release workflow), like the GIS plugin.
 rustc_version = "__RUSTC_VERSION__"
 acadrust_source = "__ACADRUST_SOURCE__"

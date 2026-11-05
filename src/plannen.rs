@@ -211,7 +211,7 @@ fn label_point(rings: &[Vec<XY>]) -> Option<XY> {
     best.map(|(_, p)| p)
 }
 
-fn hatch(rings: &[Vec<XY>], patterned: bool, unit_factor: f64) -> Hatch {
+pub(crate) fn hatch(rings: &[Vec<XY>], patterned: bool, unit_factor: f64) -> Hatch {
     let mut hatch = if patterned {
         let mut pattern = HatchPattern::new("IMRO_DUBBELBESTEMMING");
         let angle = std::f64::consts::FRAC_PI_4;

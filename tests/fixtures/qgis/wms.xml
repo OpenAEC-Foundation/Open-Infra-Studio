@@ -1,0 +1,7 @@
+<!DOCTYPE connections>
+<qgsWMSConnections version="1.0">
+  <wms name="PDOK Luchtfoto" url="https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0?request=GetCapabilities&amp;service=WMS" ignoreGetMapURI="false" ignoreGetFeatureInfoURI="false" ignoreAxisOrientation="false" invertAxisOrientation="false" referer="" smoothPixmapTransform="false" dpiMode="7" username="" password=""/>
+  <wms name="MapServer met mapfile" url="https://example.org/cgi-bin/mapserv?map=/data/a.map&amp;lang=nl&amp;VERSION=1.3.0" ignoreAxisOrientation="false" invertAxisOrientation="false" username="" password=""/>
+  <wms name="Intern met wachtwoord" url="https://gis.example.com/wms" username="jan.jansen" password="geheim-wachtwoord" authcfg=""/>
+  <wms name="Omgekeerde assen" url="https://axes.example.net/wms" invertAxisOrientation="true" username="" password=""/>
+</qgsWMSConnections>

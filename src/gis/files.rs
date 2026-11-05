@@ -19,6 +19,10 @@ pub struct FileData {
     pub crs: Option<String>,
     /// Layers in a GeoPackage (the one read is the first, or the asked one).
     pub layers: Vec<String>,
+    /// Read diagnostics, kept separate from object attributes.
+    pub warnings: Vec<String>,
+    /// Source objects omitted while keeping the rest of the file readable.
+    pub skipped: usize,
 }
 
 impl FileData {
@@ -77,9 +81,11 @@ pub enum Kind {
 pub fn kind(path: &Path) -> Kind {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     match ext.as_str() {
+        // Bare coordinates without a header row: a point cloud (XYZ in .txt).
+        "txt" if super::pointcloud::txt_is_points(path) => Kind::PointCloud,
         e if EXTENSIONS.contains(&e) || e == "dbf" || e == "shx" || e == "xml" => Kind::Vector,
         "tif" | "tiff" | "asc" | "jpg" | "jpeg" | "png" | "jp2" => Kind::Raster,
-        "las" | "laz" | "e57" | "ply" => Kind::PointCloud,
+        "las" | "laz" | "e57" | "ply" | "pts" | "xyz" => Kind::PointCloud,
         _ => Kind::Unknown,
     }
 }
@@ -150,7 +156,7 @@ pub fn geojson(bytes: &[u8]) -> Result<FileData, String> {
     let v: Value = serde_json::from_slice(bytes).map_err(|e| format!("GeoJSON: {e}"))?;
     let v = if v["type"] == "Feature" { serde_json::json!({"type": "FeatureCollection", "features": [v]}) } else { v };
     let crs = v["crs"]["properties"]["name"].as_str().and_then(epsg_from_name).or(Some("EPSG:4326".into()));
-    Ok(FileData { format: "GeoJSON", features: vector::parse_geojson(&v), crs, layers: Vec::new() })
+    Ok(FileData { format: "GeoJSON", features: vector::parse_geojson(&v), crs, layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 // ── Shapefile ───────────────────────────────────────────────────────────────
@@ -200,10 +206,17 @@ pub fn shapefile(path: &Path) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "Shapefile", features, crs, layers: Vec::new() })
+    Ok(FileData { format: "Shapefile", features, crs, layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 // ── WKB (GeoPackage) ────────────────────────────────────────────────────────
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GpkgGeometryError {
+    Corrupt,
+    Unsupported(u32),
+    UnsupportedEncoding,
+}
 
 struct Wkb<'a> {
     b: &'a [u8],
@@ -229,76 +242,100 @@ impl Wkb<'_> {
 
     /// One geometry into `f`. ISO (1001, 2001, 3001) and EWKB-style flag
     /// dimensions are both read; Z and M are skipped.
-    fn geometry(&mut self, f: &mut Feature) -> Option<()> {
-        let le = self.u8()? == 1;
-        let raw = self.u32(le)?;
-        let (base, mut dims) = match raw {
-            r if r & 0x8000_0000 != 0 || r & 0x4000_0000 != 0 => (r & 0xFFFF, 2 + (r & 0x8000_0000 != 0) as usize + (r & 0x4000_0000 != 0) as usize),
-            r if r >= 3000 => (r - 3000, 4),
-            r if r >= 2000 => (r - 2000, 3),
-            r if r >= 1000 => (r - 1000, 3),
-            r => (r, 2),
-        };
-        if dims < 2 {
-            dims = 2;
+    fn geometry(&mut self, f: &mut Feature) -> Result<Option<u32>, GpkgGeometryError> {
+        use GpkgGeometryError::{Corrupt, Unsupported};
+        // WKB stores children immediately after each collection header. A
+        // count of pending geometries consumes that preorder stream without
+        // recursion or a fixed nesting limit.
+        let mut pending = 1usize;
+        let mut unsupported = None;
+        while pending > 0 {
+            pending -= 1;
+            let le = match self.u8().ok_or(Corrupt)? { 0 => false, 1 => true, _ => return Err(Corrupt) };
+            let raw = self.u32(le).ok_or(Corrupt)?;
+            let (base, dims) = match raw {
+                r if r & 0x8000_0000 != 0 || r & 0x4000_0000 != 0 => (r & 0xFFFF, 2 + (r & 0x8000_0000 != 0) as usize + (r & 0x4000_0000 != 0) as usize),
+                r if r >= 3000 => (r - 3000, 4),
+                r if r >= 2000 => (r - 2000, 3),
+                r if r >= 1000 => (r - 1000, 3),
+                r => (r, 2),
+            };
+            let point = |w: &mut Self| -> Option<XY> {
+                let x = w.f64(le)?;
+                let y = w.f64(le)?;
+                for _ in 2..dims { w.f64(le)?; }
+                Some([x, y])
+            };
+            let line = |w: &mut Self| -> Option<Vec<XY>> {
+                let n = w.u32(le)? as usize;
+                if n.checked_mul(dims * 8)? > w.b.len().saturating_sub(w.i) { return None; }
+                let points: Vec<XY> = (0..n).map(|_| point(w)).collect::<Option<_>>()?;
+                points.iter().flatten().all(|v| v.is_finite()).then_some(points)
+            };
+            match base {
+                1 => {
+                    let p = point(self).ok_or(Corrupt)?;
+                    if p[0].is_finite() && p[1].is_finite() { f.points.push(p); }
+                    else if !p.iter().all(|v| v.is_nan()) { return Err(Corrupt); }
+                }
+                2 => f.lines.push((line(self).ok_or(Corrupt)?, false)),
+                3 => {
+                    let rings = self.u32(le).ok_or(Corrupt)? as usize;
+                    if rings > self.b.len().saturating_sub(self.i) / 4 { return Err(Corrupt); }
+                    for _ in 0..rings { f.lines.push((line(self).ok_or(Corrupt)?, true)); }
+                }
+                4..=7 => {
+                    let count = self.u32(le).ok_or(Corrupt)? as usize;
+                    if count > self.b.len().saturating_sub(self.i) / 5 { return Err(Corrupt); }
+                    pending = pending.checked_add(count).ok_or(Corrupt)?;
+                }
+                8 => {
+                    // CircularString uses a point array. Validate its bytes
+                    // but do not turn a curve into straight segments. Empty
+                    // curves preserve their record and optional attributes.
+                    if !line(self).ok_or(Corrupt)?.is_empty() { unsupported.get_or_insert(base); }
+                }
+                _ => return Err(Unsupported(base)),
+            }
         }
-        let point = |w: &mut Self| -> Option<XY> {
-            let x = w.f64(le)?;
-            let y = w.f64(le)?;
-            for _ in 2..dims {
-                w.f64(le)?;
-            }
-            Some([x, y])
-        };
-        let line = |w: &mut Self| -> Option<Vec<XY>> {
-            let n = w.u32(le)? as usize;
-            (0..n).map(|_| point(w)).collect()
-        };
-        match base {
-            1 => {
-                let p = point(self)?;
-                if p[0].is_finite() && p[1].is_finite() {
-                    f.points.push(p);
-                }
-            }
-            2 => {
-                let l = line(self)?;
-                f.lines.push((l, false));
-            }
-            3 => {
-                let rings = self.u32(le)?;
-                for _ in 0..rings {
-                    let r = line(self)?;
-                    f.lines.push((r, true));
-                }
-            }
-            4..=7 => {
-                let n = self.u32(le)?;
-                for _ in 0..n {
-                    self.geometry(f)?;
-                }
-            }
-            _ => return None,
-        }
-        Some(())
+        Ok(unsupported)
     }
 }
 
 /// A GeoPackage geometry blob: the `GP` header (with an optional envelope),
 /// then standard WKB.
 pub fn gpkg_geometry(blob: &[u8], f: &mut Feature) -> bool {
-    if blob.len() < 8 || &blob[0..2] != b"GP" {
-        return Wkb { b: blob, i: 0 }.geometry(f).is_some();
-    }
-    let flags = blob[3];
-    let envelope = match (flags >> 1) & 0b111 {
-        1 => 32,
-        2 | 3 => 48,
-        4 => 64,
-        _ => 0,
+    gpkg_geometry_result(blob, f).is_ok()
+}
+
+fn gpkg_geometry_result(blob: &[u8], f: &mut Feature) -> Result<(), GpkgGeometryError> {
+    use GpkgGeometryError::{Corrupt, Unsupported, UnsupportedEncoding};
+    let mut extended = false;
+    let bytes = if blob.starts_with(b"GP") {
+        if blob.len() < 8 || blob[2] != 0 || blob[3] & 0b1100_0000 != 0 { return Err(Corrupt); }
+        extended = blob[3] & 0x20 != 0;
+        let envelope = match (blob[3] >> 1) & 0b111 {
+            0 => 0,
+            1 => 32,
+            2 | 3 => 48,
+            4 => 64,
+            _ => return Err(Corrupt),
+        };
+        blob.get(8 + envelope..).ok_or(Corrupt)?
+    } else { blob };
+    let mut parsed = Feature::default();
+    let mut wkb = Wkb { b: bytes, i: 0 };
+    let kind = match wkb.geometry(&mut parsed) {
+        Err(Corrupt) if extended => return Err(UnsupportedEncoding),
+        result => result?,
     };
-    let start = 8 + envelope;
-    blob.get(start..).is_some_and(|b| Wkb { b, i: 0 }.geometry(f).is_some())
+    // Legacy extended headers with fully readable WKB keep working. An
+    // unknown extended payload is unsupported; standard WKB must be complete.
+    if wkb.i != bytes.len() { return Err(if extended { UnsupportedEncoding } else { Corrupt }); }
+    if let Some(kind) = kind { return Err(Unsupported(kind)); }
+    f.points.extend(parsed.points);
+    f.lines.extend(parsed.lines);
+    Ok(())
 }
 
 pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> {
@@ -323,13 +360,27 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
     let gi = names.iter().position(|n| n.eq_ignore_ascii_case(&geom_col)).ok_or("GeoPackage: geometry column missing")?;
     let mut rows = st.query([]).map_err(err)?;
     let mut features = Vec::new();
-    while let Some(row) = rows.next().map_err(err)? {
+    let mut warnings = Vec::new();
+    let mut row_index = 0;
+    'rows: while let Some(row) = rows.next().map_err(err)? {
+        row_index += 1;
         let mut f = Feature::default();
         for (i, n) in names.iter().enumerate() {
             let v = row.get_ref(i).map_err(err)?;
             if i == gi {
                 if let ValueRef::Blob(b) = v {
-                    gpkg_geometry(b, &mut f);
+                    if let Err(error) = gpkg_geometry_result(b, &mut f) {
+                        let reason = match error {
+                            GpkgGeometryError::Corrupt => "onleesbare geometrie".to_string(),
+                            GpkgGeometryError::Unsupported(kind) => format!("niet ondersteunde geometriesoort {kind}"),
+                            GpkgGeometryError::UnsupportedEncoding => "niet ondersteunde uitgebreide geometrie".to_string(),
+                        };
+                        warnings.push(format!("GeoPackage: {reason} in laag {table}, rij {row_index}; object overgeslagen"));
+                        continue 'rows;
+                    }
+                } else if !matches!(v, ValueRef::Null) {
+                    warnings.push(format!("GeoPackage: geometrie is geen blob in laag {table}, rij {row_index}; object overgeslagen"));
+                    continue 'rows;
                 }
                 continue;
             }
@@ -344,7 +395,8 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
         }
         features.push(f);
     }
-    Ok(FileData { format: "GeoPackage", features, crs, layers })
+    let skipped = warnings.len();
+    Ok(FileData { format: "GeoPackage", features, crs, layers, warnings, skipped })
 }
 
 // ── KML / KMZ / GPX ─────────────────────────────────────────────────────────
@@ -404,7 +456,7 @@ pub fn kml(text: &str) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "KML", features, crs: Some("EPSG:4326".into()), layers: Vec::new() })
+    Ok(FileData { format: "KML", features, crs: Some("EPSG:4326".into()), layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 pub fn kmz(path: &Path) -> Result<FileData, String> {
@@ -449,61 +501,164 @@ pub fn gpx(text: &str) -> Result<FileData, String> {
         f.props.insert("gpx_type".into(), Value::String(n.tag_name().name().into()));
         features.push(f);
     }
-    Ok(FileData { format: "GPX", features, crs: Some("EPSG:4326".into()), layers: Vec::new() })
+    Ok(FileData { format: "GPX", features, crs: Some("EPSG:4326".into()), layers: Vec::new(), warnings: Vec::new(), skipped: 0 })
 }
 
 // ── GML (simple features, GML 2 and 3) ─────────────────────────────────────
 
-fn gml_coords(node: roxmltree::Node, dim: usize) -> Vec<XY> {
-    // GML 3: posList / pos (space separated); GML 2: coordinates ("x,y x,y").
-    if let Some(t) = node.descendants().find(|d| d.has_tag_name("posList")).and_then(|n| n.text()) {
-        let d = node.descendants().find(|d| d.has_tag_name("posList")).and_then(|n| n.attribute("srsDimension")).and_then(|v| v.parse().ok()).unwrap_or(dim);
-        let v: Vec<f64> = t.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-        return v.chunks(d.max(2)).filter(|c| c.len() >= 2).map(|c| [c[0], c[1]]).collect();
+fn gml_numbers(text: &str, separator: Option<char>) -> Result<Vec<f64>, String> {
+    text.split(|c: char| separator.map_or_else(|| c.is_whitespace(), |s| c == s)).filter(|t| separator.is_some() || !t.is_empty()).map(|t| {
+        let v = t.trim().parse::<f64>().map_err(|_| format!("GML: ongeldig coördinaatgetal '{t}'"))?;
+        if !v.is_finite() { return Err(format!("GML: niet-eindig coördinaatgetal '{t}'")); }
+        Ok(v)
+    }).collect()
+}
+
+fn gml_dimension(node: roxmltree::Node, fallback: usize) -> Result<usize, String> {
+    match node.ancestors().find_map(|n| n.attribute("srsDimension")) {
+        Some(text) => match text.trim().parse::<usize>() {
+            Ok(d) if d >= 2 => Ok(d),
+            _ => Err(format!("GML: srsDimension '{text}' kan niet naar XY worden gelezen")),
+        },
+        None => Ok(fallback),
     }
-    let pos: Vec<XY> = node
-        .descendants()
-        .filter(|d| d.has_tag_name("pos"))
-        .filter_map(|p| {
-            let v: Vec<f64> = p.text()?.split_whitespace().filter_map(|x| x.parse().ok()).collect();
-            (v.len() >= 2).then(|| [v[0], v[1]])
-        })
-        .collect();
-    if !pos.is_empty() {
-        return pos;
+}
+
+// XML comments can split a simple value into several text nodes. Joining
+// without added whitespace preserves the XML value, including split numbers.
+fn gml_text(node: roxmltree::Node) -> String {
+    node.children().filter(|n| n.is_text()).filter_map(|n| n.text()).collect()
+}
+
+fn gml_coords(node: roxmltree::Node, dim: usize) -> Result<Vec<XY>, String> {
+    // GML 3: inherit the nearest dimension from the coordinate or geometry.
+    if let Some(list) = node.descendants().find(|d| d.has_tag_name("posList")) {
+        let d = gml_dimension(list, dim)?;
+        let v = gml_numbers(gml_text(list).trim(), None)?;
+        if v.len() % d != 0 { return Err("GML: onvolledige coördinaat in posList".into()); }
+        return Ok(v.chunks_exact(d).map(|c| [c[0], c[1]]).collect());
     }
-    node.descendants().find(|d| d.has_tag_name("coordinates")).and_then(|c| c.text()).map(kml_coords).unwrap_or_default()
+    let mut pos = Vec::new();
+    for p in node.descendants().filter(|d| d.has_tag_name("pos")) {
+        let v = gml_numbers(gml_text(p).trim(), None)?;
+        let d = gml_dimension(p, v.len())?;
+        if d < 2 || v.len() != d { return Err("GML: onvolledige coördinaat in pos".into()); }
+        pos.push([v[0], v[1]]);
+    }
+    if !pos.is_empty() { return Ok(pos); }
+    // GML 2: x,y[,z] tuples, separated by whitespace.
+    if let Some(c) = node.descendants().find(|d| d.has_tag_name("coordinates")) {
+        let mut dimension = None;
+        return gml_text(c).split_whitespace().map(|tuple| {
+            let v = gml_numbers(tuple, Some(','))?;
+            let d = *dimension.get_or_insert(gml_dimension(c, v.len())?);
+            if d < 2 || v.len() != d { return Err("GML: onvolledige coordinates-tuple".into()); }
+            Ok([v[0], v[1]])
+        }).collect();
+    }
+    Ok(Vec::new())
+}
+
+// A Ring/Curve contains ordered curve parts. Read every supported part before
+// applying any length check; an unhandled part must not become a partial ring.
+fn gml_curve(root: roxmltree::Node) -> Result<Vec<XY>, String> {
+    let mut pending = vec![root];
+    let mut points = Vec::new();
+    while let Some(node) = pending.pop() {
+        let name = node.tag_name().name();
+        if matches!(name, "LineString" | "LineStringSegment" | "LinearRing") {
+            let next = gml_coords(node, 2)?;
+            if next.len() < if name == "LinearRing" { 3 } else { 2 } { return Err(format!("GML: te weinig coördinaten in {name}")); }
+            let shared = points.last().is_some_and(|p| *p == next[0]);
+            if !points.is_empty() && !shared { return Err("GML: curveonderdelen sluiten niet aan".into()); }
+            points.extend(next.into_iter().skip(usize::from(shared)));
+            continue;
+        }
+        let parts: Vec<_> = match name {
+            "Curve" => node.children().find(|n| n.has_tag_name("segments"))
+                .ok_or("GML: Curve zonder segments")?.children().filter(|n| n.is_element()).collect(),
+            "Ring" | "CompositeCurve" => {
+                let mut parts = Vec::new();
+                for member in node.children().filter(|n| n.has_tag_name("curveMember")) {
+                    let part = member.children().find(|n| n.is_element())
+                        .ok_or("GML: curveMember zonder inline curve wordt niet ondersteund")?;
+                    parts.push(part);
+                }
+                if parts.is_empty() { return Err(format!("GML: {name} zonder curveMember")); }
+                parts
+            }
+            _ => return Err(format!("GML: curveonderdeel {name} wordt niet ondersteund")),
+        };
+        // XML nodes form an acyclic tree. An explicit stack keeps arbitrary
+        // nesting off the Rust call stack without imposing a schema limit.
+        pending.extend(parts.into_iter().rev());
+    }
+    Ok(points)
 }
 
 /// The geometry elements directly under a property, read into `f`.
-fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> bool {
-    let name = node.tag_name().name();
-    match name {
-        "Point" => f.points.extend(gml_coords(node, 2).into_iter().take(1)),
-        "LineString" | "Curve" | "LineStringSegment" => f.lines.push((gml_coords(node, 2), false)),
-        "LinearRing" | "Ring" => f.lines.push((gml_coords(node, 2), true)),
-        "Polygon" | "Surface" | "PolygonPatch" => {
-            for r in node.descendants().filter(|d| d.has_tag_name("LinearRing") || d.has_tag_name("Ring")) {
-                f.lines.push((gml_coords(r, 2), true));
+fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> Result<bool, String> {
+    let mut pending = vec![node];
+    let mut recognized = false;
+    while let Some(node) = pending.pop() {
+        let name = node.tag_name().name();
+        match name {
+            "Point" => {
+                let points = gml_coords(node, 2)?;
+                if points.len() != 1 { return Err("GML: Point verwacht één coördinaat".into()); }
+                f.points.extend(points);
             }
-        }
-        "MultiPoint" | "MultiCurve" | "MultiLineString" | "MultiSurface" | "MultiPolygon" | "MultiGeometry" | "CompositeCurve" | "CompositeSurface" => {
-            for m in node.children().filter(|c| c.is_element()) {
+            "LineString" | "Curve" | "LineStringSegment" | "LinearRing" | "Ring" | "CompositeCurve" => {
+                let ring = matches!(name, "LinearRing" | "Ring");
+                let points = gml_curve(node)?;
+                if ring && points.len() < 3 { return Err(format!("GML: te weinig coördinaten in {name}")); }
+                if !points.is_empty() { f.lines.push((points, ring)); }
+            }
+            "Polygon" | "Surface" | "PolygonPatch" => {
+                let rings: Vec<_> = node.descendants().filter(|d| d.has_tag_name("LinearRing") || d.has_tag_name("Ring")).collect();
+                pending.extend(rings.into_iter().rev());
+            }
+            "MultiPoint" | "MultiCurve" | "MultiLineString" | "MultiSurface" | "MultiPolygon" | "MultiGeometry" | "CompositeSurface" => {
                 // pointMember / surfaceMembers: the geometries one level down.
-                for g in m.children().filter(|c| c.is_element()) {
-                    gml_geometry(g, f);
-                }
+                let parts: Vec<_> = node.children().filter(|c| c.is_element()).flat_map(|m| m.children().filter(|c| c.is_element())).collect();
+                pending.extend(parts.into_iter().rev());
             }
+            _ => continue,
         }
-        _ => return false,
+        recognized = true;
     }
-    true
+    Ok(recognized)
 }
 
 /// Features from a GML file: every member of a feature collection (or of a
 /// WFS response) with its geometry and its simple properties. The CRS comes
 /// from the first `srsName`.
 pub fn gml(text: &str) -> Result<FileData, String> {
+    // roxmltree's tokenizer is recursive. Measure nesting with a streaming
+    // parser first, then provide enough stack for deep valid XML instead of
+    // rejecting it at a fixed depth or overflowing the caller's stack.
+    let invalid = || crate::lang::tr("geen tekenbare objecten in het bestand", "no drawable features in the file").to_string();
+    let mut reader = quick_xml::Reader::from_str(text);
+    let (mut depth, mut deepest) = (0usize, 0usize);
+    loop {
+        match reader.read_event() {
+            Ok(quick_xml::events::Event::Start(_)) => { depth += 1; deepest = deepest.max(depth); }
+            Ok(quick_xml::events::Event::End(_)) => depth = depth.saturating_sub(1),
+            // Let the original XML parser report syntax errors, on the stack
+            // needed for the prefix already measured, preserving its details.
+            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    if deepest <= 64 { return gml_inner(text); }
+    let stack = deepest.checked_mul(32 * 1024).and_then(|size| size.checked_add(2 * 1024 * 1024)).ok_or_else(invalid)?;
+    std::thread::scope(|scope| {
+        let handle = std::thread::Builder::new().stack_size(stack).spawn_scoped(scope, || gml_inner(text)).map_err(|_| invalid())?;
+        handle.join().map_err(|_| invalid())?
+    })
+}
+
+fn gml_inner(text: &str) -> Result<FileData, String> {
     if super::planning::gml::is_imro(text) { return Ok(super::planning::gml::parse(text)?.file_data()); }
     let doc = roxmltree::Document::parse(text).map_err(|e| format!("GML: {e}"))?;
     let root = doc.root_element();
@@ -523,10 +678,16 @@ pub fn gml(text: &str) -> Result<FileData, String> {
         })
         .collect();
     let mut features = Vec::new();
-    for fnode in members {
+    let mut warnings = Vec::new();
+    for (index, fnode) in members.into_iter().enumerate() {
+        let id = fnode.attributes().find(|a| a.name() == "id").map(|a| a.value().to_string());
+        let parsed = (|| -> Result<Feature, String> {
         let mut f = Feature::default();
         for prop in fnode.children().filter(|c| c.is_element()) {
-            let geom = prop.children().filter(|c| c.is_element()).any(|g| gml_geometry(g, &mut f));
+            let mut geom = false;
+            for g in prop.children().filter(|c| c.is_element()) {
+                if gml_geometry(g, &mut f)? { geom = true; break; }
+            }
             if !geom {
                 if let Some(t) = prop.text().map(str::trim).filter(|t| !t.is_empty()) {
                     if prop.children().all(|c| !c.is_element()) {
@@ -535,34 +696,114 @@ pub fn gml(text: &str) -> Result<FileData, String> {
                 }
             }
         }
-        if let Some(id) = fnode.attributes().find(|a| a.name() == "id").map(|a| a.value().to_string()) {
-            f.props.entry("gml_id").or_insert(Value::String(id));
+        if let Some(id) = &id {
+            f.props.entry("gml_id").or_insert(Value::String(id.clone()));
         }
-        features.push(f);
+        Ok(f)
+        })();
+        match parsed {
+            Ok(f) => features.push(f),
+            Err(error) => warnings.push(format!("GML: object {} overgeslagen: {error}", id.unwrap_or_else(|| (index + 1).to_string()))),
+        }
     }
-    Ok(FileData { format: "GML", features, crs, layers: Vec::new() })
+    let skipped = warnings.len();
+    Ok(FileData { format: "GML", features, crs, layers: Vec::new(), warnings, skipped })
 }
 
 // ── CSV ─────────────────────────────────────────────────────────────────────
 
-fn split_line(line: &str, sep: char) -> Vec<String> {
-    let mut out = Vec::new();
+struct CsvRecord {
+    end: usize,
+    lines: usize,
+    fields: Vec<String>,
+    invalid: bool,
+}
+
+/// One decoder for complete records and physical-line recovery. Recovery
+/// keeps main's permissive fields, but never joins two physical lines.
+fn csv_record(text: &str, sep: char, physical: bool) -> CsvRecord {
+    let mut out = CsvRecord { end: text.len(), lines: 0, fields: Vec::new(), invalid: false };
     let mut cur = String::new();
     let mut quoted = false;
-    let mut chars = line.chars().peekable();
-    while let Some(c) = chars.next() {
+    let mut quoted_field = false;
+    let field = |fields: &mut Vec<String>, cur: &mut String, quoted: bool| {
+        let value = std::mem::take(cur);
+        fields.push(if quoted { value } else { value.trim().to_string() });
+    };
+    let mut chars = text.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        if matches!(c, '\r' | '\n') {
+            let end = if c == '\r' && chars.peek().is_some_and(|(_, c)| *c == '\n') {
+                chars.next(); i + 2
+            } else { i + 1 };
+            out.lines += 1;
+            if !quoted || physical {
+                field(&mut out.fields, &mut cur, quoted_field);
+                out.end = end;
+                return out;
+            }
+            cur.push_str(&text[i..end]);
+            continue;
+        }
         match c {
-            '"' if quoted && chars.peek() == Some(&'"') => {
+            '"' if quoted && chars.peek().is_some_and(|(_, c)| *c == '"') => {
                 cur.push('"');
                 chars.next();
             }
-            '"' => quoted = !quoted,
-            c if c == sep && !quoted => out.push(std::mem::take(&mut cur)),
+            '"' => {
+                if !physical {
+                    let next = chars.clone().map(|(_, c)| c)
+                        .find(|c| !c.is_whitespace() || matches!(*c, '\r' | '\n') || *c == sep);
+                    let invalid_close = quoted && next.is_some_and(|c| c != sep && !matches!(c, '\r' | '\n'));
+                    let invalid_open = !quoted && !cur.trim().is_empty();
+                    if invalid_close || invalid_open {
+                        out.end = i;
+                        out.invalid = true;
+                        return out;
+                    }
+                }
+                if !quoted && cur.trim().is_empty() { quoted_field = true; cur.clear(); }
+                quoted = !quoted;
+            }
+            c if c == sep && !quoted => {
+                field(&mut out.fields, &mut cur, quoted_field);
+                quoted_field = false;
+            }
+            c if quoted_field && !quoted && c.is_whitespace() => {}
             c => cur.push(c),
         }
     }
-    out.push(cur);
-    out.into_iter().map(|s| s.trim().to_string()).collect()
+    field(&mut out.fields, &mut cur, quoted_field);
+    out.invalid = quoted && !physical;
+    out
+}
+
+/// Complete records with their physical start line. Keep newlines inside
+/// quoted fields verbatim. Malformed records are replayed by the same
+/// decoder one physical line at a time, preserving later readable rows.
+fn csv_records(text: &str, sep: char, warnings: &mut Vec<String>) -> Vec<(usize, Vec<String>)> {
+    let mut records = Vec::new();
+    let (mut start, mut line) = (0usize, 1usize);
+    while start < text.len() {
+        let tail = &text[start..];
+        let record = csv_record(tail, sep, false);
+        if !record.invalid {
+            if !tail[..record.end].trim().is_empty() { records.push((line, record.fields)); }
+            line += record.lines;
+            start += record.end;
+            continue;
+        }
+        warnings.push(format!("CSV: {} {line}; {}",
+            crate::lang::tr("niet afgesloten aangehaald veld vanaf regel", "unterminated quoted field starting on line"),
+            crate::lang::tr("resterende regels afzonderlijk gelezen", "remaining lines read separately")));
+        // Recover only the first physical line. The following record may
+        // contain valid quoted newlines and must use normal decoding again.
+        let physical = csv_record(tail, sep, true);
+        if !tail[..physical.end].trim().is_empty() { records.push((line, physical.fields)); }
+        line += physical.lines;
+        start += physical.end;
+    }
+    records
 }
 
 fn number(s: &str) -> Option<f64> {
@@ -573,10 +814,12 @@ fn number(s: &str) -> Option<f64> {
 /// Points from a table with coordinate columns: x/y, easting/northing,
 /// lon/lat (also Dutch names). `;`, tab or `,` separated.
 pub fn csv(text: &str) -> Result<FileData, String> {
-    let mut lines = text.lines().filter(|l| !l.trim().is_empty());
-    let head = lines.next().ok_or("CSV: empty file")?;
+    let head = text.lines().find(|line| !line.trim().is_empty()).ok_or("CSV: empty file")?;
     let sep = [';', '\t', ','].into_iter().max_by_key(|s| head.matches(*s).count()).unwrap_or(',');
-    let cols: Vec<String> = split_line(head, sep).into_iter().map(|c| c.trim_start_matches('\u{feff}').to_string()).collect();
+    let mut warnings = Vec::new();
+    let mut records = csv_records(text, sep, &mut warnings).into_iter();
+    let (_, head) = records.next().ok_or("CSV: empty file")?;
+    let cols: Vec<String> = head.into_iter().map(|c| c.trim().trim_start_matches('\u{feff}').to_string()).collect();
     let find = |names: &[&str]| cols.iter().position(|c| names.iter().any(|n| c.eq_ignore_ascii_case(n)));
     let (ix, iy, geographic) = if let (Some(x), Some(y)) = (find(&["lon", "lng", "long", "longitude", "lengtegraad"]), find(&["lat", "latitude", "breedtegraad"])) {
         (x, y, true)
@@ -586,9 +829,15 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         return Err(format!("CSV: no coordinate columns (x/y, easting/northing or lon/lat) in {}", cols.join(", ")));
     };
     let mut features = Vec::new();
-    for line in lines {
-        let vals = split_line(line, sep);
-        let (Some(x), Some(y)) = (vals.get(ix).and_then(|v| number(v)), vals.get(iy).and_then(|v| number(v))) else { continue };
+    let mut skipped = 0;
+    for (line_number, vals) in records {
+        let coordinate = |index: usize| {
+            vals.get(index).and_then(|v| number(v)).filter(|v| v.is_finite()).ok_or_else(|| format!("CSV: {} {line_number}: {} {}; {}", crate::lang::tr("regel", "line"), crate::lang::tr("ontbrekende of ongeldige coördinaat in kolom", "missing or invalid coordinate in column"), cols[index], crate::lang::tr("rij overgeslagen", "row skipped")))
+        };
+        let (x, y) = match coordinate(ix).and_then(|x| coordinate(iy).map(|y| (x, y))) {
+            Ok(xy) => xy,
+            Err(error) => { skipped += 1; warnings.push(error); continue; }
+        };
         let mut f = Feature { points: vec![[x, y]], ..Default::default() };
         for (i, c) in cols.iter().enumerate() {
             if i != ix && i != iy {
@@ -599,12 +848,319 @@ pub fn csv(text: &str) -> Result<FileData, String> {
         }
         features.push(f);
     }
-    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new() })
+    Ok(FileData { format: "CSV", features, crs: geographic.then(|| "EPSG:4326".to_string()), layers: Vec::new(), warnings, skipped })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_csv_recovery_keeps_a_multiline_successor(source: &str) {
+        let expected_points = vec![[100.0, 200.0], [110.0, 220.0], [120.0, 240.0]];
+        let mut failures = Vec::new();
+        for separator in [',', ';', '\t'] {
+            for newline in ["\n", "\r\n"] {
+                let text = source.replace(',', &separator.to_string()).replace('\n', newline);
+                let data = match csv(&text) {
+                    Ok(data) => data,
+                    Err(error) => { failures.push(format!("{separator:?}/{newline:?}: {error}")); continue; }
+                };
+                let points = data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>();
+                let note = data.features.get(1).and_then(|f| f.props.get("note")).and_then(Value::as_str);
+                let expected_note = format!("put{newline}west");
+                if points != expected_points || data.skipped != 1 || note != Some(expected_note.as_str()) {
+                    failures.push(format!("{separator:?}/{newline:?}: points={points:?}, skipped={}, note={note:?}", data.skipped));
+                }
+            }
+        }
+        // Collect every variant before failing, so the negative control
+        // proves both line endings and all three separators independently.
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn sol_csv_note_first_recovery_preserves_the_next_multiline_record() {
+        assert_csv_recovery_keeps_a_multiline_successor(
+            "note,x,y\ngoed,100,200\n\"onaf,bad,210\n\"put\nwest\",110,220\neind,120,240");
+    }
+
+    #[test]
+    fn sol_csv_coordinate_first_recovery_preserves_the_next_multiline_note() {
+        assert_csv_recovery_keeps_a_multiline_successor(
+            "x,y,note\n100,200,goed\nbad,210,\"onaf\n110,220,\"put\nwest\"\n120,240,eind");
+    }
+
+    #[test]
+    fn sol_csv_broken_note_with_bad_coordinates_keeps_both_later_rows() {
+        let text = "x,y,note\n100,200,goed\nbad,210,\"onaf\n110,220,\"normaal\"\n120,240,goed";
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(),
+            vec![[100.0, 200.0], [110.0, 220.0], [120.0, 240.0]]);
+        assert_eq!(data.skipped, 1);
+        assert_eq!(data.features[1].props["note"], "normaal");
+        assert!(!data.warnings.is_empty());
+    }
+
+    #[test]
+    fn sol_csv_broken_note_with_valid_coordinates_keeps_every_point() {
+        let text = "x,y,note\n100,200,goed\n105,210,\"onaf\n110,220,\"normaal\"\n120,240,goed";
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(),
+            vec![[100.0, 200.0], [105.0, 210.0], [110.0, 220.0], [120.0, 240.0]]);
+        assert_eq!(data.skipped, 0);
+        assert_eq!(data.features[1].props["note"], "onaf");
+        assert_eq!(data.features[2].props["note"], "normaal");
+        assert!(!data.warnings.is_empty());
+    }
+
+    #[test]
+    fn sol_csv_multiline_note_preserves_both_points_full_text_and_no_warnings() {
+        let text = "x,y,note\n100,200,\"put\nwest\"\n110,220,normaal";
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+        assert_eq!(data.features[0].props["note"], "put\nwest");
+        assert_eq!(data.features[1].props["note"], "normaal");
+        assert!(data.warnings.is_empty(), "geen onterechte waarschuwing voor west: {:?}", data.warnings);
+    }
+
+    #[test]
+    fn csv_unterminated_note_diagnostic_does_not_count_a_skipped_point() {
+        let data = csv("x,y,note\n100,200,\"unfinished\n110,220,normaal\n").unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+        assert_eq!(data.warnings.len(), 1);
+        assert_eq!(data.skipped, 0);
+    }
+
+    #[test]
+    fn csv_and_gml_keep_read_diagnostics_in_the_result() {
+        let csv_data = csv("x,y\n100,200\nbad,220\n").unwrap();
+        assert_eq!(csv_data.skipped, 1);
+        assert_eq!(csv_data.warnings.len(), 1);
+
+        let generic = gml(include_str!("../../tests/fixtures/gml/mixed.gml")).unwrap();
+        assert_eq!((generic.features.len(), generic.skipped, generic.warnings.len()), (1, 1, 1));
+    }
+
+    #[test]
+    fn imro_unreadable_geometry_diagnostics_stay_in_the_read_result() {
+        let text = include_str!("../../tests/fixtures/planning/synthetic-imro.gml").replace("<imro:geometrie xlink:href=\"#polygon\"/>", "");
+        let data = gml(&text).unwrap();
+        assert_eq!(data.format, "IMRO");
+        assert!(!data.features.is_empty());
+        assert!(data.warnings.iter().any(|w| w == "zone: geen tekenbare geometrie"));
+    }
+
+    const GML: &str = include_str!("../../tests/fixtures/gml/features.gml");
+
+    fn with_first_gml_line(geometry: &str) -> String {
+        let doc = roxmltree::Document::parse(GML).unwrap();
+        let line = doc.descendants().find(|n| n.has_tag_name("LineString")).unwrap();
+        let mut text = GML.to_string();
+        text.replace_range(line.range(), geometry);
+        text
+    }
+
+    #[test]
+    fn gml_fixture_inherits_dimensions_and_preserves_crs_and_ids() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/gml/features.gml");
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.crs.as_deref(), Some("EPSG:2056"));
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].props["gml_id"], "line-1");
+        assert_eq!(data.features[0].lines[0].0, vec![[2600000.0, 1200000.0], [2600010.0, 1200020.0]]);
+        assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+    }
+
+    #[test]
+    fn gml_skips_invalid_or_incomplete_coordinate_tuples_with_internal_details() {
+        for (from, to) in [
+            ("2600000 1200000 5 2600010 1200020 6", "2600000 bad 1200000 5 2600010 1200020 6"),
+            ("2600000 1200000 5 2600010 1200020 6", "2600000 1200000 5 2600010 1200020"),
+            ("2600000 1200000 5 2600010 1200020 6", ""),
+            ("2600005 1200005", "2600005 bad 1200005"),
+            ("2600005 1200005", "2600005"),
+            ("2600005 1200005", "NaN 1200005"),
+            ("2600005 1200005", "inf 1200005"),
+            ("srsDimension=\"3\"", "srsDimension=\"0\""),
+            ("srsDimension=\"3\"", "srsDimension=\"bad\""),
+        ] {
+            let bad = GML.replace(from, to);
+            assert_ne!(bad, GML);
+            let data = gml(&bad).unwrap();
+            assert_eq!(data.features.len(), 1, "{from} -> {to}");
+            assert_eq!(data.warnings.len(), 1, "{from} -> {to}");
+            assert!(data.warnings[0].contains("overgeslagen"));
+        }
+    }
+
+    #[test]
+    fn gml2_coordinates_reject_invalid_numbers_without_shifting_tuples() {
+        let text = GML.replace("<gml:pos>2600005 1200005</gml:pos>", "<gml:coordinates>2600005,1200005,7</gml:coordinates>");
+        assert_eq!(gml(&text).unwrap().features[1].points[0], [2600005.0, 1200005.0]);
+        for tuple in ["2600005,bad,1200005", "2600005,NaN,7", "2600005,1200005,inf", "2600005"] {
+            let data = gml(&text.replace("2600005,1200005,7", tuple)).unwrap();
+            assert_eq!(data.features.len(), 1, "{tuple}");
+            assert_eq!(data.features[0].props["gml_id"], "line-1");
+            assert_eq!(data.warnings.len(), 1);
+        }
+    }
+
+    #[test]
+    fn gml_handles_empty_missing_optional_fields_large_numbers_and_broken_xml() {
+        let empty = r#"<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml"/>"#;
+        assert!(gml(empty).unwrap().features.is_empty());
+        let huge = gml(&GML.replace("2600005 1200005", "1e100 -1e100")).unwrap();
+        assert_eq!(huge.features[1].points[0], [1e100, -1e100]);
+        for text in ["", "<", &GML[..GML.len() / 2]] {
+            assert!(gml(text).is_err());
+        }
+    }
+
+    #[test]
+    fn gml_nil_properties_preserve_other_features_without_fake_coordinates() {
+        for geometry in [
+            "<t:geometry nilReason=\"unknown\"/>",
+            "<t:geometry xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:nil=\"true\"/>",
+            "<t:geometry><gml:MultiSurface/></t:geometry>",
+        ] {
+            let missing = format!("<wfs:member><t:missing gml:id=\"missing\">{geometry}<t:height xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:nil=\"true\"/></t:missing></wfs:member>");
+            let text = GML.replace("</wfs:FeatureCollection>", &format!("{missing}</wfs:FeatureCollection>"));
+            let data = gml(&text).unwrap();
+            assert_eq!(data.features.len(), 3);
+            assert_eq!(data.features[0].lines[0].0, vec![[2600000.0, 1200000.0], [2600010.0, 1200020.0]]);
+            assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+            assert!(data.features[2].points.is_empty() && data.features[2].lines.is_empty());
+            assert_eq!(data.features[2].props["gml_id"], "missing");
+        }
+    }
+
+    #[test]
+    fn gml_composite_ring_keeps_every_part_and_the_adjacent_point() {
+        let ring = "<gml:Polygon><gml:exterior><gml:Ring><gml:curveMember><gml:LineString><gml:posList>0 0 10 0</gml:posList></gml:LineString></gml:curveMember><gml:curveMember><gml:LineString><gml:posList>10 0 10 10</gml:posList></gml:LineString></gml:curveMember><gml:curveMember><gml:LineString><gml:posList>10 10 0 0</gml:posList></gml:LineString></gml:curveMember></gml:Ring></gml:exterior></gml:Polygon>";
+        let data = gml(&with_first_gml_line(ring)).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 0.0]], true));
+        assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn gml_empty_curve_container_does_not_hide_the_adjacent_point() {
+        let text = with_first_gml_line("<gml:Curve><gml:segments/></gml:Curve>");
+        assert_ne!(text, GML);
+        let data = gml(&text).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert!(data.features[0].lines.is_empty());
+        assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+    }
+
+    #[test]
+    fn gml_projects_complete_four_and_five_dimensional_tuples_to_xy() {
+        for (dim, values) in [(4, "1 2 3 4 5 6 7 8"), (5, "1 2 3 4 5 6 7 8 9 10")] {
+            let text = GML.replace("srsDimension=\"3\"", &format!("srsDimension=\"{dim}\""))
+                .replace("2600000 1200000 5 2600010 1200020 6", values);
+            let data = gml(&text).unwrap();
+            assert_eq!(data.features[0].lines[0].0, vec![[1.0, 2.0], [if dim == 4 { 5.0 } else { 6.0 }, if dim == 4 { 6.0 } else { 7.0 }]]);
+            assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+        }
+    }
+
+    #[test]
+    fn gml_bad_object_does_not_discard_the_valid_adjacent_point() {
+        let data = gml(&GML.replace("2600000 1200000 5 2600010 1200020 6", "2600000 broken 5 2600010 1200020 6")).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("line-1 overgeslagen"));
+        assert_eq!(data.skipped, 1);
+    }
+
+    #[test]
+    fn gml_bad_line_between_two_points_is_skipped_and_counted() {
+        let text = r#"<gml:FeatureCollection xmlns:gml="http://www.opengis.net/gml" xmlns:t="urn:test">
+          <gml:featureMember><t:point gml:id="p1"><t:geometry><gml:Point><gml:pos>0 0</gml:pos></gml:Point></t:geometry></t:point></gml:featureMember>
+          <gml:featureMember><t:line gml:id="broken"><t:geometry><gml:LineString><gml:posList>1 2 bad 3 4</gml:posList></gml:LineString></t:geometry></t:line></gml:featureMember>
+          <gml:featureMember><t:point gml:id="p2"><t:geometry><gml:Point><gml:pos>10 10</gml:pos></gml:Point></t:geometry></t:point></gml:featureMember>
+        </gml:FeatureCollection>"#;
+        let data = gml(text).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].points, vec![[0.0, 0.0]]);
+        assert_eq!(data.features[1].points, vec![[10.0, 10.0]]);
+        assert_eq!(data.skipped, 1);
+    }
+
+    #[test]
+    fn gml_projects_pos_in_any_complete_dimension_and_trims_the_attribute() {
+        for (dimension, values) in [("4", "1 2 3 4"), (" 2 ", "1 2"), ("5", "1 2 3 4 5")] {
+            let text = GML.replace("<gml:Point>", &format!("<gml:Point srsDimension=\"{dimension}\">"))
+                .replace("2600005 1200005", values);
+            assert_ne!(text, GML);
+            let data = gml(&text).unwrap();
+            assert_eq!(data.features.len(), 2);
+            assert_eq!(data.features[1].points, vec![[1.0, 2.0]]);
+            assert_eq!(data.skipped, 0);
+        }
+    }
+
+    #[test]
+    fn gml_deep_curves_and_collections_keep_the_geometry_read_by_main() {
+        for depth in [65, 256] {
+            for (container, member) in [("CompositeCurve", "curveMember"), ("MultiGeometry", "geometryMember")] {
+                let mut geometry = "<gml:LineString><gml:posList>0 0 10 0</gml:posList></gml:LineString>".to_string();
+                for _ in 0..depth {
+                    geometry = format!("<gml:{container}><gml:{member}>{geometry}</gml:{member}></gml:{container}>");
+                }
+                let data = gml(&with_first_gml_line(&geometry)).unwrap();
+                assert_eq!(data.features.len(), 2, "{container}, depth {depth}");
+                assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0]], false));
+                assert_eq!(data.features[1].points, vec![[2600005.0, 1200005.0]]);
+                assert_eq!(data.skipped, 0);
+            }
+        }
+    }
+
+    #[test]
+    fn gml_coordinate_comments_preserve_every_text_part() {
+        let text = GML.replace("2600000 1200000 5 2600010 1200020 6", "2600000 1200000 5<!--comment--> 2600010 1200020 6");
+        let data = gml(&text).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].lines[0].0, vec![[2600000.0, 1200000.0], [2600010.0, 1200020.0]]);
+        assert_eq!(data.skipped, 0);
+    }
+
+    #[test]
+    fn gml_bad_number_after_a_comment_cannot_hide_behind_a_valid_prefix() {
+        let text = GML.replace("2600000 1200000 5 2600010 1200020 6", "2600000 1200000 5 2600010 1200020 6<!--comment--> BAD");
+        let data = gml(&text).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+        assert_eq!(data.skipped, 1);
+    }
+
+    #[test]
+    fn gml_linear_segments_are_joined_and_unsupported_parts_are_reported() {
+        let curve = "<gml:Curve><gml:segments><gml:LineStringSegment><gml:posList>0 0 10 0</gml:posList></gml:LineStringSegment><gml:LineStringSegment><gml:posList>10 0 10 10</gml:posList></gml:LineStringSegment></gml:segments></gml:Curve>";
+        let data = gml(&with_first_gml_line(curve)).unwrap();
+        assert_eq!(data.features[0].lines[0], (vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]], false));
+        assert!(data.warnings.is_empty());
+        for curve in [curve.replace("LineStringSegment", "Arc"), curve.replace("10 0 10 10", "20 0 10 10")] {
+            let data = gml(&with_first_gml_line(&curve)).unwrap();
+            assert_eq!(data.features.len(), 1);
+            assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+            assert_eq!(data.warnings.len(), 1);
+        }
+    }
+
+    #[test]
+    fn gml_file_import_counts_a_skipped_feature_and_keeps_the_good_one() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/gml/mixed.gml");
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+        assert_eq!(data.warnings.len(), 1);
+        assert_eq!(data.skipped, 1);
+        assert!(data.warnings[0].contains("broken-line"));
+    }
 
     #[test]
     fn wkt_codes() {
@@ -656,6 +1212,392 @@ mod tests {
         assert_eq!(f.lines[0].0.len(), 4);
     }
 
+    const WKB_POINT: &[u8] = include_bytes!("../../tests/fixtures/geopackage/point.wkb");
+    const WKB_LINE: &[u8] = include_bytes!("../../tests/fixtures/geopackage/line.wkb");
+
+    fn gpkg_blob(wkb: &[u8]) -> Vec<u8> {
+        let mut blob = vec![b'G', b'P', 0, 1];
+        blob.extend(2056i32.to_le_bytes());
+        blob.extend(wkb);
+        blob
+    }
+
+    fn temporary_gpkg(name: &str, blob: &[u8]) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!("oi-gpkg-{name}-{}.gpkg", std::process::id()));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch("DROP TABLE IF EXISTS gpkg_contents; DROP TABLE IF EXISTS gpkg_geometry_columns; DROP TABLE IF EXISTS gpkg_spatial_ref_sys; DROP TABLE IF EXISTS sample;
+            CREATE TABLE gpkg_contents (table_name TEXT, data_type TEXT);
+            CREATE TABLE gpkg_geometry_columns (table_name TEXT, column_name TEXT, srs_id INTEGER);
+            CREATE TABLE gpkg_spatial_ref_sys (srs_id INTEGER, organization TEXT, organization_coordsys_id INTEGER);
+            CREATE TABLE sample (id INTEGER, geom BLOB, name TEXT);
+            INSERT INTO gpkg_contents VALUES ('sample','features');
+            INSERT INTO gpkg_geometry_columns VALUES ('sample','geom',2056);
+            INSERT INTO gpkg_spatial_ref_sys VALUES (2056,'EPSG',2056);").unwrap();
+        db.execute("INSERT INTO sample VALUES (1,?1,'synthetic')", [blob]).unwrap();
+        path
+    }
+
+    fn circular_string() -> Vec<u8> {
+        include_bytes!("../../tests/fixtures/geopackage/circular.wkb").to_vec()
+    }
+
+    fn broken_collection() -> Vec<u8> {
+        let mut wkb = vec![1];
+        wkb.extend(7u32.to_le_bytes());
+        wkb.extend(2u32.to_le_bytes());
+        wkb.extend(WKB_POINT);
+        wkb.extend(&WKB_LINE[..10]);
+        wkb
+    }
+
+    fn mixed_layer_gpkg(name: &str, middle: &[u8]) -> std::path::PathBuf {
+        let path = temporary_gpkg(name, &gpkg_blob(WKB_LINE));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch("DROP TABLE IF EXISTS a_mix; DROP TABLE IF EXISTS b_good;
+            ALTER TABLE sample RENAME TO a_mix;
+            UPDATE gpkg_contents SET table_name = 'a_mix';
+            UPDATE gpkg_geometry_columns SET table_name = 'a_mix';
+            CREATE TABLE b_good (id INTEGER, geom BLOB, name TEXT);
+            INSERT INTO gpkg_contents VALUES ('b_good','features');
+            INSERT INTO gpkg_geometry_columns VALUES ('b_good','geom',2056);").unwrap();
+        db.execute("INSERT INTO a_mix VALUES (2,?1,'middle')", [&gpkg_blob(middle)]).unwrap();
+        db.execute("INSERT INTO a_mix VALUES (3,?1,'point')", [&gpkg_blob(WKB_POINT)]).unwrap();
+        db.execute("INSERT INTO b_good VALUES (1,?1,'healthy')", [&gpkg_blob(WKB_POINT)]).unwrap();
+        path
+    }
+
+    fn assert_readable_neighbours_and_layers(path: &Path) {
+        let mixed = read(path, None).unwrap();
+        assert_eq!(mixed.layers, vec!["a_mix", "b_good"]);
+        let line = mixed.features.iter().find(|f| f.props["id"] == 1).unwrap();
+        let point = mixed.features.iter().find(|f| f.props["id"] == 3).unwrap();
+        let mut expected = Feature::default();
+        assert!(gpkg_geometry(WKB_LINE, &mut expected));
+        assert_eq!(line.lines, expected.lines);
+        assert_eq!(point.points, vec![[2600000.25, 1200000.5]]);
+        let healthy = read(path, Some("b_good")).unwrap();
+        assert_eq!(healthy.layers, vec!["a_mix", "b_good"]);
+        assert_eq!(healthy.features.len(), 1);
+        assert_eq!(healthy.features[0].points, point.points);
+        assert_eq!(healthy.crs.as_deref(), Some("EPSG:2056"));
+    }
+
+    #[test]
+    fn sol_gpkg_circular_string_keeps_readable_rows_and_other_layer() {
+        let path = mixed_layer_gpkg("sol-curve", &circular_string());
+        assert_readable_neighbours_and_layers(&path);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("geometriesoort 8"));
+        assert!(!data.warnings[0].contains("onleesbaar"));
+    }
+
+    #[test]
+    fn sol_gpkg_truncated_wkb_keeps_readable_rows_and_other_layer() {
+        let path = mixed_layer_gpkg("sol-truncated", &WKB_LINE[..10]);
+        assert_readable_neighbours_and_layers(&path);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("onleesbare"));
+    }
+
+    #[test]
+    fn sol_gpkg_broken_collection_keeps_readable_rows_and_other_layer() {
+        let path = mixed_layer_gpkg("sol-collection", &broken_collection());
+        assert_readable_neighbours_and_layers(&path);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[1].points.len(), 1);
+        assert_eq!(data.warnings.len(), 1);
+    }
+
+    #[test]
+    fn gpkg_unreadable_default_layer_keeps_healthy_layer_selectable() {
+        let path = mixed_layer_gpkg("empty-default", &broken_collection());
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute("DELETE FROM a_mix WHERE id != 2", []).unwrap();
+        drop(db);
+        let data = read(&path, None).unwrap();
+        assert!(data.features.is_empty());
+        assert_eq!(data.layers, vec!["a_mix", "b_good"]);
+        assert_eq!(read(&path, Some("b_good")).unwrap().features[0].points, vec![[2600000.25, 1200000.5]]);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn sol_gpkg_65_nested_collections_preserve_the_point_read_by_main() {
+        let mut wkb = Vec::new();
+        for _ in 0..65 {
+            wkb.push(1);
+            wkb.extend(7u32.to_le_bytes());
+            wkb.extend(1u32.to_le_bytes());
+        }
+        wkb.extend(WKB_POINT);
+        let path = temporary_gpkg("sol-depth-65", &gpkg_blob(&wkb));
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600000.25, 1200000.5]]);
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn gpkg_many_nested_collections_do_not_use_the_call_stack() {
+        let mut wkb = Vec::new();
+        for _ in 0..5000 {
+            wkb.push(1);
+            wkb.extend(7u32.to_le_bytes());
+            wkb.extend(1u32.to_le_bytes());
+        }
+        wkb.extend(WKB_POINT);
+        let mut feature = Feature::default();
+        assert!(gpkg_geometry(&wkb, &mut feature));
+        assert_eq!(feature.points, vec![[2600000.25, 1200000.5]]);
+    }
+
+    #[test]
+    fn gpkg_truncated_circular_string_is_corrupt_instead_of_unsupported() {
+        let curve = circular_string();
+        let path = mixed_layer_gpkg("truncated-curve", &curve[..curve.len() - 1]);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("onleesbare geometrie"));
+        assert!(!data.warnings[0].contains("niet ondersteunde"));
+    }
+
+    #[test]
+    fn gpkg_unsupported_collection_does_not_commit_a_readable_prefix() {
+        let mut wkb = vec![1];
+        wkb.extend(7u32.to_le_bytes());
+        wkb.extend(2u32.to_le_bytes());
+        wkb.extend(WKB_POINT);
+        wkb.extend(circular_string());
+        let mut feature = Feature { points: vec![[1.0, 2.0]], ..Default::default() };
+        assert!(!gpkg_geometry(&wkb, &mut feature));
+        assert_eq!(feature.points, vec![[1.0, 2.0]]);
+        assert!(feature.lines.is_empty());
+    }
+
+    #[test]
+    fn gpkg_main_compatible_neighbours_and_layers_stay_available() {
+        for (name, middle) in [("compat-curve", circular_string()), ("compat-truncated", WKB_LINE[..10].to_vec()), ("compat-collection", broken_collection())] {
+            let path = mixed_layer_gpkg(name, &middle);
+            assert_readable_neighbours_and_layers(&path);
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn gpkg_fixed_wkb_and_file_route_preserve_geometry_and_crs() {
+        for (wkb, points, lines) in [(WKB_POINT, 1, 0), (WKB_LINE, 0, 1)] {
+            let mut f = Feature::default();
+            assert!(gpkg_geometry(&gpkg_blob(wkb), &mut f));
+            assert_eq!((f.points.len(), f.lines.len()), (points, lines));
+        }
+        let path = temporary_gpkg("valid", &gpkg_blob(WKB_POINT));
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.crs.as_deref(), Some("EPSG:2056"));
+        assert_eq!(data.features[0].points[0], [2600000.25, 1200000.5]);
+        assert_eq!(data.features[0].props["name"], "synthetic");
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn gpkg_preserves_big_endian_iso_dimensions_and_empty_points() {
+        let mut big_endian = vec![0];
+        big_endian.extend(1u32.to_be_bytes());
+        big_endian.extend(12.0f64.to_be_bytes());
+        big_endian.extend(34.0f64.to_be_bytes());
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&big_endian, &mut f));
+        assert_eq!(f.points, vec![[12.0, 34.0]]);
+        for kind in [1001u32, 2001, 3001, 0x8000_0001, 0x4000_0001] {
+            let mut point = vec![1];
+            point.extend(kind.to_le_bytes());
+            point.extend(12.0f64.to_le_bytes());
+            point.extend(34.0f64.to_le_bytes());
+            point.extend(5.0f64.to_le_bytes());
+            if kind == 3001 { point.extend(6.0f64.to_le_bytes()); }
+            let mut f = Feature::default();
+            assert!(gpkg_geometry(&point, &mut f), "{kind}");
+            assert_eq!(f.points, vec![[12.0, 34.0]]);
+        }
+        let mut empty = WKB_POINT.to_vec();
+        empty[5..13].copy_from_slice(&f64::NAN.to_le_bytes());
+        empty[13..21].copy_from_slice(&f64::NAN.to_le_bytes());
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&empty, &mut f));
+        assert!(f.points.is_empty());
+    }
+
+    #[test]
+    fn gpkg_preserves_envelopes_and_valid_geometry_collections() {
+        let mut envelope = vec![b'G', b'P', 0, 3];
+        envelope.extend(2056i32.to_le_bytes());
+        for bound in [2600000.0f64, 2600010.0, 1200000.0, 1200020.0] {
+            envelope.extend(bound.to_le_bytes());
+        }
+        envelope.extend(WKB_POINT);
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&envelope, &mut f));
+        assert_eq!(f.points.len(), 1);
+        let mut collection = vec![1];
+        collection.extend(7u32.to_le_bytes());
+        collection.extend(2u32.to_le_bytes());
+        collection.extend(WKB_POINT);
+        collection.extend(WKB_LINE);
+        let mut f = Feature::default();
+        assert!(gpkg_geometry(&collection, &mut f));
+        assert_eq!((f.points.len(), f.lines.len()), (1, 1));
+    }
+
+    #[test]
+    fn gpkg_legacy_extended_flag_keeps_the_readable_point_from_main() {
+        let mut blob = gpkg_blob(WKB_POINT);
+        blob[3] |= 0x20;
+        let mut feature = Feature::default();
+        assert!(gpkg_geometry(&blob, &mut feature));
+        assert_eq!(feature.points, vec![[2600000.25, 1200000.5]]);
+    }
+
+    #[test]
+    fn gpkg_empty_circular_string_preserves_the_record_attributes() {
+        let mut empty = vec![1];
+        empty.extend(8u32.to_le_bytes());
+        empty.extend(0u32.to_le_bytes());
+        let mut blob = gpkg_blob(&empty);
+        blob[3] |= 0x10;
+        let path = temporary_gpkg("empty-circular", &blob);
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].props["name"], "synthetic");
+        assert!(data.features[0].points.is_empty() && data.features[0].lines.is_empty());
+        assert!(data.warnings.is_empty());
+    }
+
+    #[test]
+    fn gpkg_sql_null_geometry_preserves_the_feature_and_attributes() {
+        let path = temporary_gpkg("null", &gpkg_blob(WKB_POINT));
+        {
+            let db = rusqlite::Connection::open(&path).unwrap();
+            db.execute("UPDATE sample SET geom = NULL WHERE id = 1", []).unwrap();
+        }
+        let data = read(&path, None).unwrap();
+        std::fs::remove_file(path).unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].props["name"], "synthetic");
+        assert!(data.features[0].points.is_empty() && data.features[0].lines.is_empty());
+        assert_eq!(data.crs.as_deref(), Some("EPSG:2056"));
+    }
+
+    #[test]
+    fn gpkg_empty_geometries_remain_supported_with_the_empty_flag() {
+        let mut point = WKB_POINT.to_vec();
+        point[5..13].copy_from_slice(&f64::NAN.to_le_bytes());
+        point[13..21].copy_from_slice(&f64::NAN.to_le_bytes());
+        let mut empty = vec![point];
+        for kind in 2..=7u32 {
+            let mut wkb = vec![1];
+            wkb.extend(kind.to_le_bytes());
+            wkb.extend(0u32.to_le_bytes());
+            empty.push(wkb);
+        }
+        for wkb in empty {
+            let mut blob = gpkg_blob(&wkb);
+            blob[3] |= 0x10;
+            let mut f = Feature::default();
+            assert!(gpkg_geometry(&blob, &mut f));
+            assert!(f.points.is_empty() && f.lines.iter().all(|(line, _)| line.is_empty()));
+        }
+    }
+
+    #[test]
+    fn gpkg_rejects_bad_headers_byte_order_and_trailing_data() {
+        let mut version = gpkg_blob(WKB_POINT);
+        version[2] = 1;
+        let mut envelope = gpkg_blob(WKB_POINT);
+        envelope[3] = 1 | (5 << 1);
+        let mut byte_order = vec![9];
+        byte_order.extend(1u32.to_be_bytes());
+        byte_order.extend(1.0f64.to_be_bytes());
+        byte_order.extend(2.0f64.to_be_bytes());
+        let mut trailing = WKB_POINT.to_vec();
+        trailing.push(0);
+        for blob in [version, envelope, byte_order, trailing] {
+            assert!(!gpkg_geometry(&blob, &mut Feature::default()), "{blob:?}");
+        }
+    }
+
+    #[test]
+    fn gpkg_failure_does_not_leave_partial_geometry() {
+        let mut collection = vec![1];
+        collection.extend(7u32.to_le_bytes());
+        collection.extend(2u32.to_le_bytes());
+        collection.extend(WKB_POINT);
+        collection.extend(&WKB_LINE[..10]);
+        let mut f = Feature { points: vec![[1.0, 2.0]], ..Default::default() };
+        assert!(!gpkg_geometry(&collection, &mut f));
+        assert_eq!(f.points, vec![[1.0, 2.0]], "failed parse must be atomic");
+        assert!(f.lines.is_empty());
+    }
+
+    #[test]
+    fn gpkg_reports_corrupt_geometry_through_the_real_file_reader() {
+        let path = temporary_gpkg("broken", &gpkg_blob(&WKB_LINE[..10]));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute("INSERT INTO sample (id, geom) VALUES (2, ?1)", [&gpkg_blob(WKB_POINT)]).unwrap();
+        drop(db);
+        let result = read(&path, None);
+        std::fs::remove_file(path).unwrap();
+        let data = result.unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points.len(), 1);
+        assert_eq!(data.features[0].props["id"], 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains("rij 1"));
+        assert_eq!(data.skipped, 1);
+    }
+
+    #[test]
+    fn gpkg_reads_deep_collections_and_rejects_nonfinite_lines() {
+        let mut nested = WKB_POINT.to_vec();
+        for _ in 0..100 {
+            let mut outer = vec![1];
+            outer.extend(7u32.to_le_bytes());
+            outer.extend(1u32.to_le_bytes());
+            outer.extend(nested);
+            nested = outer;
+        }
+        assert!(gpkg_geometry(&nested, &mut Feature::default()));
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut line = WKB_LINE.to_vec();
+            line[9..17].copy_from_slice(&value.to_le_bytes());
+            assert!(!gpkg_geometry(&line, &mut Feature::default()));
+        }
+        let mut large = WKB_POINT.to_vec();
+        large[5..13].copy_from_slice(&1e100f64.to_le_bytes());
+        assert!(gpkg_geometry(&large, &mut Feature::default()));
+    }
+
+    #[test]
+    fn gpkg_rejects_every_truncation_and_impossible_point_count() {
+        let blob = gpkg_blob(WKB_LINE);
+        for end in 0..blob.len() {
+            assert!(!gpkg_geometry(&blob[..end], &mut Feature::default()), "{end}");
+        }
+        let mut line = WKB_LINE.to_vec();
+        line[5..9].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(!gpkg_geometry(&line, &mut Feature::default()));
+    }
+
     #[test]
     fn test_files_read() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/gisbestanden");
@@ -692,5 +1634,80 @@ mod tests {
         let d = geojson(br#"{"type":"FeatureCollection","crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:EPSG::28992"}},"features":[{"type":"Feature","properties":{"a":1},"geometry":{"type":"Point","coordinates":[1,2]}}]}"#).unwrap();
         assert_eq!(d.crs.as_deref(), Some("EPSG:28992"));
         assert_eq!(d.features[0].points[0], [1.0, 2.0]);
+    }
+
+    #[test]
+    fn csv_multiline_records_keep_the_points_read_by_main() {
+        let text = include_str!("../../tests/fixtures/csv/multiline.csv");
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+    }
+
+    #[test]
+    fn csv_multiline_records_preserve_the_whole_quoted_attribute() {
+        for newline in ["\n", "\r\n"] {
+            // A Windows checkout may already have CRLF: start from LF.
+            let text = include_str!("../../tests/fixtures/csv/multiline.csv").replace("\r\n", "\n").replace('\n', newline);
+            let data = csv(&text).unwrap();
+            assert_eq!(data.features.len(), 2);
+            assert_eq!(data.features[0].props["note"], format!("put{newline}west"));
+            assert!(data.warnings.is_empty());
+            let text = text.replace(&format!("put{newline}west"), &format!("put{newline}{newline}\"\"west\"\", vijf"));
+            let data = csv(&text).unwrap();
+            assert_eq!(data.features[0].props["note"], format!("put{newline}{newline}\"west\", vijf"));
+            assert_eq!(data.features[1].points, vec![[110.0, 220.0]]);
+            assert!(data.warnings.is_empty());
+        }
+    }
+
+    #[test]
+    fn csv_multiline_records_report_the_physical_start_line_of_a_bad_record() {
+        let text = "\nx,y,note\n100,200,\"put\nwest\"\nbad,220,kapot\n110,220,normaal\n";
+        let data = csv(text).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.warnings.len(), 1);
+        assert!(data.warnings[0].contains(crate::lang::tr("regel 5", "line 5")));
+    }
+
+    #[test]
+    fn csv_unterminated_quotes_keep_the_points_read_by_main() {
+        for note in ["text\"", "\"unfinished"] {
+            let data = csv(&format!("x,y,note\n100,200,{note}\n110,220,normaal\n")).unwrap();
+            assert_eq!(data.features.iter().flat_map(|f| &f.points).copied().collect::<Vec<_>>(), vec![[100.0, 200.0], [110.0, 220.0]]);
+        }
+    }
+
+    #[test]
+    fn csv_fixture_preserves_decimal_commas_quotes_and_optional_fields() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/csv/points.csv");
+        let data = read(&path, None).unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.features[0].points[0], [100.25, 200.5]);
+        assert_eq!(data.features[1].props["type"], "boom; groot");
+        assert_eq!(data.crs, None);
+        assert_eq!(csv("lon,lat\n4.6,51.8\n").unwrap().crs.as_deref(), Some("EPSG:4326"));
+        assert_eq!(csv("x;y;name\n1;2\n").unwrap().features[0].points[0], [1.0, 2.0]);
+    }
+
+    #[test]
+    fn csv_keeps_good_rows_and_reports_bad_or_nonfinite_coordinates() {
+        for row in ["p2;bad;220;tree", "p2;NaN;220;tree", "p2;110;inf;tree", "p2;1e999;220;tree", "p2;110", "p2;;220;tree"] {
+            let text = format!("id;x;y;type\np1;100;200;put\n{row}\n");
+            let data = csv(&text).unwrap();
+            assert_eq!(data.features.len(), 1, "{row}");
+            assert_eq!(data.features[0].points, vec![[100.0, 200.0]]);
+            assert_eq!(data.warnings.len(), 1);
+            assert!(data.warnings[0].starts_with("CSV:") && data.warnings[0].contains(crate::lang::tr("regel 3", "line 3")));
+        }
+    }
+
+    #[test]
+    fn csv_handles_empty_missing_columns_and_large_finite_coordinates() {
+        for text in ["", "\n", "id;name\np1;tree\n"] {
+            assert!(csv(text).is_err());
+        }
+        assert!(csv("x;y\n").unwrap().features.is_empty());
+        let large = csv("x;y\n1e100;-1e100\n").unwrap();
+        assert_eq!(large.features[0].points[0], [1e100, -1e100]);
     }
 }

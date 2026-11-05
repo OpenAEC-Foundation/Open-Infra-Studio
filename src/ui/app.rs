@@ -426,6 +426,9 @@ struct ServersPage {
     name: String,
     region: String,
     test: Option<Job<String>>,
+    /// QGIS connections export: path and the connections read from it, with their checkbox.
+    qgis_path: String,
+    qgis: Vec<(crate::gis::qgis::Connection, bool)>,
 }
 
 struct CoordsPage {
@@ -461,6 +464,84 @@ pub struct App {
     files: super::files::FilesPage,
     svc: services::ServicesPage,
     planning: super::planning::PlanningPage,
+}
+
+#[cfg(test)]
+mod qgis_preview_tests {
+    use super::*;
+
+    fn render(connections: Vec<crate::gis::qgis::Connection>) -> String {
+        let context = egui::Context::default();
+        let creation = eframe::CreationContext::_new_kittest(context.clone());
+        let (_, receiver) = std::sync::mpsc::channel();
+        let mut app = App::new(&creation, receiver);
+        app.srv.qgis = connections.into_iter().map(|c| (c, true)).collect();
+        let output = context.run_ui(egui::RawInput::default(), |ui| app.qgis_import(ui));
+        let rendered = format!("{:?}", output.shapes);
+        output.drop_without_applying_deltas();
+        rendered
+    }
+
+    #[test]
+    fn qgis_preview_does_not_render_url_credentials() {
+        let connections = crate::gis::qgis::parse(r#"<qgsWMSConnections>
+            <wms name="Besloten" url="https://example.invalid/wms?password=SYNTHETIC_VALUE"/>
+            <wms name="Openbaar" url="https://public.invalid/wms"/>
+        </qgsWMSConnections>"#).unwrap();
+        let rendered = render(connections);
+        assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
+        assert!(!rendered.contains("SYNTHETIC_VALUE"));
+    }
+
+    #[test]
+    fn azure_maps_subscription_keys_do_not_render() {
+        let connections = crate::gis::qgis::parse(include_str!("../../tests/fixtures/qgis/azure-maps.xml")).unwrap();
+        assert_eq!(connections.len(), 3);
+        let public = crate::gis::qgis::parse(r#"<qgsXYZTilesConnections><xyztiles name="Openbaar" url="https://public.invalid/{z}/{x}/{y}.png"/></qgsXYZTilesConnections>"#).unwrap().remove(0);
+        let mut failures = Vec::new();
+        for c in connections {
+            let name = c.server.name.clone();
+            let rendered = render(vec![c, public.clone()]);
+            assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
+            let leaked = rendered.contains("SYNTHETIC_VALUE");
+            println!("{name}: gevoelige waarde in voorvertoning={leaked}");
+            if leaked {
+                failures.push(name);
+            }
+        }
+        assert!(failures.is_empty(), "Zichtbaar in de voorvertoning: {}", failures.join(", "));
+    }
+
+    fn check_auth_cases(cases: Vec<crate::gis::qgis::auth_test_support::Case>) {
+        let public = crate::gis::qgis::parse(r#"<qgsWMSConnections><wms name="Openbaar" url="https://public.invalid/wms"/></qgsWMSConnections>"#).unwrap().remove(0);
+        let mut failures = Vec::new();
+        for case in cases {
+            let name = case.connection.server.name.clone();
+            let url = case.connection.server.url.clone();
+            let rendered = render(vec![case.connection, public.clone()]);
+            assert!(rendered.contains("public.invalid"), "de echte voorvertoning moet gevuld zijn");
+            let leaked = crate::gis::qgis::auth_test_support::contains_test_secret(&rendered);
+            let public_visible = !url.is_empty() && rendered.contains(&url);
+            println!("{name}: verwacht blokkade={}, gevoelige waarde zichtbaar={leaked}, publieke URL zichtbaar={public_visible}", case.blocked);
+            if leaked || (!case.blocked && !public_visible) { failures.push(name); }
+        }
+        assert!(failures.is_empty(), "Onjuiste voorvertoning: {}", failures.join(", "));
+    }
+
+    #[test]
+    fn ordnance_survey_keys_do_not_render() {
+        check_auth_cases(crate::gis::qgis::auth_test_support::os_cases());
+    }
+
+    #[test]
+    fn geoserver_and_here_credentials_do_not_render() {
+        check_auth_cases(crate::gis::qgis::auth_test_support::review_cases());
+    }
+
+    #[test]
+    fn audited_credentials_do_not_render_and_public_urls_stay_visible() {
+        check_auth_cases(crate::gis::qgis::auth_test_support::audited_cases());
+    }
 }
 
 impl App {
@@ -1755,6 +1836,29 @@ impl App {
                         }
                     }
                 });
+                // The letters, conditions and sketches of the operators, folded away.
+                if !lev.extras.attachments.is_empty() {
+                    egui::CollapsingHeader::new(format!("Bijlagen ({})", lev.extras.attachments.len())).id_salt("klic_bijlagen").show(ui, |ui| {
+                        egui::Grid::new("klic_attachments").num_columns(3).striped(true).spacing([12.0, 3.0]).show(ui, |ui| {
+                            for a in &lev.extras.attachments {
+                                let name = a.path.rsplit('/').next().unwrap_or(&a.path).to_string();
+                                ui.label(RichText::new(format!("{} · {}", a.operator, a.kind)).small().weak());
+                                ui.label(RichText::new(&name).small()).on_hover_text(&a.path);
+                                if ui.small_button("Openen").clicked() {
+                                    let (src, rel) = (lev.source.clone(), a.path.clone());
+                                    let dir = crate::gis::servers::config_dir().join("klic-bijlagen").join(&lev.meldnummer);
+                                    std::thread::spawn(move || {
+                                        let r = crate::gis::klic_extra::attachment_file(&src, &rel, &dir).and_then(|p| crate::gis::klic_extra::open_file(&p));
+                                        if let Err(e) = r {
+                                            crate::bridge::error(&e);
+                                        }
+                                    });
+                                }
+                                ui.end_row();
+                            }
+                        });
+                    });
+                }
             }
         });
     }
@@ -2200,7 +2304,11 @@ impl App {
         if let Some(r) = poll(&mut self.hoev.job) {
             match r {
                 Ok(q) => {
-                    self.message = Some((true, format!("Hoeveelheden van {} elementen op {} lagen.", q.entities, q.rows.len())));
+                    let mut m = format!("Hoeveelheden van {} elementen op {} lagen.", q.entities, q.rows.len());
+                    if let Some(note) = q.duplicates_note() {
+                        m.push_str(&format!(" {note}."));
+                    }
+                    self.message = Some((true, m));
                     self.hoev.result = Some(q);
                 }
                 Err(e) => self.err(e),
@@ -2258,7 +2366,20 @@ impl App {
                     ui.end_row();
                 });
             });
-            ui.label(RichText::new("Oppervlakte: gesloten polylijnen (met bogen), cirkels, ellipsen en arceringen (met eilanden). Lengte: lijnen, bogen, polylijnen, splines. Een hoeveelhedenstaat in de tekening: lintknop Hoeveelhedenstaat of GIS_HOEVEELHEDEN_TABEL.").small().weak());
+            if let Some(note) = q.duplicates_note() {
+                ui.horizontal(|ui| {
+                    ui.colored_label(WARN, format!("⚠ {note}."));
+                    if ui.small_button("Kopieën selecteren").on_hover_text("Selecteer de dubbel getekende kopieën in de tekening, om ze te controleren of te verwijderen").clicked() {
+                        let copies: Vec<_> = q.duplicates.iter().map(|d| d.2).collect();
+                        std::thread::spawn(move || {
+                            if let Err(e) = crate::bridge::select(&copies) {
+                                crate::bridge::error(&e);
+                            }
+                        });
+                    }
+                });
+            }
+            ui.label(RichText::new("Oppervlakte: gesloten polylijnen (met bogen), cirkels, ellipsen en arceringen (met eilanden). Lengte: lijnen, bogen, polylijnen, splines. Een element dat op dezelfde laag dubbel getekend is (zelfde vorm op de millimeter, ook omgekeerd), telt één keer. Een hoeveelhedenstaat in de tekening: lintknop Hoeveelhedenstaat of GIS_HOEVEELHEDEN_TABEL.").small().weak());
         });
     }
 
@@ -2436,10 +2557,9 @@ impl App {
             match r {
                 Ok(title) => {
                     let kind = self.srv.kind.unwrap_or(ServerKind::Wms);
-                    let mut user = servers::load_user();
                     let name = if self.srv.name.trim().is_empty() { title } else { self.srv.name.trim().to_string() };
                     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-                    user.push(MapServer {
+                    let server = MapServer {
                         id: format!("user-{stamp}"),
                         kind,
                         name: name.clone(),
@@ -2448,9 +2568,10 @@ impl App {
                         attribution: String::new(),
                         default_layer: String::new(),
                         max_zoom: (kind == ServerKind::Xyz).then_some(19),
+                        min_zoom: None,
                         builtin: false,
-                    });
-                    match servers::save_user(&user) {
+                    };
+                    match servers::update_user(|user| user.push(server)) {
                         Ok(()) => {
                             self.servers = servers::all();
                             self.svc.refresh();
@@ -2496,6 +2617,7 @@ impl App {
                 }
             });
         });
+        self.qgis_import(ui);
         let mut remove = None;
         group(ui, "Servers", |ui| {
             let mut regions: Vec<String> = Vec::new();
@@ -2523,13 +2645,99 @@ impl App {
             });
         });
         if let Some(id) = remove {
-            let user: Vec<MapServer> = servers::load_user().into_iter().filter(|s| s.id != id).collect();
-            match servers::save_user(&user) {
+            match servers::update_user(|user| user.retain(|s| s.id != id)) {
                 Ok(()) => {
                     self.servers = servers::all();
                     self.svc.refresh();
                 }
                 Err(e) => self.err(e),
+            }
+        }
+    }
+}
+
+impl App {
+    /// Connections exported from QGIS: read the XML, show what can be added,
+    /// add the chosen ones in one save.
+    fn qgis_import(&mut self, ui: &mut egui::Ui) {
+        use crate::gis::qgis;
+        use crate::lang::tr;
+        let mut read = ui.ctx().input(|i| {
+            i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("xml")))
+        });
+        let mut add = false;
+        group(ui, tr("QGIS-verbindingen importeren", "Import QGIS connections"), |ui| {
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.srv.qgis_path)
+                        .hint_text(tr("XML uit QGIS (Verbindingen opslaan) — of sleep het bestand op dit venster", "XML from QGIS (Save connections) — or drop the file on this window"))
+                        .desired_width(ui.available_width() - 90.0),
+                );
+                if ui.add_enabled(!self.srv.qgis_path.trim().is_empty(), egui::Button::new(tr("Lezen", "Read"))).clicked() {
+                    read = Some(std::path::PathBuf::from(self.srv.qgis_path.trim().trim_matches('"')));
+                }
+            });
+            if self.srv.qgis.is_empty() {
+                ui.label(RichText::new(tr("WMS-, WFS- en XYZ-verbindingen. Verbindingen met een wachtwoord, eigen headers of een afwijkende asvolgorde worden getoond maar niet toegevoegd.", "WMS, WFS and XYZ connections. Connections with a password, own headers or a different axis order are shown but not added.")).small().weak());
+                return;
+            }
+            egui::Grid::new("qgis_import").num_columns(4).striped(true).spacing([10.0, 3.0]).show(ui, |ui| {
+                for (c, on) in self.srv.qgis.iter_mut() {
+                    ui.add_enabled(c.importable(), egui::Checkbox::without_text(on));
+                    ui.label(RichText::new(c.server.kind.label()).monospace().small());
+                    let name = ui.label(&c.server.name);
+                    if c.blocking.is_empty() {
+                        name.on_hover_text(&c.server.url);
+                    }
+                    if c.duplicate {
+                        ui.label(RichText::new(tr("staat er al", "already there")).small().weak());
+                    } else if c.blocking.is_empty() {
+                        ui.label(RichText::new(c.server.url.as_str()).small().weak());
+                    } else {
+                        ui.colored_label(WARN, RichText::new(c.blocking.join(" · ")).small());
+                    }
+                    ui.end_row();
+                }
+            });
+            let n = self.srv.qgis.iter().filter(|(c, on)| *on && c.importable()).count();
+            ui.horizontal(|ui| {
+                if ui.add_enabled(n > 0, primary_button(&format!("{} ({n})", tr("Toevoegen", "Add")))).clicked() {
+                    add = true;
+                }
+                if ui.small_button(tr("Sluiten", "Close")).clicked() {
+                    self.srv.qgis.clear();
+                }
+            });
+        });
+        if let Some(path) = read {
+            self.srv.qgis_path = path.to_string_lossy().into_owned();
+            match qgis::read(&path) {
+                Ok(mut conns) => {
+                    qgis::mark_duplicates(&mut conns, &servers::all());
+                    self.srv.qgis = conns.into_iter().map(|c| { let on = c.importable(); (c, on) }).collect();
+                }
+                Err(e) => {
+                    self.srv.qgis.clear();
+                    self.err(e);
+                }
+            }
+        }
+        if add {
+            let chosen: Vec<&qgis::Connection> = self.srv.qgis.iter().filter(|(c, on)| *on && c.importable()).map(|(c, _)| c).collect();
+            let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            let saved = servers::update_user(|user| {
+                let (list, added) = qgis::merge(user, &chosen, stamp);
+                *user = list;
+                added
+            });
+            match saved {
+                Ok(added) => {
+                    self.servers = servers::all();
+                    self.svc.refresh();
+                    self.srv.qgis.clear();
+                    self.ok(format!("{added} {}", tr("QGIS-verbindingen toegevoegd. Kies ze in Services wereldwijd om ze te testen.", "QGIS connections added. Choose them in Services worldwide to test them.")));
+                }
+                Err(e) => self.err(format!("{}: {e}", tr("Niets toegevoegd", "Nothing added"))),
             }
         }
     }
@@ -2555,6 +2763,8 @@ fn kind_colour(kind: &str) -> Color32 {
 /// the source on the right. Long texts end in "…".
 fn hit_row(ui: &mut egui::Ui, h: &Hit, highlighted: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 40.0), egui::Sense::click());
+    // Painted by hand: give screen readers (and the UI test) its text.
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} — {} ({})", h.name, h.place, h.kind)));
     let painter = ui.painter_at(rect);
     let visuals = ui.visuals();
     if highlighted || resp.hovered() {

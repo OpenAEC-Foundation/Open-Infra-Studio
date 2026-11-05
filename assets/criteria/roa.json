@@ -1,0 +1,279 @@
+{
+ "id": "roa",
+ "naam": "ROA 2017 — Richtlijn Ontwerp Autosnelwegen (Rijkswaterstaat)",
+ "land": "NL",
+ "ooghoogte": {
+  "v": 1.1,
+  "bron": "roa17-t522"
+ },
+ "objecthoogte": {
+  "v": 0.5,
+  "bron": "roa17-t522",
+  "opmerking": "stopzicht: achterlicht 0,2 × 0,2 m met de onderkant op 0,50 m"
+ },
+ "a_r_deler": {
+  "v": 3,
+  "bron": "roa17-t518",
+  "opmerking": "R/3 ≤ A ≤ R"
+ },
+ "categorieen": [
+  {
+   "id": "hoofdbaan",
+   "naam": "Hoofdbaan autosnelweg",
+   "snelheden": [
+    {
+     "v": 120,
+     "r_min": {
+      "v": 1500,
+      "bron": "roa17-t515",
+      "opmerking": "bij 2,5 % verkanting; 4000 m met tegenverkanting"
+     },
+     "a_min": {
+      "v": 270,
+      "bron": "roa17-t518"
+     },
+     "r_overgang": {
+      "v": 4000,
+      "bron": "roa17-t518"
+     },
+     "helling_max": {
+      "v": 3,
+      "bron": "roa17-t521",
+      "opmerking": "hellinglengte ≤ 1300 m; 5 % (≤ 500 m) bij grote kunstwerken"
+     },
+     "r_top_min": {
+      "v": 12400,
+      "bron": "roa17-t523"
+     },
+     "r_voet_min": {
+      "v": 24800,
+      "bron": "roa17-t525",
+      "opmerking": "wegbeeld; comfort in onderdoorgangen 1200 m"
+     },
+     "verkanting_max": {
+      "v": 2.5,
+      "bron": "roa17-t545"
+     },
+     "stopzicht": {
+      "v": 260,
+      "bron": "roa17-t54"
+     }
+    }
+   ]
+  },
+  {
+   "id": "stadsautosnelweg",
+   "naam": "Hoofdbaan stadsautosnelweg",
+   "snelheden": [
+    {
+     "v": 90,
+     "r_min": {
+      "v": 700,
+      "bron": "roa17-t515",
+      "opmerking": "bij 2,5 % verkanting; 2000 m met tegenverkanting"
+     },
+     "a_min": {
+      "v": 175,
+      "bron": "roa17-t518"
+     },
+     "r_overgang": {
+      "v": 2000,
+      "bron": "roa17-t518"
+     },
+     "helling_max": {
+      "v": 3,
+      "bron": "roa17-t521",
+      "opmerking": "hellinglengte ≤ 1300 m; 5 % (≤ 500 m) bij grote kunstwerken"
+     },
+     "r_top_min": {
+      "v": 6600,
+      "bron": "roa17-t523"
+     },
+     "r_voet_min": {
+      "v": 13200,
+      "bron": "roa17-t525",
+      "opmerking": "wegbeeld; comfort in onderdoorgangen 700 m"
+     },
+     "verkanting_max": {
+      "v": 2.5,
+      "bron": "roa17-t545"
+     },
+     "stopzicht": {
+      "v": 135,
+      "bron": "roa17-t54"
+     }
+    }
+   ]
+  },
+  {
+   "id": "niethoofdbaan",
+   "naam": "Niet-hoofdbaan (parallelbaan, verbindingsweg, rangeerbaan)",
+   "snelheden": [
+    {
+     "v": 120,
+     "r_min": {
+      "v": 750,
+      "bron": "roa17-t516",
+      "opmerking": "bij 5 % verkanting; 1500 m bij 2,5 %; 120 km/h alleen voor parallelbanen met veel doorgaand verkeer"
+     },
+     "a_min": {
+      "v": 270,
+      "bron": "roa17-t518"
+     },
+     "r_overgang": {
+      "v": 4000,
+      "bron": "roa17-t518"
+     },
+     "helling_max": {
+      "v": 3,
+      "bron": "roa17-t521",
+      "opmerking": "hellinglengte ≤ 1300 m; 5 % (≤ 500 m) bij grote kunstwerken"
+     },
+     "r_top_min": {
+      "v": 12400,
+      "bron": "roa17-t523"
+     },
+     "r_voet_min": {
+      "v": 24800,
+      "bron": "roa17-t525",
+      "opmerking": "wegbeeld; comfort in onderdoorgangen 1200 m"
+     },
+     "verkanting_max": {
+      "v": 7.0,
+      "bron": "roa17-t545",
+      "opmerking": "algemeen maximum; de boogtabel loopt tot 5 %"
+     },
+     "stopzicht": {
+      "v": 260,
+      "bron": "roa17-t54"
+     }
+    },
+    {
+     "v": 90,
+     "r_min": {
+      "v": 330,
+      "bron": "roa17-t516",
+      "opmerking": "bij 6 % verkanting; 700 m bij 2,5 %"
+     },
+     "a_min": {
+      "v": 175,
+      "bron": "roa17-t518"
+     },
+     "r_overgang": {
+      "v": 2000,
+      "bron": "roa17-t518"
+     },
+     "helling_max": {
+      "v": 3,
+      "bron": "roa17-t521",
+      "opmerking": "hellinglengte ≤ 1300 m; 5 % (≤ 500 m) bij grote kunstwerken"
+     },
+     "r_top_min": {
+      "v": 6600,
+      "bron": "roa17-t523"
+     },
+     "r_voet_min": {
+      "v": 13200,
+      "bron": "roa17-t525",
+      "opmerking": "wegbeeld; comfort in onderdoorgangen 700 m"
+     },
+     "verkanting_max": {
+      "v": 7.0,
+      "bron": "roa17-t545"
+     },
+     "stopzicht": {
+      "v": 135,
+      "bron": "roa17-t54"
+     }
+    },
+    {
+     "v": 70,
+     "r_min": {
+      "v": 160,
+      "bron": "roa17-t516",
+      "opmerking": "bij 7 % verkanting; 350 m bij 2,5 %"
+     },
+     "a_min": {
+      "v": 95,
+      "bron": "roa17-t518"
+     },
+     "r_overgang": {
+      "v": 800,
+      "bron": "roa17-t518"
+     },
+     "helling_max": {
+      "v": 4,
+      "bron": "roa17-t521",
+      "opmerking": "hellinglengte ≤ 700 m; 6 % (≤ 350 m)"
+     },
+     "r_top_min": {
+      "v": 3000,
+      "bron": "roa17-t523"
+     },
+     "r_voet_min": {
+      "v": 6000,
+      "bron": "roa17-t525",
+      "opmerking": "wegbeeld; comfort in onderdoorgangen 400 m"
+     },
+     "verkanting_max": {
+      "v": 7.0,
+      "bron": "roa17-t545"
+     },
+     "stopzicht": {
+      "v": 80,
+      "bron": "roa17-t54"
+     }
+    },
+    {
+     "v": 50,
+     "r_min": {
+      "v": 80,
+      "bron": "roa17-t516",
+      "opmerking": "bij 6,5-7 % verkanting; 300 m met tegenverkanting"
+     },
+     "a_min": {
+      "v": 60,
+      "bron": "roa17-t518"
+     },
+     "r_overgang": {
+      "v": 300,
+      "bron": "roa17-t518"
+     },
+     "helling_max": {
+      "v": 4,
+      "bron": "roa17-t521",
+      "opmerking": "hellinglengte ≤ 700 m; 7 % (≤ 250 m)"
+     },
+     "r_top_min": {
+      "v": 750,
+      "bron": "roa17-t523"
+     },
+     "r_voet_min": {
+      "v": 1500,
+      "bron": "roa17-t525",
+      "opmerking": "wegbeeld; comfort in onderdoorgangen 200 m"
+     },
+     "verkanting_max": {
+      "v": 7.0,
+      "bron": "roa17-t545"
+     },
+     "stopzicht": {
+      "v": 40,
+      "bron": "roa17-t54"
+     }
+    }
+   ]
+  }
+ ],
+ "bronnen": {
+  "roa17-t515": "Rijkswaterstaat, Richtlijn Ontwerp Autosnelwegen (ROA) 2017 (27-11-2017), tabel 5.15: minimale boogstralen hoofdbaan",
+  "roa17-t516": "Rijkswaterstaat, ROA 2017, tabel 5.16: minimale boogstralen niet-hoofdbaan",
+  "roa17-t518": "Rijkswaterstaat, ROA 2017, tabellen 5.18-5.20: clothoïden (Amin, R/3 ≤ A ≤ R, overgangsboog nodig onder R)",
+  "roa17-t521": "Rijkswaterstaat, ROA 2017, tabel 5.21: maximale hellingen en hellinglengtes",
+  "roa17-t522": "Rijkswaterstaat, ROA 2017, tabel 5.22 en p. 55: ooghoogte 1,10 m, objecthoogte stopzicht 0,50 m (achterlicht)",
+  "roa17-t523": "Rijkswaterstaat, ROA 2017, tabel 5.23: minimale straal topboog",
+  "roa17-t525": "Rijkswaterstaat, ROA 2017, tabellen 5.25-5.26: minimale straal voetboog (wegbeeld; comfort in onderdoorgangen)",
+  "roa17-t545": "Rijkswaterstaat, ROA 2017, tabel 5.45: verkanting",
+  "roa17-t54": "Rijkswaterstaat, ROA 2017, tabel 5.4 en §5.1.3: stopzicht (reactietijd 2,5/2,0/1,75/1,5 s; f 0,32/0,38/0,44/0,48)"
+ }
+}

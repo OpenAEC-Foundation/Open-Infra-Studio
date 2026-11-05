@@ -548,32 +548,42 @@ fn aerial(bbox: [f64; 4], w: u32, h: u32) -> Result<image::RgbaImage, String> {
     image::load_from_memory(&bytes).map(|i| i.to_rgba8()).map_err(|e| format!("luchtfoto onleesbaar: {e}"))
 }
 
-/// `CIV_FOTOTERREIN`: the AHN ground of the project area as a 3D surface in
-/// `cell` m cells, each coloured by the aerial photo (OG-DTM).
-pub fn photo_terrain(opt: &super::CivielOptions, cell: f64, progress: &dyn Fn(String)) -> Result<String, String> {
+/// `CIV_FOTOTERREIN`: the ground of the project area as a 3D surface in
+/// `cell` m cells (default 2 m on AHN, 10 m elsewhere), each coloured by an
+/// aerial or satellite photo (OG-DTM).
+/// Anywhere in the world: AHN with the PDOK photo in the Netherlands, Terrain
+/// Tiles (SRTM, USGS 3DEP) elsewhere, with the USGS photo in the United States
+/// and Sentinel-2 cloudless in the rest of the world. `photo` (`FOTO=`)
+/// chooses another one, see [`Photo::choose`].
+pub fn photo_terrain(opt: &super::CivielOptions, cell: Option<f64>, photo: Option<&str>, progress: &dyn Fn(String)) -> Result<String, String> {
+    use crate::gis::foto::Photo;
+    use crate::lang::tr;
     let ctx = Ctx::new(opt)?;
-    let b = project_rd_bbox(&ctx)?;
-    let cell = cell.max(0.5);
+    let site = ctx.site.clone().ok_or("stel eerst de projectlocatie in (GIS → Locatie, of GIS_SITE)")?;
+    let foto = Photo::choose(photo, site.lon, site.lat)?;
+    let bron = super::hoogtebron(&ctx)?;
+    let ahn = bron.src.is_ahn();
+    let b = if ahn { project_rd_bbox(&ctx)? } else { bron.src.bbox(&site)? };
+    // Terrain Tiles are 5 m at best (mostly SRTM's 30 m): coarser by default.
+    let cell = cell.unwrap_or(if ahn { 2.0 } else { 10.0 }).max(if ahn { 0.5 } else { bron.src.native_cell() });
     let cells = ((b[2] - b[0]) / cell) * ((b[3] - b[1]) / cell);
     if cells > 400_000.0 {
-        return Err(format!("{cells:.0} cellen is te veel: kies een grotere cel dan {cell} m"));
+        return Err(format!("{cells:.0} {} {cell} m", tr("cellen is te veel: kies een grotere cel dan", "cells is too many: choose a cell larger than")));
     }
-    let bron = super::hoogtebron(&ctx)?;
-    progress(format!("{} ophalen…", bron.label()));
-    let mut grid = bron.grid(b, cell, progress)?;
+    progress(format!("{} {}…", bron.label(), tr("ophalen", "fetching")));
+    let mut grid = bron.src.fetch(b, cell, progress)?;
     fill_gaps(&mut grid.z, grid.w, grid.h);
     // The photo at about four pixels a cell.
-    let px = (cell / 4.0).max(0.25);
     let gb = [grid.x0, grid.y1 - grid.h as f64 * grid.cell, grid.x0 + grid.w as f64 * grid.cell, grid.y1];
-    let photo = aerial_mosaic(gb, px, progress)?;
-    progress("Terrein kleuren…".into());
-    let to = rd_to_drawing(&ctx)?;
+    let (photo, px) = foto.image(&bron.src.crs, gb, (grid.cell / 4.0).max(0.25), progress)?;
+    progress(tr("Terrein kleuren…", "Colouring the terrain…").into());
+    let to_site = crate::gis::vector::data_to_site(&site, &bron.src.crs, &[])?;
     let f = ctx.f;
     let at = |c: usize, r: usize| -> Option<P3> {
         let p = grid.centre(c, r);
         let z = grid.z[r * grid.w + c];
         z.is_finite().then_some(())?;
-        to(p).map(|q| [q[0], q[1], z as f64 * f])
+        to_site(p).map(|q| site.to_drawing(q, f)).map(|q| [q[0], q[1], z as f64 * f])
     };
     let mut buckets: HashMap<(u8, u8, u8), MeshBuilder> = HashMap::new();
     for r in 0..grid.h.saturating_sub(1) {
@@ -587,6 +597,10 @@ pub fn photo_terrain(opt: &super::CivielOptions, cell: f64, progress: &dyn Fn(St
             for v in v0..(v0 + n).min(photo.height()) {
                 for u in u0..(u0 + n).min(photo.width()) {
                     let p = photo.get_pixel(u, v);
+                    // Outside the service's coverage the warp leaves pixels transparent.
+                    if p[3] == 0 {
+                        continue;
+                    }
                     s[0] += p[0] as u32;
                     s[1] += p[1] as u32;
                     s[2] += p[2] as u32;
@@ -598,7 +612,7 @@ pub fn photo_terrain(opt: &super::CivielOptions, cell: f64, progress: &dyn Fn(St
         }
     }
     let layer = spec(&ctx, "OG", "DTM")?;
-    let d = record(&[("bron", format!("{} + luchtfoto PDOK", bron.label())), ("cel_m", format!("{cell}"))]);
+    let d = record(&[("bron", format!("{} + {}", bron.label(), foto.label())), ("cel_m", format!("{}", grid.cell))]);
     let mut out = Out::default();
     let mut quads = 0;
     let colours = buckets.len();
@@ -608,13 +622,31 @@ pub fn photo_terrain(opt: &super::CivielOptions, cell: f64, progress: &dyn Fn(St
     }
     let n = out.write("Terrein met luchtfoto")?;
     crate::bridge::note_source(bron.attribution());
-    crate::bridge::note_source("Luchtfoto (Beeldmateriaal.nl / PDOK, CC BY 4.0)");
+    crate::bridge::note_source(&foto.attribution());
     let (lo, hi) = grid.range().unwrap_or((0.0, 0.0));
     super::api::note("cellen", quads);
     super::api::note("kleuren", colours);
     super::api::note("hoogte_min", lo);
     super::api::note("hoogte_max", hi);
-    Ok(format!("Terrein met luchtfoto: {quads} cellen van {cell} m in {colours} kleuren, {} tot {} m — {n} elementen op {}.", nap(lo, 2), nap(hi, 2), layer.name))
+    let datum = if ahn { "NAP".to_string() } else { bron.datum().to_string() };
+    let mut msg = format!(
+        "{}: {quads} {} {} m {} {colours} {}, {lo:.1} {} {hi:.1} m {datum} ({} + {}) — {n} {} {}.",
+        tr("Terrein met luchtfoto", "Terrain with photo"),
+        tr("cellen van", "cells of"),
+        grid.cell,
+        tr("in", "in"),
+        tr("kleuren", "colours"),
+        tr("tot", "to"),
+        bron.label(),
+        foto.label(),
+        tr("elementen op", "elements on"),
+        layer.name
+    );
+    if let Some(note) = foto.licence_note() {
+        msg.push(' ');
+        msg.push_str(note);
+    }
+    Ok(msg)
 }
 
 // ── Water level (flood picture) ─────────────────────────────────────────────
@@ -1217,7 +1249,6 @@ pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagSty
         progress,
     )?;
     let crs = model.crs.clone().unwrap_or_else(|| site.crs.clone());
-    for warning in &model.warnings { progress(warning.clone()); }
     let to = drawing(&crs)?;
     let outside = model.seen - model.objects.len();
     let p3 = |p: &[f64; 3]| to([p[0], p[1]]).map(|q| [q[0], q[1], p[2] * f]);
@@ -1346,10 +1377,10 @@ pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagSty
     }
     let done: usize = per_theme.values().sum();
     if done == 0 {
-        return Err(model.report(format!(
+        return Err(format!(
             "CityGML: geen van de {total} objecten ligt in het projectgebied ({crs}); verschuif de projectlocatie naar de data{}",
             if skipped > 0 { format!(" ({skipped} zonder bruikbare geometrie)") } else { String::new() }
-        )));
+        ));
     }
     progress("CityGML tekenen…".into());
     let json = path.to_string_lossy().to_ascii_lowercase().contains(".json");
@@ -1362,13 +1393,13 @@ pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagSty
     super::api::note("driehoeken", faces);
     super::api::note("crs", crs.clone());
     let themes: Vec<String> = per_theme.iter().map(|(k, v)| format!("{v} {k}")).collect();
-    Ok(model.report(format!(
+    Ok(format!(
         "{} ({crs}): {done} objecten ({}) met {faces} driehoeken{}{} — {n} elementen.",
         if json { "CityJSON" } else { "CityGML" },
         themes.join(", "),
         if outside > 0 { format!("; {outside} buiten het projectgebied") } else { String::new() },
         if skipped > 0 { format!("; {skipped} overgeslagen") } else { String::new() },
-    )))
+    ))
 }
 
 /// `CIV_DOORZICHT [PCT=70] [ALLES] [UIT]`: make the ground see-through, so
