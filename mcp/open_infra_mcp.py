@@ -438,11 +438,12 @@ def t_mutation(a):
       "Every object becomes its IFC class from its NLCS layer and object data: terrain (TIN, photo terrain), 3D BAG and CityGML "
       "buildings, pavements, green, water, structures, cables and pipes, sewers, earthworks, CPTs and boreholes (IfcBorehole with "
       "IfcGeotechnicalStratum); axes become IfcAlignments with horizontal and vertical layout. Georeferenced from the project "
-      "location; object data as property sets. Answers with the counts per IFC class.",
-      {"path": STR, "selection": {"type": "boolean"}, "texts": {"type": "boolean"}})
+      "location; object data as property sets. Answers with the counts per IFC class. With `ids` the export is then checked "
+      "against that IDS file (as civ_ifc_ids).",
+      {"path": STR, "selection": {"type": "boolean"}, "texts": {"type": "boolean"}, "ids": STR})
 def t_ifc(a):
     words = (" SELECTIE" if a.get("selection") else "") + (" TEKST=nee" if a.get("texts") is False else "")
-    return OCS.run(f"CIV_IFC {_kv(BESTAND=a.get('path'))}{words}", 1800)
+    return OCS.run(f"CIV_IFC {_kv(BESTAND=a.get('path'), IDS=a.get('ids'))}{words}", 1800)
 
 
 @tool("quantities", "Quantities per NLCS layer (count, length, area) as CSV beside the drawing.")
@@ -733,6 +734,43 @@ EXPORT = {"path": {"type": "string", "description": "Output file; empty = beside
 @tool("civ_landxml_export", "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.", EXPORT)
 def t_landxml_export(a):
     return OCS.run(f"CIV_LANDXML_EXPORT {_kv(BESTAND=a.get('path'))}{' ALLES' if a.get('all', True) else ''}")
+
+
+# Exchange: IFC in, IDS checks, 3D meshes out and in (#66, #65, #71).
+@tool("civ_ifc_import", "Import an IFC model (IFC 4.3; IFC4/IFC2X3 for element geometry) as a base: IfcAlignments (line, circular arc, clothoid; "
+      "gradients and parabolic arcs) become axes with stationing and their design profile, terrain (IfcTriangulatedIrregularNetwork, "
+      "IfcGeographicElement TERRAIN) a TIN (status B by default, N with status), other elements meshes on NLCS layers with their "
+      "property sets as object data. IfcMapConversion places everything in the project CRS. Answers with the axes, terrains, "
+      "classes and what could not be read.",
+      {"path": STR, "status": SURF}, ["path"])
+def t_ifc_import(a):
+    return OCS.run(f"CIV_IFC_IMPORT {_quote(a['path'])} {_kv(STATUS=a.get('status'))}", 1800)
+
+
+@tool("civ_ifc_ids", "Check an IFC model against a client's IDS (buildingSMART IDS 1.0: entity, attribute, property, classification, "
+      "material and partOf facets). Without `ifc`: the drawing's last export (<drawing>_IFC4X3.ifc), exported first when missing. "
+      "Writes <drawing>_ids.md and <drawing>_ids.json and answers with the counts per specification.",
+      {"ids": STR, "ifc": STR}, ["ids"])
+def t_ifc_ids(a):
+    return OCS.run(f"CIV_IFC_IDS {_kv(IDS=a['ids'], IFC=a.get('ifc'))}", 1800)
+
+
+@tool("civ_3d_export", "Export the drawing's 3D content (meshes, polyface meshes, 3D faces: TINs, photo terrain, 3D BAG, BGT 3D, corridor "
+      "bodies) as glTF binary (GLB), OBJ (+MTL, Y-up) or STL, one mesh per layer and colour, local origin at the project base point "
+      "with the EPSG code in the file. Default beside the drawing as <drawing>_3D.<ext>.",
+      {"format": {"type": "string", "enum": ["GLB", "OBJ", "STL"]}, "path": STR, "selection": {"type": "boolean"}})
+def t_3d_export(a):
+    words = " SELECTIE" if a.get("selection") else ""
+    return OCS.run(f"CIV_3D_EXPORT {_kv(FORMAAT=a.get('format'), PAD=a.get('path'))}{words}", 1800)
+
+
+@tool("civ_3d_import", "Import an OBJ, STL or glTF/GLB model as mesh entities on a layer, with triangle count, area and volume (closed "
+      "meshes) as object data. A file exported by Open Infra returns to its own coordinates; otherwise its origin goes to `place` "
+      "(project coordinates) or the project base point, scaled and rotated (degrees about the vertical).",
+      {"path": STR, "place": PT, "scale": NUM, "rotation": NUM, "layer": STR}, ["path"])
+def t_3d_import(a):
+    place = ",".join(_num(v) for v in a["place"]) if a.get("place") else None
+    return OCS.run(f"CIV_3D_IMPORT {_quote(a['path'])} {_kv(PLAATS=place, SCHAAL=a.get('scale'), ROTATIE=a.get('rotation'), LAAG=a.get('layer'))}", 1800)
 
 
 
