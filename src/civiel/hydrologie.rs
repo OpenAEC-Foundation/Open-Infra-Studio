@@ -1242,6 +1242,164 @@ pub fn catchment(opt: &super::CivielOptions, req: CatchmentRequest, progress: &d
     Ok(msg + ".")
 }
 
+// ── CIV_BUI: a storm on the ground ──────────────────────────────────────────
+
+/// `CIV_BUI`: the storm, the ground and what takes water away.
+pub struct StormRequest {
+    /// The ground grid, as `CIV_STROOMGEBIED` makes it (`BRON=`, `CEL=`).
+    pub ground: CatchmentRequest,
+    /// `BUI=`: `08`, `T100`, `T250`, `T1000`, `48h`, `R100`…, `<mm>/<min>` or a CSV file.
+    pub storm: String,
+    /// Infiltration capacity (mm/h).
+    pub infiltration: f64,
+    /// Manning's n.
+    pub manning: Option<f64>,
+    /// Water leaves over the edge of the model (`RAND=open`).
+    pub free_edge: bool,
+    /// Gullies (`KOLKEN=` points or `LAAG=`) and their capacity (l/s each).
+    pub sinks: Outlets,
+    pub sink_capacity: f64,
+    /// Minutes simulated after the rain.
+    pub after: f64,
+}
+
+/// Depth classes (m) of the maximum water depth, as the stress test maps
+/// show them (Klimaateffectatlas: 10, 15, 20 and 30 cm), with 5 cm below.
+pub const DEPTH_CLASSES: [f64; 5] = [0.05, 0.10, 0.15, 0.20, 0.30];
+const DEPTH_ACI: [u8; 5] = [151, 141, 150, 160, 170];
+
+fn storm_of(spec: &str) -> Result<rekenkern::buien::Hyetograph, String> {
+    let path = std::path::Path::new(spec);
+    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("csv") || e.eq_ignore_ascii_case("txt")) {
+        let text = std::fs::read_to_string(path).map_err(|e| format!("{spec}: {e}"))?;
+        let unit = if text.to_ascii_lowercase().contains("mm/h") { rekenkern::buien::CsvValue::IntensityMmH } else { rekenkern::buien::CsvValue::DepthMm };
+        return rekenkern::buien::Hyetograph::from_csv(&path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), &text, unit);
+    }
+    rekenkern::buien::parse_storm(spec)
+}
+
+/// The class (index in `DEPTH_CLASSES`) of a depth, −1 below the first.
+pub fn depth_class(d: f64) -> i32 {
+    DEPTH_CLASSES.iter().rposition(|c| d >= *c).map_or(-1, |i| i as i32)
+}
+
+/// `CIV_BUI`: a storm on the ground grid, simulated in time (local-inertial
+/// overland flow, Bates et al. 2010): the maximum water depth in classes,
+/// the ponds with their volume and the point where each one overflows, the
+/// outflow over the edge and into gullies, and the water balance.
+pub fn storm(opt: &super::CivielOptions, req: StormRequest, progress: &dyn Fn(String)) -> Result<String, String> {
+    use rekenkern::bui;
+    let ctx = Ctx::new(opt)?;
+    let rain = storm_of(&req.storm)?;
+    let m = model(&ctx, &req.ground, progress)?;
+    let g = &m.grid;
+    if g.w * g.h > 400_000 {
+        return Err(t!("{} cellen is te veel voor een bui in de tijd: kies een grotere cel (CEL=) of een kleiner gebied", "{} cells is too many for a storm in time: choose a larger cell (CEL=) or a smaller area", g.w * g.h));
+    }
+    let grid = bui::Grid { origin: [0.0, 0.0], cell: g.cell_m, nx: g.w, ny: g.h, z: g.z.clone() };
+    let mut settings = bui::Settings { infiltration: bui::Field::Uniform(req.infiltration.max(0.0)), boundary: if req.free_edge { bui::Boundary::Free } else { bui::Boundary::Closed }, ..bui::Settings::default() };
+    if let Some(n) = req.manning {
+        settings.manning = bui::Field::Uniform(n);
+    }
+    let gullies = outlet_points(&req.sinks)?;
+    for (_, p) in &gullies {
+        if let Some(c) = (m.to_grid)(*p).and_then(|q| g.cell_at(q)) {
+            settings.sinks.push(bui::Sink { at: grid.centre(c), capacity: req.sink_capacity / 1000.0 });
+        }
+    }
+    let blocks: Vec<(f64, f64)> = rain.blocks.iter().map(|b| (b.duration_s, b.intensity_mm_h)).collect();
+    settings.duration = rain.duration_s() + req.after.max(0.0) * 60.0;
+    progress(t!("{} op {} × {} cellen van {} m…", "{} on {} × {} cells of {} m…", rain.name, g.w, g.h, num(g.cell_m, 2)));
+    let flood = bui::simulate(&grid, &blocks, &settings)?;
+    let k = ctx.k;
+    let mut out = Out::default();
+    // Maximum depth in classes.
+    let label: Vec<i32> = flood.max_depth.iter().map(|d| depth_class(*d)).collect();
+    let rings = outlines(g, &label);
+    let mut class_area = [0.0f64; 5];
+    for l in label.iter().filter(|l| **l >= 0) {
+        class_area[*l as usize] += g.cell_m * g.cell_m;
+    }
+    for (i, c) in DEPTH_CLASSES.iter().enumerate() {
+        let layer = tool_layer(&format!("OI-BUI-DIEPTE-{:02}CM", (c * 100.0).round() as i32), DEPTH_ACI[i]);
+        let dat = record(&[("bui", rain.name.clone()), ("diepte_vanaf_m", format!("{c:.2}"))]);
+        for ring in rings.get(&(i as i32)).into_iter().flatten() {
+            let simple = crate::gis::ahn::simplify(ring, g.cell * 0.5, true);
+            let pts: Vec<XY> = simple.iter().filter_map(|q| (m.to_drawing)(*q)).collect();
+            if pts.len() >= 3 {
+                out.put(&layer, crate::emit::polylines(&[(pts, true)], &layer.name, k, Some(&dat)));
+            }
+        }
+    }
+    // Ponds at the highest water, with where they overflow.
+    let found = bui::ponds(&grid, &flood.max_depth, settings.pond_depth, settings.boundary);
+    let pond_l = tool_layer("OI-BUI-PLAS", 5);
+    let over_l = tool_layer("OI-BUI-OVERLOOP", 1);
+    let mut pond_rows = Vec::new();
+    for (i, p) in found.iter().enumerate().filter(|(_, p)| p.volume >= 0.5) {
+        let at = (m.to_drawing)(g.centre(p.deepest)).unwrap_or([0.0, 0.0]);
+        let text = format!("{} {} · {} m · {} m³", crate::lang::tr("Plas", "Pond"), i + 1, num(p.max_depth, 2), num(p.volume, 1));
+        let mut t = ctx.text([at[0] + 1.2 * k, at[1]], &text, 1.8, 0.0, &pond_l, None);
+        if let EntityType::Text(tx) = &mut t {
+            tx.horizontal_alignment = TextHorizontalAlignment::Left;
+        }
+        out.put(&pond_l, [t]);
+        let mut row = serde_json::json!({"plas": i + 1, "volume_m3": p.volume, "diepte_m": p.max_depth, "oppervlakte_m2": p.area, "waterpeil_m": p.level});
+        if let Some(o) = &p.overflow {
+            let q = (m.to_drawing)(g.centre(o.cell)).unwrap_or(at);
+            let mut c = EntityType::Circle(Circle::from_center_radius(Vector3::new(q[0], q[1], 0.0), 1.0 * k));
+            c.common_mut().layer = over_l.name.clone();
+            out.put(&over_l, [c]);
+            out.put(&over_l, [ctx.text([q[0] + 1.4 * k, q[1]], &t!("overloop {} ({} m)", "overflow {} ({} m)", i + 1, nap(o.level, 2)), 1.8, 0.0, &over_l, None)]);
+            row["overloop_peil_m"] = serde_json::json!(o.level);
+            row["overloop_marge_m"] = serde_json::json!(o.freeboard);
+        }
+        pond_rows.push(row);
+    }
+    if out.is_empty() {
+        return Err(t!("geen water dieper dan {} m ({}, {})", "no water deeper than {} m ({}, {})", num(DEPTH_CLASSES[0], 2), rain.name, m.source));
+    }
+    out.write(crate::lang::tr("Bui", "Storm"))?;
+    let b = &flood.balance;
+    let wet: f64 = class_area.iter().sum();
+    let max = flood.max_depth.iter().copied().fold(0.0, f64::max);
+    let mut md = format!("# {}: {}\n\n{}: {} · {} mm · {} min\n\n", crate::lang::tr("Bui op het maaiveld", "Storm on the ground"), rain.name, crate::lang::tr("Bui", "Storm"), rain.name, num(rain.total_depth_mm(), 1), num(rain.duration_s() / 60.0, 0));
+    md.push_str(&format!("{}: {}\n\n| {} | m² |\n|---|---|\n", crate::lang::tr("Ondergrond", "Ground"), m.source, crate::lang::tr("Maximale waterdiepte", "Maximum water depth")));
+    for (i, c) in DEPTH_CLASSES.iter().enumerate() {
+        md.push_str(&format!("| ≥ {} m | {} |\n", num(*c, 2), class_area[i].round()));
+    }
+    md.push_str(&format!(
+        "\n| {} | m³ |\n|---|---|\n| {} | {} |\n| {} | {} |\n| {} | {} |\n| {} | {} |\n| {} | {} |\n| {} | {} % |\n",
+        crate::lang::tr("Waterbalans", "Water balance"),
+        crate::lang::tr("neerslag", "rain"), b.rain.round(),
+        crate::lang::tr("berging op maaiveld", "stored on the ground"), b.storage.round(),
+        crate::lang::tr("infiltratie", "infiltration"), b.infiltration.round(),
+        crate::lang::tr("over de rand", "over the edge"), b.boundary.round(),
+        crate::lang::tr("kolken", "gullies"), b.sinks.round(),
+        crate::lang::tr("fout", "error"), num(b.relative_error * 100.0, 4)
+    ));
+    md.push_str(&t!(
+        "\nLokaal-inertiaal model (Bates et al. 2010, LISFLOOD-FP) met Manning n {}, {} tijdstappen. Een stresstest-indicatie, geen vervanging van een gekalibreerd 2D-model met riolering.\n",
+        "\nLocal-inertial model (Bates et al. 2010, LISFLOOD-FP) with Manning n {}, {} time steps. A stress test indication, not a replacement for a calibrated 2D model with the sewer.\n",
+        req.manning.map(|n| num(n, 3)).unwrap_or_else(|| "0,030".into()),
+        flood.steps
+    ));
+    let path = crate::bridge::beside_drawing("bui.md");
+    let _ = std::fs::write(&path, md);
+    super::api::note("bui", rain.name.clone());
+    super::api::note("neerslag_mm", rain.total_depth_mm());
+    super::api::note("max_diepte_m", max);
+    super::api::note("nat_oppervlak_m2", wet);
+    super::api::note("plassen", pond_rows.clone());
+    super::api::note("waterbalans", serde_json::to_value(b).unwrap_or_default());
+    super::api::note("rapport", path.to_string_lossy().into_owned());
+    Ok(t!(
+        "{} ({} mm) op {}: max {} m water, {} m² dieper dan {} m, {} plas(sen); over de rand {} m³, kolken {} m³; waterbalans {} %. Rapport: {}",
+        "{} ({} mm) on {}: max {} m of water, {} m² deeper than {} m, {} pond(s); over the edge {} m³, gullies {} m³; water balance {} %. Report: {}",
+        rain.name, num(rain.total_depth_mm(), 0), m.source, num(max, 2), wet.round(), num(DEPTH_CLASSES[0], 2), pond_rows.len(), b.boundary.round(), b.sinks.round(), num(b.relative_error * 100.0, 4), path.display()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1255,6 +1413,14 @@ mod tests {
             }
         }
         Tin::build(&pts, 0.0).unwrap()
+    }
+
+    #[test]
+    fn depth_classes() {
+        assert_eq!(depth_class(0.01), -1);
+        assert_eq!(depth_class(0.05), 0);
+        assert_eq!(depth_class(0.149), 1);
+        assert_eq!(depth_class(1.0), 4);
     }
 
     #[test]

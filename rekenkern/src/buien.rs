@@ -368,12 +368,54 @@ impl StresstestStorm {
     }
 }
 
+/// A storm from a short spec, as the commands take it (`BUI=`):
+/// `08` / `bui08` (Leidraad Riolering standard storm 1–10), `T100`, `T250`,
+/// `T1000`, `48h`, `R100`, `R250`, `R1000` (the stress test events of
+/// [`StresstestStorm`], local and regional), or `<mm>/<minutes>` (a
+/// uniform block, e.g. `70/60`). A CSV is read by the caller with [`Hyetograph::from_csv`].
+pub fn parse_storm(spec: &str) -> Result<Hyetograph, String> {
+    let s = spec.trim().to_ascii_lowercase().replace(' ', "");
+    let event = match s.as_str() {
+        "t100" => Some(StresstestStorm::Local1hT100),
+        "t250" => Some(StresstestStorm::Local1hT250),
+        "t1000" => Some(StresstestStorm::Local2hT1000),
+        "48h" | "t48" => Some(StresstestStorm::Local48h),
+        "r100" => Some(StresstestStorm::Regional48hT100),
+        "r250" => Some(StresstestStorm::Regional48hT250),
+        "r1000" => Some(StresstestStorm::Regional48hT1000),
+        _ => None,
+    };
+    if let Some(e) = event {
+        return Ok(e.hyetograph());
+    }
+    if let Some((mm, min)) = s.split_once('/') {
+        let num = |t: &str| t.trim_end_matches("mm").trim_end_matches("min").replace(',', ".").parse::<f64>().map_err(|_| format!("storm {spec}: expected <mm>/<minutes>"));
+        return uniform_block(num(mm)?, num(min)?);
+    }
+    let nr = s.trim_start_matches("bui").trim_start_matches("leidraad");
+    match nr.parse::<u8>() {
+        Ok(n) => leidraad_bui(n),
+        Err(_) => Err(format!("storm {spec}: use 01–10 (Leidraad), T100, T250, T1000, 48h, R100, R250, R1000 or <mm>/<minutes>")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn close(a: f64, b: f64, tol: f64) -> bool {
         (a - b).abs() <= tol
+    }
+
+    #[test]
+    fn storm_specs() {
+        assert!(close(parse_storm("08").unwrap().total_depth_mm(), bui08().total_depth_mm(), 1e-9));
+        assert!(close(parse_storm("bui08").unwrap().total_depth_mm(), 19.8, 1e-6));
+        assert!(close(parse_storm("T100").unwrap().total_depth_mm(), 70.0, 1e-9));
+        assert!(close(parse_storm("R1000").unwrap().duration_s(), 48.0 * 3600.0, 1e-9));
+        let u = parse_storm("70/60").unwrap();
+        assert!(close(u.total_depth_mm(), 70.0, 1e-9) && close(u.duration_s(), 3600.0, 1e-9));
+        assert!(parse_storm("regen").is_err() && parse_storm("11").is_err());
     }
 
     #[test]

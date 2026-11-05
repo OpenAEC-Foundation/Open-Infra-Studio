@@ -164,6 +164,7 @@ fn terrain_tools() -> Vec<RibbonItem> {
             ("CIV_STROOMGEBIED", tr("Stroomgebied", "Catchment"), I_CATCHMENT),
             ("CIV_WATERDRUPPEL", tr("Waterdruppel", "Water drop"), I_DROP),
             ("CIV_PLASSEN", tr("Plassen", "Ponds"), I_PONDS),
+            ("CIV_BUI", tr("Bui op het maaiveld", "Storm on the ground"), I_PONDS),
         ],
         default: "CIV_STROOMGEBIED",
     });
@@ -1519,6 +1520,26 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let label = if ponds_only { open_infra::lang::tr("Plassen", "Ponds") } else { open_infra::lang::tr("Stroomgebied", "Catchment") };
             job(host, label, id, move |p| civiel::hydrologie::catchment(&o, req, p));
         }
+        "CIV_BUI" => {
+            let o = opt(&["BRON", "BUI", "INFILTRATIE", "RUWHEID", "RAND", "KOLKEN", "LAAG", "KOLK", "NA"])?;
+            let ground = catchment_request(&args.without(&["LAAG", "PUNTEN"]), true)?;
+            let sinks = match args.points("KOLKEN")? {
+                Some(p) => p.into_iter().map(to_drawing).collect::<Result<Vec<_>, _>>()?,
+                None => Vec::new(),
+            };
+            let layers = args.str("LAAG").map(|l| l.split(';').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()).unwrap_or_default();
+            let req = civiel::hydrologie::StormRequest {
+                ground: civiel::hydrologie::CatchmentRequest { cell: args.f64("CEL")?.unwrap_or(2.0).max(0.5), ..ground },
+                storm: args.str("BUI").unwrap_or("T100").to_string(),
+                infiltration: args.f64("INFILTRATIE")?.unwrap_or(0.0),
+                manning: args.f64("RUWHEID")?,
+                free_edge: !args.str("RAND").is_some_and(|v| v.eq_ignore_ascii_case("dicht") || v.eq_ignore_ascii_case("closed")),
+                sinks: civiel::hydrologie::Outlets { points: sinks, layers },
+                sink_capacity: args.f64("KOLK")?.unwrap_or(5.0),
+                after: args.f64("NA")?.unwrap_or(30.0),
+            };
+            job(host, open_infra::lang::tr("Bui op het maaiveld", "Storm on the ground"), id, move |p| civiel::hydrologie::storm(&o, req, p));
+        }
         // Point clouds: a TIN from the AHN points (of the site or the selected
         // closed polyline) or from a file, and a 3D mesh of an object.
         "CIV_PUNTENWOLK_TIN" | "CIV_PUNTENWOLK_BESTAND" => {
@@ -1819,7 +1840,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_PROFIELTYPEN, CIV_PROFIELTYPE NAAM= [KOPIE=] [PLAATS=x,y]; CIV_KRUISPUNT HOOFD= ZIJ= [R=8;…] [PROFIELTYPE=] [NIVEAU=]; \
              CIV_ROTONDE ASSEN=h;h [MIDDEN=x,y] [TYPE=binnen|buiten] [D=] [RIJBAAN=] [OVERRIJDBAAR=] [IN=] [UIT=] [INBREEDTE=] [UITBREEDTE=] [MIDDENGELEIDER=] [LENGTE=] [HELLING=] [PROFIELTYPE=] [NIVEAU=]; CIV_IFC [BESTAND=<pad>] [SELECTIE] [TEKST=nee] (IFC 4x3); CIV_LANDXML_EXPORT [BESTAND=<pad>] [ALLES]; CIV_INFO; \
              codes: CIV_PUNTEN_IMPORT <pad> CODES=JA [CODETABEL=], CIV_CODES_TOEPASSEN [CODETABEL=]; percelen: CIV_PERCELEN KAVEL= [STRAAT=|RICHTING=graden] N=|OPP=|FRONT= [REST=laatste|apart|verdelen] [PREFIX=P] [START=1], CIV_PERCEEL_INFO [PERCEEL=h;h] [STRAAT=]; \
-             water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=]; \
+             water: CIV_WATERDRUPPEL x,y | PUNTEN=x,y;… [CEL=1], CIV_STROOMGEBIED PUNTEN=x,y;… | LAAG=*KOLK* [BRON=TIN|AHN] [CEL=1] [SNAP=2] [PLASSEN=ja] [MINDIEPTE=0.05] [MINOPP=2], CIV_PLASSEN [BRON=] [CEL=] [MINDIEPTE=] [MINOPP=]; CIV_BUI [BUI=T100|T250|T1000|48h|R100|08|<mm>/<min>|<bui.csv>] [BRON=TIN|AHN] [CEL=2] [INFILTRATIE=mm/h] [RUWHEID=n] [RAND=open|dicht] [KOLKEN=x,y;… | LAAG=*KOLK*] [KOLK=l/s] [NA=min]; \
              CIV_ONTWERPCRITERIA [RICHTLIJN=roa|noa|crow|aashto CATEGORIE= V=] [AS=]; CIV_AS_TOETS AS= [RICHTLIJN= CATEGORIE= V=] [VERKANTING=%]; \
              CIV_ZICHT AS= [RICHTLIJN= CATEGORIE= V=|NODIG=] [OOG=] [OBJECT=] [OM=10] [RIJLIJN=1.75] [VRIJ=5] [MAX=] [RICHTING=heen|terug|beide] [LAGEN=-OG-BEBOUWING;…] [PLAATS=]; \
              CIV_SPOOR AS=|PI= R= [LS=|A=] V= [VMIN=] [VERKANTING=mm;…] [SPOREN=] [SPOORAFSTAND=] [NAAM=] [PLAATS=]; CIV_WISSEL AS= STATION= [TYPE=1:9|1:12|1:15|…] [ZIJDE=links|rechts] [RICHTING=op|af] [LENGTE=].",
