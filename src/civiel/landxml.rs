@@ -218,6 +218,9 @@ pub fn parse(text: &str) -> Result<LandXml, String> {
                     };
                     // An exact clothoid (Seg::Spiral), heading from the PI.
                     let (k0, k1) = (k("radiusStart")?, k("radiusEnd")?);
+                    // A clothoid turning more than a full circle is no
+                    // transition curve, and drawing it as arcs would not end.
+                    if k0.abs().max(k1.abs()) * len > 2.0 * PI { return Err("LandXML: overgangsboog draait meer dan een volle slag".into()); }
                     let dir = match en(child(g, "PI"), unit, &points)? {
                         Some(pi) if (pi[0] - a[0]).hypot(pi[1] - a[1]) > 1e-9 => (pi[1] - a[1]).atan2(pi[0] - a[0]),
                         // Without a PI: the direction that makes the chord fit.
