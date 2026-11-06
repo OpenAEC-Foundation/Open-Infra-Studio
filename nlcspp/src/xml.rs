@@ -245,6 +245,25 @@ pub fn write(d: &Delivery, operator: &str, srs: &str) -> String {
 mod tests {
     use super::*;
 
+    /// One object whose child is nested `depth` elements deep.
+    fn nested(depth: usize) -> String {
+        format!("<NLCSnetbeheer><LSkabel>{}{}</LSkabel></NLCSnetbeheer>", "<a>".repeat(depth), "</a>".repeat(depth))
+    }
+
+    #[test]
+    fn deeply_nested_xml_does_not_overflow_the_stack() {
+        // Host commands run on threads with the default 2 MiB stack. Without
+        // a guard, roxmltree's recursion aborts the process here (SIGABRT).
+        let text = nested(50_000);
+        let objects = std::thread::Builder::new()
+            .stack_size(2 << 20)
+            .spawn(move || read(&text).map(|d| d.objects.len()))
+            .unwrap()
+            .join()
+            .unwrap();
+        assert_eq!(objects, Ok(1));
+    }
+
     const V11: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <NLCSnetbeheerAlliander xmlns:gml="http://www.opengis.net/gml/3.2" xmlns="NS_NLCSnetbeheerAlliander">
   <VersieNummer>11</VersieNummer>
