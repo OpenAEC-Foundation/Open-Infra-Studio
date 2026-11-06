@@ -5,6 +5,8 @@
 //! Objects are read generically, so a field the model does not know is kept
 //! (and reported by [`crate::check`]). Geometry keeps its Z.
 
+use std::collections::{HashMap, HashSet};
+
 use crate::model::{self, model};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -323,6 +325,57 @@ fn write_object(o: &Object, fields: &[model::Field], srs: &str, n: usize) -> Str
     s
 }
 
+/// A reference (an IDREF field) that names no object of the delivery.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Dangling {
+    /// The object's index in the slice given to [`relink`].
+    pub object: usize,
+    pub field: String,
+    /// The ID it named.
+    pub id: String,
+}
+
+/// Points the references of a delivery at the new IDs of its objects.
+///
+/// Each object's `ID` field holds its new ID. `source[i]` is where object
+/// `i` came from: its import (any key unique per import) and its ID in that
+/// delivery. A reference of an imported object names an object of the same
+/// import by its source ID and gets that object's new ID; when two objects
+/// of one import had the same source ID (a copy in the drawing), the first
+/// one keeps the link. A reference of an object made in the drawing names a
+/// new ID. A reference that names no object is removed (the schema rejects
+/// a delivery with it) and returned.
+pub fn relink(objects: &mut [Object], source: &[Option<(String, String)>]) -> Vec<Dangling> {
+    let m = model();
+    let mut by_source: HashMap<(String, String), String> = HashMap::new();
+    for (o, s) in objects.iter().zip(source) {
+        if let (Some(s), Some(new)) = (s, o.get("ID")) {
+            by_source.entry(s.clone()).or_insert_with(|| new.to_string());
+        }
+    }
+    let new: HashSet<String> = objects.iter().filter_map(|o| o.get("ID").map(str::to_string)).collect();
+    let mut out = Vec::new();
+    for (i, o) in objects.iter_mut().enumerate() {
+        let Some(def) = m.object(&o.kind) else { continue };
+        let import = source.get(i).and_then(Option::as_ref).map(|(import, _)| import.clone());
+        for f in def.velden.iter().filter(|f| f.kind == "IDREF") {
+            let Some(v) = o.get(&f.name).map(str::to_string) else { continue };
+            let to = match &import {
+                Some(import) => by_source.get(&(import.clone(), v.clone())).cloned(),
+                None => new.contains(&v).then(|| v.clone()),
+            };
+            match to {
+                Some(n) => o.set(&f.name, n),
+                None => {
+                    o.attrs.retain(|(k, _)| k != &f.name);
+                    out.push(Dangling { object: i, field: f.name.clone(), id: v });
+                }
+            }
+        }
+    }
+    out
+}
+
 /// A V12.1 delivery for `operator`, objects in drawing order, coordinates
 /// in `srs` (EPSG:28992 or EPSG:7415). Objects of kinds the model does not
 /// know are skipped (and counted by the check).
@@ -463,6 +516,49 @@ mod tests {
         assert_eq!(back.objects[0].geom, d.objects[0].geom, "Z kept");
         assert_eq!(back.project.unwrap().get("Projectnummer"), Some("P-1"));
         assert_eq!(back.operator.as_deref(), Some("Alliander"), "from the project's Netbeheerder");
+    }
+
+    #[test]
+    fn references_follow_their_objects_to_the_new_ids() {
+        let obj = |kind: &str, id: &str, refs: &[(&str, &str)]| {
+            let mut o = Object { kind: kind.into(), ..Default::default() };
+            o.set("ID", id);
+            for (k, v) in refs {
+                o.set(k, *v);
+            }
+            o
+        };
+        let mut objects = vec![
+            obj("LSkabel", "H1A", &[]),
+            obj("LSkabel", "H2B", &[]),
+            obj("AbestandBijlage", "H3C", &[("AssetObjectID", "OLD_ASSET")]),
+            obj("LSkabel", "H5E", &[]),
+            obj("AbestandBijlage", "R1", &[("AssetObjectID", "OLD_ASSET")]),
+            obj("AbestandBijlage", "R2", &[("AssetObjectID", "GONE")]),
+            obj("AmantelbuisInhoud", "R3", &[("MantelbuisID", "H1A"), ("InhoudID", "OLD_ASSET")]),
+            obj("Averplaatsing", "H4D", &[("AssetObjectID", "H2B")]),
+            obj("Averplaatsing", "H6F", &[("AssetObjectID", "OLD_ASSET")]),
+        ];
+        // Two imports, a and b, with the same IDs; H2B is a copy of H1A in
+        // the drawing; H4D and H6F were drawn by hand.
+        let source = [Some(("a", "OLD_ASSET")), Some(("a", "OLD_ASSET")), Some(("a", "OLD_PHOTO")), Some(("b", "OLD_ASSET")), Some(("b", "OLD_DOC")), Some(("a", "OLD_NOTE")), Some(("a", "OLD_CONTENT")), None, None]
+            .map(|s| s.map(|(i, id)| (i.to_string(), id.to_string())));
+        let dangling = relink(&mut objects, &source);
+        assert_eq!(objects[2].get("AssetObjectID"), Some("H1A"), "the first object of its import with that ID");
+        assert_eq!(objects[4].get("AssetObjectID"), Some("H5E"), "the cable of its own import");
+        assert_eq!(objects[5].get("AssetObjectID"), None, "removed");
+        assert_eq!(objects[6].get("InhoudID"), Some("H1A"));
+        assert_eq!(objects[6].get("MantelbuisID"), None, "an imported reference names source IDs only");
+        assert_eq!(objects[7].get("AssetObjectID"), Some("H2B"), "a new ID, given in the drawing");
+        assert_eq!(objects[8].get("AssetObjectID"), None, "made in the drawing: new IDs only");
+        assert_eq!(
+            dangling,
+            vec![
+                Dangling { object: 5, field: "AssetObjectID".into(), id: "GONE".into() },
+                Dangling { object: 6, field: "MantelbuisID".into(), id: "H1A".into() },
+                Dangling { object: 8, field: "AssetObjectID".into(), id: "OLD_ASSET".into() },
+            ]
+        );
     }
 
     #[test]

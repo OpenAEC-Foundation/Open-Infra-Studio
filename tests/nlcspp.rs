@@ -107,3 +107,136 @@ fn the_examples_written_as_v12_1() {
         std::fs::write(out.join(format!("{name}-keuzelijstfouten.json")), serde_json::to_string(&list_errors).unwrap()).unwrap();
     }
 }
+
+/// A drawing in memory for the host requests of an import: the entities it
+/// adds and the XRecords it keeps.
+#[derive(Default)]
+struct Drawing {
+    entities: std::sync::Mutex<Vec<ocs_plugin_api::host::codec::EntityType>>,
+    records: std::sync::Mutex<HashMap<String, Vec<ocs_plugin_api::host::XRecordEntry>>>,
+}
+
+impl ocs_plugin_api::host::PluginRequestSender for Drawing {
+    fn request(&self, request: ocs_plugin_api::ipc::protocol::PluginRequest) -> Result<ocs_plugin_api::ipc::protocol::PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+        use ocs_plugin_api::host::codec::Handle;
+        use ocs_plugin_api::ipc::protocol::{PluginRequest as Q, PluginResponse as A};
+        Ok(match request {
+            Q::AddLayer(_) => A::OptHandle(Some(Handle::from(1000u64))),
+            Q::TableOperation { .. } => A::TableResult(Ok(Handle::from(1001u64))),
+            Q::AddEntities(entities) => {
+                let mut stored = self.entities.lock().unwrap();
+                let handles = (stored.len()..stored.len() + entities.len()).map(|i| Handle::from(i as u64 + 1)).collect();
+                stored.extend(entities);
+                A::Handles(handles)
+            }
+            Q::ReadXRecord { name, .. } => A::XRecordEntries(Ok(self.records.lock().unwrap().get(&name).cloned().unwrap_or_default())),
+            Q::UpdateXRecord { name, entries, .. } => {
+                let mut r = self.records.lock().unwrap();
+                match r.get_mut(&name) {
+                    Some(slot) => {
+                        *slot = entries;
+                        A::XRecordUpdateResult(Ok(Handle::from(1002u64)))
+                    }
+                    None => A::XRecordUpdateResult(Err("no such record".into())),
+                }
+            }
+            Q::CreateXRecord { name, entries, .. } => {
+                self.records.lock().unwrap().insert(name, entries);
+                A::XRecordCreateResult(Ok(Handle::from(1002u64)))
+            }
+            Q::PushUndo { .. } | Q::WriteRecord { .. } | Q::SetDirty | Q::BumpGeometry => A::Ok,
+            other => return Err(ocs_plugin_api::host::PluginRequestError(format!("unexpected host request: {other:?}"))),
+        })
+    }
+}
+
+/// A V12.1 delivery with a cable and two attachments linked to it, one with
+/// a location and one without (the schema allows a relation object without
+/// geometry), and a sleeve with its content and a note on that content
+/// (both without geometry). Every delivery uses the same IDs; `tag` and `dx`
+/// tell them apart.
+fn linked(tag: &str, dx: f64) -> String {
+    let x = |v: f64| v + dx;
+    format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<NLCSnetbeheer xmlns="NS_NLCSnetbeheer" xmlns:gml="http://www.opengis.net/gml/3.2" gml:id="NLCSnetbeheer">
+  <AprojectReferentie gml:id="f_PROJECT"><ID>PROJECT</ID><Projectnummer>P-61</Projectnummer><Netbeheerder>Enexis</Netbeheerder><NaamAannemer>Test</NaamAannemer><Tekeningtype>EINDREVISIE</Tekeningtype>
+    <Geometry><gml:Polygon gml:id="g_PROJECT" srsName="EPSG:28992"><gml:exterior><gml:LinearRing><gml:posList>105000 425000 105300 425000 105300 425100 105000 425000</gml:posList></gml:LinearRing></gml:exterior></gml:Polygon></Geometry></AprojectReferentie>
+  <LSkabel gml:id="f_OLD_ASSET"><Handle>1A</Handle><ID>OLD_ASSET</ID><Toelichting>kabel {tag}</Toelichting><Status>NIEUW</Status><Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+    <Geometry><gml:LineString gml:id="g_OLD_ASSET" srsName="EPSG:28992" srsDimension="3"><gml:posList>{} 425010 -0.6 {} 425040 -0.7</gml:posList></gml:LineString></Geometry></LSkabel>
+  <AbestandBijlage gml:id="f_OLD_PHOTO"><Handle>1B</Handle><ID>OLD_PHOTO</ID><Bestandsnaam>foto-{tag}.jpg</Bestandsnaam><Status>NIEUW</Status><AssetObjectID>OLD_ASSET</AssetObjectID>
+    <Geometry><gml:Point gml:id="g_OLD_PHOTO" srsName="EPSG:28992"><gml:pos>{} 425020</gml:pos></gml:Point></Geometry></AbestandBijlage>
+  <AbestandBijlage gml:id="f_OLD_DOC"><Handle>1C</Handle><ID>OLD_DOC</ID><Bestandsnaam>meetrapport-{tag}.pdf</Bestandsnaam><Status>NIEUW</Status><AssetObjectID>OLD_ASSET</AssetObjectID></AbestandBijlage>
+  <Amantelbuis gml:id="f_OLD_SLEEVE"><Handle>1D</Handle><ID>OLD_SLEEVE</ID><Status>NIEUW</Status><Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+    <Geometry><gml:LineString gml:id="g_OLD_SLEEVE" srsName="EPSG:28992" srsDimension="3"><gml:posList>{} 425060 -1.0 {} 425070 -1.0</gml:posList></gml:LineString></Geometry></Amantelbuis>
+  <AmantelbuisInhoud gml:id="f_OLD_CONTENT"><ID>OLD_CONTENT</ID><Status>NIEUW</Status><MantelbuisID>OLD_SLEEVE</MantelbuisID></AmantelbuisInhoud>
+  <AbestandBijlage gml:id="f_OLD_NOTE"><ID>OLD_NOTE</ID><Bestandsnaam>notitie-{tag}.txt</Bestandsnaam><Status>NIEUW</Status><AssetObjectID>OLD_CONTENT</AssetObjectID></AbestandBijlage>
+</NLCSnetbeheer>"#,
+        x(105010.0),
+        x(105050.0),
+        x(105020.0),
+        x(105010.0),
+        x(105040.0)
+    )
+}
+
+/// Two deliveries with the same IDs imported into one drawing, the sleeves
+/// deleted, and the drawing exported: every relation object comes back
+/// linked to the object of its own delivery, every reference (IDREF) names
+/// an ID of the new delivery, and the relations of the deleted sleeves are
+/// left out.
+#[test]
+fn import_then_export_keeps_relations_and_their_references() {
+    use open_infra::{bridge, gis::site::Site, nlcspp_host};
+    let dir = std::env::temp_dir().join(format!("oi-nlcspp-refs-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let drawing = std::sync::Arc::new(Drawing::default());
+    let target = || bridge::Target { sender: drawing.clone(), tab_id: 61002, unit_factor: 1.0, doc_path: None };
+    let site = Site::default();
+    for (tag, dx) in [("a", 0.0), ("b", 100.0)] {
+        let file = dir.join(format!("gekoppeld-{tag}.xml"));
+        std::fs::write(&file, linked(tag, dx)).unwrap();
+        bridge::with_command_context(target(), None, None, || nlcspp_host::import(&site, &file, 1.0)).unwrap();
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut doc = ocs_plugin_api::host::codec::CadDocument::new();
+    for e in drawing.entities.lock().unwrap().iter() {
+        // The user deleted the sleeves.
+        if open_infra::library::infra::host::data(e).get("nlcspp_object").map(String::as_str) != Some("Amantelbuis") {
+            doc.add_entity(e.clone()).unwrap();
+        }
+    }
+    let project = nlcspp_host::Project { nummer: "P-61".into(), aannemer: "Test".into(), tekeningtype: "EINDREVISIE".into(), ..Default::default() };
+    let (x, findings, _) = bridge::with_command_context(target(), None, None, || nlcspp_host::delivery(&doc, &site, 1.0, "Enexis", &project)).unwrap();
+    // For tests/test_nlcspp_xsd.py, which validates it against the Enexis XSD.
+    let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/nlcspp");
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join("relaties-v12.1.xml"), &x).unwrap();
+
+    let back = nlcspp::xml::read(&x).unwrap();
+    let ids: Vec<&str> = back.objects.iter().chain(back.project.iter()).filter_map(|o| o.get("ID")).collect();
+    let m = nlcspp::model::model();
+    for o in &back.objects {
+        for f in m.object(&o.kind).unwrap().velden.iter().filter(|f| f.kind == "IDREF") {
+            if let Some(v) = o.get(&f.name) {
+                assert!(ids.contains(&v), "{} {}: {} = {v} names no ID of the delivery ({ids:?})\n{x}", o.kind, o.get("ID").unwrap_or(""), f.name);
+            }
+        }
+    }
+    let named = |name: &str| back.objects.iter().find(|o| o.get("Bestandsnaam") == Some(name));
+    for tag in ["a", "b"] {
+        let cable = back.objects.iter().find(|o| o.kind == "LSkabel" && o.get("Toelichting") == Some(format!("kabel {tag}").as_str())).unwrap();
+        for name in [format!("foto-{tag}.jpg"), format!("meetrapport-{tag}.pdf")] {
+            let a = named(name.as_str()).unwrap_or_else(|| panic!("{name} delivered\n{x}"));
+            assert_eq!(a.get("AssetObjectID"), cable.get("ID"), "{name} on the cable of its own delivery\n{x}");
+        }
+        let without = named(format!("meetrapport-{tag}.pdf").as_str()).unwrap();
+        assert_eq!(without.geom, None, "the attachment without a location stays without one");
+        assert_eq!(without.get("Handle"), None, "no CAD handle: it is not drawn");
+        assert!(named(format!("notitie-{tag}.txt").as_str()).is_none(), "its content's sleeve is gone\n{x}");
+    }
+    assert_eq!(back.objects.iter().filter(|o| o.kind == "AbestandBijlage").count(), 4, "{x}");
+    assert!(!back.objects.iter().any(|o| o.kind == "AmantelbuisInhoud" || o.kind == "Amantelbuis"), "{x}");
+    let left_out = findings.iter().filter(|f| f.level == nlcspp::Level::Waarschuwing && f.field.is_empty() && f.message.contains("niet geleverd")).count();
+    assert_eq!(left_out, 4, "a warning per relation left out: {findings:#?}");
+}
