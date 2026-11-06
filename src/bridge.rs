@@ -550,6 +550,74 @@ pub fn json_record_write(name: &str, json: &str) -> Result<(), String> {
     }
 }
 
+// ── XRecords under any dictionary path ──────────────────────────────────────
+
+fn dictionary(path: &[&str]) -> Vec<String> {
+    path.iter().map(|s| s.to_string()).collect()
+}
+
+/// The text of an XRecord at `path`/`name`: its string entries in order;
+/// `None` when it is not there.
+pub fn xrecord_strings(path: &[&str], name: &str) -> Option<Vec<String>> {
+    let Ok(PluginResponse::XRecordEntries(Ok(entries))) = request(PluginRequest::ReadXRecord { dictionary_path: dictionary(path), name: name.into() }) else {
+        return None;
+    };
+    Some(entries.into_iter().filter_map(|e| match e.value {
+        XRecordValue::String(s) => Some(s),
+        _ => None,
+    }).collect())
+}
+
+/// Write an XRecord of string entries (made, with its dictionaries, when it
+/// is not there yet). An XRecord keeps at least one entry.
+pub fn xrecord_write_strings(path: &[&str], name: &str, chunks: Vec<String>) -> Result<(), String> {
+    let chunks = if chunks.is_empty() { vec![String::new()] } else { chunks };
+    let entries: Vec<XRecordEntry> = chunks.into_iter().map(|c| XRecordEntry::string(1, c)).collect();
+    let update = PluginRequest::UpdateXRecord { dictionary_path: dictionary(path), name: name.into(), entries: entries.clone() };
+    if matches!(request(update), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
+        return Ok(());
+    }
+    match request(PluginRequest::CreateXRecord { dictionary_path: dictionary(path), name: name.into(), entries })? {
+        PluginResponse::XRecordCreateResult(Err(e)) => Err(e),
+        _ => Ok(()),
+    }
+}
+
+/// Delete an XRecord; one that is not there is no error.
+pub fn xrecord_delete(path: &[&str], name: &str) {
+    let _ = request(PluginRequest::DeleteXRecord { dictionary_path: dictionary(path), name: name.into() });
+}
+
+/// The XRecord names under a dictionary (none when it does not exist).
+pub fn xrecord_names(path: &[&str]) -> Vec<String> {
+    match request(PluginRequest::ListXRecords { dictionary_path: dictionary(path) }) {
+        Ok(PluginResponse::XRecordNames(Ok(names))) => names,
+        _ => Vec::new(),
+    }
+}
+
+/// Text in pieces of at most `n` characters (XRecord string entries).
+pub fn text_chunks(text: &str, n: usize) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    chars.chunks(n.max(1)).map(|c| c.iter().collect()).collect()
+}
+
+/// One undo step for everything sent until the guard drops.
+pub struct UndoGroup;
+
+impl UndoGroup {
+    pub fn begin(label: &str) -> UndoGroup {
+        let _ = request(PluginRequest::BeginUndoGroup { label: label.into() });
+        UndoGroup
+    }
+}
+
+impl Drop for UndoGroup {
+    fn drop(&mut self) {
+        let _ = request(PluginRequest::EndUndoGroup);
+    }
+}
+
 pub fn index_read() -> Vec<(String, String, Vec<Handle>)> {
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
     let Ok(PluginResponse::XRecordEntries(Ok(entries))) = request(PluginRequest::ReadXRecord { dictionary_path: path, name: INDEX_RECORD.into() }) else {
@@ -569,6 +637,82 @@ pub fn index_read() -> Vec<(String, String, Vec<Handle>)> {
     out
 }
 
+/// The whole index, written in one XRecord (lines of at most ~2000
+/// characters; an XRecord keeps at least one entry).
+fn index_write(all: &[(String, String, Vec<Handle>)]) {
+    let mut entries = Vec::new();
+    for (k, n, hs) in all {
+        let mut seen = HashSet::new();
+        let list: Vec<String> = hs.iter().filter(|h| seen.insert(**h)).map(|h| format!("{:X}", u64::from(*h))).collect();
+        for chunk in list.chunks(200) {
+            entries.push(XRecordEntry::string(1, format!("{k}\t{n}\t{}", chunk.join(" "))));
+        }
+    }
+    if entries.is_empty() {
+        entries.push(XRecordEntry::string(1, "-\t-\t".to_string()));
+    }
+    let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
+    let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: INDEX_RECORD.into(), entries: entries.clone() };
+    if !matches!(request(update), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
+        let _ = request(PluginRequest::CreateXRecord { dictionary_path: path, name: INDEX_RECORD.into(), entries });
+    }
+}
+
+/// What changed in the index per kind and key: (kind, key, added, removed).
+pub type IndexDiff = Vec<(String, String, Vec<Handle>, Vec<Handle>)>;
+
+pub fn index_diff(before: &[(String, String, Vec<Handle>)], after: &[(String, String, Vec<Handle>)]) -> IndexDiff {
+    let find = |all: &[(String, String, Vec<Handle>)], k: &str, n: &str| -> HashSet<Handle> { all.iter().filter(|(a, b, _)| a == k && b == n).flat_map(|(_, _, hs)| hs.iter().copied()).collect() };
+    let mut keys: Vec<(&str, &str)> = Vec::new();
+    for (k, n, _) in before.iter().chain(after) {
+        if !keys.contains(&(k.as_str(), n.as_str())) {
+            keys.push((k, n));
+        }
+    }
+    let mut out = Vec::new();
+    for (k, n) in keys {
+        let (b, a) = (find(before, k, n), find(after, k, n));
+        let mut added: Vec<Handle> = a.difference(&b).copied().collect();
+        let mut removed: Vec<Handle> = b.difference(&a).copied().collect();
+        if added.is_empty() && removed.is_empty() {
+            continue;
+        }
+        added.sort();
+        removed.sort();
+        out.push((k.to_string(), n.to_string(), added, removed));
+    }
+    out
+}
+
+/// The index with `diff` undone: what it added goes, what it removed comes back.
+pub fn index_reverted(mut all: Vec<(String, String, Vec<Handle>)>, diff: &IndexDiff) -> Vec<(String, String, Vec<Handle>)> {
+    for (k, n, added, removed) in diff {
+        match all.iter_mut().find(|(a, b, _)| a == k && b == n) {
+            Some((_, _, hs)) => {
+                hs.retain(|h| !added.contains(h));
+                for h in removed {
+                    if !hs.contains(h) {
+                        hs.push(*h);
+                    }
+                }
+            }
+            None if !removed.is_empty() => all.push((k.clone(), n.clone(), removed.clone())),
+            None => {}
+        }
+    }
+    all.retain(|(_, _, hs)| !hs.is_empty());
+    all
+}
+
+/// Undo an index change of a rejected proposal.
+pub fn index_revert(diff: &IndexDiff) {
+    if diff.is_empty() {
+        return;
+    }
+    let _one = index_lock().lock().unwrap_or_else(|e| e.into_inner());
+    index_write(&index_reverted(index_read(), diff));
+}
+
 /// Add handles to the index under kind and key (`replace` drops the old ones).
 pub fn index_add(kind: &str, key: &str, handles: &[Handle], replace: bool) {
     if handles.is_empty() {
@@ -576,6 +720,7 @@ pub fn index_add(kind: &str, key: &str, handles: &[Handle], replace: bool) {
     }
     let _one = index_lock().lock().unwrap_or_else(|e| e.into_inner());
     let mut all = index_read();
+    let before = all.clone();
     match all.iter_mut().find(|(k, n, _)| k == kind && n == key) {
         Some((_, _, v)) => {
             if replace {
@@ -585,20 +730,8 @@ pub fn index_add(kind: &str, key: &str, handles: &[Handle], replace: bool) {
         }
         None => all.push((kind.to_string(), key.to_string(), handles.to_vec())),
     }
-    // Lines of at most ~2000 characters.
-    let mut entries = Vec::new();
-    for (k, n, hs) in &all {
-        let mut seen = HashSet::new();
-        let list: Vec<String> = hs.iter().filter(|h| seen.insert(**h)).map(|h| format!("{:X}", u64::from(*h))).collect();
-        for chunk in list.chunks(200) {
-            entries.push(XRecordEntry::string(1, format!("{k}\t{n}\t{}", chunk.join(" "))));
-        }
-    }
-    let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
-    let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: INDEX_RECORD.into(), entries: entries.clone() };
-    if !matches!(request(update), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
-        let _ = request(PluginRequest::CreateXRecord { dictionary_path: path, name: INDEX_RECORD.into(), entries });
-    }
+    crate::assistant::capture::index_changed(index_diff(&before, &all));
+    index_write(&all);
 }
 
 /// Set many keys of one kind in a single write: each key gets exactly these
@@ -610,29 +743,15 @@ pub fn index_set_many(kind: &str, keys: &[(String, Vec<Handle>)]) {
     }
     let _one = index_lock().lock().unwrap_or_else(|e| e.into_inner());
     let mut all = index_read();
+    let before = all.clone();
     for (key, handles) in keys {
         all.retain(|(k, n, _)| !(k == kind && n == key));
         if !handles.is_empty() {
             all.push((kind.to_string(), key.clone(), handles.clone()));
         }
     }
-    let mut entries = Vec::new();
-    for (k, n, hs) in &all {
-        let mut seen = HashSet::new();
-        let list: Vec<String> = hs.iter().filter(|h| seen.insert(**h)).map(|h| format!("{:X}", u64::from(*h))).collect();
-        for chunk in list.chunks(200) {
-            entries.push(XRecordEntry::string(1, format!("{k}\t{n}\t{}", chunk.join(" "))));
-        }
-    }
-    if entries.is_empty() {
-        // An XRecord keeps at least one entry.
-        entries.push(XRecordEntry::string(1, "-\t-\t".to_string()));
-    }
-    let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
-    let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: INDEX_RECORD.into(), entries: entries.clone() };
-    if !matches!(request(update), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
-        let _ = request(PluginRequest::CreateXRecord { dictionary_path: path, name: INDEX_RECORD.into(), entries });
-    }
+    crate::assistant::capture::index_changed(index_diff(&before, &all));
+    index_write(&all);
 }
 
 /// Entities by handle, without fetching the drawing (API 12).
@@ -641,6 +760,33 @@ pub fn entities(handles: &[Handle]) -> Result<Vec<Option<EntityType>>, String> {
         PluginResponse::GetEntitiesBatchResult(r) => r,
         other => Err(format!("onverwacht antwoord: {other:?}")),
     }
+}
+
+/// What [`for_each_entity_batch`] calls per batch: the handles and their entities.
+pub type EntityBatch<'a> = dyn FnMut(&[Handle], Vec<Option<EntityType>>) + 'a;
+
+/// Entities by handle in batches of `per_request`, halving a batch the host
+/// refuses (a few large meshes can outgrow one message); `f` gets each
+/// batch with its handles. For reads of any number of entities.
+pub fn for_each_entity_batch(handles: &[Handle], per_request: usize, f: &mut EntityBatch) -> Result<(), String> {
+    fn go(chunk: &[Handle], f: &mut EntityBatch) -> Result<(), String> {
+        match entities(chunk) {
+            Ok(v) => {
+                f(chunk, v);
+                Ok(())
+            }
+            Err(_) if chunk.len() > 1 => {
+                let (a, b) = chunk.split_at(chunk.len() / 2);
+                go(a, f)?;
+                go(b, f)
+            }
+            Err(e) => Err(e),
+        }
+    }
+    for chunk in handles.chunks(per_request.max(1)) {
+        go(chunk, f)?;
+    }
+    Ok(())
 }
 
 /// The handles selected in the drawing.
@@ -677,13 +823,18 @@ pub fn remove_entities(label: &str, handles: &[Handle]) -> Result<usize, String>
     if handles.is_empty() {
         return Ok(0);
     }
+    // An assistant's proposal keeps what is removed, to restore it on reject.
+    let before = crate::assistant::capture::prepare(handles);
     request(PluginRequest::PushUndo { label: label.into() })?;
     let mut n = 0;
+    let mut gone = Vec::with_capacity(handles.len());
     for h in handles {
         if request(PluginRequest::RemoveEntity { handle: *h }).is_ok() {
             n += 1;
+            gone.push(*h);
         }
     }
+    crate::assistant::capture::removed(before, &gone);
     let _ = request(PluginRequest::SetDirty);
     let _ = request(PluginRequest::BumpGeometry);
     Ok(n)
@@ -695,8 +846,11 @@ pub fn update_entities(label: &str, entities: Vec<EntityType>) -> Result<usize, 
     if n == 0 {
         return Ok(0);
     }
+    let handles: Vec<Handle> = entities.iter().map(|e| e.common().handle).collect();
+    let before = crate::assistant::capture::prepare(&handles);
     match request(PluginRequest::UpdateEntitiesTransaction { label: label.into(), entities })? {
         PluginResponse::EntityTransactionResult(Ok(())) => {
+            crate::assistant::capture::modified(before);
             let _ = request(PluginRequest::SetDirty);
             let _ = request(PluginRequest::BumpGeometry);
             Ok(n)
@@ -750,7 +904,10 @@ pub fn object_data<'a>(pairs: impl IntoIterator<Item = (&'a str, String)>) -> Ex
 /// The host registers an XDATA application name only through WriteRecord:
 /// rewrite one entity's record so the drawing carries the APPID.
 pub fn register_object_data(handle: Handle, record: ExtendedDataRecord) {
-    let _ = request(PluginRequest::WriteRecord { handle, record });
+    let before = crate::assistant::capture::prepare(&[handle]);
+    if matches!(request(PluginRequest::WriteRecord { handle, record }), Ok(PluginResponse::Bool(true))) {
+        crate::assistant::capture::modified(before);
+    }
 }
 
 const BATCH_BYTES: usize = 12 * 1024 * 1024;
@@ -794,6 +951,8 @@ pub fn add_entities_handles(label: &str, entities: Vec<EntityType>) -> Result<Ve
     let send = |chunk: &mut Vec<EntityType>, handles: &mut Vec<Handle>| -> Result<(), String> {
         if !chunk.is_empty() {
             if let PluginResponse::Handles(h) = request(PluginRequest::AddEntities(std::mem::take(chunk)))? {
+                // Recorded per batch: a later failing batch keeps these.
+                crate::assistant::capture::added(&h);
                 handles.extend(h);
             }
         }

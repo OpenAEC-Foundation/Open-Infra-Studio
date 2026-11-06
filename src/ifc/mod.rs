@@ -1090,6 +1090,12 @@ impl<'a, W: Write> Exporter<'a, W> {
                 skip("tekst");
                 continue;
             }
+            // The frame and label of a pending assistant proposal mark it for
+            // review; they are no object (`crate::assistant::proposal`).
+            if get(&data, "assistant_proposal").is_some() {
+                skip("voorstelmarkering");
+                continue;
+            }
             // An assembly drawn as a template section is no object.
             if get(&data, "profieltype").is_some() {
                 skip("profieltype");

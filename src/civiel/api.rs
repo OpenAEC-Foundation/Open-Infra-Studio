@@ -248,8 +248,17 @@ pub fn result_dir() -> PathBuf {
     crate::gis::servers::config_dir().join("api")
 }
 
-/// Write `<config>/api/<id>.json`: {"ok", "message", "data"}.
+/// Write `<config>/api/<id>.json`: {"ok", "message", "data"}. The answer to
+/// an assistant's command is written once its changes are kept as a
+/// proposal or logged (`crate::assistant`).
 pub fn write(id: &str, ok: bool, message: &str, data: Map<String, Value>) {
+    if let Some(data) = crate::assistant::capture::finish(id, ok, message, data) {
+        write_file(id, ok, message, data);
+    }
+}
+
+/// [`write`] without the assistant's bookkeeping.
+pub fn write_file(id: &str, ok: bool, message: &str, data: Map<String, Value>) {
     let dir = result_dir();
     let _ = std::fs::create_dir_all(&dir);
     let body = serde_json::json!({ "ok": ok, "message": message, "data": Value::Object(data) });

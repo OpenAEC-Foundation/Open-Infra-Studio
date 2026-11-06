@@ -51,6 +51,7 @@ const I_SECTIONS: IconKind = icon!("dwarsprofielen.svg");
 const I_SETTINGS: IconKind = icon!("instellingen.svg");
 const I_CORRIDOR: IconKind = icon!("corridor.svg");
 const I_INFO: IconKind = icon!("info.svg");
+const I_ASSISTANT: IconKind = icon!("assistent.svg");
 const I_BAG3D: IconKind = icon!("bag3d.svg");
 const I_PHOTO: IconKind = icon!("fototerrein.svg");
 const I_BGT3D: IconKind = icon!("bgt3d.svg");
@@ -302,6 +303,8 @@ impl CadModule for CivielModule {
                         menu("CIV_MENU_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS, vec![
                             ("CIV_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS),
                             ("CIV_INFO", tr("Modelinfo", "Model info"), I_INFO),
+                            // An assistant's proposals and the activity log.
+                            ("CIV_ASSISTENT", tr("Assistent", "Assistant"), I_ASSISTANT),
                         ], "CIV_INSTELLINGEN"),
                     ],
                 },
@@ -1179,7 +1182,17 @@ impl BuiltinPlugin for OpenInfraCiviel {
         let rest = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim()).unwrap_or("");
         let args = Args::parse(rest);
         let id = args.id();
-        if let Err(e) = run(host, &verb, &args, id.clone()) {
+        // An assistant's command (the MCP server's request file): recorded
+        // as a proposal or logged when it answers.
+        let (line, _) = bridge::split_id(cmd);
+        let request = match open_infra::assistant::capture::begin(id.as_deref(), &line) {
+            Ok(r) => r,
+            Err(e) => {
+                refuse(host, id, &verb, e);
+                return true;
+            }
+        };
+        if let Err(e) = run(host, &verb, &args, id.clone(), request) {
             refuse(host, id, &verb, e);
         }
         true
@@ -1244,7 +1257,11 @@ fn named_handles(args: &Args, key: &str) -> Result<Vec<(String, ocs_plugin_api::
 
 /// One command: from the ribbon (no arguments: selection and clicks) or
 /// from a script (arguments; see CIV_HELP).
-fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> Result<(), String> {
+fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>, request: Option<open_infra::assistant::capture::Request>) -> Result<(), String> {
+    // Proposals, review and the activity log.
+    if open_infra::assistant::commands::run(host, verb, args, id.clone(), request)? {
+        return Ok(());
+    }
     let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
     let scripted = !args.is_empty();
     let base = civiel::settings();
