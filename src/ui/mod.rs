@@ -12,6 +12,7 @@ mod library;
 mod infra;
 mod map;
 mod planning;
+mod problems;
 
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, OnceLock};
@@ -40,6 +41,8 @@ pub enum Tab {
     Planning,
     /// The Civiel plugin's settings and actions.
     Civiel,
+    /// Design problems: every check in one list, with fixes.
+    Problems,
 }
 
 /// Which plugin this window belongs to: the GIS tab or the Civiel tab (each

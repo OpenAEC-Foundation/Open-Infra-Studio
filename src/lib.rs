@@ -274,6 +274,7 @@ impl CadModule for GisModule {
                                 I_CHECK,
                                 vec![
                                     ("GIS_NLCS_CONTROLE", tr("Controle", "Check"), I_CHECK),
+                                    ("GIS_PROBLEMEN", tr("Alle problemen (ontwerp + NLCS)", "All problems (design + NLCS)"), I_CHECK),
                                     ("GIS_HOEVEELHEDEN", tr("Hoeveelheden", "Quantities"), I_QUANTITIES),
                                     ("GIS_HOEVEELHEDEN_TABEL", tr("Hoeveelhedenstaat", "Bill of quantities"), I_TABLE),
                                     ("GIS_BGT_MUTATIE", tr("BGT-mutatie", "BGT mutation"), I_MUTATION),
@@ -1243,6 +1244,11 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_COORD" => open(host, ui::Tab::Coords),
             "GIS_BGT" | "GIS_NLCS" => open(host, ui::Tab::Nlcs),
             "GIS_AHN" => open(host, ui::Tab::Ahn),
+            // The Problems page: the design checks of the Civiel tab and NLCS in one list.
+            "GIS_PROBLEMEN" | "GIS_PROBLEMS" => {
+                open(host, ui::Tab::Problems);
+                ui::send(ui::UiMsg::Run(ui::Tab::Problems));
+            }
             "GIS_NLCS_CONTROLE" | "GIS_HOEVEELHEDEN" => {
                 // The window shows the result; without it, or for a script
                 // waiting for the answer (ID=), the command line.

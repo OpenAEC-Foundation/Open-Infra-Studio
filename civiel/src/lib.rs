@@ -99,6 +99,8 @@ const I_CHECK: IconKind = icon!("as-toets.svg");
 const I_SIGHT: IconKind = icon!("zicht.svg");
 const I_RAIL: IconKind = icon!("spoor.svg");
 const I_TURNOUT: IconKind = icon!("wissel.svg");
+// Design problems: every check in one list.
+const I_PROBLEMS: IconKind = icon!("problemen.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -283,6 +285,7 @@ impl CadModule for CivielModule {
                             ("CIV_INSTELLINGEN", tr("Instellingen", "Settings"), I_SETTINGS),
                             ("CIV_INFO", tr("Modelinfo", "Model info"), I_INFO),
                         ], "CIV_INSTELLINGEN"),
+                        small("CIV_PROBLEMEN", tr("Problemen", "Problems"), I_PROBLEMS),
                     ],
                 },
             ];
@@ -1179,7 +1182,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
         }
         "CIV_ONTWERPPROFIEL" => {
             let o = opt(&["AS", "PVI", "LIJN"])?;
-            let (axis, line, pvi) = (args.handle("AS")?, args.handle("LIJN")?, args.pairs("PVI")?);
+            let (axis, line, pvi) = (args.handle("AS")?, args.handle("LIJN")?, args.pvis("PVI")?);
             job(host, "Ontwerpprofiel", id, move |_| as_profiel::design_profile(&o, line, axis, pvi));
         }
         "CIV_STATION" if scripted => {
@@ -1789,6 +1792,40 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             opt(&[])?;
             job(host, "Modelinfo", id, |_| civiel::info());
         }
+        // Design problems: every check in one list, with computed fixes.
+        "CIV_PROBLEMEN" => {
+            use civiel::problems::{Checks, Scope};
+            let o = opt(&["CONTROLES", "MARKERINGEN"])?;
+            let word = |w: &str| args.words.iter().any(|x| x.eq_ignore_ascii_case(w));
+            let scope = if word("SELECTIE") || word("SELECTION") { Scope::Selection } else { Scope::All };
+            let checks = match args.str("CONTROLES") {
+                Some(c) => Checks::parse(c)?,
+                None => Checks::all(),
+            };
+            let markers = yes(args.str("MARKERINGEN")).unwrap_or(true);
+            // From the ribbon: the Problems page of the window, which runs them.
+            if !scripted {
+                if let Err(e) = ui::open(ui::Tab::Problems) {
+                    host.push_error(&format!("[Open Infra] {e}"));
+                }
+                ui::send(ui::UiMsg::Run(ui::Tab::Problems));
+                return Ok(());
+            }
+            job(host, tr("Problemen", "Problems"), id, move |p| civiel::problems::run_command(&o, scope, checks, markers, p));
+        }
+        "CIV_PROBLEEM_HERSTEL" | "CIV_PROBLEEM_ACCEPTEER" => {
+            let o = opt(&["CODE", "OBJECT", "FIX", "REDEN"])?;
+            let (Some(code), Some(object)) = (args.str("CODE").map(str::to_string), args.str("OBJECT").map(str::to_string)) else {
+                return Err(tr("geef CODE= en OBJECT= van het probleem (CIV_PROBLEMEN ID= geeft ze)", "give CODE= and OBJECT= of the problem (CIV_PROBLEMEN ID= lists them)").into());
+            };
+            if verb == "CIV_PROBLEEM_HERSTEL" {
+                let fix = args.str("FIX").map(str::to_string);
+                job(host, tr("Probleem herstellen", "Fix problem"), id, move |p| civiel::problems::fix_command(&o, &code, &object, fix.as_deref(), p));
+            } else {
+                let reason = args.str("REDEN").map(str::to_string).unwrap_or_else(|| args.words.join(" "));
+                job(host, tr("Probleem accepteren", "Accept problem"), id, move |p| civiel::problems::accept_command(&o, &code, &object, &reason, p));
+            }
+        }
         "CIV_INSTELLINGEN" => open_settings(host),
         "CIV_HELP" => {
             host.push_info(open_infra::lang::tr(
@@ -1815,6 +1852,12 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
              CIV_ZICHT AS= [RICHTLIJN= CATEGORIE= V=|NODIG=] [OOG=] [OBJECT=] [OM=10] [RIJLIJN=1.75] [VRIJ=5] [MAX=] [RICHTING=heen|terug|beide] [LAGEN=-OG-BEBOUWING;…] [PLAATS=]; \
              CIV_SPOOR AS=|PI= R= [LS=|A=] V= [VMIN=] [VERKANTING=mm;…] [SPOREN=] [SPOORAFSTAND=] [NAAM=] [PLAATS=]; CIV_WISSEL AS= STATION= [TYPE=1:9|1:12|1:15|…] [ZIJDE=links|rechts] [RICHTING=op|af] [LENGTE=].",
             );
+            host.push_info(open_infra::lang::tr(
+                "[Open Infra — Problemen] CIV_PROBLEMEN [ALLES|SELECTIE] [CONTROLES=as;criteria;profiel;riool;grading;corridor;producten;nlcs] [MARKERINGEN=nee] (alle toetsen in één lijst, markeringen op OI-PROBLEMEN); \
+                 CIV_PROBLEEM_HERSTEL CODE= OBJECT= [FIX=<id>|<nr>]; CIV_PROBLEEM_ACCEPTEER CODE= OBJECT= REDEN=\"…\"; CIV_ONTWERPPROFIEL PVI=station:hoogte[:boog];…",
+                "[Open Infra — Problems] CIV_PROBLEMEN [ALLES|SELECTIE] [CONTROLES=as;criteria;profiel;riool;grading;corridor;producten;nlcs] [MARKERINGEN=nee] (every check in one list, markers on OI-PROBLEMEN); \
+                 CIV_PROBLEEM_HERSTEL CODE= OBJECT= [FIX=<id>|<n>]; CIV_PROBLEEM_ACCEPTEER CODE= OBJECT= REDEN=\"…\"; CIV_ONTWERPPROFIEL PVI=station:height[:curve];…",
+            ));
         }
         _ => return Err(format!("onbekend commando {verb}; zie CIV_HELP")),
     }

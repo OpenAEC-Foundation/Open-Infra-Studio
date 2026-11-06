@@ -576,31 +576,20 @@ impl Alignment {
                 prev_t = 0.0;
                 continue;
             }
-            let ls = match transitions.get(i - 1).or(transitions.last()).copied().unwrap_or(Transition::None) {
-                Transition::None => 0.0,
-                Transition::Length(l) => l.max(0.0),
-                Transition::Parameter(a) => a * a / r,
-            };
+            let transition = transitions.get(i - 1).or(transitions.last()).copied().unwrap_or(Transition::None);
+            let ls = transition_length(transition, r);
             // Centre on the inside: left of the way for a left turn.
             let side = delta.signum();
             // Clothoid angle, shift and tangent length (symmetric curve).
             let tau = ls / (2.0 * r);
             let arc_sweep = delta.abs() - 2.0 * tau;
-            if arc_sweep < -1e-9 {
+            let Some(t) = tangent_length(r, delta.abs(), transition) else {
                 let (turn, deflection) = ((2.0 * tau).to_degrees(), delta.abs().to_degrees());
                 return Err(if nl() {
                     format!("boog {i} (R = {r:.0}): de overgangsbogen (L = {ls:.1}) draaien samen {turn:.1}°, meer dan de hoek van {deflection:.1}°")
                 } else {
                     format!("curve {i} (R = {r:.0}): the transition curves (L = {ls:.1}) turn {turn:.1}° together, more than the deflection of {deflection:.1}°")
                 });
-            }
-            let t = if ls > 0.0 {
-                let e = clothoid_local(0.0, 1.0 / (r * ls), ls);
-                let shift = e[1] - r * (1.0 - tau.cos());
-                let abscissa = e[0] - r * tau.sin();
-                (r + shift) * (delta.abs() / 2.0).tan() + abscissa
-            } else {
-                r * (delta.abs() / 2.0).tan()
             };
             let len_in = (p[0] - a[0]).hypot(p[1] - a[1]);
             if prev_t + t > len_in + 1e-6 {
@@ -698,6 +687,41 @@ pub enum Transition {
     None,
     Length(f64),
     Parameter(f64),
+}
+
+/// The clothoid length of a transition at radius `r` (drawing units).
+pub fn transition_length(t: Transition, r: f64) -> f64 {
+    match t {
+        Transition::None => 0.0,
+        Transition::Length(l) => l.max(0.0),
+        Transition::Parameter(a) if r > 0.0 => a * a / r,
+        Transition::Parameter(_) => 0.0,
+    }
+}
+
+/// The tangent length T of a symmetric curve at a PI, from the PI to where
+/// the curve (or its clothoid) leaves the straight: R·tan(Δ/2) for a plain
+/// arc, (R + p)·tan(Δ/2) + xₘ with clothoids, where p is the shift and xₘ the
+/// abscissa of the clothoid's centre (`docs/civiel-as-spoor.md`). `delta` is the
+/// deflection angle (radians, absolute); 0 for a corner. `None` when the
+/// clothoids turn more than the deflection (no circular arc is left).
+pub fn tangent_length(r: f64, delta: f64, t: Transition) -> Option<f64> {
+    if r <= 0.0 || delta < 1e-9 {
+        return Some(0.0);
+    }
+    let ls = transition_length(t, r);
+    let tau = ls / (2.0 * r);
+    if delta - 2.0 * tau < -1e-9 {
+        return None;
+    }
+    Some(if ls > 0.0 {
+        let e = clothoid_local(0.0, 1.0 / (r * ls), ls);
+        let shift = e[1] - r * (1.0 - tau.cos());
+        let abscissa = e[0] - r * tau.sin();
+        (r + shift) * (delta / 2.0).tan() + abscissa
+    } else {
+        r * (delta / 2.0).tan()
+    })
 }
 
 /// A piece moved sideways: its vertices, its end, and its line (for corners).
@@ -947,8 +971,15 @@ pub fn draw_axis(ctx: &Ctx, al: &Alignment, axis: &LayerSpec, axis_t: &LayerSpec
     Ok(drawing)
 }
 
+/// The index kind that keeps the stationing, main points and labels of
+/// each axis (key: the axis handle), so a change can replace them.
+pub const AXIS_PARTS: &str = "as_delen";
+
 /// `CIV_AS`: an axis on AM-AS with stationing (AM-KILOMETRERING), tangent
-/// points (AM-TANGENTPUNT), radii and clothoids.
+/// points (AM-TANGENTPUNT), radii and clothoids. By layout the PIs and the
+/// asked radii stay on the axis (`pi<n>`); curves that do not fit between
+/// their PIs are drawn smaller until they meet, and reported as design
+/// problems (`CIV_PROBLEMEN`).
 pub fn create(opt: &super::CivielOptions, input: AxisInput, name: Option<String>, start: Option<f64>) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let extra: Vec<Handle> = match &input {
@@ -960,13 +991,20 @@ pub fn create(opt: &super::CivielOptions, input: AxisInput, name: Option<String>
         AxisInput::Pis(..) | AxisInput::Layout(..) => None,
     };
     let doc = super::document(&["as"], &extra)?;
-    let (mut al, layer) = match input {
+    let f = ctx.f;
+    let (mut al, layer, layout) = match input {
         AxisInput::Line(h) => {
             let (al, _, layer) = axis(&doc, h)?;
-            (al, layer)
+            (al, layer, None)
         }
-        AxisInput::Pis(pis, radii) => (Alignment::from_pis(&pis, &radii)?, String::new()),
-        AxisInput::Layout(pis, radii, tr) => (Alignment::from_layout(&pis, &radii, &tr)?, String::new()),
+        AxisInput::Pis(pis, radii) => {
+            let lay = super::curve_fit::Layout::new(pis, &radii, &[]);
+            (lay.alignment(&lay.fitted())?, String::new(), Some(lay))
+        }
+        AxisInput::Layout(pis, radii, tr) => {
+            let lay = super::curve_fit::Layout::new(pis, &radii, &tr);
+            (lay.alignment(&lay.fitted())?, String::new(), Some(lay))
+        }
     };
     if let Some(n) = name {
         al.name = n;
@@ -977,23 +1015,22 @@ pub fn create(opt: &super::CivielOptions, input: AxisInput, name: Option<String>
     if let Some(s) = start {
         al.start = s;
     }
-    let f = ctx.f;
     let len = al.length();
     let axis = ctx.layer("AM", "AS", Element::G)?;
     let axis_t = ctx.layer("AM", "AS", Element::T)?;
     let mut out = Out::default();
     // The axis itself, unless the line already is one.
     let drawn = !layer.contains("-AM-AS");
-    let drawing = draw_axis(&ctx, &al, &axis, &axis_t, drawn, &[], &mut out)?;
+    let data = layout.as_ref().map(|l| l.to_data(f)).unwrap_or_default();
+    let drawing = draw_axis(&ctx, &al, &axis, &axis_t, drawn, &data, &mut out)?;
     let handles = out.write_handles(&al.name)?;
     let written = handles.len();
-    if drawn {
-        if let Some(h) = handles.first() {
-            super::api::note("as", super::api::handle_text(*h));
-            crate::bridge::index_add("as", &al.name, &[*h], true);
-        }
-    } else if let Some(h) = input_handle {
+    let axis_handle = if drawn { handles.first().copied() } else { input_handle };
+    if let Some(h) = axis_handle {
+        super::api::note("as", super::api::handle_text(h));
         crate::bridge::index_add("as", &al.name, &[h], true);
+        let parts = if drawn { handles[1..].to_vec() } else { handles.clone() };
+        crate::bridge::index_set_many(AXIS_PARTS, &[(super::api::handle_text(h), parts)]);
     }
     let curves = drawing.curves;
     super::api::note("naam", al.name.clone());
@@ -1003,15 +1040,120 @@ pub fn create(opt: &super::CivielOptions, input: AxisInput, name: Option<String>
     super::api::note("bogen", curves);
     super::api::note("overgangsbogen", drawing.spirals.iter().map(|(a, l)| serde_json::json!({"A": a, "L": l})).collect::<Vec<_>>());
     super::api::note("raakpunten", al.marks().iter().map(|m| serde_json::json!({"code": m.code, "station": al.start + m.s / f})).collect::<Vec<_>>());
+    let mut misfit_text = String::new();
+    if let Some(lay) = &layout {
+        let fitted = lay.fitted();
+        let misfits = lay.misfits(&lay.radii);
+        super::api::note("past", misfits.is_empty());
+        super::api::note("straal_gevraagd", lay.radii[1..lay.len() - 1].iter().map(|r| r / f).collect::<Vec<_>>());
+        super::api::note("straal_getekend", fitted[1..lay.len() - 1].iter().map(|r| r / f).collect::<Vec<_>>());
+        if !misfits.is_empty() {
+            let pis: Vec<String> = misfits.iter().flat_map(|m| m.curves.iter().map(|i| format!("PI {i}"))).collect();
+            misfit_text = if nl() {
+                format!(" De bogen bij {} passen niet tussen hun PI's en zijn kleiner getekend: zie CIV_PROBLEMEN.", pis.join(", "))
+            } else {
+                format!(" The curves at {} do not fit between their PIs and were drawn smaller: see CIV_PROBLEMEN.", pis.join(", "))
+            };
+        }
+    }
     let spirals = if drawing.spirals.is_empty() { String::new() } else { format!(", {} {}", drawing.spirals.len(), crate::lang::tr("overgangsbogen", "transition curves")) };
     Ok(format!(
-        "{}: {} m, {} bocht(en){spirals}, stationering {} tot {} — {written} elementen.",
+        "{}: {} m, {} bocht(en){spirals}, stationering {} tot {} — {written} elementen.{misfit_text}",
         al.name,
         format!("{:.2}", len / f).replace('.', ","),
         curves,
         station(al.start),
         station(al.start + len / f)
     ))
+}
+
+/// Draw an axis again from its layout with new radii (one per PI, drawing
+/// units): the polyline keeps its handle and other object data, its
+/// stationing, main points and labels are replaced, in one undo step.
+pub fn rebuild_axis(opt: &super::CivielOptions, handle: Handle, layout: &super::curve_fit::Layout, radii: &[f64]) -> Result<String, String> {
+    let ctx = Ctx::new(opt)?;
+    let f = ctx.f;
+    let e = crate::bridge::entities(&[handle])?.into_iter().next().flatten().ok_or_else(|| format!("geen element met handle {}", super::api::handle_text(handle)))?;
+    let old = Alignment::from_entity(&e).ok_or_else(|| format!("{} is geen as", super::api::handle_text(handle)))?;
+    let lay = super::curve_fit::Layout { radii: radii.to_vec(), ..layout.clone() };
+    let mut al = lay.alignment(&lay.fitted())?;
+    al.name = old.name.clone();
+    al.start = old.start;
+    let axis = ctx.layer("AM", "AS", Element::G)?;
+    let axis_t = ctx.layer("AM", "AS", Element::T)?;
+    // Keep the axis's other object data (design criteria, own keys); the
+    // geometry, layout and clothoid records are new.
+    let own: Vec<(String, String)> = e
+        .common()
+        .extended_data
+        .get_record(crate::bridge::XDATA_APP)
+        .map(|r| {
+            r.values
+                .iter()
+                .filter_map(|v| match v {
+                    ocs_plugin_api::host::XDataValue::String(s) => s.split_once('=').map(|(k, v)| (k.to_string(), v.to_string())),
+                    _ => None,
+                })
+                .filter(|(k, _)| !matches!(k.as_str(), "as" | "beginstation" | "lengte_m") && !k.starts_with(SPIRAL_KEY) && !is_pi_key(k))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut data = lay.to_data(f);
+    data.extend(own);
+    let mut out = Out::default();
+    draw_axis(&ctx, &al, &axis, &axis_t, true, &data, &mut out)?;
+    let mut ents: Vec<EntityType> = Vec::new();
+    let mut parts = Out::default();
+    // The polyline comes first on its layer; the rest are its parts.
+    for (spec, list) in out.into_layers() {
+        for (i, x) in list.into_iter().enumerate() {
+            if ents.is_empty() && i == 0 && spec.name == axis.name {
+                ents.push(x);
+            } else {
+                parts.put(&spec, [x]);
+            }
+        }
+    }
+    let mut poly = ents.pop().ok_or("de as is niet getekend")?;
+    // The old entity's properties (layer, owner, colour) with the new object data.
+    let mut common = e.common().clone();
+    common.extended_data = poly.common().extended_data.clone();
+    *poly.common_mut() = common;
+    let key = super::api::handle_text(handle);
+    let label = format!("{} {}", al.name, crate::lang::tr("aangepast", "changed"));
+    let old_parts: Vec<Handle> = crate::bridge::index_read().into_iter().filter(|(k, n, _)| k == AXIS_PARTS && *n == key).flat_map(|(_, _, h)| h).collect();
+    let untracked = old_parts.is_empty();
+    let (n, key) = crate::bridge::undo_group(&label, || {
+        let key = match crate::bridge::update_entities(&label, vec![poly.clone()]) {
+            Ok(_) => key.clone(),
+            Err(_) => {
+                // The host would not take the change in place: draw it anew.
+                crate::bridge::remove_entities(&label, &[handle])?;
+                poly.common_mut().handle = Handle::NULL;
+                let h = *crate::bridge::add_entities_handles(&label, vec![poly])?.first().ok_or("de as is niet opnieuw getekend")?;
+                crate::bridge::index_add("as", &al.name, &[h], true);
+                super::api::handle_text(h)
+            }
+        };
+        crate::bridge::remove_entities(&label, &old_parts)?;
+        let new_parts = parts.write_handles(&label)?;
+        crate::bridge::index_set_many(AXIS_PARTS, &[(key.clone(), new_parts.clone())]);
+        Ok((new_parts.len() + 1, key))
+    })?;
+    // An axis drawn before its parts were kept: its old labels stay.
+    let note = if untracked { crate::lang::tr(" De oude stationering en labels van deze as zijn niet bekend en staan er nog: verwijder ze met de hand.", " The old stationing and labels of this alignment are not known and are still there: delete them by hand.") } else { "" };
+    let radii_m: Vec<String> = lay.radii[1..lay.len() - 1].iter().map(|r| format!("{:.2}", r / f).replace('.', ",")).collect();
+    super::api::note("as", key.clone());
+    super::api::note("straal_gevraagd", lay.radii[1..lay.len() - 1].iter().map(|r| r / f).collect::<Vec<_>>());
+    Ok(if nl() {
+        format!("{}: opnieuw getekend met R = {} m — {n} elementen.{note}", al.name, radii_m.join(" / "))
+    } else {
+        format!("{}: drawn again with R = {} m — {n} entities.{note}", al.name, radii_m.join(" / "))
+    })
+}
+
+fn is_pi_key(k: &str) -> bool {
+    k.strip_prefix(super::curve_fit::PI_KEY).is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Heights along a list of plan points; `None` where there is no ground.
@@ -1521,15 +1663,97 @@ pub struct Pvi {
 /// Curve lengths: the wanted length, but never longer than a neighbouring
 /// straight, so curves do not overlap.
 pub fn fit_curves(points: &[(f64, f64)], wanted: f64) -> Vec<Pvi> {
+    fit_curves_with(points, wanted, &[])
+}
+
+/// Like [`fit_curves`], with a length of its own at some PVIs (`own[i]`,
+/// `None` = the wanted length). A PVI without one follows the rule of
+/// [`fit_curves`]: never longer than a neighbouring straight. A PVI with one
+/// keeps it as far as it fits: half of it and half of each neighbour's
+/// curve within the distance to that neighbour, left to right (a
+/// neighbour with a length of its own counts with that length). Without own
+/// lengths the result is that of [`fit_curves`].
+pub fn fit_curves_with(points: &[(f64, f64)], wanted: f64, own: &[Option<f64>]) -> Vec<Pvi> {
     let n = points.len();
-    points
+    let own_at = |i: usize| own.get(i).copied().flatten().filter(|_| i > 0 && i + 1 < n).map(|l| l.max(0.0));
+    let mut out: Vec<Pvi> = points
         .iter()
         .enumerate()
         .map(|(i, (s, z))| {
-            let l = if i == 0 || i + 1 == n { 0.0 } else { wanted.min(s - points[i - 1].0).min(points[i + 1].0 - s).max(0.0) };
+            let l = if i == 0 || i + 1 == n || own_at(i).is_some() { 0.0 } else { wanted.min(s - points[i - 1].0).min(points[i + 1].0 - s).max(0.0) };
             Pvi { s: *s, z: *z, l }
         })
-        .collect()
+        .collect();
+    for i in 1..n.saturating_sub(1) {
+        let Some(asked) = own_at(i) else { continue };
+        let right = own_at(i + 1).unwrap_or(out[i + 1].l);
+        let room_l = 2.0 * (points[i].0 - points[i - 1].0 - out[i - 1].l / 2.0);
+        let room_r = 2.0 * (points[i + 1].0 - points[i].0 - right / 2.0);
+        out[i].l = asked.min(room_l).min(room_r).max(0.0);
+    }
+    out
+}
+
+/// The longest vertical curve that fits at inner PVI `i` of a profile drawn
+/// with `own` lengths: half of it and half of each neighbour's curve within
+/// the distance to that neighbour (the right neighbour with its own length
+/// when it has one, as [`fit_curves_with`] lays them out).
+pub fn longest_curve(pvis: &[Pvi], own: &[Option<f64>], i: usize) -> f64 {
+    if i == 0 || i + 1 >= pvis.len() {
+        return 0.0;
+    }
+    let right = own.get(i + 1).copied().flatten().filter(|_| i + 2 < pvis.len()).unwrap_or(pvis[i + 1].l);
+    let room_l = 2.0 * (pvis[i].s - pvis[i - 1].s - pvis[i - 1].l / 2.0);
+    let room_r = 2.0 * (pvis[i + 1].s - pvis[i].s - right / 2.0);
+    room_l.min(room_r).max(0.0)
+}
+
+/// A design profile as its object data keeps it: the PVIs (`pvi`, station
+/// from the start of the axis : height), the wanted curve length
+/// (`boog_m`) and the lengths of their own (`pvi_boog`, "l;;l", empty for
+/// the wanted one).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProfileData {
+    pub points: Vec<(f64, f64)>,
+    pub wanted: f64,
+    pub own: Vec<Option<f64>>,
+}
+
+impl ProfileData {
+    pub fn of(e: &EntityType) -> Option<ProfileData> {
+        let points: Vec<(f64, f64)> = super::data_value(e, "pvi")?
+            .split(';')
+            .filter_map(|t| {
+                let (a, b) = t.split_once(':')?;
+                Some((a.parse().ok()?, b.parse().ok()?))
+            })
+            .collect();
+        let wanted: f64 = super::data_value(e, "boog_m").and_then(|v| v.parse().ok()).unwrap_or(0.0);
+        let own = super::data_value(e, "pvi_boog").map(|v| parse_own(&v)).unwrap_or_default();
+        (points.len() >= 2).then_some(ProfileData { points, wanted, own })
+    }
+
+    pub fn pvis(&self) -> Vec<Pvi> {
+        fit_curves_with(&self.points, self.wanted, &self.own)
+    }
+}
+
+/// "l;;l": a length of its own per PVI, empty for none.
+pub fn parse_own(v: &str) -> Vec<Option<f64>> {
+    v.split(';').map(|t| t.trim().replace(',', ".").parse::<f64>().ok()).collect()
+}
+
+/// The `pvi_boog` text of the lengths of their own; empty when there are none.
+pub fn own_text(own: &[Option<f64>]) -> String {
+    if own.iter().all(Option::is_none) {
+        return String::new();
+    }
+    own.iter().map(|l| l.map(|l| format!("{l:.3}")).unwrap_or_default()).collect::<Vec<_>>().join(";")
+}
+
+/// The PVIs of a design profile line (its object data).
+pub fn pvis_from_data(e: &EntityType) -> Option<Vec<Pvi>> {
+    ProfileData::of(e).map(|d| d.pvis())
 }
 
 fn grade(a: &Pvi, b: &Pvi) -> f64 {
@@ -1557,8 +1781,9 @@ fn data_f64(e: &EntityType, key: &str) -> Option<f64> {
 
 /// `CIV_ONTWERPPROFIEL`: the selected polyline, drawn in a length profile,
 /// becomes the design profile: its vertices are the PVIs, with parabolic
-/// curves between the grades.
-pub fn design_profile(opt: &super::CivielOptions, drawn_line: Option<Handle>, axis_h: Option<Handle>, pvi: Option<Vec<(f64, f64)>>) -> Result<String, String> {
+/// curves between the grades. With `pvi` (station, height and an optional
+/// curve length of its own) the PVIs are given instead.
+pub fn design_profile(opt: &super::CivielOptions, drawn_line: Option<Handle>, axis_h: Option<Handle>, pvi: Option<Vec<super::api::PviInput>>) -> Result<String, String> {
     let opt = opt.clone();
     let ctx = Ctx::new(&opt)?;
     let doc = super::document(&["lengteprofiel", "ontwerpprofiel"], &axis_h.into_iter().chain(drawn_line).collect::<Vec<_>>())?;
@@ -1570,7 +1795,7 @@ pub fn design_profile(opt: &super::CivielOptions, drawn_line: Option<Handle>, ax
             _ => None,
         })
         .collect();
-    let (frame, pvi_mode, drawn): (&EntityType, bool, Vec<(f64, f64)>) = match pvi {
+    let (frame, pvi_mode, drawn): (&EntityType, bool, Vec<super::api::PviInput>) = match pvi {
         // PVIs as station:height, in the newest length profile of the axis.
         Some(list) => {
             let (al, _, _) = axis(&doc, axis_h)?;
@@ -1600,23 +1825,74 @@ pub fn design_profile(opt: &super::CivielOptions, drawn_line: Option<Handle>, ax
                 .iter()
                 .find(|(_, b)| pts.iter().all(|p| p[0] >= b[0] - 1e-6 && p[0] <= b[2] + 1e-6 && p[1] >= b[1] - 1e-6 && p[1] <= b[3] + 1e-6))
                 .ok_or("de lijn ligt niet in een lengteprofiel van Open Infra (Profielen → Lengteprofiel)")?;
-            (*frame, false, pts.iter().map(|p| (p[0], p[1])).collect())
+            (*frame, false, pts.iter().map(|p| (p[0], p[1], None)).collect())
         }
     };
-    let get = |k: &str| data_f64(frame, k).ok_or_else(|| format!("het lengteprofiel mist '{k}'"));
-    let (x_nul, y_basis, basis, v, f, start, length) = (get("x_nul")?, get("y_basis")?, get("basis")?, get("overhoging")?, get("eenheid")?, get("beginstation")?, get("lengte_m")?);
-    let as_name = super::data_value(frame, "as").unwrap_or_default();
-    let mut pts: Vec<(f64, f64)> = if pvi_mode {
-        drawn.iter().map(|(st, z)| ((st - start).clamp(0.0, length), *z)).collect()
+    let fr = ProfileFrame::of(frame)?;
+    let mut pts: Vec<super::api::PviInput> = if pvi_mode {
+        drawn.iter().map(|(st, z, l)| ((st - fr.start).clamp(0.0, fr.length), *z, *l)).collect()
     } else {
-        drawn.iter().map(|(x, y)| (((x - x_nul) / f).clamp(0.0, length), basis + (y - y_basis) / (v * f))).collect()
+        drawn.iter().map(|(x, y, _)| (((x - fr.x_nul) / fr.f).clamp(0.0, fr.length), fr.basis + (y - fr.y_basis) / (fr.v * fr.f), None)).collect()
     };
     pts.sort_by(|a, b| a.0.total_cmp(&b.0));
     pts.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-3);
     if pts.len() < 2 {
         return Err("de ontwerplijn heeft minstens twee punten op verschillende stations nodig".into());
     }
-    let pvis = fit_curves(&pts, opt.vertical_curve.max(0.0));
+    let data = ProfileData { points: pts.iter().map(|p| (p.0, p.1)).collect(), wanted: opt.vertical_curve.max(0.0), own: pts.iter().map(|p| p.2).collect() };
+    draw_design(&ctx, &fr, &data, None)
+}
+
+/// Where a length profile is drawn: its origin (station 0 at `x_nul`),
+/// base line and height, exaggeration, units and the stations it covers.
+#[derive(Clone, Debug)]
+pub struct ProfileFrame {
+    pub x_nul: f64,
+    pub y_basis: f64,
+    pub basis: f64,
+    pub v: f64,
+    pub f: f64,
+    pub start: f64,
+    pub length: f64,
+    pub axis: String,
+}
+
+impl ProfileFrame {
+    pub fn of(frame: &EntityType) -> Result<ProfileFrame, String> {
+        let get = |k: &str| data_f64(frame, k).ok_or_else(|| format!("het lengteprofiel mist '{k}'"));
+        Ok(ProfileFrame {
+            x_nul: get("x_nul")?,
+            y_basis: get("y_basis")?,
+            basis: get("basis")?,
+            v: get("overhoging")?,
+            f: get("eenheid")?,
+            start: get("beginstation")?,
+            length: get("lengte_m")?,
+            axis: super::data_value(frame, "as").unwrap_or_default(),
+        })
+    }
+
+    /// The newest length profile of the axis named `axis` in `doc`.
+    pub fn newest(doc: &CadDocument, axis: &str) -> Option<ProfileFrame> {
+        doc.model_space_entities()
+            .filter(|e| matches!(e, EntityType::LwPolyline(_)) && super::data_value(e, "lengteprofiel").is_some() && super::data_value(e, "as").as_deref() == Some(axis))
+            .last()
+            .and_then(|e| ProfileFrame::of(e).ok())
+    }
+}
+
+/// The index kind that keeps the texts and marks of each design profile
+/// line (key: the line's handle), so a change can replace them.
+pub const DESIGN_PARTS: &str = "ontwerpprofiel_delen";
+
+/// Draw a design profile in its length profile: the line (on AM-AS, with
+/// its PVIs as object data), grades and PVI labels. With `replace` the line
+/// keeps its handle and the old texts go, in one undo step.
+pub fn draw_design(ctx: &Ctx, fr: &ProfileFrame, pd: &ProfileData, replace: Option<Handle>) -> Result<String, String> {
+    let opt = &ctx.opt;
+    let (x_nul, y_basis, basis, v, f, start) = (fr.x_nul, fr.y_basis, fr.basis, fr.v, fr.f, fr.start);
+    let as_name = fr.axis.clone();
+    let pvis = pd.pvis();
     let k = ctx.k;
     let spec = ctx.layer("AM", "AS", Element::G)?;
     let spec_t = ctx.layer("AM", "AS", Element::T)?;
@@ -1639,9 +1915,18 @@ pub fn design_profile(opt: &super::CivielOptions, drawn_line: Option<Handle>, ax
     ss.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
     let curve: Vec<XY> = ss.iter().map(|s| to(*s, design_z(&pvis, *s))).collect();
     let pvi_text = pvis.iter().map(|p| format!("{:.3}:{:.3}", p.s, p.z)).collect::<Vec<_>>().join(";");
-    let data = record(&[("ontwerpprofiel", format!("Ontwerpprofiel {as_name}")), ("as", as_name.clone()), ("pvi", pvi_text), ("boog_m", format!("{}", opt.vertical_curve))]);
+    let data = record(&[
+        ("ontwerpprofiel", format!("Ontwerpprofiel {as_name}")),
+        ("as", as_name.clone()),
+        ("pvi", pvi_text),
+        ("boog_m", format!("{}", pd.wanted)),
+        ("pvi_boog", own_text(&pd.own)),
+    ]);
+    let mut line_e = crate::emit::polylines(&[(curve, false)], &spec.name, k, Some(&data));
     let mut out = Out::default();
-    out.put(&spec, crate::emit::polylines(&[(curve, false)], &spec.name, k, Some(&data)));
+    if replace.is_none() {
+        out.put(&spec, line_e.clone());
+    }
     // Grades along the straights.
     for w in pvis.windows(2) {
         let g = grade(&w[0], &w[1]);
@@ -1669,16 +1954,223 @@ pub fn design_profile(opt: &super::CivielOptions, drawn_line: Option<Handle>, ax
         let t = ctx.text([at[0] - 1.0 * k, at[1] + 7.0 * k], &label, 1.8, FRAC_PI_2, &spec_t, None);
         out.put(&spec_t, [aligned(t, TextHorizontalAlignment::Left, TextVerticalAlignment::Middle)]);
     }
-    let handles = out.write_handles("Ontwerpprofiel")?;
-    let n = handles.len();
-    if let Some(h) = handles.first() {
-        super::api::note("ontwerpprofiel", super::api::handle_text(*h));
-        crate::bridge::index_add("ontwerpprofiel", &as_name, &[*h], true);
-    }
-    super::api::note("pvi", pvis.iter().map(|p| serde_json::json!({"station": start + p.s, "hoogte": p.z, "boog_m": p.l})).collect::<Vec<_>>());
+    let (line_h, parts, n) = match replace {
+        None => {
+            let handles = out.write_handles("Ontwerpprofiel")?;
+            let n = handles.len();
+            let h = *handles.first().ok_or("het ontwerpprofiel is niet getekend")?;
+            (h, handles[1..].to_vec(), n)
+        }
+        Some(h) => {
+            let label = format!("Ontwerpprofiel {as_name}");
+            let old_e = crate::bridge::entities(&[h])?.into_iter().next().flatten().ok_or_else(|| format!("geen element met handle {}", super::api::handle_text(h)))?;
+            let old: Vec<Handle> = crate::bridge::index_read().into_iter().filter(|(kind, key, _)| kind == DESIGN_PARTS && *key == super::api::handle_text(h)).flat_map(|(_, _, hs)| hs).collect();
+            // The old line's properties, the new geometry and object data.
+            let mut common = old_e.common().clone();
+            common.extended_data = line_e[0].common().extended_data.clone();
+            *line_e[0].common_mut() = common;
+            crate::bridge::undo_group(&label, || {
+                let line_h = match crate::bridge::update_entities(&label, vec![line_e[0].clone()]) {
+                    Ok(_) => h,
+                    Err(_) => {
+                        crate::bridge::remove_entities(&label, &[h])?;
+                        line_e[0].common_mut().handle = Handle::NULL;
+                        *crate::bridge::add_entities_handles(&label, line_e)?.first().ok_or("het ontwerpprofiel is niet opnieuw getekend")?
+                    }
+                };
+                crate::bridge::remove_entities(&label, &old)?;
+                let handles = out.write_handles("Ontwerpprofiel")?;
+                let n = handles.len() + 1;
+                Ok((line_h, handles, n))
+            })?
+        }
+    };
+    super::api::note("ontwerpprofiel", super::api::handle_text(line_h));
+    crate::bridge::index_add("ontwerpprofiel", &as_name, &[line_h], true);
+    crate::bridge::index_set_many(DESIGN_PARTS, &[(super::api::handle_text(line_h), parts)]);
+    super::api::note("pvi", pvis.iter().enumerate().map(|(i, p)| serde_json::json!({"station": start + p.s, "hoogte": p.z, "boog_m": p.l, "eigen_boog_m": pd.own.get(i).copied().flatten()})).collect::<Vec<_>>());
     super::api::note("hellingen_pct", pvis.windows(2).map(|w| grade(&w[0], &w[1]) * 100.0).collect::<Vec<_>>());
     let grades: Vec<String> = pvis.windows(2).map(|w| format!("{:+.2} %", grade(&w[0], &w[1]) * 100.0).replace('.', ",")).collect();
     Ok(format!("Ontwerpprofiel {as_name}: {} PVI's, hellingen {} — {n} elementen.", pvis.len(), grades.join(" / ")))
+}
+
+// ── Design problems (`CIV_PROBLEMEN`) ───────────────────────────────────────
+
+/// A computed radius or length as a round value that still fits: to the
+/// centimetre, rounded down when rounding to nearest would not fit.
+pub fn snap(v: f64, ok: impl Fn(f64) -> bool) -> f64 {
+    let r = (v * 100.0).round() / 100.0;
+    if ok(r) { r } else { (v * 100.0).floor() / 100.0 }
+}
+
+/// Where a problem of an axis is: the point at `s` (drawing units along the
+/// axis) in project coordinates, and its station.
+fn axis_spot(ctx: &Ctx, al: &Alignment, s: f64) -> (XY, f64) {
+    let (p, _) = al.at(s.clamp(0.0, al.length()));
+    (ctx.from_drawing(p), al.start + s / ctx.f)
+}
+
+/// The curves of an axis by layout that do not fit between their PIs, with
+/// the radii that do: the largest at either PI with the other one kept, or
+/// both scaled down.
+pub fn layout_problems(ctx: &Ctx, e: &EntityType, al: &Alignment, lay: &super::curve_fit::Layout) -> Vec<super::problems::Problem> {
+    use super::problems::{en, nl, Action, Problem, Severity, Text};
+    let f = ctx.f;
+    let h = e.common().handle;
+    let hex = super::api::handle_text(h);
+    let name = if al.name.is_empty() { hex.clone() } else { al.name.clone() };
+    let drawn = lay.fitted();
+    // The design minimum, when the axis has criteria.
+    let rmin = super::ontwerpcriteria::choice_for(None, Some(e)).and_then(|c| c.resolve(&super::ontwerpcriteria::guidelines()).ok()).and_then(|(_, _, l)| l.r_min.map(|v| v.v));
+    let below = |r: f64| match rmin {
+        Some(m) if r < m - 1e-6 => Text::new(format!(" (onder Rmin {} m)", nl(m, 0)), format!(" (below Rmin {} m)", en(m, 0))),
+        _ => Text::default(),
+    };
+    let radii_m = |r: &[f64]| r.iter().map(|x| x / f).collect::<Vec<f64>>();
+    let mut out = Vec::new();
+    for m in lay.misfits(&lay.radii) {
+        let (a, b) = (m.leg, m.leg + 1);
+        let mid = [(lay.pis[a][0] + lay.pis[b][0]) / 2.0, (lay.pis[a][1] + lay.pis[b][1]) / 2.0];
+        let (s, _) = al.station_offset(mid);
+        let (spot, st) = axis_spot(ctx, al, s);
+        let (used, len) = (m.used / f, m.length / f);
+        let object = format!("as:{hex}/PI{a}-PI{b}");
+        let p = if m.curves.len() == 2 {
+            let (ra, rb, da, db) = (lay.radii[a] / f, lay.radii[b] / f, drawn[a] / f, drawn[b] / f);
+            let mut p = Problem::new(
+                "alignment.curve_overlap",
+                Severity::Error,
+                "alignment",
+                object,
+                Text::new(format!("Bogen overlappen: PI {a} en PI {b}"), format!("Curves overlap: PI {a} and PI {b}")),
+                Text::new(
+                    format!("De bogen bij PI {a} (R = {} m) en PI {b} (R = {} m) hebben samen {} m raaklijn nodig op de rechtstand van {} m ertussen; getekend met R = {} m en R = {} m.", nl(ra, 1), nl(rb, 1), nl(used, 1), nl(len, 1), nl(da, 1), nl(db, 1)),
+                    format!("The curves at PI {a} (R = {} m) and PI {b} (R = {} m) need {} m of tangent together on the {} m straight between them; drawn with R = {} m and R = {} m.", en(ra, 1), en(rb, 1), en(used, 1), en(len, 1), en(da, 1), en(db, 1)),
+                ),
+            );
+            for (i, other) in [(a, b), (b, a)] {
+                if let Some(r) = lay.largest_radius_on(i, m.leg, &lay.radii) {
+                    let room = m.length - lay.tangent(other, lay.radii[other]).unwrap_or(0.0);
+                    let r = snap(r / f, |x| lay.tangent(i, x * f).is_some_and(|t| t <= room + 1e-7));
+                    let mut radii = lay.radii.clone();
+                    radii[i] = r * f;
+                    let note = below(r);
+                    p = p.fix(
+                        &format!("pi{i}"),
+                        Text::new(format!("R = {} m bij PI {i}, PI {other} houdt R = {} m{}", nl(r, 2), nl(lay.radii[other] / f, 1), note.nl), format!("R = {} m at PI {i}, PI {other} keeps R = {} m{}", en(r, 2), en(lay.radii[other] / f, 1), note.en)),
+                        Action::AxisRadii { axis: hex.clone(), radii: radii_m(&radii) },
+                    );
+                }
+            }
+            if let Some(k) = lay.both_scaled(m.leg, &lay.radii) {
+                let ok = |x: f64, y: f64| matches!((lay.tangent(a, x * f), lay.tangent(b, y * f)), (Some(t1), Some(t2)) if t1 + t2 <= m.length + 1e-7);
+                let (mut xa, mut xb) = ((lay.radii[a] * k / f * 100.0).round() / 100.0, (lay.radii[b] * k / f * 100.0).round() / 100.0);
+                if !ok(xa, xb) {
+                    xa = (lay.radii[a] * k / f * 100.0).floor() / 100.0;
+                    xb = (lay.radii[b] * k / f * 100.0).floor() / 100.0;
+                }
+                let mut radii = lay.radii.clone();
+                radii[a] = xa * f;
+                radii[b] = xb * f;
+                let note = below(xa.min(xb));
+                p = p.fix(
+                    "beide",
+                    Text::new(format!("Beide × {}: R = {} m en R = {} m{}", nl(k, 3), nl(xa, 2), nl(xb, 2), note.nl), format!("Both × {}: R = {} m and R = {} m{}", en(k, 3), en(xa, 2), en(xb, 2), note.en)),
+                    Action::AxisRadii { axis: hex.clone(), radii: radii_m(&radii) },
+                );
+            }
+            p
+        } else {
+            let Some(&i) = m.curves.first() else { continue };
+            let (ri, di) = (lay.radii[i] / f, drawn[i] / f);
+            let (to_nl, to_en) = if a == 0 { ("het begin", "the start") } else { ("het eind", "the end") };
+            let mut p = Problem::new(
+                "alignment.curve_no_fit",
+                Severity::Error,
+                "alignment",
+                object,
+                Text::new(format!("Boog past niet: PI {i}"), format!("Curve does not fit: PI {i}")),
+                Text::new(
+                    format!("De boog bij PI {i} (R = {} m) heeft {} m raaklijn nodig; de rechtstand naar {to_nl} is {} m; getekend met R = {} m.", nl(ri, 1), nl(used, 1), nl(len, 1), nl(di, 1)),
+                    format!("The curve at PI {i} (R = {} m) needs {} m of tangent; the straight to {to_en} is {} m; drawn with R = {} m.", en(ri, 1), en(used, 1), en(len, 1), en(di, 1)),
+                ),
+            );
+            if let Some(r) = lay.largest_radius_on(i, m.leg, &lay.radii) {
+                let r = snap(r / f, |x| lay.tangent(i, x * f).is_some_and(|t| t <= m.length + 1e-7));
+                let mut radii = lay.radii.clone();
+                radii[i] = r * f;
+                let note = below(r);
+                p = p.fix(&format!("pi{i}"), Text::new(format!("R = {} m bij PI {i}: de grootste die past{}", nl(r, 2), note.nl), format!("R = {} m at PI {i}: the largest that fits{}", en(r, 2), note.en)), Action::AxisRadii { axis: hex.clone(), radii: radii_m(&radii) });
+            } else {
+                p = p.no_fix(Text::new("de overgangsbogen zijn langer dan de rechtstand: geen straal past", "the transition curves are longer than the straight: no radius fits"));
+            }
+            p
+        };
+        out.push(p.required(len, "m").found(used, "m").about(&[h], "alignment", &name).at(spot, Some(st)));
+    }
+    out
+}
+
+/// The vertical curves of a design profile that are shorter than asked
+/// because they do not fit between their neighbours, with the longest
+/// length that does (and its K and R).
+pub fn profile_problems(ctx: &Ctx, axis_h: Handle, al: &Alignment, design: &EntityType) -> Vec<super::problems::Problem> {
+    use super::problems::{en, nl, Action, Problem, Severity, Text};
+    let Some(pd) = ProfileData::of(design) else { return Vec::new() };
+    let f = ctx.f;
+    let pvis = pd.pvis();
+    let n = pvis.len();
+    let dh = design.common().handle;
+    let hex = super::api::handle_text(dh);
+    let name = format!("{} {}", tr_pair("Ontwerpprofiel", "Design profile"), al.name);
+    let mut own = pd.own.clone();
+    own.resize(n, None);
+    let mut out = Vec::new();
+    for i in 1..n.saturating_sub(1) {
+        let asked = own[i].unwrap_or(pd.wanted);
+        let drawn = pvis[i].l;
+        let (g1, g2) = (grade(&pvis[i - 1], &pvis[i]), grade(&pvis[i], &pvis[i + 1]));
+        if drawn >= asked - 0.005 || (g2 - g1).abs() < 1e-9 {
+            continue;
+        }
+        let longest = longest_curve(&pvis, &own, i);
+        let fit = snap(asked.min(longest), |l| l <= longest + 1e-9);
+        let k = super::curve_fit::k_value(fit, g1, g2);
+        let r = fit / (g2 - g1).abs();
+        let kl = super::curve_fit::k_value(longest, g1, g2);
+        let rl = longest / (g2 - g1).abs();
+        let st = al.start + pvis[i].s;
+        let (spot, _) = axis_spot(ctx, al, pvis[i].s * f);
+        let mut lengths = own.clone();
+        lengths[i] = Some(fit);
+        let label = if fit >= asked - 1e-6 {
+            Text::new(format!("L = {} m bij PVI {i}: past (K = {}, R = {} m)", nl(fit, 2), nl(k, 1), nl(r, 0)), format!("L = {} m at PVI {i}: fits (K = {}, R = {} m)", en(fit, 2), en(k, 1), en(r, 0)))
+        } else {
+            Text::new(format!("L = {} m bij PVI {i}: de langste die past (K = {}, R = {} m)", nl(fit, 2), nl(k, 1), nl(r, 0)), format!("L = {} m at PVI {i}: the longest that fits (K = {}, R = {} m)", en(fit, 2), en(k, 1), en(r, 0)))
+        };
+        let p = Problem::new(
+            "profile.curve_no_fit",
+            Severity::Warning,
+            "profile",
+            format!("profiel:{hex}/PVI{i}"),
+            Text::new(format!("Verticale boog past niet: PVI {i}"), format!("Vertical curve does not fit: PVI {i}")),
+            Text::new(
+                format!("De verticale boog bij PVI {i} ({}) vraagt L = {} m maar past niet tussen zijn buren: getekend met L = {} m. De langste die past is L = {} m (K = {}, R = {} m).", station(st), nl(asked, 1), nl(drawn, 1), nl(longest, 1), nl(kl, 1), nl(rl, 0)),
+                format!("The vertical curve at PVI {i} ({}) asks L = {} m but does not fit between its neighbours: drawn with L = {} m. The longest that fits is L = {} m (K = {}, R = {} m).", station(st), en(asked, 1), en(drawn, 1), en(longest, 1), en(kl, 1), en(rl, 0)),
+            ),
+        )
+        .required(asked, "m")
+        .found(drawn, "m")
+        .about(&[axis_h, dh], "design profile", &name)
+        .at(spot, Some(st))
+        .fix("l", label, Action::CurveLengths { profile: hex.clone(), lengths });
+        out.push(p);
+    }
+    out
+}
+
+fn tr_pair(nl_text: &'static str, en_text: &'static str) -> &'static str {
+    crate::lang::tr(nl_text, en_text)
 }
 
 /// Size of the cross-section grid for the preview: width, height (drawing units).
@@ -1786,6 +2278,18 @@ mod tests {
         // A curve never runs past the next PVI.
         let short = fit_curves(&[(0.0, 0.0), (20.0, 1.0), (200.0, 0.0)], 50.0);
         assert_eq!(short[1].l, 20.0);
+    }
+
+    #[test]
+    fn own_curve_lengths_as_object_data() {
+        assert_eq!(own_text(&[None, Some(80.0), None]), ";80.000;");
+        assert_eq!(parse_own(";80.000;"), vec![None, Some(80.0), None]);
+        assert_eq!(own_text(&[None, None]), "");
+        // A layout misfit is drawn smaller, never refused: R 200 on 100 m.
+        let lay = super::super::curve_fit::Layout::new(vec![[0.0, 0.0], [100.0, 0.0], [100.0, 100.0]], &[200.0], &[]);
+        let drawn = lay.fitted();
+        assert!((drawn[1] - 100.0).abs() < 1e-6, "{drawn:?}");
+        assert!(lay.alignment(&drawn).is_ok());
     }
 
     #[test]

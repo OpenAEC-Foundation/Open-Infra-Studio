@@ -666,6 +666,35 @@ pub fn remove_entities(label: &str, handles: &[Handle]) -> Result<usize, String>
     Ok(n)
 }
 
+thread_local! { static UNDO_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) }; }
+
+/// One undo step for several writes (API 14): every edit until the end of
+/// `f` joins the step `label` opens, also the steps that removing, replacing
+/// and adding elements would open on their own. Nested groups join the
+/// outer one (the host closes a group at its first end).
+pub fn undo_group<R>(label: &str, f: impl FnOnce() -> Result<R, String>) -> Result<R, String> {
+    struct Depth;
+    impl Drop for Depth {
+        fn drop(&mut self) {
+            UNDO_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+        }
+    }
+    let outer = UNDO_DEPTH.with(|d| {
+        let v = d.get();
+        d.set(v + 1);
+        v == 0
+    });
+    let _depth = Depth;
+    if outer {
+        request(PluginRequest::BeginUndoGroup { label: label.into() })?;
+    }
+    let r = f();
+    if outer {
+        let _ = request(PluginRequest::EndUndoGroup);
+    }
+    r
+}
+
 /// Replace elements in one undo step (an atomic transaction in the host).
 pub fn update_entities(label: &str, entities: Vec<EntityType>) -> Result<usize, String> {
     let n = entities.len();

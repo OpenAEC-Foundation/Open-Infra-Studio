@@ -2262,6 +2262,11 @@ pub struct Bevinding {
     pub xy: XY,
     pub tekst: String,
     pub kort: String,
+    /// What is required and what is found, with their unit.
+    pub eis: Option<(f64, &'static str)>,
+    pub waarde: Option<(f64, &'static str)>,
+    /// The pipe (index into the network's pipes).
+    pub leiding: Option<usize>,
 }
 
 /// A pipe or cable of a KLIC delivery in the drawing.
@@ -2377,17 +2382,19 @@ fn other_sewers(doc: &CadDocument, ctx: &Ctx, nets: &[Gelezen], skip: &str) -> V
     out
 }
 
-/// `CIV_RIOOL_TOETS`: cover, slope, manhole spacing, full-pipe capacity and
-/// velocity (Prandtl-Colebrook), crossings with KLIC cables and pipes and
-/// with other sewers. Markers in the drawing (OI-RIOOLTOETS), a CSV beside
-/// it, the findings as JSON (ID=).
-pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progress: &dyn Fn(String)) -> Result<String, String> {
-    let ctx = Ctx::new(opt)?;
-    let (f, k) = (ctx.f, ctx.k);
-    let doc = super::document(&["riool", "riooltoets", "tin"], &[])?;
-    let all = lees(&doc, &ctx);
-    let names: Vec<String> = choose(lees(&doc, &ctx), naam.as_deref(), true)?.into_iter().map(|g| g.net.naam).collect();
-    let cables = klic_cables(&doc, &ctx);
+/// What the checks of `CIV_RIOOL_TOETS` find in some networks.
+pub struct Analyse {
+    pub findings: Vec<(String, Bevinding)>,
+    pub hydraulics: Vec<Value>,
+    pub crossings: Vec<Value>,
+    pub checked: Vec<String>,
+    /// KLIC cables and pipes in the drawing.
+    pub cables: usize,
+}
+
+/// Check the networks named `names` of `all` (the drawing `doc`).
+pub fn analyse(opt: &super::CivielOptions, ctx: &Ctx, doc: &CadDocument, all: &[Gelezen], names: &[String], t: &Toets, progress: &dyn Fn(String)) -> Analyse {
+    let cables = klic_cables(doc, ctx);
     let flow = t.debiet();
     let mut findings: Vec<(String, Bevinding)> = Vec::new();
     let mut hydraulics = Vec::new();
@@ -2396,12 +2403,12 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
     for g in all.iter().filter(|g| names.contains(&g.net.naam)) {
         progress(t!("{} toetsen …", "Checking {} …", g.net.naam));
         let mut net = g.net.clone();
-        let mut ground = Grond::new(&ctx, &doc, g.referentie);
+        let mut ground = Grond::new(ctx, doc, g.referentie);
         let _ = net.sample_ground(&mut |p| ground.height(p), opt.step.max(0.5));
         let mut add = |b: Bevinding| findings.push((net.naam.clone(), b));
         if !g.changes.is_empty() {
             let xy = net.putten.first().map(|p| p.xy).unwrap_or([0.0, 0.0]);
-            add(Bevinding { soort: "gewijzigd", ernst: "fout", object: net.naam.clone(), xy, tekst: t!("gewijzigd in de tekening ({}): voer CIV_RIOOL_BIJWERKEN uit", "changed in the drawing ({}): run CIV_RIOOL_BIJWERKEN", g.changes.join(", ")), kort: tr("gewijzigd: bijwerken", "changed: update").into() });
+            add(Bevinding { eis: None, waarde: None, leiding: None, soort: "gewijzigd", ernst: "fout", object: net.naam.clone(), xy, tekst: t!("gewijzigd in de tekening ({}): voer CIV_RIOOL_BIJWERKEN uit", "changed in the drawing ({}): run CIV_RIOOL_BIJWERKEN", g.changes.join(", ")), kort: tr("gewijzigd: bijwerken", "changed: update").into() });
         }
         let up = net.bovenstrooms();
         let total: f64 = (0..net.leidingen.len()).filter(|i| net.outgoing(net.leidingen[*i].naar).next().is_none()).map(|i| up[i]).sum::<f64>().max(1e-9);
@@ -2416,18 +2423,18 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
             let cover = net.dekking(i);
             if let Some((x, c)) = cover.iter().copied().min_by(|p, q| p.1.total_cmp(&q.1)) {
                 if c < l.dekking_min - 0.005 {
-                    add(Bevinding { soort: "dekking", ernst: "fout", object: name.clone(), xy: along(x), tekst: t!("leiding {}: dekking {} m op {} m van {}, eis {} m", "pipe {}: cover {} m at {} m from {}, required {} m", name, dec(c, 2), dec(x, 1), net.putten[l.van].naam, dec(l.dekking_min, 2)), kort: t!("dekking {} < {}", "cover {} < {}", dec(c, 2), dec(l.dekking_min, 2)) });
+                    add(Bevinding { eis: Some((l.dekking_min, "m")), waarde: Some((c, "m")), leiding: Some(i), soort: "dekking", ernst: "fout", object: name.clone(), xy: along(x), tekst: t!("leiding {}: dekking {} m op {} m van {}, eis {} m", "pipe {}: cover {} m at {} m from {}, required {} m", name, dec(c, 2), dec(x, 1), net.putten[l.van].naam, dec(l.dekking_min, 2)), kort: t!("dekking {} < {}", "cover {} < {}", dec(c, 2), dec(l.dekking_min, 2)) });
                 }
             }
             let s = net.verhang(i);
             if s <= 0.0 {
-                add(Bevinding { soort: "verhang", ernst: "fout", object: name.clone(), xy: middle, tekst: t!("leiding {}: {} (BOB {} → {})", "pipe {}: {} (invert {} → {})", name, if s < 0.0 { tr("tegenverhang", "adverse slope") } else { tr("geen verhang", "no slope") }, nap(l.bob_van, 2), nap(l.bob_naar, 2)), kort: tr("tegenverhang", "adverse slope").into() });
+                add(Bevinding { eis: Some((l.verhang_min * 1000.0, "‰")), waarde: Some((s * 1000.0, "‰")), leiding: Some(i), soort: "verhang", ernst: "fout", object: name.clone(), xy: middle, tekst: t!("leiding {}: {} (BOB {} → {})", "pipe {}: {} (invert {} → {})", name, if s < 0.0 { tr("tegenverhang", "adverse slope") } else { tr("geen verhang", "no slope") }, nap(l.bob_van, 2), nap(l.bob_naar, 2)), kort: tr("tegenverhang", "adverse slope").into() });
             } else if s < l.verhang_min - 0.0011 / len.max(1.0) {
-                add(Bevinding { soort: "verhang", ernst: "fout", object: name.clone(), xy: middle, tekst: t!("leiding {}: verhang {} flauwer dan {}", "pipe {}: slope {} flatter than {}", name, verhang_text(s), verhang_text(l.verhang_min)), kort: format!("i {} < {}", verhang_text(s), verhang_text(l.verhang_min)) });
+                add(Bevinding { eis: Some((l.verhang_min * 1000.0, "‰")), waarde: Some((s * 1000.0, "‰")), leiding: Some(i), soort: "verhang", ernst: "fout", object: name.clone(), xy: middle, tekst: t!("leiding {}: verhang {} flauwer dan {}", "pipe {}: slope {} flatter than {}", name, verhang_text(s), verhang_text(l.verhang_min)), kort: format!("i {} < {}", verhang_text(s), verhang_text(l.verhang_min)) });
             }
             let max_len = t.putafstand.unwrap_or_else(|| max_putafstand(l.dn));
             if len > max_len + 1e-6 {
-                add(Bevinding { soort: "putafstand", ernst: "fout", object: name.clone(), xy: middle, tekst: t!("leiding {}: putafstand {} m, meer dan {} m", "pipe {}: manhole spacing {} m, more than {} m", name, dec(len, 1), dec(max_len, 0)), kort: t!("putafstand {} > {} m", "spacing {} > {} m", dec(len, 0), dec(max_len, 0)) });
+                add(Bevinding { eis: Some((max_len, "m")), waarde: Some((len, "m")), leiding: Some(i), soort: "putafstand", ernst: "fout", object: name.clone(), xy: middle, tekst: t!("leiding {}: putafstand {} m, meer dan {} m", "pipe {}: manhole spacing {} m, more than {} m", name, dec(len, 1), dec(max_len, 0)), kort: t!("putafstand {} > {} m", "spacing {} > {} m", dec(len, 0), dec(max_len, 0)) });
             }
             // Full-pipe capacity and velocity.
             let kr = t.ruwheid.unwrap_or_else(|| l.materiaal.ruwheid()) / 1000.0;
@@ -2436,14 +2443,14 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
             let q = flow.as_ref().map(|(q, _)| q * up_i / total);
             if let Some(q) = q {
                 if q > qv + 1e-9 {
-                    add(Bevinding { soort: "capaciteit", ernst: "fout", object: name.clone(), xy: middle, tekst: t!("leiding {}: ontwerpdebiet {} l/s groter dan de capaciteit bij volle buis {} l/s", "pipe {}: design flow {} l/s exceeds the full-pipe capacity {} l/s", name, dec(q, 1), dec(qv, 1)), kort: format!("Q {} > {} l/s", dec(q, 1), dec(qv, 1)) });
+                    add(Bevinding { eis: Some((q, "l/s")), waarde: Some((qv, "l/s")), leiding: Some(i), soort: "capaciteit", ernst: "fout", object: name.clone(), xy: middle, tekst: t!("leiding {}: ontwerpdebiet {} l/s groter dan de capaciteit bij volle buis {} l/s", "pipe {}: design flow {} l/s exceeds the full-pipe capacity {} l/s", name, dec(q, 1), dec(qv, 1)), kort: format!("Q {} > {} l/s", dec(q, 1), dec(qv, 1)) });
                 }
             }
             if s > 0.0 && v < V_MIN {
-                add(Bevinding { soort: "snelheid", ernst: "waarschuwing", object: name.clone(), xy: middle, tekst: t!("leiding {}: snelheid bij volle buis {} m/s, minder dan {} m/s (zelfreiniging)", "pipe {}: full-pipe velocity {} m/s, less than {} m/s (self-cleansing)", name, dec(v, 2), dec(V_MIN, 1)), kort: format!("v {} < {} m/s", dec(v, 2), dec(V_MIN, 1)) });
+                add(Bevinding { eis: Some((V_MIN, "m/s")), waarde: Some((v, "m/s")), leiding: Some(i), soort: "snelheid", ernst: "waarschuwing", object: name.clone(), xy: middle, tekst: t!("leiding {}: snelheid bij volle buis {} m/s, minder dan {} m/s (zelfreiniging)", "pipe {}: full-pipe velocity {} m/s, less than {} m/s (self-cleansing)", name, dec(v, 2), dec(V_MIN, 1)), kort: format!("v {} < {} m/s", dec(v, 2), dec(V_MIN, 1)) });
             }
             if v > v_max(l.materiaal) {
-                add(Bevinding { soort: "snelheid", ernst: "waarschuwing", object: name.clone(), xy: middle, tekst: t!("leiding {}: snelheid bij volle buis {} m/s, meer dan {} m/s", "pipe {}: full-pipe velocity {} m/s, more than {} m/s", name, dec(v, 2), dec(v_max(l.materiaal), 1)), kort: format!("v {} > {} m/s", dec(v, 2), dec(v_max(l.materiaal), 1)) });
+                add(Bevinding { eis: Some((v_max(l.materiaal), "m/s")), waarde: Some((v, "m/s")), leiding: Some(i), soort: "snelheid", ernst: "waarschuwing", object: name.clone(), xy: middle, tekst: t!("leiding {}: snelheid bij volle buis {} m/s, meer dan {} m/s", "pipe {}: full-pipe velocity {} m/s, more than {} m/s", name, dec(v, 2), dec(v_max(l.materiaal), 1)), kort: format!("v {} > {} m/s", dec(v, 2), dec(v_max(l.materiaal), 1)) });
             }
             hydraulics.push(json!({
                 "riool": net.naam, "leiding": name, "diameter": l.dn, "binnendiameter_mm": l.d() * 1000.0, "materiaal": l.materiaal.code(),
@@ -2473,13 +2480,13 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
                             row["vrije_ruimte"] = json!(clear);
                             row["ok"] = json!(clear >= vrij_k);
                             if clear < vrij_k {
-                                add(Bevinding { soort: "klic", ernst: "fout", object: name.clone(), xy: at, tekst: t!("leiding {} kruist {} op {} m van {}: vrije ruimte {} m, eis {} m", "pipe {} crosses {} at {} m from {}: clearance {} m, required {} m", name, c.label, dec(x, 1), net.putten[l.van].naam, dec(clear, 2), dec(vrij_k, 2)), kort: t!("KLIC: vrij {} < {}", "KLIC: clear {} < {}", dec(clear, 2), dec(vrij_k, 2)) });
+                                add(Bevinding { eis: Some((vrij_k, "m")), waarde: Some((clear, "m")), leiding: Some(i), soort: "klic", ernst: "fout", object: name.clone(), xy: at, tekst: t!("leiding {} kruist {} op {} m van {}: vrije ruimte {} m, eis {} m", "pipe {} crosses {} at {} m from {}: clearance {} m, required {} m", name, c.label, dec(x, 1), net.putten[l.van].naam, dec(clear, 2), dec(vrij_k, 2)), kort: t!("KLIC: vrij {} < {}", "KLIC: clear {} < {}", dec(clear, 2), dec(vrij_k, 2)) });
                             }
                         }
                         None => {
                             row["ok"] = Value::Null;
                             let depth = g_here.map(|g| t!(", bovenkant riool {} m onder maaiveld", ", top of the sewer {} m below ground", dec(g - pipe_top(x), 2))).unwrap_or_default();
-                            add(Bevinding { soort: "klic", ernst: "waarschuwing", object: name.clone(), xy: at, tekst: t!("leiding {} kruist {} op {} m van {}; diepte van de kabel/leiding onbekend — BOB {}{}", "pipe {} crosses {} at {} m from {}; depth of the cable/pipe unknown — invert {}{}", name, c.label, dec(x, 1), net.putten[l.van].naam, nap(l.bob_at(x, len), 2), depth), kort: tr("KLIC: diepte onbekend", "KLIC: depth unknown").into() });
+                            add(Bevinding { eis: None, waarde: None, leiding: Some(i), soort: "klic", ernst: "waarschuwing", object: name.clone(), xy: at, tekst: t!("leiding {} kruist {} op {} m van {}; diepte van de kabel/leiding onbekend — BOB {}{}", "pipe {} crosses {} at {} m from {}; depth of the cable/pipe unknown — invert {}{}", name, c.label, dec(x, 1), net.putten[l.van].naam, nap(l.bob_at(x, len), 2), depth), kort: tr("KLIC: diepte onbekend", "KLIC: depth unknown").into() });
                         }
                     }
                     crossings.push(row);
@@ -2487,7 +2494,7 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
             }
             // Other sewers: vertical clearance at the crossing.
             let vrij_r = t.vrij.unwrap_or(VRIJ_RIOOL);
-            for o in other_sewers(&doc, &ctx, &all, &net.naam) {
+            for o in other_sewers(doc, ctx, all, &net.naam) {
                 let Some((tt, u)) = cross(a, b, o.a, o.b) else { continue };
                 // Pipes that meet in a manhole do not cross.
                 if (tt < 1e-6 || tt > 1.0 - 1e-6) && (u < 1e-6 || u > 1.0 - 1e-6) {
@@ -2500,13 +2507,28 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
                 let clear = (o_bottom - pipe_top(x)).max(pipe_bottom(x) - o_top);
                 crossings.push(json!({"riool": net.naam, "leiding": name, "met": o.label, "x": at[0], "y": at[1], "afstand_van": x, "bob": l.bob_at(x, len), "bob_ander": ob, "vrije_ruimte": clear, "ok": clear >= vrij_r}));
                 if clear < vrij_r {
-                    add(Bevinding { soort: "kruising", ernst: "fout", object: name.clone(), xy: at, tekst: t!("leiding {} kruist {}: vrije ruimte {} m, eis {} m (BOB {} en {})", "pipe {} crosses {}: clearance {} m, required {} m (inverts {} and {})", name, o.label, dec(clear, 2), dec(vrij_r, 2), nap(l.bob_at(x, len), 2), nap(ob, 2)), kort: t!("riool: vrij {} < {}", "sewer: clear {} < {}", dec(clear, 2), dec(vrij_r, 2)) });
+                    add(Bevinding { eis: Some((vrij_r, "m")), waarde: Some((clear, "m")), leiding: Some(i), soort: "kruising", ernst: "fout", object: name.clone(), xy: at, tekst: t!("leiding {} kruist {}: vrije ruimte {} m, eis {} m (BOB {} en {})", "pipe {} crosses {}: clearance {} m, required {} m (inverts {} and {})", name, o.label, dec(clear, 2), dec(vrij_r, 2), nap(l.bob_at(x, len), 2), nap(ob, 2)), kort: t!("riool: vrij {} < {}", "sewer: clear {} < {}", dec(clear, 2), dec(vrij_r, 2)) });
                 }
             }
         }
         ground.note_source();
         checked.push(net.naam.clone());
     }
+    Analyse { findings, hydraulics, crossings, checked, cables: cables.len() }
+}
+
+/// `CIV_RIOOL_TOETS`: cover, slope, manhole spacing, full-pipe capacity and
+/// velocity (Prandtl-Colebrook), crossings with KLIC cables and pipes and
+/// with other sewers. Markers in the drawing (OI-RIOOLTOETS), a CSV beside
+/// it, the findings as JSON (ID=).
+pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progress: &dyn Fn(String)) -> Result<String, String> {
+    let ctx = Ctx::new(opt)?;
+    let (f, k) = (ctx.f, ctx.k);
+    let doc = super::document(&["riool", "riooltoets", "tin"], &[])?;
+    let all = lees(&doc, &ctx);
+    let names: Vec<String> = choose(lees(&doc, &ctx), naam.as_deref(), true)?.into_iter().map(|g| g.net.naam).collect();
+    let flow = t.debiet();
+    let Analyse { findings, hydraulics, crossings, checked, cables } = analyse(opt, &ctx, &doc, &all, &names, &t, progress);
     // Markers: the old ones of these networks go.
     let old: Vec<Handle> = doc.model_space_entities().filter(|e| data_value(e, "riooltoets").is_some_and(|n| checked.contains(&n))).map(|e| e.common().handle).collect();
     if !old.is_empty() {
@@ -2551,7 +2573,7 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
     api::note("bevindingen", findings.iter().map(|(n, b)| json!({"riool": n, "soort": b.soort, "ernst": b.ernst, "object": b.object, "x": b.xy[0], "y": b.xy[1], "tekst": b.tekst})).collect::<Vec<_>>());
     api::note("leidingen", hydraulics);
     api::note("kruisingen", crossings.clone());
-    api::note("klic_objecten", cables.len());
+    api::note("klic_objecten", cables);
     api::note("debiet", flow.as_ref().map(|f| json!({"q": f.0, "uitleg": f.1})).unwrap_or(Value::Null));
     api::note("csv", csv_path.to_string_lossy().into_owned());
     api::note("markeringen", handles.len());
@@ -2564,10 +2586,81 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
         warnings,
         if kinds.is_empty() { String::new() } else { format!(" ({kinds})") },
         crossings.len(),
-        cables.len(),
+        cables,
         flow.map(|f| format!("; {}", f.1)).unwrap_or_else(|| tr("; geen ontwerpdebiet (Q=, OPPERVLAK= of INWONERS=)", "; no design flow (Q=, OPPERVLAK= or INWONERS=)").into()),
         csv_path.display()
     ))
+}
+
+// ── Design problems (`CIV_PROBLEMEN`) ───────────────────────────────────────
+
+/// The sewer check as design problems. A fix only where one change clearly
+/// helps: a network changed in the drawing is computed again; too little
+/// cover under a fixed invert level at the upstream manhole gets that level
+/// released, else (a design pipe) the network computed again on the ground
+/// as it is now; a design pipe flatter than its minimum slope is computed
+/// again. Existing pipes (from GWSW) get no fix.
+pub fn problems(opt: &super::CivielOptions, ctx: &Ctx, doc: &CadDocument, progress: &dyn Fn(String)) -> Result<Vec<super::problems::Problem>, String> {
+    use super::problems::{en, nl, Action, Problem, Severity, Text};
+    let all = lees(doc, ctx);
+    if all.is_empty() {
+        return Ok(Vec::new());
+    }
+    let names: Vec<String> = all.iter().map(|g| g.net.naam.clone()).collect();
+    let a = analyse(opt, ctx, doc, &all, &names, &Toets::default(), progress);
+    let mut out: Vec<Problem> = Vec::new();
+    for (net, b) in &a.findings {
+        let Some(g) = all.iter().find(|g| &g.net.naam == net) else { continue };
+        let pipe = b.leiding.and_then(|i| g.net.leidingen.get(i).map(|l| (i, l)));
+        let pname = b.object.clone();
+        let (req, found) = (b.eis.map(|e| e.0).unwrap_or(0.0), b.waarde.map(|w| w.0).unwrap_or(0.0));
+        let (code, title, message) = match b.soort {
+            "gewijzigd" => ("sewer.changed", Text::new(format!("Riool gewijzigd: {net}"), format!("Sewer changed: {net}")), Text::new(format!("Riool {net} is in de tekening gewijzigd sinds de berekening: de BOB's kloppen niet meer."), format!("Sewer {net} was changed in the drawing since it was computed: its invert levels no longer hold."))),
+            "dekking" => ("sewer.cover", Text::new(format!("Dekking te klein: {pname}"), format!("Cover too small: {pname}")), Text::new(format!("Leiding {pname}: dekking {} m, eis {} m.", nl(found, 2), nl(req, 2)), format!("Pipe {pname}: cover {} m, required {} m.", en(found, 2), en(req, 2)))),
+            "verhang" if found <= 0.0 => ("sewer.slope", Text::new(format!("Tegenverhang: {pname}"), format!("Adverse slope: {pname}")), Text::new(format!("Leiding {pname}: geen verhang of tegenverhang ({} ‰).", nl(found, 2)), format!("Pipe {pname}: no slope or an adverse slope ({} ‰).", en(found, 2)))),
+            "verhang" => ("sewer.slope", Text::new(format!("Verhang te flauw: {pname}"), format!("Slope too flat: {pname}")), Text::new(format!("Leiding {pname}: verhang {} ‰, flauwer dan {} ‰.", nl(found, 2), nl(req, 2)), format!("Pipe {pname}: slope {} ‰, flatter than {} ‰.", en(found, 2), en(req, 2)))),
+            "putafstand" => ("sewer.manhole_spacing", Text::new(format!("Putafstand te groot: {pname}"), format!("Manhole spacing too large: {pname}")), Text::new(format!("Leiding {pname}: putafstand {} m, meer dan {} m.", nl(found, 1), nl(req, 0)), format!("Pipe {pname}: manhole spacing {} m, more than {} m.", en(found, 1), en(req, 0)))),
+            "capaciteit" => ("sewer.capacity", Text::new(format!("Capaciteit te klein: {pname}"), format!("Capacity too small: {pname}")), Text::new(format!("Leiding {pname}: ontwerpdebiet {} l/s, capaciteit bij volle buis {} l/s.", nl(req, 1), nl(found, 1)), format!("Pipe {pname}: design flow {} l/s, full-pipe capacity {} l/s.", en(req, 1), en(found, 1)))),
+            "snelheid" => ("sewer.velocity", Text::new(format!("Snelheid buiten de grens: {pname}"), format!("Velocity out of range: {pname}")), Text::new(format!("Leiding {pname}: snelheid bij volle buis {} m/s, grens {} m/s.", nl(found, 2), nl(req, 1)), format!("Pipe {pname}: full-pipe velocity {} m/s, limit {} m/s.", en(found, 2), en(req, 1)))),
+            "klic" if b.eis.is_none() => ("sewer.utility_depth", Text::new(format!("Kruising, diepte onbekend: {pname}"), format!("Crossing, depth unknown: {pname}")), Text::new(format!("Leiding {pname} kruist een kabel of leiding waarvan de diepte niet bekend is."), format!("Pipe {pname} crosses a cable or pipe whose depth is not known."))),
+            "klic" => ("sewer.utility_clearance", Text::new(format!("Te weinig ruimte tot kabel: {pname}"), format!("Too little room to a cable: {pname}")), Text::new(format!("Leiding {pname} kruist een kabel of leiding: vrije ruimte {} m, eis {} m.", nl(found, 2), nl(req, 2)), format!("Pipe {pname} crosses a cable or pipe: clearance {} m, required {} m.", en(found, 2), en(req, 2)))),
+            _ => ("sewer.sewer_clearance", Text::new(format!("Te weinig ruimte tot riool: {pname}"), format!("Too little room to a sewer: {pname}")), Text::new(format!("Leiding {pname} kruist een ander riool: vrije ruimte {} m, eis {} m.", nl(found, 2), nl(req, 2)), format!("Pipe {pname} crosses another sewer: clearance {} m, required {} m.", en(found, 2), en(req, 2)))),
+        };
+        let severity = if b.ernst == "fout" { Severity::Error } else { Severity::Warning };
+        let object = match (b.soort, pipe) {
+            ("gewijzigd", _) | (_, None) => format!("riool:{net}"),
+            ("klic" | "kruising", Some((_, l))) => format!("riool:{net}/{pname}@{:.0}", dist(g.net.putten[l.van].xy, b.xy)),
+            (_, Some(_)) => format!("riool:{net}/{pname}"),
+        };
+        let handle = pipe.and_then(|(i, _)| g.leiding_handles.get(i).copied().flatten()).or_else(|| g.handles.first().copied());
+        let mut p = Problem::new(code, severity, "sewer", object, title, message).about(&handle.into_iter().collect::<Vec<_>>(), "sewer", format!("{net} {}", if pipe.is_some() { pname.as_str() } else { "" }).trim()).at(b.xy, None);
+        if let (Some((v, u)), Some((w, _))) = (b.eis, b.waarde) {
+            p = p.required(v, u).found(w, u);
+        }
+        let update = Action::SewerUpdate { sewer: net.clone(), manhole: None, invert_auto: false };
+        let recompute = |p: Problem, what: Text| p.fix("bijwerken", what, update.clone());
+        p = match (b.soort, pipe) {
+            ("gewijzigd", _) => recompute(p, Text::new(format!("Riool {net} opnieuw berekenen (CIV_RIOOL_BIJWERKEN)"), format!("Compute sewer {net} again (CIV_RIOOL_BIJWERKEN)"))),
+            ("dekking" | "verhang", Some((_, l))) if l.bestaand => p.no_fix(Text::new("bestaande leiding (uit de GWSW): geen wijziging berekend", "existing pipe (from GWSW): no change computed")),
+            ("dekking", Some((_, l))) => match g.net.putten[l.van].bob_vast {
+                Some(bob) => {
+                    let put = g.net.putten[l.van].naam.clone();
+                    p.fix(
+                        "bob",
+                        Text::new(format!("BOB in put {put} vrijgeven (nu {} vast): de berekening houdt {} m dekking", nl(bob, 2), nl(req, 2)), format!("Release the invert level in manhole {put} (now fixed at {}): the computation keeps {} m of cover", en(bob, 2), en(req, 2))),
+                        Action::SewerUpdate { sewer: net.clone(), manhole: Some(put), invert_auto: true },
+                    )
+                }
+                None => recompute(p, Text::new(format!("Riool {net} opnieuw berekenen op het maaiveld van nu: minstens {} m dekking", nl(req, 2)), format!("Compute sewer {net} again on the ground as it is now: at least {} m of cover", en(req, 2)))),
+            },
+            ("verhang", Some(_)) => recompute(p, Text::new(format!("Riool {net} opnieuw berekenen: minstens {} ‰ verhang", nl(req, 2)), format!("Compute sewer {net} again: at least {} ‰ slope", en(req, 2)))),
+            _ => p,
+        };
+        if !out.iter().any(|q| q.code == p.code && q.object == p.object) {
+            out.push(p);
+        }
+    }
+    Ok(out)
 }
 
 // ── CIV_RIOOL_EXPORT: GWSW-OroX and CSV ─────────────────────────────────────

@@ -1651,6 +1651,9 @@ pub fn plateau(opt: &super::CivielOptions, req: PlateauRequest, progress: &dyn F
         ("afschot_richting", req.fall.map(|v| bearing_name(v.1)).unwrap_or_default()),
         ("talud_af", format!("1:{}", req.cut)),
         ("talud_op", format!("1:{}", req.fill)),
+        ("reikwijdte_m", format!("{}", req.reach)),
+        ("taludlijnen", g.rays.len().to_string()),
+        ("zonder_aansluiting", missing.to_string()),
     ]);
     let mut out = Out::default();
     let daylight = draw_grading(&ctx, &g, from_feature.is_none().then_some((&edge[..], true)), &data, &mut out)?;
@@ -1778,11 +1781,14 @@ pub fn slope(opt: &super::CivielOptions, req: SlopeRequest, progress: &dyn Fn(St
         });
     }
     let name = req.name.unwrap_or_else(|| next_name("grading", "Talud"));
+    let missing_rays = g.rays.iter().filter(|r| matches!(r.end, End::Reach | End::NoGround)).count();
     let data = record(&[
         ("grading", name.clone()),
         ("soort", "talud".into()),
         ("zijde", if req.side > 0.0 { "rechts" } else { "links" }.into()),
         ("naar", what.clone()),
+        ("taludlijnen", g.rays.len().to_string()),
+        ("zonder_aansluiting", missing_rays.to_string()),
     ]);
     let mut out = Out::default();
     let length = draw_grading(&ctx, &g, from_feature.is_none().then_some((&edge[..], line.closed)), &data, &mut out)?;
@@ -2005,6 +2011,52 @@ pub fn volume_tin(opt: &super::CivielOptions, req: VolumeRequest, progress: &dyn
         if balance >= 0.0 { tr("overschot", "surplus") } else { tr("tekort", "shortage") },
         m3(balance.abs())
     ))
+}
+
+// ── Design problems (`CIV_PROBLEMEN`) ───────────────────────────────────────
+
+/// Gradings whose slope lines do not all reach the ground (or their
+/// target) within the reach, as design problems. No fix: a larger reach or
+/// another slope ratio are both answers, and neither follows from the
+/// drawing alone.
+pub fn problems(ctx: &Ctx, doc: &ocs_plugin_api::host::codec::CadDocument) -> Vec<super::problems::Problem> {
+    use super::problems::{Problem, Severity, Text};
+    let mut seen: Vec<String> = Vec::new();
+    let mut out = Vec::new();
+    for e in doc.model_space_entities() {
+        let Some(name) = super::data_value(e, "grading") else { continue };
+        let Some(missing) = super::data_value(e, "zonder_aansluiting").and_then(|v| v.parse::<usize>().ok()) else { continue };
+        if missing == 0 || seen.contains(&name) || super::data_value(e, "deel").is_some() {
+            continue;
+        }
+        seen.push(name.clone());
+        let total = super::data_value(e, "taludlijnen").and_then(|v| v.parse::<usize>().ok()).unwrap_or(missing);
+        let reach = super::data_value(e, "reikwijdte_m").unwrap_or_default();
+        let handles: Vec<Handle> = doc.model_space_entities().filter(|x| super::data_value(x, "grading").as_deref() == Some(name.as_str()) && super::data_value(x, "deel").is_none()).map(|x| x.common().handle).take(40).collect();
+        let pts: Vec<XY> = handles.iter().filter_map(|h| doc.get_entity(*h)).filter_map(line_of).flat_map(|l| l.pts.into_iter().map(|p| [p[0], p[1]])).collect();
+        let mut p = Problem::new(
+            "grading.no_daylight",
+            Severity::Warning,
+            "grading",
+            format!("grading:{name}"),
+            Text::new(format!("Talud zonder aansluiting: {name}"), format!("Slope without daylight: {name}")),
+            Text::new(
+                format!("{missing} van de {total} taludlijnen van {name} bereiken het maaiveld niet binnen de reikwijdte{}: het ontwerpoppervlak heeft daar een gat.", if reach.is_empty() { String::new() } else { format!(" van {reach} m") }),
+                format!("{missing} of the {total} slope lines of {name} do not reach the ground within the reach{}: the design surface has a gap there.", if reach.is_empty() { String::new() } else { format!(" of {reach} m") }),
+            ),
+        )
+        .required(0.0, "-")
+        .found(missing as f64, "-")
+        .about(&handles, "grading", &name)
+        .no_fix(Text::new("een grotere reikwijdte (REIKWIJDTE=) of een andere taludhelling: geen eenduidige wijziging", "a larger reach (REIKWIJDTE=) or another slope ratio: no single clear change"));
+        if !pts.is_empty() {
+            let n = pts.len() as f64;
+            let c = [pts.iter().map(|p| p[0]).sum::<f64>() / n, pts.iter().map(|p| p[1]).sum::<f64>() / n];
+            p = p.at(ctx.from_drawing(c), None);
+        }
+        out.push(p);
+    }
+    out
 }
 
 #[cfg(test)]

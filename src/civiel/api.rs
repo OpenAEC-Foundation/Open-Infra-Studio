@@ -17,6 +17,9 @@ use super::landmeten::Format;
 use super::CivielOptions;
 use crate::gis::crs::XY;
 
+/// A PVI as given: station, height and a curve length of its own.
+pub type PviInput = (f64, f64, Option<f64>);
+
 pub struct Args {
     /// Words without "=": file paths, coordinates.
     pub words: Vec<String>,
@@ -151,6 +154,27 @@ impl Args {
             .map_err(|e: String| format!("{k}: {e}"))
     }
 
+    /// "s:z;s:z:l;…": PVIs with an optional curve length of their own.
+    pub fn pvis(&self, k: &str) -> Result<Option<Vec<PviInput>>, String> {
+        self.str(k)
+            .map(|v| {
+                v.split(';')
+                    .filter(|t| !t.trim().is_empty())
+                    .map(|t| {
+                        let parts: Vec<&str> = t.split(':').collect();
+                        match parts.as_slice() {
+                            [a, b] => Ok((num(a)?, num(b)?, None)),
+                            [a, b, l] if l.trim().is_empty() => Ok((num(a)?, num(b)?, None)),
+                            [a, b, l] => Ok((num(a)?, num(b)?, Some(num(l)?))),
+                            _ => Err(format!("verwacht station:hoogte[:boog], kreeg '{t}'")),
+                        }
+                    })
+                    .collect()
+            })
+            .transpose()
+            .map_err(|e: String| format!("{k}: {e}"))
+    }
+
     /// A handle as the REST API writes it: hexadecimal, "E9E".
     pub fn handle(&self, k: &str) -> Result<Option<Handle>, String> {
         self.str(k).map(parse_handle).transpose().map_err(|e| format!("{k}: {e}"))
@@ -277,6 +301,8 @@ mod tests {
         let err = Args::parse("FOO=1").apply(&CivielOptions::default(), &[]).unwrap_err();
         assert!(err.contains("onbekend argument FOO") && err.contains("INTERVAL"));
         assert_eq!(Args::parse("PVI=0:1.5;100:2,5").pairs("PVI").unwrap().unwrap(), vec![(0.0, 1.5), (100.0, 2.5)]);
+        assert_eq!(Args::parse("PVI=0:1.5;100:2,5:80;200:2").pvis("PVI").unwrap().unwrap(), vec![(0.0, 1.5, None), (100.0, 2.5, Some(80.0)), (200.0, 2.0, None)]);
+        assert!(Args::parse("PVI=0:1:2:3").pvis("PVI").is_err());
         assert!(Args::parse("ID=../x").id().is_none());
         assert_eq!(handle_text(Handle::from(0xE9E)), "E9E");
     }

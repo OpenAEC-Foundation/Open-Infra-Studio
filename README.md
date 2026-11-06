@@ -176,6 +176,8 @@ Sewer design (group **Riolering**: runs of manholes and pipes with their invert 
 
 Clothoids, design criteria checks (ROA, NOA, AASHTO), sight distance and rail (cant, turnouts): see [docs/civiel-as-spoor.md](docs/civiel-as-spoor.md).
 
+**Design problems:** every check in one list, with fixes the program computes and acceptance with a reason (`CIV_PROBLEMEN`, the Problems page): see [docs/design-problems.md](docs/design-problems.md).
+
 The window page **Civiel — instellingen** (settings) holds all settings, and they also apply to the ribbon buttons. Checked on a real road near Dordrecht: the corridor's average-end-area volumes and the independent TIN-to-TIN grid volume agree within 2 %.
 
 Survey codes to linework and symbols, parcels, water drops, catchments and ponds, swept paths in reverse and NEN 2443 parking bays: see [docs/civiel-overig.md](docs/civiel-overig.md).
