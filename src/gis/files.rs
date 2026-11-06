@@ -412,26 +412,29 @@ fn kml_coords(text: &str) -> Vec<XY> {
 
 fn kml_geometry(node: roxmltree::Node, f: &mut Feature) {
     let coords = |n: roxmltree::Node| n.descendants().find(|d| d.has_tag_name("coordinates")).and_then(|c| c.text()).map(kml_coords).unwrap_or_default();
-    match node.tag_name().name() {
-        "Point" => f.points.extend(coords(node)),
-        "LineString" => f.lines.push((coords(node), false)),
-        "LinearRing" => f.lines.push((coords(node), true)),
-        "Polygon" => {
-            for ring in node.descendants().filter(|d| d.has_tag_name("LinearRing")) {
-                f.lines.push((coords(ring), true));
+    // MultiGeometry nests freely: an explicit stack keeps it off the call stack.
+    let mut pending = vec![node];
+    while let Some(node) = pending.pop() {
+        match node.tag_name().name() {
+            "Point" => f.points.extend(coords(node)),
+            "LineString" => f.lines.push((coords(node), false)),
+            "LinearRing" => f.lines.push((coords(node), true)),
+            "Polygon" => {
+                for ring in node.descendants().filter(|d| d.has_tag_name("LinearRing")) {
+                    f.lines.push((coords(ring), true));
+                }
             }
-        }
-        "MultiGeometry" => {
-            for child in node.children().filter(|c| c.is_element()) {
-                kml_geometry(child, f);
+            "MultiGeometry" => {
+                let parts: Vec<_> = node.children().filter(|c| c.is_element()).collect();
+                pending.extend(parts.into_iter().rev());
             }
+            _ => {}
         }
-        _ => {}
     }
 }
 
 pub fn kml(text: &str) -> Result<FileData, String> {
-    let doc = roxmltree::Document::parse(text).map_err(|e| format!("KML: {e}"))?;
+    let doc = crate::xmldoc::parse(text, false).map_err(|e| format!("KML: {e}"))?;
     let mut features = Vec::new();
     for pm in doc.descendants().filter(|n| n.has_tag_name("Placemark")) {
         let mut f = Feature::default();
@@ -474,7 +477,7 @@ pub fn kmz(path: &Path) -> Result<FileData, String> {
 }
 
 pub fn gpx(text: &str) -> Result<FileData, String> {
-    let doc = roxmltree::Document::parse(text).map_err(|e| format!("GPX: {e}"))?;
+    let doc = crate::xmldoc::parse(text, false).map_err(|e| format!("GPX: {e}"))?;
     let pt = |n: roxmltree::Node| -> Option<XY> { Some([n.attribute("lon")?.parse().ok()?, n.attribute("lat")?.parse().ok()?]) };
     let name = |n: roxmltree::Node| n.children().find(|c| c.has_tag_name("name")).and_then(|c| c.text()).map(|t| t.trim().to_string());
     let mut features = Vec::new();
@@ -634,33 +637,8 @@ fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> Result<bool, String> 
 /// WFS response) with its geometry and its simple properties. The CRS comes
 /// from the first `srsName`.
 pub fn gml(text: &str) -> Result<FileData, String> {
-    // roxmltree's tokenizer is recursive. Measure nesting with a streaming
-    // parser first, then provide enough stack for deep valid XML instead of
-    // rejecting it at a fixed depth or overflowing the caller's stack.
-    let invalid = || crate::lang::tr("geen tekenbare objecten in het bestand", "no drawable features in the file").to_string();
-    let mut reader = quick_xml::Reader::from_str(text);
-    let (mut depth, mut deepest) = (0usize, 0usize);
-    loop {
-        match reader.read_event() {
-            Ok(quick_xml::events::Event::Start(_)) => { depth += 1; deepest = deepest.max(depth); }
-            Ok(quick_xml::events::Event::End(_)) => depth = depth.saturating_sub(1),
-            // Let the original XML parser report syntax errors, on the stack
-            // needed for the prefix already measured, preserving its details.
-            Ok(quick_xml::events::Event::Eof) | Err(_) => break,
-            _ => {}
-        }
-    }
-    if deepest <= 64 { return gml_inner(text); }
-    let stack = deepest.checked_mul(32 * 1024).and_then(|size| size.checked_add(2 * 1024 * 1024)).ok_or_else(invalid)?;
-    std::thread::scope(|scope| {
-        let handle = std::thread::Builder::new().stack_size(stack).spawn_scoped(scope, || gml_inner(text)).map_err(|_| invalid())?;
-        handle.join().map_err(|_| invalid())?
-    })
-}
-
-fn gml_inner(text: &str) -> Result<FileData, String> {
     if super::planning::gml::is_imro(text) { return Ok(super::planning::gml::parse(text)?.file_data()); }
-    let doc = roxmltree::Document::parse(text).map_err(|e| format!("GML: {e}"))?;
+    let doc = crate::xmldoc::parse(text, false).map_err(|e| format!("GML: {e}"))?;
     let root = doc.root_element();
     let crs = doc.descendants().find_map(|n| n.attribute("srsName")).and_then(epsg_from_name);
     let members: Vec<roxmltree::Node> = root
