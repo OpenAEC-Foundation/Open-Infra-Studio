@@ -224,34 +224,35 @@ pub struct Dangling {
 
 /// Points the references of a delivery at the new IDs of its objects.
 ///
-/// Each object's `ID` field holds its new ID; `old[i]` is the ID object `i`
-/// had in its source (an import), if it had one. A reference of an object
-/// with a source ID names an object by its source ID and gets that object's
-/// new ID; when two objects had the same source ID (a copy in the drawing),
-/// the first one keeps the link. A reference of an object without a source
-/// ID (made in the drawing) may also name a new ID. A reference that names
-/// no object is removed (the schema rejects a delivery with it) and
-/// returned.
-pub fn relink(objects: &mut [Object], old: &[Option<String>]) -> Vec<Dangling> {
+/// Each object's `ID` field holds its new ID. `source[i]` is where object
+/// `i` came from: its import (any key unique per import) and its ID in that
+/// delivery. A reference of an imported object names an object of the same
+/// import by its source ID and gets that object's new ID; when two objects
+/// of one import had the same source ID (a copy in the drawing), the first
+/// one keeps the link. A reference of an object made in the drawing names a
+/// new ID. A reference that names no object is removed (the schema rejects
+/// a delivery with it) and returned.
+pub fn relink(objects: &mut [Object], source: &[Option<(String, String)>]) -> Vec<Dangling> {
     let m = model();
-    let mut by_old: HashMap<String, String> = HashMap::new();
-    for (o, old) in objects.iter().zip(old) {
-        if let (Some(old), Some(new)) = (old, o.get("ID")) {
-            by_old.entry(old.clone()).or_insert_with(|| new.to_string());
+    let mut by_source: HashMap<(String, String), String> = HashMap::new();
+    for (o, s) in objects.iter().zip(source) {
+        if let (Some(s), Some(new)) = (s, o.get("ID")) {
+            by_source.entry(s.clone()).or_insert_with(|| new.to_string());
         }
     }
     let new: HashSet<String> = objects.iter().filter_map(|o| o.get("ID").map(str::to_string)).collect();
     let mut out = Vec::new();
     for (i, o) in objects.iter_mut().enumerate() {
         let Some(def) = m.object(&o.kind) else { continue };
-        let made_here = old.get(i).is_none_or(Option::is_none);
+        let import = source.get(i).and_then(Option::as_ref).map(|(import, _)| import.clone());
         for f in def.velden.iter().filter(|f| f.kind == "IDREF") {
             let Some(v) = o.get(&f.name).map(str::to_string) else { continue };
-            if made_here && new.contains(&v) {
-                continue;
-            }
-            match by_old.get(&v) {
-                Some(n) => o.set(&f.name, n.clone()),
+            let to = match &import {
+                Some(import) => by_source.get(&(import.clone(), v.clone())).cloned(),
+                None => new.contains(&v).then(|| v.clone()),
+            };
+            match to {
+                Some(n) => o.set(&f.name, n),
                 None => {
                     o.attrs.retain(|(k, _)| k != &f.name);
                     out.push(Dangling { object: i, field: f.name.clone(), id: v });
@@ -361,23 +362,31 @@ mod tests {
             obj("LSkabel", "H1A", &[]),
             obj("LSkabel", "H2B", &[]),
             obj("AbestandBijlage", "H3C", &[("AssetObjectID", "OLD_ASSET")]),
-            obj("AbestandBijlage", "R1", &[("AssetObjectID", "GONE")]),
-            obj("AmantelbuisInhoud", "R2", &[("MantelbuisID", "H1A"), ("InhoudID", "OLD_ASSET")]),
+            obj("LSkabel", "H5E", &[]),
+            obj("AbestandBijlage", "R1", &[("AssetObjectID", "OLD_ASSET")]),
+            obj("AbestandBijlage", "R2", &[("AssetObjectID", "GONE")]),
+            obj("AmantelbuisInhoud", "R3", &[("MantelbuisID", "H1A"), ("InhoudID", "OLD_ASSET")]),
             obj("Averplaatsing", "H4D", &[("AssetObjectID", "H2B")]),
+            obj("Averplaatsing", "H6F", &[("AssetObjectID", "OLD_ASSET")]),
         ];
-        // H2B is a copy of H1A in the drawing; H4D was drawn by hand.
-        let old = [Some("OLD_ASSET"), Some("OLD_ASSET"), Some("OLD_PHOTO"), Some("OLD_DOC"), Some("OLD_SLEEVE"), None].map(|o| o.map(str::to_string));
-        let dangling = relink(&mut objects, &old);
-        assert_eq!(objects[2].get("AssetObjectID"), Some("H1A"), "the first object with that source ID");
-        assert_eq!(objects[3].get("AssetObjectID"), None, "removed");
-        assert_eq!(objects[4].get("InhoudID"), Some("H1A"));
-        assert_eq!(objects[4].get("MantelbuisID"), None, "an imported reference names source IDs only");
-        assert_eq!(objects[5].get("AssetObjectID"), Some("H2B"), "a new ID, given in the drawing");
+        // Two imports, a and b, with the same IDs; H2B is a copy of H1A in
+        // the drawing; H4D and H6F were drawn by hand.
+        let source = [Some(("a", "OLD_ASSET")), Some(("a", "OLD_ASSET")), Some(("a", "OLD_PHOTO")), Some(("b", "OLD_ASSET")), Some(("b", "OLD_DOC")), Some(("a", "OLD_NOTE")), Some(("a", "OLD_CONTENT")), None, None]
+            .map(|s| s.map(|(i, id)| (i.to_string(), id.to_string())));
+        let dangling = relink(&mut objects, &source);
+        assert_eq!(objects[2].get("AssetObjectID"), Some("H1A"), "the first object of its import with that ID");
+        assert_eq!(objects[4].get("AssetObjectID"), Some("H5E"), "the cable of its own import");
+        assert_eq!(objects[5].get("AssetObjectID"), None, "removed");
+        assert_eq!(objects[6].get("InhoudID"), Some("H1A"));
+        assert_eq!(objects[6].get("MantelbuisID"), None, "an imported reference names source IDs only");
+        assert_eq!(objects[7].get("AssetObjectID"), Some("H2B"), "a new ID, given in the drawing");
+        assert_eq!(objects[8].get("AssetObjectID"), None, "made in the drawing: new IDs only");
         assert_eq!(
             dangling,
             vec![
-                Dangling { object: 3, field: "AssetObjectID".into(), id: "GONE".into() },
-                Dangling { object: 4, field: "MantelbuisID".into(), id: "H1A".into() },
+                Dangling { object: 5, field: "AssetObjectID".into(), id: "GONE".into() },
+                Dangling { object: 6, field: "MantelbuisID".into(), id: "H1A".into() },
+                Dangling { object: 8, field: "AssetObjectID".into(), id: "OLD_ASSET".into() },
             ]
         );
     }
