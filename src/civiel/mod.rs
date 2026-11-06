@@ -190,14 +190,8 @@ impl Ctx {
 /// "as", "lengteprofiel", "ontwerpprofiel", "corridor", "punten"), the
 /// selection and `extra`, fetched by handle — drawings of any size.
 pub fn document(needs: &[&str], extra: &[ocs_plugin_api::host::codec::Handle]) -> Result<ocs_plugin_api::host::codec::CadDocument, String> {
-    document_whole(needs, extra).map(|(doc, _)| doc)
-}
-
-/// [`document`], and whether it is the whole drawing (`false`: only the
-/// indexed objects, the selection and `extra`; see [`read_area`]).
-pub fn document_whole(needs: &[&str], extra: &[ocs_plugin_api::host::codec::Handle]) -> Result<(ocs_plugin_api::host::codec::CadDocument, bool), String> {
     if let Some(doc) = bridge::view() {
-        return Ok((doc, true));
+        return Ok(doc);
     }
     let mut small: Vec<ocs_plugin_api::host::codec::Handle> = extra.to_vec();
     small.extend(bridge::selection().unwrap_or_default());
@@ -217,24 +211,24 @@ pub fn document_whole(needs: &[&str], extra: &[ocs_plugin_api::host::codec::Hand
             put(&mut doc, e);
         }
     }
-    Ok((doc, false))
+    Ok(doc)
 }
 
-/// Add the Open Infra lines and points whose extents touch `area` (drawing
-/// units, `[x0, y0, x1, y1]`) to a [`document`] that is not the whole
-/// drawing: BGT, KLIC and survey points around the work, which the index
-/// does not list.
-pub fn read_area(doc: &mut ocs_plugin_api::host::codec::CadDocument, area: [f64; 4]) -> Result<(), String> {
+/// The Open Infra lines and points whose extents touch `area` (drawing
+/// units, `[x0, y0, x1, y1]`) that `doc` does not hold: on a drawing too
+/// large to share, the BGT, KLIC and survey points the index does not list.
+pub fn read_area(doc: &ocs_plugin_api::host::codec::CadDocument, area: [f64; 4]) -> Result<ocs_plugin_api::host::codec::CadDocument, String> {
+    let mut out = ocs_plugin_api::host::codec::CadDocument::new();
     // By DXF name: the host also matches revision clouds and centre marks by it.
     for kind in ["LWPOLYLINE", "POLYLINE2D", "POLYLINE3D", "LINE", "POINT"] {
         let query = serde_json::json!({"type": kind, "xdata_app": bridge::XDATA_APP, "bounds": area});
         for e in bridge::query(query)? {
             if doc.get_entity(e.common().handle).is_none() {
-                put(doc, e);
+                put(&mut out, e);
             }
         }
     }
-    Ok(())
+    Ok(out)
 }
 
 /// An entity fetched from the host, into a partial document's model space.
