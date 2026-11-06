@@ -18,6 +18,7 @@ The work was reading and probing, not a rewrite. Findings that the reviews of #6
 | **Parcel areas** | Circle segment area | **Error: arcs in a plot are ignored.** Fixed in #105 |
 | Settlement and stability | Fadum, Terzaghi, Koppejan, Bishop, Robertson 2010 | Formulas match; three table values to check against NEN 9997-1 |
 | Parking | NEN 2443:2013 tables 4A–4C | Internally consistent; not checked against the standard itself |
+| AHN heights | GeoTIFF raster type, PDOK WCS tile | Matches (PixelIsArea, corner tie point) |
 
 ## 1. RD ↔ ETRS89 and NAP height (`src/gis/rdnap.rs`)
 
@@ -137,6 +138,14 @@ So "4 equal parcels" of the first plot get 300 m² each on paper, and their real
 ## 10. Parking (`src/library/parking.rs`)
 
 The row depths P1 of NEN 2443 tables 4A–4C follow P1 = 5.13·sin α + 1.87·cos α for every angle (30°: 4.18, 45°: 4.95, 60°: 5.38, 70°: 5.46). So the copied tables are internally consistent. They were not compared with the standard itself, which is not public.
+
+## 11. AHN heights (`src/gis/ahn.rs`)
+
+**Source.** GeoTIFF 1.0: the raster type key 1025 (`GTRasterTypeGeoKey`) says whether the tie point is the corner of a pixel (PixelIsArea, 1) or its centre (PixelIsPoint, 2).
+
+**Test.** A 2 × 2 m tile of `dtm_05m` from the PDOK AHN WCS (box x 104850–104852, y 425300–425302) has key 1025 = 1, pixel size 0.5 m and tie point (104850, 425302), the top-left corner of the box. `decode_geotiff` takes the tie point as the corner and `Grid::sample` puts heights at the pixel centres. So a height is read at the right place. No finding.
+
+**Follow-up (VERVOLG).** Neither `ahn.rs` nor `rasterbestand.rs` reads key 1025. A local GeoTIFF written as PixelIsPoint would be read half a cell off.
 
 ## Seen in passing, outside the calculation core
 
