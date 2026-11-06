@@ -6,6 +6,10 @@
 //! - export: the drawing as a V12.1 delivery (`Handle` is the CAD handle,
 //!   `ID` follows from it) with a project reference over the project area;
 //!   objects are found by their object data, else by their layer name;
+//!   references (`AssetObjectID`, …) follow their objects to the new IDs;
+//! - objects without geometry (relation objects such as an `AbestandBijlage`
+//!   without a location) are kept in the drawing's data on import
+//!   ([`RELATIONS`]) and delivered again on export;
 //! - check: the schema rules per operator plus whether each object lies on
 //!   the layer its attributes ask for, as a report.
 
@@ -54,8 +58,13 @@ pub fn import(site: &Site, path: &std::path::Path, unit_factor: f64) -> Result<S
     let mut batch = crate::basisdata::Batch::new();
     let (mut drawn, mut no_rule) = (0usize, 0usize);
     let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
+    let mut kept: Vec<&Object> = Vec::new();
     for o in &d.objects {
-        let Some(g) = &o.geom else { continue };
+        let Some(g) = &o.geom else {
+            kept.push(o);
+            *kinds.entry(o.kind.clone()).or_insert(0) += 1;
+            continue;
+        };
         let name = match layer::for_object(o, op.as_deref()) {
             Some(n) => n,
             None => {
@@ -107,6 +116,9 @@ pub fn import(site: &Site, path: &std::path::Path, unit_factor: f64) -> Result<S
         *kinds.entry(o.kind.clone()).or_insert(0) += 1;
     }
     let (n, layers) = batch.write("NLCS++")?;
+    // After the entities, so the record joins their undo step.
+    keep_relations(&kept)?;
+    drawn += kept.len();
     crate::bridge::note_source(&format!("NLCS++ {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("")));
     let top: Vec<String> = {
         let mut v: Vec<(&String, &usize)> = kinds.iter().collect();
@@ -137,8 +149,95 @@ pub struct Project {
     pub toelichting: String,
 }
 
+/// The XRecord (`OPENINFRA/NLCSPP`) with the imported objects that have no
+/// geometry: relation objects the schema allows without a location. Nothing
+/// in the drawing shows them; the export delivers them again.
+const RELATIONS: &str = "NLCSPP";
+
+fn relations() -> Result<Vec<Object>, String> {
+    let Some(text) = crate::bridge::json_record_read(RELATIONS) else { return Ok(Vec::new()) };
+    let v: Vec<(String, Vec<(String, String)>)> = serde_json::from_str(&text).map_err(|e| format!("OPENINFRA/{RELATIONS}: {e}"))?;
+    Ok(v.into_iter().map(|(kind, attrs)| Object { kind, attrs, ..Default::default() }).collect())
+}
+
+/// Adds objects to [`RELATIONS`]; one that is there already (the same file
+/// imported again) is not added twice.
+fn keep_relations(new: &[&Object]) -> Result<(), String> {
+    if new.is_empty() {
+        return Ok(());
+    }
+    // Imports run on their own threads: one read-and-write at a time.
+    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut all = relations()?;
+    for o in new {
+        if !all.iter().any(|a| a.kind == o.kind && a.attrs == o.attrs) {
+            all.push(Object { kind: o.kind.clone(), attrs: o.attrs.clone(), ..Default::default() });
+        }
+    }
+    let v: Vec<(&str, &[(String, String)])> = all.iter().map(|o| (o.kind.as_str(), o.attrs.as_slice())).collect();
+    crate::bridge::json_record_write(RELATIONS, &serde_json::to_string(&v).map_err(|e| e.to_string())?)
+}
+
+fn take(o: &mut Object, k: &str) -> Option<String> {
+    let i = o.attrs.iter().position(|(a, _)| a == k)?;
+    Some(o.attrs.remove(i).1)
+}
+
+/// The number of references (IDREF fields) an object has.
+fn references(o: &Object) -> usize {
+    model::model().object(&o.kind).map_or(0, |d| d.velden.iter().filter(|f| f.kind == "IDREF" && o.get(&f.name).is_some()).count())
+}
+
+/// Gives the objects of a delivery their IDs, and points their references
+/// at them: a drawn object's ID follows from its CAD handle; a kept relation
+/// keeps its source ID when no other object has it. A kept relation whose
+/// references all name objects no longer in the drawing is left out.
+/// Returns the objects and the findings about references.
+fn with_ids(drawn: Vec<Object>, kept: Vec<Object>) -> (Vec<Object>, Vec<Finding>) {
+    let mut objs = Vec::with_capacity(drawn.len() + kept.len());
+    let mut old = Vec::with_capacity(drawn.len() + kept.len());
+    for mut o in drawn {
+        old.push(take(&mut o, "ID"));
+        let id = xml::xml_id("H", o.get("Handle").unwrap_or(""));
+        o.set("ID", id);
+        objs.push(o);
+    }
+    let first_kept = objs.len();
+    let mut used: std::collections::HashSet<String> = objs.iter().filter_map(|o| o.get("ID").map(str::to_string)).collect();
+    used.insert("PROJECT".into());
+    for (i, mut o) in kept.into_iter().enumerate() {
+        let source = take(&mut o, "ID");
+        // Its handle in the source drawing: nothing in this drawing.
+        take(&mut o, "Handle");
+        let base = source.as_deref().map(|s| xml::xml_id("", s)).filter(|s| s.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')).unwrap_or_else(|| format!("R{}", i + 1));
+        let (mut id, mut n) = (base.clone(), 1);
+        while !used.insert(id.clone()) {
+            n += 1;
+            id = format!("{base}_{n}");
+        }
+        o.set("ID", id);
+        old.push(source);
+        objs.push(o);
+    }
+    let refs: Vec<usize> = objs.iter().map(references).collect();
+    let dangling = xml::relink(&mut objs, &old);
+    let gone: Vec<bool> = (0..objs.len()).map(|i| i >= first_kept && refs[i] > 0 && dangling.iter().filter(|d| d.object == i).count() == refs[i]).collect();
+    let label = |o: &Object| format!("{} {}", o.kind, o.get("Handle").or(o.get("ID")).unwrap_or(""));
+    let mut findings = Vec::new();
+    for d in dangling.iter().filter(|d| !gone[d.object]) {
+        findings.push(Finding { level: nlcspp::Level::Waarschuwing, object: label(&objs[d.object]), field: d.field.clone(), message: format!("verwijst naar ID {}, dat niet in de tekening staat; de verwijzing wordt niet geleverd", d.id) });
+    }
+    for (o, _) in objs.iter().zip(&gone).filter(|(_, g)| **g) {
+        findings.push(Finding { level: nlcspp::Level::Waarschuwing, object: label(o), field: String::new(), message: "object zonder geometrie uit een import; het verwijst alleen naar objecten die niet meer in de tekening staan en wordt niet geleverd".into() });
+    }
+    let objs = objs.into_iter().zip(gone).filter(|(_, g)| !g).map(|(o, _)| o).collect();
+    (objs, findings)
+}
+
 /// The NLCS++ objects of a drawing (by object data, else by layer name)
-/// with their entity layer, in RD.
+/// with their entity layer, in RD. `ID` is an imported object's ID in its
+/// source.
 pub fn objects(doc: &CadDocument, site: &Site, unit_factor: f64, operator: &str) -> Result<Vec<(Object, String)>, String> {
     let feats = crate::geoexport::features(doc, site, unit_factor, &crate::geoexport::Options { annotation: false, ..Default::default() });
     let rd = (site.crs != "EPSG:28992").then(|| Transformer::new(&site.crs, "EPSG:28992")).transpose()?;
@@ -181,7 +280,7 @@ pub fn objects(doc: &CadDocument, site: &Site, unit_factor: f64, operator: &str)
         const OURS: [&str; 6] = ["bron", "nlcspp_object", "laag", "cad_type", "cad_handle", "tekst"];
         for (k, v) in &f.props {
             let model_field = def.velden.iter().any(|fd| &fd.name == k);
-            let internal = OURS.contains(&k.as_str()) || k.starts_with("nlcs_") || k == "Handle" || k == "ID" || k == "blok";
+            let internal = OURS.contains(&k.as_str()) || k.starts_with("nlcs_") || k == "Handle" || k == "blok";
             if !internal && (model_field || imported) {
                 o.set(k, v.clone());
             }
@@ -241,8 +340,10 @@ pub fn delivery(doc: &CadDocument, site: &Site, unit_factor: f64, operator: &str
             findings.push(w);
         }
     }
-    let n = found.len();
-    d.objects = found.into_iter().map(|(o, _)| o).collect();
+    let (objects, refs) = with_ids(found.into_iter().map(|(o, _)| o).collect(), relations()?);
+    let n = objects.len();
+    d.objects = objects;
+    findings.extend(refs);
     findings.extend(check::check(&d, Some(operator)));
     findings.sort_by(|a, b| a.level.cmp(&b.level).then(a.object.cmp(&b.object)));
     Ok((xml::write(&d, operator, "EPSG:28992"), findings, n))
