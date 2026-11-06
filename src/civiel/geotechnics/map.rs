@@ -406,9 +406,9 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
     api::note("soil", sub.describe());
     api::note("units", serde_json::to_value(sub.units()).unwrap_or_default());
     let lo = ctx.to_drawing([ext[0] - margin, ext[1] - margin]);
-    api::note("extent", serde_json::json!([lo[0], g0y.min(lo[1]), (g0x + gw).max(lx + 110.0 * k), right[1] + 6.0 * k]));
+    api::note("extent", serde_json::json!([lo[0], (g0y - 8.0 * k).min(lo[1]), (g0x + gw).max(lx + 110.0 * k), right[1] + 6.0 * k]));
     api::note("map_extent", serde_json::json!([lo[0], lo[1], right[0], right[1]]));
-    api::note("graph_extent", serde_json::json!([g0x - 15.0 * k, g0y - 6.0 * k, g0x + gw + 4.0 * k, g0y + gh + 8.0 * k]));
+    api::note("graph_extent", serde_json::json!([g0x - 15.0 * k, g0y - 8.0 * k, g0x + gw + 4.0 * k, g0y + gh + 8.0 * k]));
     api::note("handles", handles.len());
     api::note("disclaimer", disclaimer());
     let t90 = detail.packages.iter().map(|p| p.t90).fold(0.0f64, f64::max);
