@@ -1,8 +1,8 @@
 //! The drawing as geodata: every element with its layer, its NLCS meaning and
 //! its object data (the `OPENINFRA` XDATA) as attributes, to GeoJSON (WGS 84,
-//! as RFC 7946 asks) or a GeoPackage (in the project CRS, one table each for
-//! points, lines and areas). Host-independent: it takes a document, the
-//! project location and the drawing units.
+//! as RFC 7946 asks; heights as attributes) or a GeoPackage (in the project
+//! CRS, one table each for points, lines and areas). Host-independent: it
+//! takes a document, the project location and the drawing units.
 //!
 //! - lines, polylines (bulges as arc points), arcs, ellipses and splines
 //!   become line strings; closed ones (a BGT outline, a circle) areas;
@@ -296,23 +296,45 @@ pub fn features(doc: &CadDocument, site: &Site, unit_factor: f64, opt: &Options)
     out
 }
 
-/// GeoJSON (RFC 7946: WGS 84 longitude, latitude, height).
+/// GeoJSON (RFC 7946): positions are WGS 84 longitude and latitude only.
+/// RFC 7946 §4 reads a third coordinate as height above the WGS 84
+/// ellipsoid, and the drawing's heights are NAP (in the Netherlands about
+/// 40 m apart) or another local reference. So each feature keeps its heights
+/// (m) as a property: `cad_hoogte_nap`, one number when all its positions
+/// have the same height, otherwise `cad_hoogtes_nap`, one per position in
+/// the order of the coordinates (rings one after another). Outside the
+/// Netherlands the reference is not known to be NAP: `cad_hoogte(s)`.
 pub fn geojson(feats: &[GeoFeature], site: &Site) -> Result<String, String> {
     crs::ensure(&site.crs)?;
     let t = Transformer::new(&site.crs, "EPSG:4326")?;
+    let r = |v: f64, d: i32| (v * 10f64.powi(d)).round() / 10f64.powi(d) + 0.0;
     let ll = |p: &P3| -> Result<serde_json::Value, String> {
         let q = t.apply([p[0], p[1]])?;
-        let r = |v: f64, d: i32| (v * 10f64.powi(d)).round() / 10f64.powi(d);
-        Ok(serde_json::json!([r(q[0], 8), r(q[1], 8), r(p[2], 3)]))
+        Ok(serde_json::json!([r(q[0], 8), r(q[1], 8)]))
     };
+    let (one, each) = if crs::in_netherlands(site.lon, site.lat) { ("cad_hoogte_nap", "cad_hoogtes_nap") } else { ("cad_hoogte", "cad_hoogtes") };
     let mut list = Vec::with_capacity(feats.len());
     for f in feats {
-        let geometry = match &f.geom {
-            Geom::Point(p) => serde_json::json!({"type": "Point", "coordinates": ll(p)?}),
-            Geom::Line(v) => serde_json::json!({"type": "LineString", "coordinates": v.iter().map(&ll).collect::<Result<Vec<_>, _>>()?}),
-            Geom::Polygon(r) => serde_json::json!({"type": "Polygon", "coordinates": r.iter().map(|ring| ring.iter().map(&ll).collect::<Result<Vec<_>, _>>()).collect::<Result<Vec<_>, _>>()?}),
+        let (geometry, pts): (_, Vec<&P3>) = match &f.geom {
+            Geom::Point(p) => (serde_json::json!({"type": "Point", "coordinates": ll(p)?}), vec![p]),
+            Geom::Line(v) => (serde_json::json!({"type": "LineString", "coordinates": v.iter().map(&ll).collect::<Result<Vec<_>, _>>()?}), v.iter().collect()),
+            Geom::Polygon(rs) => (
+                serde_json::json!({"type": "Polygon", "coordinates": rs.iter().map(|ring| ring.iter().map(&ll).collect::<Result<Vec<_>, _>>()).collect::<Result<Vec<_>, _>>()?}),
+                rs.iter().flatten().collect(),
+            ),
         };
-        list.push(serde_json::json!({"type": "Feature", "geometry": geometry, "properties": f.props}));
+        let z: Vec<f64> = pts.iter().map(|p| r(p[2], 3)).collect();
+        let mut props: serde_json::Map<String, serde_json::Value> = f.props.iter().map(|(k, v)| (k.clone(), v.clone().into())).collect();
+        match z.as_slice() {
+            [] => {}
+            [first, rest @ ..] if rest.iter().all(|v| v == first) => {
+                props.insert(one.into(), serde_json::json!(first));
+            }
+            _ => {
+                props.insert(each.into(), serde_json::json!(z));
+            }
+        }
+        list.push(serde_json::json!({"type": "Feature", "geometry": geometry, "properties": props}));
     }
     serde_json::to_string_pretty(&serde_json::json!({"type": "FeatureCollection", "name": "Open Infra", "features": list})).map_err(|e| e.to_string())
 }
