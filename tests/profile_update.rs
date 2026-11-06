@@ -153,6 +153,7 @@ fn drawing(length: f64, kinds: &[&str], fail_add: bool) -> Arc<Drawing> {
                 plaats: Some([200.0, -200.0 - i as f64 * 100.0]),
                 bronnen: graaf::fingerprints(&doc, axis).unwrap(),
                 gemaakt: vec![format!("{:X}", u64::from(old))],
+                snijlijnen: None,
             }
         })
         .collect();
