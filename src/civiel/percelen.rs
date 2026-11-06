@@ -498,16 +498,53 @@ fn metres(v: f64) -> String {
     if crate::lang::current() == crate::lang::Lang::Nl { s.replace('.', ",") } else { s }
 }
 
-/// A closed outline or an open line, in drawing coordinates.
-/// The points of a plot or street line, with `tol` the largest distance
-/// (drawing units) between an arc segment and its chords.
-fn outline(e: &EntityType, _tol: f64) -> Option<(Vec<XY>, bool)> {
+/// The points strictly between `a` and `b` on the arc of `bulge` (DXF: the
+/// tangent of a quarter of the included angle, > 0 counter-clockwise), as
+/// chords at most `tol` from the arc. Nothing for a straight segment or an
+/// infinite `tol`.
+fn arc_points(a: XY, b: XY, bulge: f64, tol: f64) -> Vec<XY> {
+    let chord = len(sub(b, a));
+    if bulge.abs() < 1e-12 || chord < 1e-12 || !tol.is_finite() {
+        return Vec::new();
+    }
+    let theta = 4.0 * bulge.atan();
+    let r = chord / (2.0 * (theta / 2.0).sin().abs());
+    // The centre lies left of a → b for a counter-clockwise arc up to a half
+    // circle, right of it for a larger one (and mirrored when clockwise).
+    let u = unit(sub(b, a));
+    let h = chord / 2.0 / (theta / 2.0).tan();
+    let c = [(a[0] + b[0]) / 2.0 - u[1] * h, (a[1] + b[1]) / 2.0 + u[0] * h];
+    // A chord over angle φ stands r·(1 − cos φ/2) off the arc.
+    let step = if tol >= r { std::f64::consts::PI } else { 2.0 * (1.0 - tol / r).acos() };
+    let n = ((theta.abs() / step.max(1e-9)).ceil() as usize).clamp(1, 4096);
+    let a0 = (a[1] - c[1]).atan2(a[0] - c[0]);
+    (1..n)
+        .map(|k| {
+            let t = a0 + theta * k as f64 / n as f64;
+            [c[0] + r * t.cos(), c[1] + r * t.sin()]
+        })
+        .collect()
+}
+
+/// A closed outline or an open line, in drawing coordinates, with `tol` the
+/// largest distance (drawing units) between an arc segment and its chords:
+/// arcs count with their segment, as `CIV_HOEVEELHEDEN` measures them. An
+/// infinite `tol` gives the vertices only.
+fn outline(e: &EntityType, tol: f64) -> Option<(Vec<XY>, bool)> {
     match e {
         EntityType::LwPolyline(l) if l.vertices.len() >= 2 => {
-            let mut pts: Vec<XY> = l.vertices.iter().map(|v| [v.location.x, v.location.y]).collect();
-            let closed = l.is_closed || (pts.len() > 3 && len(sub(pts[0], *pts.last().unwrap())) < 1e-9);
-            if closed && len(sub(pts[0], *pts.last().unwrap())) < 1e-9 {
-                pts.pop();
+            let mut v: Vec<(XY, f64)> = l.vertices.iter().map(|v| ([v.location.x, v.location.y], v.bulge)).collect();
+            let closed = l.is_closed || (v.len() > 3 && len(sub(v[0].0, v[v.len() - 1].0)) < 1e-9);
+            if closed && len(sub(v[0].0, v[v.len() - 1].0)) < 1e-9 {
+                v.pop();
+            }
+            let n = v.len();
+            let mut pts = Vec::with_capacity(n);
+            for (i, &(p, bulge)) in v.iter().enumerate() {
+                pts.push(p);
+                if i + 1 < n || closed {
+                    pts.extend(arc_points(p, v[(i + 1) % n].0, bulge, tol));
+                }
             }
             Some((pts, closed))
         }
@@ -577,6 +614,8 @@ pub fn parcels(opt: &super::CivielOptions, req: Request) -> Result<String, Strin
             })
             .ok_or_else(|| tr("selecteer een gesloten polylijn (het perceel of plangebied), of geef KAVEL=<handle>", "select a closed polyline (the plot or plan area), or give KAVEL=<handle>"))?,
     };
+    // The plot's own vertices (an arc as its chord), for the longest side.
+    let corners_d = by(plot_h).and_then(|e| outline(e, f64::INFINITY)).map(|(p, _)| p).unwrap_or_else(|| plot_d.clone());
     let street_d: Option<Vec<XY>> = match &req.direction {
         Direction::Street(Some(h)) => match by(*h).and_then(|e| outline(e, tol)) {
             Some((p, _)) => Some(p),
@@ -602,9 +641,10 @@ pub fn parcels(opt: &super::CivielOptions, req: Request) -> Result<String, Strin
         }
         _ => {
             // Perpendicular to the longest side: that side acts as the street.
-            let n = plot.len();
-            let (i, _) = (0..n).map(|i| (i, len(sub(plot[(i + 1) % n], plot[i])))).max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
-            let (a, b) = (plot[i], plot[(i + 1) % n]);
+            let corners: Vec<XY> = corners_d.iter().map(|p| to_m(*p)).collect();
+            let n = corners.len();
+            let (i, _) = (0..n).map(|i| (i, len(sub(corners[(i + 1) % n], corners[i])))).max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
+            let (a, b) = (corners[i], corners[(i + 1) % n]);
             (Sweep::Street { line: vec![a, b] }, tr("haaks op de langste zijde", "perpendicular to the longest side"))
         }
     };
