@@ -229,6 +229,48 @@ class WorkFolderTest(unittest.TestCase):
         sent = self.allowed('infra_civ_corridor_range', {'assembly': 'stadsstraat'})
         self.assertIn('PROFIELTYPE=stadsstraat', sent[0]['cmd'])
 
+    def test_lists_and_objects_are_not_text(self):
+        # A list became its Python text, quotes and all (review round 3).
+        inject = f'" FORMAAT=PNEZD PAD={self.outside}/overwrite.csv "'
+        for value in ([inject], {'a': inject}):
+            with self.subTest(value=value):
+                self.refused('infra_civ_points_export', {'format': value})
+                self.refused('infra_oi_site', {'x': 1, 'y': 2, 'name': value})
+                self.refused('infra_gis_server', {'id': value})
+                self.refused('infra_open', {'path': value})
+                self.refused('infra_civ_corridor_range', {'assembly': value})
+
+    def test_no_argument_of_any_tool_reaches_outside(self):
+        """Every tool, every argument: a list, an object or text carrying a file
+        argument outside the work folder never reaches the window."""
+        def sample(schema):
+            if 'enum' in schema:
+                return schema['enum'][0]
+            kind = schema.get('type')
+            if kind == 'array':
+                items = schema.get('items', {})
+                if isinstance(items, list):
+                    return [sample(i) for i in items]
+                return [sample(items) for _ in range(max(schema.get('minItems', 2), 1))]
+            return {'number': 1, 'boolean': False, 'object': {}}.get(kind, 'x')
+
+        marker = f'{self.outside}/overwrite.csv'
+        attempts = [[f'" PAD={marker} "'], {'k': f'" PAD={marker} "'}, f'x" PAD="{marker}', f'x\u00a0PAD={marker}']
+        for t in mcp.TOOLS:
+            props = t['inputSchema']['properties']
+            for prop in props:
+                # A plain path outside only where the argument is a file; elsewhere it is text (a search).
+                for value in attempts + ([marker] if prop in ('path', 'template') else []):
+                    args = {k: sample(props[k]) for k in t['inputSchema']['required']}
+                    args[prop] = value
+                    try:
+                        mcp.call_tool(t['name'], args)
+                    except Exception:  # a crash on a wrong type is not a file route
+                        pass
+                    self.assertNotIn(str(self.outside), repr(self.window.actions()), f"{t['name']} {prop}={value!r}")
+                    self.window.sent.clear()
+        self.assertEqual(os.listdir(self.outside), ['private.dwg'])
+
     def test_points_stay_points(self):
         sent = self.allowed('infra_place', {'item': 'kabel', 'path': [[0, 0], [10, 0]]})
         self.assertIn('PATH=0,0;10,0', sent[0]['cmd'])

@@ -122,7 +122,9 @@ def confine(path):
     if not managed():
         return path
     root = work_folder()
-    p = str(path)
+    if not isinstance(path, str):
+        raise OcsError(f"pad {path!r}: geen tekst")
+    p = path
     if not p.strip() or '"' in p or _control(p) or _odd_space(p) or (os.sep == "/" and "\\" in p):
         raise OcsError(f"pad {p!r}: leeg, of met een aanhalingsteken, backslash, stuurteken of andere witruimte dan een spatie")
     real = os.path.realpath(os.path.join(root, p))
@@ -137,16 +139,17 @@ def _file(a, key="path"):
 
 
 def _text(v):
-    """A text argument: in managed mode without quotes, control characters or
-    whitespace other than a plain space, so it stays one argument."""
-    if managed() and isinstance(v, str) and ('"' in v or _control(v) or _odd_space(v)):
-        raise OcsError(f"{v!r}: geen aanhalingsteken, stuurteken of andere witruimte dan een spatie in beheerde modus")
+    """A text argument: in managed mode only text (not a list or object), without
+    quotes, control characters or whitespace other than a plain space, so it
+    stays one argument."""
+    if managed() and (not isinstance(v, str) or '"' in v or _control(v) or _odd_space(v)):
+        raise OcsError(f"{v!r}: in beheerde modus alleen tekst, zonder aanhalingsteken, stuurteken of andere witruimte dan een spatie")
     return v
 
 
 def _assembly(v):
     """An assembly (profieltype): in managed mode only by name, never a .json file."""
-    if managed() and v and ("/" in v or "\\" in v or v.strip().lower().endswith(".json")):
+    if managed() and v and ("/" in _text(v) or "\\" in v or v.strip().lower().endswith(".json")):
         raise OcsError(f"profieltype {v!r}: in beheerde modus alleen op naam (civ_assemblies geeft de namen)")
     return v
 
@@ -371,13 +374,15 @@ def _kv(**kw):
     for k, v in kw.items():
         if v is None or v == "" or v == []:
             continue
-        _text(v)
         if isinstance(v, bool):
             v = "ja" if v else "nee"
         elif isinstance(v, (int, float)):
             v = _num(v)
-        elif " " in str(v) and not str(v).startswith('"'):
-            v = f'"{v}"'
+        else:
+            # In managed mode the text as it goes into the command line.
+            v = _text(v) if managed() else str(v)
+            if " " in v and not v.startswith('"'):
+                v = f'"{v}"'
         out.append(f"{k}={v}")
     return " ".join(out)
 
@@ -966,7 +971,7 @@ def t_capture(a):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     body = {"path": path, "document_id": OCS.document_id()}
     if a.get("region"):
-        body.update({"view": "region", "bounds": a["region"]})
+        body.update({"view": "region", "bounds": [float(v) for v in a["region"]]})
     if a.get("max_dimension"):
         body["max_dimension"] = int(a["max_dimension"])
     r = OCS.request("capture", body, timeout=180)
