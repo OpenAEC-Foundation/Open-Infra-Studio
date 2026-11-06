@@ -163,6 +163,66 @@ pub fn crossings(a: XY, b: XY, line: &[XY]) -> Vec<f64> {
     line.windows(2).filter_map(|w| cross(a, b, w[0], w[1])).collect()
 }
 
+/// Where point p lies along section line a–b, if it is within `near` of it
+/// (drawing units): the parameter along a–b.
+fn near_point(a: XY, b: XY, p: XY, near: f64) -> Option<f64> {
+    let (ab, ap) = ([b[0] - a[0], b[1] - a[1]], [p[0] - a[0], p[1] - a[1]]);
+    let len2 = ab[0] * ab[0] + ab[1] * ab[1];
+    if len2 <= 0.0 {
+        return None;
+    }
+    let t = (ap[0] * ab[0] + ap[1] * ab[1]) / len2;
+    let off = (ap[0] * ab[1] - ap[1] * ab[0]).abs() / len2.sqrt();
+    ((0.0..=1.0).contains(&t) && off <= near).then_some(t)
+}
+
+/// Whether one of the section lines cuts this object: runs through the
+/// surface, crosses the line, or passes within `near` of the survey point.
+/// Only the plan counts, not the ground, as in [`section_cuts`].
+pub fn cut_by(c: &Cuttable, lines: &[(XY, XY)], near: f64) -> bool {
+    lines.iter().any(|&(a, b)| match c.kind {
+        Kind::Surface => !inside_intervals(a, b, &c.pts).is_empty(),
+        Kind::Utility(_) => !crossings(a, b, &c.pts).is_empty(),
+        Kind::Survey(_) => near_point(a, b, c.pts[0], near).is_some(),
+    })
+}
+
+/// Everything of an object that [`section_cuts`] draws from: its kind and
+/// depth or height, its plan points, its layer and its label.
+fn object_fingerprint(c: &Cuttable) -> String {
+    let (kind, value) = match c.kind {
+        Kind::Surface => ("vlak", 0.0),
+        Kind::Utility(depth) => ("leiding", depth),
+        Kind::Survey(z) => ("meetpunt", z),
+    };
+    let values: Vec<f64> = std::iter::once(value).chain(c.pts.iter().flatten().copied()).collect();
+    super::labels::fingerprint(&values, &[kind.to_string(), c.layer.name.clone(), c.label.clone()])
+}
+
+/// The fingerprints of what the section lines cut, per source: `bgt` (the
+/// surfaces), `klic` (the cables and pipes) and `meetpunten` (the survey
+/// points within `near`). The order of the objects in the drawing does not
+/// count.
+pub fn cut_fingerprints<'a>(things: impl IntoIterator<Item = &'a Cuttable>, lines: &[(XY, XY)], near: f64) -> Vec<(String, String)> {
+    let mut per: [Vec<String>; 3] = Default::default();
+    for c in things.into_iter().filter(|c| cut_by(c, lines, near)) {
+        let i = match c.kind {
+            Kind::Surface => 0,
+            Kind::Utility(_) => 1,
+            Kind::Survey(_) => 2,
+        };
+        per[i].push(object_fingerprint(c));
+    }
+    ["bgt", "klic", "meetpunten"]
+        .into_iter()
+        .zip(per)
+        .map(|(key, mut fps)| {
+            fps.sort();
+            (key.to_string(), super::labels::fingerprint(&[], &fps))
+        })
+        .collect()
+}
+
 /// The ground height at an offset, between the sampled points.
 fn ground_at(v: &SectionView, d: f64) -> Option<f64> {
     let g: Vec<(f64, f64)> = v.ground.iter().filter_map(|(o, z)| z.map(|z| (*o, z))).collect();
@@ -226,17 +286,7 @@ pub fn section_cuts(things: &[Cuttable], views: &[SectionView], left: f64, right
                     }
                 }
                 Kind::Survey(z) => {
-                    let p = c.pts[0];
-                    let (ab, ap) = ([b[0] - a[0], b[1] - a[1]], [p[0] - a[0], p[1] - a[1]]);
-                    let len2 = ab[0] * ab[0] + ab[1] * ab[1];
-                    if len2 <= 0.0 {
-                        continue;
-                    }
-                    let t = (ap[0] * ab[0] + ap[1] * ab[1]) / len2;
-                    let off = (ap[0] * ab[1] - ap[1] * ab[0]).abs() / len2.sqrt();
-                    if !(0.0..=1.0).contains(&t) || off > near {
-                        continue;
-                    }
+                    let Some(t) = near_point(a, b, c.pts[0], near) else { continue };
                     let d = d_of(t);
                     let r = radius * 1.4;
                     lines.push((c.layer.clone(), vec![(d - r, z - r), (d + r, z + r)]));
