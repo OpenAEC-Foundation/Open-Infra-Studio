@@ -39,6 +39,24 @@ class NlcsppXsdTest(unittest.TestCase):
             ours = json.loads((OUT / f"{name}-keuzelijstfouten.json").read_text())
             self.assertEqual(len(value), len(ours), f"{name}: XSD {len(value)} code-list errors, Open Infra's check {len(ours)}")
 
+    def test_relations_survive_import_and_export(self):
+        """A cable with linked attachments, imported and exported again
+        (`import_then_export_keeps_relations_and_their_references`): every
+        reference (IDREF) must name an object of the new delivery."""
+        try:
+            import xmlschema
+        except ImportError:
+            self.skipTest("xmlschema not installed")
+        path = OUT / "relaties-v12.1.xml"
+        if not path.exists():
+            self.skipTest("run cargo test --test nlcspp first")
+        try:
+            schema = xmlschema.XMLSchema(str(XSD / "NLCS_NetbeheerEnexisV12.1Import_Keuzelijst.xsd"))
+        except Exception as e:  # the GML schemas come over the network
+            self.skipTest(f"schema not loadable: {e}")
+        errors = [f"{e.path}: {e.reason}" for e in schema.iter_errors(str(path))]
+        self.assertEqual([], errors)
+
 
 if __name__ == "__main__":
     unittest.main()
