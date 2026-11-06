@@ -166,6 +166,8 @@ A second plugin, `openaec.open-infra-civiel`, adds the ribbon tab **"Open Infra 
 
 **Grading** (feature lines, plateaus and slopes into one design surface, exact TIN-to-TIN volumes, mass haul): see [docs/civiel-grading.md](docs/civiel-grading.md).
 
+**Geotechnics** (soil profiles from BRO CPTs and boreholes, slope stability with Bishop and Fellenius, settlement of fills with Koppejan or Terzaghi; a calculation aid, not a stamped design): see [docs/geotechnics.md](docs/geotechnics.md).
+
 **Bladen** (sheets, plan production): sheet sets along an alignment with plan and profile in paper-space layouts, a PDF per sheet, and labels that follow their source — see [docs/civiel-bladen.md](docs/civiel-bladen.md).
 
 Corridor parts (kerbs, footways, cycle paths, ditches, pavement layers), your own assemblies as JSON, junctions and roundabouts: see [docs/civiel-corridor.md](docs/civiel-corridor.md).
