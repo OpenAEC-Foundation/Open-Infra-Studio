@@ -7,7 +7,10 @@
 //! checks the soil parameters and the assumptions. See docs/geotechnics.md
 //! for every formula and source.
 
+pub mod map;
 pub mod model;
+pub mod profile;
+pub mod section;
 pub mod settlement;
 pub mod soil;
 pub mod stability;

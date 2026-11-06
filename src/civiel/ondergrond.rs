@@ -140,7 +140,8 @@ pub fn overview(opt: &CivielOptions, kinds: &[Kind], progress: &dyn Fn(String)) 
         let (pts, _) = find(&ctx, *kind, usize::MAX, progress)?;
         for (p, at) in &pts {
             plan_symbol(&ctx, p, *at, &mut out)?;
-            ids.push(serde_json::json!({"bro_id": p.id, "soort": kind.label(), "maaiveld_m_nap": p.surface, "einddiepte_m": p.end_depth, "datum": p.date}));
+            let xy = ctx.from_drawing(*at);
+            ids.push(serde_json::json!({"bro_id": p.id, "soort": kind.label(), "maaiveld_m_nap": p.surface, "einddiepte_m": p.end_depth, "datum": p.date, "x": xy[0], "y": xy[1]}));
         }
         counts.push(format!("{} {}en", pts.len(), kind.label()));
     }
