@@ -15,7 +15,7 @@ The work was reading and probing, not a rewrite. Findings that the reviews of #6
 | Design criteria | ROA 2017, AASHTO Green Book 2018 | All checked ROA 2017 values match; AASHTO values match their formulas |
 | Rail cant | D = s·v²/(g·R) | Matches |
 | Volumes and mass haul | Prismoid, average end area | Matches |
-| **Parcel areas** | Circle segment area | **Error: arcs in a plot are ignored.** Fixed in a separate PR (see below) |
+| **Parcel areas** | Circle segment area | **Error: arcs in a plot are ignored.** Fixed in #105 |
 | Settlement and stability | Fadum, Terzaghi, Koppejan, Bishop, Robertson 2010 | Formulas match; three table values to check against NEN 9997-1 |
 | Parking | NEN 2443:2013 tables 4A–4C | Internally consistent; not checked against the standard itself |
 
@@ -122,7 +122,7 @@ D_eq = c·V²/R with c = 1500/(9.81·3.6²) = 11.8 (standard gauge, rail head di
 
 So "4 equal parcels" of the first plot get 300 m² each on paper, and their real areas differ. The drawn parcels also follow the chord, not the arc.
 
-**Fix.** A separate PR follows each arc with chords at most 0.1 mm from it, so the areas, the clipping and the drawn parcels follow the arc. Parcel areas that users already took from arched plots change.
+**Fix.** PR #105 follows each arc with chords at most 0.1 mm from it, so the areas, the clipping and the drawn parcels follow the arc. Parcel areas that users already took from arched plots change.
 
 ## 9. Geotechnics (`src/civiel/geotechnics/`, `src/gis/bro.rs`)
 
@@ -137,6 +137,10 @@ So "4 equal parcels" of the first plot get 300 m² each on paper, and their real
 ## 10. Parking (`src/library/parking.rs`)
 
 The row depths P1 of NEN 2443 tables 4A–4C follow P1 = 5.13·sin α + 1.87·cos α for every angle (30°: 4.18, 45°: 4.95, 60°: 5.38, 70°: 5.46). So the copied tables are internally consistent. They were not compared with the standard itself, which is not public.
+
+## Seen in passing, outside the calculation core
+
+**CityGML rings with more than one segment** (`src/gis/citygml.rs`, `ring()`). The function takes the first `posList` below a ring element and stops. A `gml:Ring` made of several `curveMember`s, or a `gml:Curve` with several `segments` (for example a `LineStringSegment` followed by a `gml:Arc`), keeps only its first segment. The surface is then cut short, or dropped when that segment has fewer than three points, without a warning. The GML reader in `src/gis/files.rs` joins linear segments and reports arcs as unsupported; the CityGML reader does neither. Code reading only (BEVESTIGD for the code path); whether IMGeo files from the BGT download use such rings was not checked (VERMOED). Left for the readers work, not fixed here.
 
 ## Not checked
 
