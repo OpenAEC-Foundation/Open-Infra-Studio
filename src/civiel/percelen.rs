@@ -561,6 +561,18 @@ fn outline(e: &EntityType, tol: f64) -> Option<(Vec<XY>, bool)> {
     }
 }
 
+/// The sweep for `Direction::Auto`: perpendicular to the longest side
+/// between the plot's own vertices (an arc as its chord); that side acts as
+/// the street.
+fn auto_sweep(e: &EntityType, to_m: &dyn Fn(XY) -> XY) -> Option<Sweep> {
+    let (corners, _) = outline(e, f64::INFINITY)?;
+    let pts: Vec<XY> = corners.iter().map(|p| to_m(*p)).collect();
+    let n = pts.len();
+    let (i, _) = (0..n).map(|i| (i, len(sub(pts[(i + 1) % n], pts[i])))).max_by(|a, b| a.1.total_cmp(&b.1))?;
+    let (a, b) = (pts[i], pts[(i + 1) % n]);
+    Some(Sweep::Street { line: vec![a, b] })
+}
+
 /// How the dividing lines run.
 #[derive(Clone, Debug)]
 pub enum Direction {
@@ -614,8 +626,6 @@ pub fn parcels(opt: &super::CivielOptions, req: Request) -> Result<String, Strin
             })
             .ok_or_else(|| tr("selecteer een gesloten polylijn (het perceel of plangebied), of geef KAVEL=<handle>", "select a closed polyline (the plot or plan area), or give KAVEL=<handle>"))?,
     };
-    // The plot's own vertices (an arc as its chord), for the longest side.
-    let corners_d = by(plot_h).and_then(|e| outline(e, f64::INFINITY)).map(|(p, _)| p).unwrap_or_else(|| plot_d.clone());
     let street_d: Option<Vec<XY>> = match &req.direction {
         Direction::Street(Some(h)) => match by(*h).and_then(|e| outline(e, tol)) {
             Some((p, _)) => Some(p),
@@ -639,14 +649,10 @@ pub fn parcels(opt: &super::CivielOptions, req: Request) -> Result<String, Strin
             }
             (Sweep::Street { line }, tr("haaks op de straat", "perpendicular to the street"))
         }
-        _ => {
-            // Perpendicular to the longest side: that side acts as the street.
-            let corners: Vec<XY> = corners_d.iter().map(|p| to_m(*p)).collect();
-            let n = corners.len();
-            let (i, _) = (0..n).map(|i| (i, len(sub(corners[(i + 1) % n], corners[i])))).max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
-            let (a, b) = (corners[i], corners[(i + 1) % n]);
-            (Sweep::Street { line: vec![a, b] }, tr("haaks op de langste zijde", "perpendicular to the longest side"))
-        }
+        _ => match by(plot_h).and_then(|e| auto_sweep(e, &to_m)) {
+            Some(sweep) => (sweep, tr("haaks op de langste zijde", "perpendicular to the longest side")),
+            None => return Err(tr("het perceel (KAVEL=) moet een gesloten polylijn zijn", "the plot (KAVEL=) must be a closed polyline")),
+        },
     };
     let parcels = split(&plot, &sweep, req.sizing)?;
     let method = match req.sizing {
@@ -939,6 +945,39 @@ mod tests {
         // Without arcs the corners stay as they are.
         let (corners, _) = outline(&e, f64::INFINITY).unwrap();
         assert_eq!(corners, vec![[0.0, 0.0], [40.0, 0.0], [40.0, 30.0], [0.0, 30.0]]);
+    }
+
+    #[test]
+    fn without_a_street_an_arc_side_gives_the_direction() {
+        // The longest side (a 42 m chord) is an arc bulging outward: 60°.
+        use ocs_plugin_api::host::codec::{LwPolyline, Vector2};
+        let mut l = LwPolyline::new();
+        for (x, y) in [(0.0, 0.0), (40.0, 0.0), (41.0, 30.0), (-1.0, 30.0)] {
+            l.add_point_with_bulge(Vector2::new(x, y), 0.0);
+        }
+        l.vertices[2].bulge = (60f64.to_radians() / 4.0).tan();
+        l.is_closed = true;
+        let e = EntityType::LwPolyline(l);
+        let (ring, _) = outline(&e, ARC_TOLERANCE).unwrap();
+        // Perpendicular to the chord, parcels of at least 12 m frontage are
+        // 12, 12 and 18 m wide: the remainder goes to the last one.
+        let sweep = auto_sweep(&e, &|p| p).unwrap();
+        let p = split(&ring, &sweep, Sizing::Min { area: None, front: Some(12.0), rest: Remainder::Last }).unwrap();
+        let fronts: Vec<f64> = p.iter().map(|q| q.frontage).collect();
+        assert_eq!(fronts.len(), 3, "{fronts:?}");
+        for (f, want) in fronts.iter().zip([12.0, 12.0, 18.0]) {
+            assert!((f - want).abs() < 1e-6, "{fronts:?}");
+        }
+        let total: f64 = p.iter().map(|q| q.area).sum();
+        assert!((total - area(&ring)).abs() < 1e-6);
+        // A straight longest side stays the street (the last of equal ones).
+        let mut r = LwPolyline::new();
+        for (x, y) in [(0.0, 0.0), (40.0, 0.0), (40.0, 30.0), (0.0, 30.0)] {
+            r.add_point_with_bulge(Vector2::new(x, y), 0.0);
+        }
+        r.is_closed = true;
+        let street = auto_sweep(&EntityType::LwPolyline(r), &|p| p);
+        assert!(matches!(&street, Some(Sweep::Street { line }) if *line == vec![[40.0, 30.0], [0.0, 30.0]]), "{street:?}");
     }
 
     #[test]
