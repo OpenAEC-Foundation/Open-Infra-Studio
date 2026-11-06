@@ -3,8 +3,8 @@
 //! direction. Three ways to size them: N equal parcels, a target area
 //! (`OPP=`) or a frontage width (`FRONT=`); area and frontage together act as
 //! minimums, as subdivision tools usually treat them. Each dividing line is
-//! found by bisection on the exact (clipped polygon) area, so the areas are
-//! exact to well under 0.01 m².
+//! found by bisection on the exact (clipped polygon) area, so the bisection
+//! adds well under 0.01 m². Arcs are followed by chords (`ARC_TOLERANCE`).
 //!
 //! The engine works in metres around a local origin; the drawing side reads
 //! the plot and street, draws the parcels on KG-GRENS_PERCEEL with their
@@ -20,8 +20,10 @@ use crate::gis::crs::XY;
 use crate::nlcs::Element;
 
 /// Arc segments of a plot or street (polyline bulges) are followed by chords
-/// at most this far from the arc (m): 0.1 mm. The chords leave out about
-/// two thirds of that times the arc length: 0.007 m² per 100 m of arc.
+/// at most this far from the arc (m): 0.1 mm, with at most 4096 chords per
+/// arc. The area then differs by up to about two thirds of that times the
+/// arc length, 0.007 m² per 100 m of arc: the plot gets smaller where an arc
+/// bulges outward and larger where it bulges inward.
 const ARC_TOLERANCE: f64 = 1e-4;
 
 /// A message in the interface language (Dutch or English).
@@ -973,8 +975,10 @@ mod tests {
         let p = split(&ring, &sweep, Sizing::Min { area: None, front: Some(12.0), rest: Remainder::Last }).unwrap();
         let fronts: Vec<f64> = p.iter().map(|q| q.frontage).collect();
         assert_eq!(fronts.len(), 3, "{fronts:?}");
+        // `split()` starts and ends where 1e-9 m² of the plot lies beyond the
+        // line; at this plot's pointed end that is about 2e-5 m.
         for (f, want) in fronts.iter().zip([12.0, 12.0, 18.0]) {
-            assert!((f - want).abs() < 1e-6, "{fronts:?}");
+            assert!((f - want).abs() < 1e-4, "{fronts:?}");
         }
         let total: f64 = p.iter().map(|q| q.area).sum();
         assert!((total - area(&ring)).abs() < 1e-6);
