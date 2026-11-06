@@ -419,12 +419,16 @@ pub fn marker_entities(id: &str, title: &str, counts: (usize, usize, usize), bbo
         counts.1,
         counts.2
     );
-    // As wide as the frame, so it reads at the zoom that shows the frame;
-    // at least 3 mm on paper.
+    // About as wide as the frame (a character is taken as 0.9 × the height),
+    // so it reads at the zoom that shows the frame; at least 3 mm on paper.
+    // Left-aligned at the frame's upper-left corner.
     let chars = label.chars().count().max(1) as f64;
-    let text_h = ((x1 - x0) / (chars * 0.6)).min(0.03 * size.max(1.0)).max(3.0 * k);
-    let w = chars * text_h * 0.6;
-    out.push(crate::emit::text([x0 + w / 2.0, y1 + text_h], &label, text_h, 0.0, MARKER_LAYER, Some(&data)));
+    let text_h = ((x1 - x0) / (chars * 0.9)).min(0.03 * size.max(1.0)).max(3.0 * k);
+    let mut t = crate::emit::text([x0, y1 + text_h], &label, text_h, 0.0, MARKER_LAYER, Some(&data));
+    if let EntityType::Text(tx) = &mut t {
+        tx.horizontal_alignment = ocs_plugin_api::host::codec::entities::TextHorizontalAlignment::Left;
+    }
+    out.push(t);
     out
 }
 
