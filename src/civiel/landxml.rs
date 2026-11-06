@@ -780,7 +780,7 @@ mod tests {
             // More than a full turn: no transition curve, and drawing it
             // as arcs would not end.
             ("length=\"30\"", "length=\"1e9\""),
-            ("radiusEnd=\"200\"", "radiusEnd=\"1e-9\""),
+            ("radiusEnd=\"200\"", "radiusEnd=\"0.002\""),
             ("radiusStart=\"INF\"", "radiusStart=\"0.001\""),
         ] {
             assert_ne!(SAMPLE.replace(from, to), SAMPLE, "fixture substitution: {from}");
