@@ -36,7 +36,18 @@ Claude Desktop (`claude_desktop_config.json`): dezelfde regel onder `mcpServers`
 
 Daar draait Open CAD Studio met beide plugins als gestreamde desktop (route B van het [SuperCloud-contract](https://github.com/OpenAEC-Foundation/OpenAEC-Blueprint/blob/main/docs/supercloud-koppeling.md)).
 
-- **Transport:** stdio, of streamable HTTP met `python3 open_infra_mcp.py --http 0.0.0.0:8765`. Een POST naar `/mcp` met JSON-RPC krijgt één JSON-antwoord terug. Is `OI_MCP_TOKEN` gezet, dan is `Authorization: Bearer <token>` verplicht.
+- **Transport:** stdio, of streamable HTTP met `--http [host:]poort`. Een POST naar `/mcp` met JSON-RPC en `Content-Type: application/json` krijgt één JSON-antwoord terug. Een ander `Content-Type` krijgt 415.
+  - `--http 8765` luistert alleen op 127.0.0.1. Op loopback (127.0.0.1, `::1`, `localhost`) is een token niet verplicht.
+  - Op elk ander adres is een token verplicht, van minstens 32 tekens. Zonder token start de server niet. De client stuurt `Authorization: Bearer <token>`:
+
+    ```sh
+    export OI_MCP_TOKEN="$(openssl rand -hex 32)"
+    python3 open_infra_mcp.py --http 0.0.0.0:8765
+    ```
+
+  - Is `OI_MCP_TOKEN` gezet, dan is het token op elk adres verplicht. Een ontbrekend of fout token krijgt 401.
+  - De server controleert de `Host` van elke aanvraag. Toegestaan zijn `localhost`, `127.0.0.1`, `::1` en het adres waarop de server luistert. Gebruikt de client een andere naam, bijvoorbeeld de naam van de container, zet die dan in `OI_MCP_HOSTS` (namen gescheiden door komma's). Een andere `Host` krijgt 403.
+  - Een aanvraag met een `Origin`-header (uit een browser) krijgt 403, tenzij die origin in `OI_MCP_ORIGINS` staat (bijvoorbeeld `https://cloud.example`). Een gewone MCP-client stuurt geen `Origin`.
 - **Eén voorvoegsel:** met `OPENAEC_BEHEERD=1` (of `--prefix infra`) beginnen alle tools met `infra_`. Zo wordt `civ_tin` bijvoorbeeld `infra_civ_tin`. De oude namen blijven werken.
 - **Stand en bestanden:**
   - `infra_stand`: wat er open is, de projectlocatie en het model.
