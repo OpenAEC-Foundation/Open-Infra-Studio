@@ -64,8 +64,8 @@ impl PluginRequestSender for Drawing {
             PluginRequest::OpenDocumentViewV4 { .. } => PluginResponse::Error("de tekening is te groot voor de gedeelde weergave".into()),
             PluginRequest::CloseDocumentViewV4 { .. } => PluginResponse::Ok,
             PluginRequest::ReadXRecord { name, .. } if name == "INDEX" => PluginResponse::XRecordEntries(Ok(vec![
-                XRecordEntry::string(1, "tin\tB\t20 21".into()),
-                XRecordEntry::string(1, "punten\t\t40".into()),
+                XRecordEntry::string(1, "tin\tB\t20 21"),
+                XRecordEntry::string(1, "punten\t\t40"),
             ])),
             PluginRequest::ReadXRecord { .. } => PluginResponse::XRecordEntries(Ok(Vec::new())),
             PluginRequest::GetSelection => PluginResponse::Selection(Vec::new()),
