@@ -305,7 +305,9 @@ def main():
         path = OUT / "problemen.dwg"
         if path.exists():
             path.unlink()
-        ocs.run(f"QSAVEAS {path}")
+        r = ocs.call("/save", {"path": str(path), "document_id": ocs.doc()}, timeout=300)
+        if r.get("ok") is False:
+            return False, f"save: {r.get('error')}"
         t0 = time.time()
         while not path.exists() and time.time() - t0 < 30:
             time.sleep(0.5)
@@ -334,9 +336,10 @@ def main():
         shots.append(capture("pi3", [bend[0] + ox - 60, bend[1] + oy - 45, bend[0] + ox + 60, bend[1] + oy + 45]))
         f = api_dir / "lp1.json"
         if f.exists():
-            h = json.loads(f.read_text()).get("data", {}).get("lengteprofiel")
-            if h:
-                shots.append(capture("lengteprofiel", focus=[h]))
+            at = json.loads(f.read_text()).get("data", {}).get("plaats")
+            if at:
+                n = state.get("len") or 640
+                shots.append(capture("lengteprofiel", [at[0] - 30, at[1] - 50, at[0] + n + 40, at[1] + 90]))
         # The Problems page of the window.
         ocs.run("CIV_PROBLEMEN")
         time.sleep(12)
@@ -349,7 +352,11 @@ def main():
         x, y, w, h = SITE
         rect = state.get("rect") or [x - w / 2, y - h / 2, x + w / 2, y + h / 2]
         ox, oy = (rect[0] + rect[2]) / 2 - x, (rect[1] + rect[3]) / 2 - y
-        return capture("plan-voor", [PIS[0][0] + ox - 40, PIS[3][1] + oy - 160, PIS[4][0] + ox + 40, PIS[2][1] + oy + 80])
+        a = capture("plan-voor", [PIS[0][0] + ox - 40, PIS[3][1] + oy - 160, PIS[4][0] + ox + 40, PIS[2][1] + oy + 80])
+        # The overlapping bend between PI 1 and PI 2, with its marker.
+        mx, my = (PIS[1][0] + PIS[2][0]) / 2 + ox, (PIS[1][1] + PIS[2][1]) / 2 + oy
+        b = capture("bocht-voor", [mx - 110, my - 80, mx + 110, my + 50])
+        return a[0] and b[0], f"{a[1]}, {b[1]}"
 
     if step("site", site) and step("axis with overlapping curves", axis):
         if step("length and design profile", profiles):

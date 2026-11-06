@@ -34,6 +34,8 @@ CIV_PROBLEMEN [ALLES|SELECTIE] [CONTROLES=as;criteria;profiel;riool;grading;corr
 - Markers go on dedicated layers, in place of the markers of the previous run: `OI-PROBLEMEN` (errors, red), `OI-PROBLEMEN-LET-OP` (warnings and info, orange) and `OI-PROBLEMEN-GEACCEPTEERD` (accepted, grey). Each marker is a circle with a short title and object data `probleem`, `probleem_object`, `probleem_status`. The NLCS check leaves these layers out. `MARKERINGEN=nee` draws none.
 - From the ribbon (without arguments) it opens the Problems page.
 
+![Markers of the e2e test: the overlapping curves between PI 1 and PI 2, and the missing transition curves](images/design-problems-markers.png)
+
 With `ID=` the JSON (`<config>/OpenCADStudio/open-infra/api/<name>.json`) holds `problems` and the counts `open`, `errors`, `warnings`, `info`, `accepted`, the `checks` that ran, `notes` (checks that could not run) and `markers`.
 
 ### The problem record

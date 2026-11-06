@@ -271,7 +271,7 @@ fn row(ui: &mut egui::Ui, i: usize, p: &Problem, busy: bool, accepting: &mut Opt
             ui.label(RichText::new(format!("{}: {s}", tr("bron", "source"))).small().weak());
         }
         if let Some(a) = &p.accepted {
-            ui.label(RichText::new(format!("✓ {}: {} — {}{}", tr("geaccepteerd", "accepted"), a.reason, a.date, if a.author.is_empty() { String::new() } else { format!(", {}", a.author) })).small().color(OK_GREEN));
+            ui.label(RichText::new(format!("{}: {} — {}{}", tr("Geaccepteerd", "Accepted"), a.reason, a.date, if a.author.is_empty() { String::new() } else { format!(", {}", a.author) })).small().color(OK_GREEN));
         } else if p.acceptance_outdated {
             ui.label(RichText::new(tr("Eerder geaccepteerd; het object is sindsdien gewijzigd.", "Accepted before; the object has changed since.")).small().color(WARN));
         }
@@ -285,7 +285,7 @@ fn row(ui: &mut egui::Ui, i: usize, p: &Problem, busy: bool, accepting: &mut Opt
                 todo = Some(Todo::Zoom(i));
             }
             for (k, f) in p.fixes.iter().enumerate() {
-                if ui.add_enabled(!busy && p.status == Status::Open, egui::Button::new(format!("⚒ {}", f.label.get())).small()).on_hover_text(tr("Toepassen: één stap ongedaan te maken", "Apply: one undo step")).clicked() {
+                if ui.add_enabled(!busy && p.status == Status::Open, egui::Button::new(format!("{}: {}", tr("Herstel", "Fix"), f.label.get())).small()).on_hover_text(tr("Toepassen: één stap ongedaan te maken", "Apply: one undo step")).clicked() {
                     todo = Some(Todo::Fix(i, k));
                 }
             }

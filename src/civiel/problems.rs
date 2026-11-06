@@ -650,10 +650,14 @@ pub fn draw_markers(ctx: &Ctx, problems: &mut [Problem], scope: &Scope) -> Resul
     };
     let mut out = Out::default();
     let mut owners: Vec<usize> = Vec::new();
+    let mut placed: Vec<XY> = Vec::new();
     for (i, p) in problems.iter().enumerate() {
         let Some(loc) = &p.location else { continue };
         let spec = marker_layer(p);
         let c = ctx.to_drawing([loc.x, loc.y]);
+        // Several problems at one place: their labels one below the other.
+        let row = placed.iter().filter(|q| (q[0] - c[0]).hypot(q[1] - c[1]) < 2.0 * k).count() as f64;
+        placed.push(c);
         let data = super::record(&[
             ("probleem", p.code.clone()),
             ("probleem_object", p.object.clone()),
@@ -671,7 +675,7 @@ pub fn draw_markers(ctx: &Ctx, problems: &mut [Problem], scope: &Scope) -> Resul
             _ => "!",
         };
         let label = format!("{mark} {}", p.title.get());
-        let t = ctx.text([c[0] + 5.0 * k, c[1] + 2.5 * k], &label, 2.5, 0.0, &spec, Some(&data));
+        let t = ctx.text([c[0] + 5.0 * k, c[1] + 2.5 * k - row * 4.0 * k], &label, 2.5, 0.0, &spec, Some(&data));
         owners.push(i);
         out.put(&spec, [circle, t]);
     }

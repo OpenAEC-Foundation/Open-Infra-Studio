@@ -226,7 +226,7 @@ pub fn check_plan(al: &Alignment, f: f64, g: &Guideline, l: &Limits) -> Vec<Find
                     }
                 }
                 // A straight right against a curve that needs clothoids.
-                if let Some(req) = l.r_overgang.as_ref().filter(|v| r < v.v) {
+                if let Some(req) = l.r_overgang.as_ref().filter(|v| r < v.v - 1e-6) {
                     let straight = |j: Option<usize>| j.and_then(|j| al.segs.get(j)).is_some_and(|s| matches!(s, Seg::Line { .. }));
                     if straight(i.checked_sub(1)) || straight(Some(i + 1)) {
                         let text = if nl() { format!("boog R = {} m zonder overgangsboog (nodig onder R = {} m)", comma(r, 0), comma(req.v, 0)) } else { format!("curve R = {} m without transition curve (needed below R = {} m)", comma(r, 0), comma(req.v, 0)) };
