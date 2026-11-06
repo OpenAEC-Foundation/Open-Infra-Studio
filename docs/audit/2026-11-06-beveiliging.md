@@ -101,11 +101,19 @@ roxmltree tokenises nested elements recursively, as the comment in `src/gis/file
 - `src/gis/klic_extra.rs:143` the KLIC extras (every delivery, also in the followed folder).
 - `src/civiel/landxml.rs:102` LandXML, `src/gis/bro.rs:170, 280, 625` BRO answers, `src/gis/qgis.rs:45` QGIS projects.
 
-Probe (`xmlprobe depth 200000`): `roxmltree::Document::parse` as in `files.rs:434`, on 200,000 nested `MultiGeometry` elements, in a thread with 8 MiB of stack (more than a worker thread gets):
+Probe (`xmlprobe depth <n>`): `roxmltree::Document::parse` as in `files.rs:434`, on `n` nested `MultiGeometry` elements, in a thread with 8 MiB of stack (more than a worker thread gets):
 
 ```
-(probe output follows in the next commit)
+input 310011 bytes, depth 10000, parsing on a thread with 8 MiB stack
+parse -> Ok(Ok(10002))
+
+input 620011 bytes, depth 20000, parsing on a thread with 8 MiB stack
+thread '<unknown>' (77026) has overflowed its stack
+fatal runtime error: stack overflow, aborting
+Command terminated by signal 6
 ```
+
+A file of 620 kB is enough, even with 8 MiB of stack.
 
 Direction: one shared `parse_xml` that does what `files::gml` does (measure depth, then parse on a thread with enough stack, or refuse beyond a limit), used by every reader.
 
@@ -115,10 +123,14 @@ FOLLOW-UP. CONFIRMED.
 
 Five readers parse with `allow_dtd: true`: `src/gis/caps.rs:62`, `src/gis/klic_extra.rs:142`, `src/gis/citygml.rs:346`, `src/gis/qgis.rs:44` and `nlcspp/src/xml.rs:123`. roxmltree has no external entities (no XXE: nothing is read from disk or the network), and it limits nesting to 10 levels and 255 references inside one entity. It does not limit the total size: each top-level reference can expand to 255 times the largest entity again.
 
-Probe (`xmlprobe dtd 100 20`): `parse_with_options` with `allow_dtd: true` as in `klic_extra.rs:142`, on a document with a 100 kB entity, a second entity of 255 references to it, and 20 references to the second one.
+Probe (`xmlprobe dtd 100 <refs>`): `parse_with_options` with `allow_dtd: true` as in `klic_extra.rs:142`, on a document with a 100 kB entity, a second entity of 255 references to it, and 1 or 8 references to the second one. Each further reference (3 bytes) adds 25.5 MB.
 
 ```
-(probe output follows in the next commit)
+input 100818 bytes
+parse -> ok, text of <r>: 25500000 bytes, 0.1 s          (1 reference, max RSS 52 MB)
+
+input 100839 bytes
+parse -> ok, text of <r>: 204000000 bytes, 1.6 s         (8 references, max RSS 401 MB)
 ```
 
 Direction: refuse a DTD with `<!ENTITY` where it is not needed (KLIC, NLCS++), or check the size of the internal subset before parsing; for WMS 1.1.1 and QGIS the DOCTYPE is needed, but internal entities are not.
@@ -129,10 +141,11 @@ FOLLOW-UP. CONFIRMED for KMZ.
 
 `files::kmz` (`src/gis/files.rs:470`), `klic_extra::gi_xml` (`src/gis/klic_extra.rs:211`), `klic_extra::attachment_file` (`:303`) and `klic2geo::convert_zip_bytes` (crates-warehouse) read a whole entry with `read_to_string`/`read_to_end`. Deflate compresses runs of the same byte about 1000 to 1; an allocation failure aborts the process.
 
-Probe (`xmlprobe kmz 512`): `by_name(..).read_to_string` as in `files.rs:470`, on a KMZ holding 512 MiB of spaces:
+Probe (`xmlprobe kmz 256`): `by_name(..).read_to_string` as in `files.rs:470`, on a KMZ holding 256 MiB of spaces (kept small; the machine had 2 GB free):
 
 ```
-(probe output follows in the next commit)
+kmz on disk: 260888 bytes, kml inside: 268435456 bytes
+read_to_string -> 268435456 bytes in memory               (max RSS 274 MB)
 ```
 
 Direction: `.take(limit)` on each entry (for example 1 GiB for the GI-xml, 100 MiB for an attachment) and a clear message when it is reached.
@@ -190,6 +203,7 @@ FOLLOW-UP. CONFIRMED.
 
 ## Not checked
 
+- Items 3–5 through the plug-in's own functions: the probe program makes the same library calls, but a full build of the plug-in did not finish on the shared machine today.
 - Windows itself: items 1 and 7 follow from `cmd /C start` and Windows path rules, not from a run on Windows.
 - Open CAD Studio's handling of extra tokens on a command line (item 2).
 - The external crates' own readers (shapefile, las/laz, copc-rs, e57, pointcloud-core, tiff), beyond how this code calls them.
