@@ -99,6 +99,11 @@ def _control(text):
     return any(unicodedata.category(c) in ("Cc", "Zl", "Zp") for c in text)
 
 
+def _odd_space(text):
+    """Whitespace other than a plain space: the plugins split on it, but only a plain space is quoted."""
+    return any(c.isspace() and c != " " for c in text)
+
+
 def _no_links(root):
     """OcsError when the work folder holds a symlink or a file with more than one hard link."""
     todo = [root]
@@ -118,8 +123,8 @@ def confine(path):
         return path
     root = work_folder()
     p = str(path)
-    if not p.strip() or '"' in p or _control(p) or (os.sep == "/" and "\\" in p):
-        raise OcsError(f"pad {p!r}: leeg, of met een aanhalingsteken, backslash of stuurteken")
+    if not p.strip() or '"' in p or _control(p) or _odd_space(p) or (os.sep == "/" and "\\" in p):
+        raise OcsError(f"pad {p!r}: leeg, of met een aanhalingsteken, backslash, stuurteken of andere witruimte dan een spatie")
     real = os.path.realpath(os.path.join(root, p))
     # A symlink loop leaves the rest of the path unresolved, '..' included.
     if not _inside(real, root) or os.pardir in real.split(os.sep):
@@ -132,9 +137,17 @@ def _file(a, key="path"):
 
 
 def _text(v):
-    """A text argument: in managed mode without quotes or control characters, so it stays one argument."""
-    if managed() and isinstance(v, str) and ('"' in v or _control(v)):
-        raise OcsError(f"{v!r}: geen aanhalingstekens of stuurtekens in beheerde modus")
+    """A text argument: in managed mode without quotes, control characters or
+    whitespace other than a plain space, so it stays one argument."""
+    if managed() and isinstance(v, str) and ('"' in v or _control(v) or _odd_space(v)):
+        raise OcsError(f"{v!r}: geen aanhalingsteken, stuurteken of andere witruimte dan een spatie in beheerde modus")
+    return v
+
+
+def _assembly(v):
+    """An assembly (profieltype): in managed mode only by name, never a .json file."""
+    if managed() and v and ("/" in v or "\\" in v or v.strip().lower().endswith(".json")):
+        raise OcsError(f"profieltype {v!r}: in beheerde modus alleen op naam (civ_assemblies geeft de namen)")
     return v
 
 
@@ -660,7 +673,7 @@ def t_sections(a):
 def t_corridor(a):
     views = a.get("sections_at") and _pt(a["sections_at"]) or (True if a.get("sections") else None)
     return OCS.run("CIV_CORRIDOR " + _kv(
-        AS=a.get("axis"), SJABLOON=a.get("assembly"), NIVEAU=a.get("level"), BOVEN=a.get("above_ground"),
+        AS=a.get("axis"), SJABLOON=_assembly(a.get("assembly")), NIVEAU=a.get("level"), BOVEN=a.get("above_ground"),
         RIJSTROOK=a.get("lane_width"), BERM=a.get("shoulder_width"), HELLING=a.get("cross_slope_pct"), BERMHELLING=a.get("shoulder_slope_pct"),
         TALUD=a.get("fill_slope"), INGRAVING=a.get("cut_slope"), KRUIN=a.get("crest_half_width"), VERKANTING=a.get("superelevation_pct"),
         REIKWIJDTE=a.get("reach"), FREQUENTIE=a.get("frequency"), DWARSPROFIELEN=views))
@@ -735,7 +748,7 @@ def t_mass_haul(a):
       {"name": STR, "copy_to": STR, "at": PT})
 def t_assemblies(a):
     if a.get("name"):
-        return OCS.run(f"CIV_PROFIELTYPE {_kv(NAAM=a['name'], KOPIE=a.get('copy_to'), PLAATS=a.get('at') and _pt(a['at']))}")
+        return OCS.run(f"CIV_PROFIELTYPE {_kv(NAAM=_assembly(a['name']), KOPIE=a.get('copy_to'), PLAATS=a.get('at') and _pt(a['at']))}")
     return OCS.run("CIV_PROFIELTYPEN")
 
 
@@ -745,7 +758,7 @@ def t_assemblies(a):
        "level": NUM, "frequency": NUM, "sections": {"type": "boolean"}}, ["assembly"])
 def t_corridor_range(a):
     targets = ";".join(f"{k}:{v}" for k, v in (a.get("targets") or {}).items())
-    return OCS.run("CIV_CORRIDOR " + _kv(AS=a.get("axis"), PROFIELTYPE=a["assembly"], VAN=a.get("from_station"), TOT=a.get("to_station"), DOELEN=targets,
+    return OCS.run("CIV_CORRIDOR " + _kv(AS=a.get("axis"), PROFIELTYPE=_assembly(a["assembly"]), VAN=a.get("from_station"), TOT=a.get("to_station"), DOELEN=targets,
                                          NIVEAU=a.get("level"), FREQUENTIE=a.get("frequency"), DWARSPROFIELEN=True if a.get("sections") else None))
 
 
@@ -755,8 +768,8 @@ def t_corridor_range(a):
       ["main", "side"])
 def t_junction(a):
     radii = ";".join(_num(r) for r in a.get("radii") or [])
-    return OCS.run("CIV_KRUISPUNT " + _kv(HOOFD=a["main"], ZIJ=a["side"], R=radii, PROFIELTYPE=a.get("assembly"), PROFIELTYPE_HOOFD=a.get("main_assembly"),
-                                           PROFIELTYPE_ZIJ=a.get("side_assembly"), NIVEAU=a.get("level")))
+    return OCS.run("CIV_KRUISPUNT " + _kv(HOOFD=a["main"], ZIJ=a["side"], R=radii, PROFIELTYPE=_assembly(a.get("assembly")), PROFIELTYPE_HOOFD=_assembly(a.get("main_assembly")),
+                                           PROFIELTYPE_ZIJ=_assembly(a.get("side_assembly")), NIVEAU=a.get("level")))
 
 
 @tool("civ_roundabout", "A single-lane roundabout after CROW publication 126 on 2+ axes (3–6 arms): outer diameter, carriageway, overrunnable strip, "
@@ -765,7 +778,7 @@ def t_junction(a):
       ["axes"])
 def t_roundabout(a):
     return OCS.run("CIV_ROTONDE " + _kv(ASSEN=";".join(a["axes"]), MIDDEN=a.get("centre") and _pt(a["centre"]), TYPE=a.get("kind"), D=a.get("diameter"),
-                                         PROFIELTYPE=a.get("assembly"), NIVEAU=a.get("level")))
+                                         PROFIELTYPE=_assembly(a.get("assembly")), NIVEAU=a.get("level")))
 
 
 @tool("civ_bag3d", "3D BAG buildings of the project area (LoD 1.2, 1.3 or 2.2): roof and wall meshes per building. "
@@ -803,8 +816,9 @@ def t_server(a):
       "in IMKL colours. Without path: the delivery imported last. scale thickens the tubes for overview pictures.",
       {"path": STR, "scale": NUM})
 def t_klic3d(a):
-    if managed() and not a.get("path"):
-        raise OcsError("civ_klic3d: geef in beheerde modus het pad van de levering in de werkmap")
+    # Without an existing path the plugin falls back to the delivery imported last, which may lie outside.
+    if managed() and not (a.get("path") and os.path.exists(confine(a["path"]))):
+        raise OcsError("civ_klic3d: geef in beheerde modus het pad van een bestaande levering in de werkmap")
     return OCS.run(f"CIV_KLIC3D {_quote(_file(a) or '')} {_kv(VERGROOT=a.get('scale'))}", 1800)
 
 

@@ -402,10 +402,16 @@ pub fn list() -> Vec<Entry> {
     out
 }
 
-/// An assembly by name (the user's first), or from a .json file.
+/// An assembly by name (the user's first), or from a .json file. In the
+/// SuperCloud (`OPENAEC_BEHEERD=1`) only by name: a path, also one stored
+/// in a drawing, would reach files outside the work folder.
 pub fn find(name: &str) -> Result<Assembly, String> {
+    find_in(name, std::env::var("OPENAEC_BEHEERD").as_deref() == Ok("1"))
+}
+
+fn find_in(name: &str, managed: bool) -> Result<Assembly, String> {
     let n = name.trim();
-    if n.to_lowercase().ends_with(".json") && Path::new(n).exists() {
+    if n.to_lowercase().ends_with(".json") && !managed && Path::new(n).exists() {
         let text = std::fs::read_to_string(n).map_err(|e| format!("{n}: {e}"))?;
         return parse(&text).map_err(|e| format!("{n}: {e}"));
     }
@@ -609,6 +615,20 @@ pub fn draw(opt: &super::CivielOptions, a: &Assembly, at: XY) -> Result<usize, S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn managed_mode_reads_no_assembly_file() {
+        let dir = std::env::temp_dir().join(format!("oi-profieltype-beheerd-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("buiten.json");
+        std::fs::write(&file, PRESETS[0]).unwrap();
+        let path = file.to_string_lossy().to_string();
+        assert!(find_in(&path, false).is_ok());
+        let err = find_in(&path, true).err().expect("managed mode read a file");
+        assert!(err.contains("buiten.json"), "{err}");
+        assert!(find_in("weg", true).is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn every_preset_reads() {

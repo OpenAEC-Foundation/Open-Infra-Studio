@@ -836,7 +836,16 @@ pub fn zoom_extents() {
 /// A file beside the drawing (`<tekening>_<suffix>`), or in the plugin's
 /// config folder while the drawing has not been saved.
 pub fn beside_drawing(suffix: &str) -> PathBuf {
-    match target().and_then(|t| t.doc_path) {
+    file_beside(target().and_then(|t| t.doc_path), suffix)
+}
+
+/// `<folder of doc>/<stem>_<suffix>` as one file name: a name in the suffix
+/// (an axis, a sewer, from the drawing or an agent) cannot add folders or
+/// `..` to the path.
+fn file_beside(doc: Option<PathBuf>, suffix: &str) -> PathBuf {
+    let suffix: String = suffix.chars().map(|c| if c == '/' || c == '\\' || c.is_control() { '_' } else { c }).collect();
+    let suffix = suffix.as_str();
+    match doc {
         Some(p) => {
             let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("tekening").to_string();
             p.parent().map(|d| d.join(format!("{stem}_{suffix}"))).unwrap_or_else(|| crate::gis::servers::config_dir().join(suffix))
@@ -860,5 +869,21 @@ pub fn image_dir() -> PathBuf {
             p.parent().map(|d| d.join(format!("{stem}_GIS"))).unwrap_or_else(|| crate::gis::servers::config_dir().join("kaarten"))
         }
         None => crate::gis::servers::config_dir().join("kaarten"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_name_stays_one_file_beside_the_drawing() {
+        let doc = PathBuf::from("/werkmap/tekening.dwg");
+        assert_eq!(file_beside(Some(doc.clone()), "punten.csv"), PathBuf::from("/werkmap/tekening_punten.csv"));
+        // An axis named "a/../../../outside/overwrite" (review of #103).
+        let out = file_beside(Some(doc.clone()), "corridor_a/../../../outside/overwrite.csv");
+        assert_eq!(out, PathBuf::from("/werkmap/tekening_corridor_a_.._.._.._outside_overwrite.csv"));
+        assert_eq!(out.parent(), Some(std::path::Path::new("/werkmap")));
+        assert_eq!(file_beside(Some(doc), "a\\..\\b\nc.csv"), PathBuf::from("/werkmap/tekening_a_.._b_c.csv"));
     }
 }

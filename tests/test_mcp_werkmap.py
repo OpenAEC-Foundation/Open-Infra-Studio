@@ -143,6 +143,7 @@ class WorkFolderTest(unittest.TestCase):
         self.assertEqual(sent[0]['op'], 'new')
 
     def test_every_file_tool_is_confined(self):
+        (self.work / 'in de map.xml').write_text('x')
         tools = ['planning_gml', 'ifc_export', 'civ_points_import', 'civ_points_export', 'civ_landxml', 'civ_klic3d',
                  'civ_citygml', 'civ_landxml_export', 'oi_capture']
         for name in tools:
@@ -155,6 +156,9 @@ class WorkFolderTest(unittest.TestCase):
         sent = self.allowed('civ_points_import', {'path': 'PRIVATE'})
         self.assertIn(f'CIV_PUNTEN_IMPORT {self.real}/PRIVATE ', sent[0]['cmd'])
         self.refused('civ_klic3d', {})
+        # A missing path with a comma made the plugin take the delivery imported last (review round 2).
+        self.refused('civ_klic3d', {'path': 'bestaat,niet.zip'})
+        self.refused('civ_klic3d', {'path': 'bestaat-niet.zip'})
         self.assertEqual(os.listdir(self.outside), ['private.dwg'])
 
     def test_capture_without_path_uses_its_own_folder(self):
@@ -200,6 +204,30 @@ class WorkFolderTest(unittest.TestCase):
         self.refused('infra_gis_server', {'id': 'x"'})
         sent = self.allowed('infra_civ_points_import', {'path': 'punten.csv', 'format': 'AUTO CODETABEL=../../outside/c.csv'})
         self.assertIn('FORMAAT="AUTO CODETABEL=../../outside/c.csv"', sent[0]['cmd'])
+
+    def test_other_whitespace_cannot_split_an_argument(self):
+        # The plugins split on every Unicode space; only a plain space is quoted (review round 2).
+        for space in ('\u00a0', '\u2003', '\u202f', '\u3000', '\t'):
+            with self.subTest(space=repr(space)):
+                self.refused('infra_civ_points_export', {'format': f'PNEZD{space}PAD={self.outside}/overwrite.csv'})
+                self.refused('infra_civ_points_import', {'path': 'punten.csv', 'format': f'AUTO{space}CODETABEL={self.outside}/codes.csv'})
+                self.refused('infra_oi_site', {'x': 1, 'y': 2, 'name': f'a{space}b'})
+                self.refused('infra_open', {'path': f'a{space}b.dwg'})
+        sent = self.allowed('infra_oi_site', {'x': 1, 'y': 2, 'name': 'Den Haag'})
+        self.assertTrue(sent[0]['cmd'].startswith('GIS_SITE RD 1 2 300 250 Den Haag'), sent[0]['cmd'])
+
+    def test_assemblies_only_by_name(self):
+        (self.outside / 'private.json').write_text('{}')
+        for name, args in [('infra_civ_corridor_range', {'assembly': str(self.outside / 'private.json')}),
+                           ('infra_civ_corridor_range', {'assembly': 'eigen.JSON'}),
+                           ('infra_civ_junction', {'main': '1A', 'side': '2B', 'main_assembly': '../../outside/private.json'}),
+                           ('infra_civ_junction', {'main': '1A', 'side': '2B', 'side_assembly': 'map/eigen'}),
+                           ('infra_civ_roundabout', {'axes': ['1A', '2B', '3C'], 'assembly': str(self.outside / 'private.json')}),
+                           ('infra_civ_assemblies', {'name': str(self.outside / 'private.json')})]:
+            with self.subTest(name=name, args=args):
+                self.refused(name, args)
+        sent = self.allowed('infra_civ_corridor_range', {'assembly': 'stadsstraat'})
+        self.assertIn('PROFIELTYPE=stadsstraat', sent[0]['cmd'])
 
     def test_points_stay_points(self):
         sent = self.allowed('infra_place', {'item': 'kabel', 'path': [[0, 0], [10, 0]]})
