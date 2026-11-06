@@ -1694,6 +1694,16 @@ pub fn sections_extent(al: &Alignment, opt: &super::CivielOptions, f: f64) -> (f
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_spiral_far_from_the_origin_becomes_a_bounded_number_of_arcs() {
+        // So far out that rounding keeps every arc over a 1 mm tolerance.
+        let far = Seg::Spiral { a: [1e15, 1e15], dir: 0.3, len: 30.0, k0: 0.0, k1: 1.0 / 200.0 };
+        let (send, receive) = std::sync::mpsc::channel();
+        std::thread::spawn(move || send.send(far.vertices(0.0, 0.001).len()));
+        let n = receive.recv_timeout(std::time::Duration::from_secs(10)).expect("vertices() gave no answer within 10 s");
+        assert!(n <= 20_000, "{n} vertices");
+    }
+
     fn close(a: XY, b: XY) -> bool {
         (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9
     }

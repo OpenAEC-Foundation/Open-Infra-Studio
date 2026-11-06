@@ -777,6 +777,11 @@ mod tests {
             ("radiusEnd=\"200\"", "radiusEnd=\"NaN\""),
             ("radiusEnd=\"200\"", "radiusEnd=\"bad\""),
             ("<Center>50 100</Center>", "<Center>-1.7e308 -1.7e308</Center>"),
+            // More than a full turn: no transition curve, and drawing it
+            // as arcs would not end.
+            ("length=\"30\"", "length=\"1e9\""),
+            ("radiusEnd=\"200\"", "radiusEnd=\"1e-9\""),
+            ("radiusStart=\"INF\"", "radiusStart=\"0.001\""),
         ] {
             assert_ne!(SAMPLE.replace(from, to), SAMPLE, "fixture substitution: {from}");
             let data = parse(&SAMPLE.replace(from, to)).unwrap();
