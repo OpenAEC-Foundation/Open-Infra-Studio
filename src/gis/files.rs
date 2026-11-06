@@ -425,8 +425,7 @@ fn kml_geometry(node: roxmltree::Node, f: &mut Feature) {
                 }
             }
             "MultiGeometry" => {
-                let parts: Vec<_> = node.children().filter(|c| c.is_element()).collect();
-                pending.extend(parts.into_iter().rev());
+                pending.extend(node.children().rev().filter(|c| c.is_element()));
             }
             _ => {}
         }

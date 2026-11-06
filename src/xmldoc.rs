@@ -9,20 +9,23 @@ use roxmltree::Document;
 /// The deepest element nesting of `text`, counted without parsing it.
 /// roxmltree reads nested elements recursively, so this bounds the stack
 /// the parse needs. Comments, CDATA, processing instructions and quoted
-/// attribute values do not count. An entity in an internal DTD subset can
+/// attribute values do not count. A DOCTYPE is read the way roxmltree reads
+/// it (`tokenizer.rs`, `parse_doctype`). An entity in its internal subset can
 /// expand to markup, entity in entity up to ten levels deep, so each `<` in
 /// that subset counts ten times on top of the body's nesting.
 fn nesting(text: &str) -> usize {
     let b = text.as_bytes();
     // The index just past `pat` from `at`, or the end of the text.
     let past = |at: usize, pat: &[u8]| b.get(at..).and_then(|r| r.windows(pat.len()).position(|w| w == pat)).map_or(b.len(), |p| at + p + pat.len());
-    // The index just past the `>` that ends a tag, outside quoted values.
-    let tag_end = |mut i: usize| {
+    // The index just past the first `>` from `i` outside quoted values;
+    // `count` gets the number of `<` inside them.
+    let quoted_end = |mut i: usize, count: &mut usize| {
         let mut quote = None;
         while let Some(&c) = b.get(i) {
             i += 1;
             match (quote, c) {
                 (Some(q), c) if c == q => quote = None,
+                (Some(_), b'<') => *count += 1,
                 (None, b'"' | b'\'') => quote = Some(c),
                 (None, b'>') => break,
                 _ => {}
@@ -41,32 +44,53 @@ fn nesting(text: &str) -> usize {
         } else if rest.starts_with(b"<?") {
             i = past(at + 2, b"?>");
         } else if rest.starts_with(b"<!") {
-            // A DOCTYPE: skip it with its internal subset (declarations
-            // with quoted values, comments and processing instructions).
-            let (mut j, mut quote, mut subset) = (at + 2, None, false);
+            // A DOCTYPE: its name and quoted identifiers up to `[` or `>`.
+            let mut j = at + 2;
+            let mut quote = None;
+            let mut subset = false;
             while let Some(&c) = b.get(j) {
                 j += 1;
                 match (quote, c) {
                     (Some(q), c) if c == q => quote = None,
-                    (Some(_), b'<') => dtd += 1,
                     (Some(_), _) => {}
                     (None, b'"' | b'\'') => quote = Some(c),
-                    (None, b'<') if b[j..].starts_with(b"!--") => j = past(j + 3, b"-->"),
-                    (None, b'<') if b[j..].starts_with(b"?") => j = past(j + 1, b"?>"),
-                    (None, b'<') => dtd += 1,
-                    (None, b'[') => subset = true,
-                    (None, b']') => subset = false,
-                    (None, b'>') if !subset => break,
+                    (None, b'[') => { subset = true; break; }
+                    (None, b'>') => break,
                     _ => {}
+                }
+            }
+            // The internal subset, declaration by declaration. ELEMENT,
+            // ATTLIST and NOTATION end at their first `>`, ENTITY at the
+            // first `>` outside quotes. roxmltree rejects anything else,
+            // so the rest is scanned as body.
+            while subset {
+                while b.get(j).is_some_and(u8::is_ascii_whitespace) {
+                    j += 1;
+                }
+                let decl = &b[j.min(b.len())..];
+                if decl.starts_with(b"<!--") {
+                    j = past(j + 4, b"-->");
+                } else if decl.starts_with(b"<?") {
+                    j = past(j + 2, b"?>");
+                } else if decl.starts_with(b"<!ENTITY") {
+                    dtd += 1;
+                    j = quoted_end(j + 8, &mut dtd);
+                } else if decl.starts_with(b"<!ELEMENT") || decl.starts_with(b"<!ATTLIST") || decl.starts_with(b"<!NOTATION") {
+                    j = past(j + 2, b">");
+                } else {
+                    if decl.starts_with(b"]") {
+                        j = past(j + 1, b">");
+                    }
+                    subset = false;
                 }
             }
             i = j;
         } else if rest.starts_with(b"</") {
             depth = depth.saturating_sub(1);
-            i = tag_end(at + 2);
+            i = quoted_end(at + 2, &mut 0);
         } else {
             // A start tag; an empty element is parsed one level down too.
-            i = tag_end(at + 1);
+            i = quoted_end(at + 1, &mut 0);
             deepest = deepest.max(depth + 1);
             if !b[..i].ends_with(b"/>") {
                 depth += 1;
@@ -106,6 +130,10 @@ mod tests {
         // Markup in entities can expand anywhere: each `<` in the subset counts ten times.
         assert_eq!(nesting("<!DOCTYPE a [<!-- ]> --><!ENTITY e \"<b><c/></b>\">]><a>&e;</a>"), 1 + 10 * 4);
         assert_eq!(nesting("<!DOCTYPE a [<!ENTITY x 'it''s'><?pi ]> ?>]><a><b><c/></b></a>"), 3 + 10);
+        // roxmltree ends ELEMENT, ATTLIST and NOTATION at their first `>`:
+        // a `<!--` or `<?` inside one starts no comment or instruction.
+        assert_eq!(nesting("<!DOCTYPE r [<!ELEMENT r <!-- >]><r><a><b/></a>--></r>"), 3);
+        assert_eq!(nesting("<!DOCTYPE r [<!ATTLIST r x CDATA \"<?p\" >]><r><a><b/></a>?></r>"), 3);
     }
 
     #[test]

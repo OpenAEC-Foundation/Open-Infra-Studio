@@ -60,3 +60,23 @@ fn nested_kml_multigeometry_and_wms_layers_get_an_answer() {
     let layers = on_command_stack(move || caps::parse_wms("https://example.org/wms", &wms).map(|c| c.layers.len()));
     assert!(layers.is_err(), "{layers:?}");
 }
+
+#[test]
+fn a_damaged_dtd_does_not_hide_deep_content() {
+    // roxmltree ends ELEMENT, ATTLIST and NOTATION at their first `>`, so a
+    // `<!--` or `<?` inside one starts no comment; the readers that allow a
+    // DTD must still measure the content after it.
+    type Reader = fn(&str) -> Result<(), String>;
+    let readers: [(&str, &str, Reader); 3] = [
+        ("WMS capabilities", "WMS_Capabilities", |t| caps::parse_wms("https://example.org/wms", t).map(drop)),
+        ("QGIS connections", "qgsWMSConnections", |t| qgis::parse(t).map(drop)),
+        ("KLIC", "FeatureCollection", |t| klic_extra::parse(t).map(drop)),
+    ];
+    for (name, root, read) in readers {
+        for (open, close) in [("<!--", "-->"), ("<?p", "?>")] {
+            let text = format!("<!DOCTYPE {root} [<!ELEMENT {root} {open} >]><{root}>{}{close}</{root}>", deep("a", DEPTH));
+            let result = on_command_stack(move || read(&text));
+            eprintln!("{name} {open}: {result:?}");
+        }
+    }
+}
