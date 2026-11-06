@@ -33,6 +33,8 @@ pub mod uitwisseling;
 pub mod ontwerpcriteria;
 pub mod spoor;
 pub mod zicht;
+// Geotechnics: soil profiles, slope stability and settlement (#78).
+pub mod geotechnics;
 
 use std::sync::{Mutex, OnceLock};
 
