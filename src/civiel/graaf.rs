@@ -385,7 +385,8 @@ mod tests {
 
     fn set_z(doc: &mut CadDocument, h: Handle, z: &str) {
         let e = doc.get_entity_mut(h).unwrap();
-        let mut r = e.common().extended_data.get_record(bridge::XDATA_APP).unwrap().clone();
+        // `add_record` appends: take the old record out first.
+        let mut r = e.common_mut().extended_data.remove_record(bridge::XDATA_APP).unwrap();
         for v in &mut r.values {
             if let ocs_plugin_api::host::XDataValue::String(s) = v {
                 if s.starts_with("z=") {
