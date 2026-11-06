@@ -16,7 +16,8 @@ Coordinates are project coordinates: metres in the project CRS (RD,
 EPSG:28992, in the Netherlands), set with oi_site.
 
 Transports: stdio (default) or streamable HTTP (`--http [host:]port`, POST
-/mcp; bearer token from OI_MCP_TOKEN when set). In the OpenAEC SuperCloud
+/mcp; a bearer token from OI_MCP_TOKEN, required off loopback; Host, Origin
+and Content-Type checked, see serve_http). In the OpenAEC SuperCloud
 (`OPENAEC_BEHEERD=1`, or `--prefix infra`) every tool carries the prefix
 `infra_` and `infra_stand`, `infra_open` and `infra_opslaan` are added; the
 old names keep working. `--tools-json` prints the definitions
@@ -25,7 +26,9 @@ old names keep working. `--tools-json` prints the definitions
 
 import base64
 import glob
+import hmac
 import http.server
+import ipaddress
 import json
 import os
 import socket
@@ -964,9 +967,95 @@ def handle(msg):
     return {"jsonrpc": "2.0", "id": mid, "result": result}
 
 
+# Streamable HTTP is for the SuperCloud, where the MCP client is another
+# process in or beside the container. The MCP specification asks a server to
+# validate Origin, to bind only to localhost when it runs locally and to
+# authenticate its connections (2025-06-18, basic/transports, "Security
+# Warning"). So:
+# - Off loopback a token is required (OI_MCP_TOKEN, at least MIN_TOKEN
+#   characters); without one the server does not start. When the token is
+#   set it is required on every address, and compared in constant time.
+# - Host must name this server: localhost, 127.0.0.1, ::1, the address it
+#   listens on, or a name in OI_MCP_HOSTS. That stops DNS rebinding, where a
+#   web page points its own host name at 127.0.0.1.
+# - A request with an Origin header (from a browser) is refused unless that
+#   origin is in OI_MCP_ORIGINS. MCP clients that are not browsers send none.
+# - JSON-RPC is only accepted as application/json, which a cross-site form
+#   or "simple" request cannot send without a CORS preflight.
+
+MIN_TOKEN = 32
+LOOPBACK_NAMES = {"localhost", "127.0.0.1", "::1"}
+
+
+def _env_list(name):
+    return [p.strip() for p in os.environ.get(name, "").split(",") if p.strip()]
+
+
+def _token():
+    return os.environ.get("OI_MCP_TOKEN", "").strip()
+
+
+def _hostname(value):
+    """The host of a Host header or a `host[:port]` entry: lower case,
+    without port or brackets; "" when there is none."""
+    v = (value or "").strip().lower()
+    if v.startswith("["):
+        return v[1:v.index("]")] if "]" in v else ""
+    host, sep, port = v.rpartition(":")
+    return host if sep and port.isdigit() and ":" not in host else v
+
+
+def _origin(value):
+    return value.strip().lower().rstrip("/")
+
+
+def is_loopback(host):
+    """True when a --http address only reaches this machine."""
+    if host == "":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    return bool(infos) and all(ipaddress.ip_address(i[4][0].split("%")[0]).is_loopback for i in infos)
+
+
 class HttpHandler(http.server.BaseHTTPRequestHandler):
     """Streamable HTTP (MCP 2025-06-18) without server-sent events: every
     POST is answered with one JSON body."""
+
+    def _hosts(self):
+        """The host names a request may use (see the notes above)."""
+        hosts = set(LOOPBACK_NAMES) | {_hostname(h) for h in _env_list("OI_MCP_HOSTS")}
+        for bound in (getattr(self.server, "mcp_host", ""), self.server.server_address[0]):
+            try:
+                if ipaddress.ip_address(bound).is_unspecified:
+                    continue
+            except ValueError:
+                pass
+            if bound:
+                hosts.add(bound.lower())
+        return hosts
+
+    def _refusal(self):
+        """(status, reason) when this request may not go on, else None."""
+        given = self.headers.get_all("Host") or []
+        if len(given) != 1 or _hostname(given[0]) not in self._hosts():
+            return 403, "Host not allowed (add the host name to OI_MCP_HOSTS)"
+        allowed = {_origin(o) for o in _env_list("OI_MCP_ORIGINS")}
+        if any(_origin(o) not in allowed for o in self.headers.get_all("Origin") or []):
+            return 403, "Origin not allowed (add the origin to OI_MCP_ORIGINS)"
+        token = _token()
+        if token:
+            scheme, _, cred = (self.headers.get("Authorization") or "").strip().partition(" ")
+            ok = hmac.compare_digest(cred.strip().encode("latin-1", "replace"), token.encode("utf-8"))
+            if scheme.lower() != "bearer" or not ok:
+                return 401, "unauthorized"
+        return None
 
     def _send(self, code, body=None, extra=None):
         data = json.dumps(body, ensure_ascii=False).encode() if body is not None else b""
@@ -979,15 +1068,15 @@ class HttpHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _allowed(self):
-        token = os.environ.get("OI_MCP_TOKEN")
-        return not token or self.headers.get("Authorization", "") == f"Bearer {token}"
-
     def do_POST(self):
+        refused = self._refusal()
+        if refused:
+            return self._send(refused[0], {"error": refused[1]})
         if self.path.split("?")[0].rstrip("/") not in ("/mcp", ""):
             return self._send(404, {"error": "not found"})
-        if not self._allowed():
-            return self._send(401, {"error": "unauthorized"})
+        ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype != "application/json":
+            return self._send(415, {"error": "Content-Type must be application/json"})
         try:
             msg = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"null")
         except ValueError:
@@ -998,16 +1087,41 @@ class HttpHandler(http.server.BaseHTTPRequestHandler):
         self._send(200, replies if isinstance(msg, list) else replies[0])
 
     def do_GET(self):
+        refused = self._refusal()
+        if refused:
+            return self._send(refused[0], {"error": refused[1]})
         self._send(405, {"error": "no server-sent events; POST JSON-RPC to /mcp"}, {"Allow": "POST"})
+
+    do_DELETE = do_PUT = do_PATCH = do_OPTIONS = do_GET
 
     def log_message(self, *args):
         pass
 
 
+class _Http6Server(http.server.ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+
+
 def serve_http(where):
-    host, _, port = where.rpartition(":")
-    server = http.server.ThreadingHTTPServer((host or "127.0.0.1", int(port)), HttpHandler)
-    sys.stderr.write(f"open-infra MCP on http://{host or '127.0.0.1'}:{port}/mcp\n")
+    """`--http [host:]port`: port alone listens on 127.0.0.1; off loopback
+    OI_MCP_TOKEN must be set, or the server does not start."""
+    host, _, port = (where or "").rpartition(":")
+    if host.startswith("[") and host.endswith("]"):
+        host = host[1:-1]
+    if not port.isdigit():
+        sys.stderr.write(f"open-infra MCP: --http expects [host:]port, e.g. 8765 or 0.0.0.0:8765, not {where!r}\n")
+        raise SystemExit(2)
+    host = host or "127.0.0.1"
+    if not is_loopback(host) and len(_token()) < MIN_TOKEN:
+        sys.stderr.write(
+            f"open-infra MCP: will not listen on {where}: off loopback every client must authenticate. "
+            f"Set OI_MCP_TOKEN to a random secret of at least {MIN_TOKEN} characters "
+            "(e.g. `export OI_MCP_TOKEN=$(openssl rand -hex 32)`), or listen on loopback only (--http 8765).\n")
+        raise SystemExit(2)
+    server = (_Http6Server if ":" in host else http.server.ThreadingHTTPServer)((host, int(port)), HttpHandler)
+    server.mcp_host = host
+    shown = f"[{host}]" if ":" in host else host
+    sys.stderr.write(f"open-infra MCP on http://{shown}:{port}/mcp\n")
     server.serve_forever()
 
 
@@ -1020,7 +1134,7 @@ def main():
         print(json.dumps(listed_tools(), ensure_ascii=False, indent=1))
         return
     if "--http" in args:
-        return serve_http(args[args.index("--http") + 1])
+        return serve_http(next(iter(args[args.index("--http") + 1:]), ""))
     for line in sys.stdin:
         line = line.strip()
         if not line:
