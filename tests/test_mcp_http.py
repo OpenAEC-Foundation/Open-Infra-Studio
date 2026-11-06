@@ -99,16 +99,30 @@ class BindingTest(unittest.TestCase):
         cls.return_value.serve_forever.assert_called_once()
 
     def test_loopback_without_token_starts(self):
-        for where, addr in (('8765', ('127.0.0.1', 8765)), ('127.0.0.1:8765', ('127.0.0.1', 8765)), ('localhost:8765', ('localhost', 8765))):
+        # localhost is bound as 127.0.0.1, not looked up again by bind().
+        for where in ('8765', '127.0.0.1:8765', 'localhost:8765'):
             with self.subTest(where=where):
                 refused, cls, _ = self.start(where)
                 self.assertIsNone(refused)
-                self.assertEqual(cls.call_args.args[0], addr)
+                self.assertEqual(cls.call_args.args[0], ('127.0.0.1', 8765))
+
+    def test_host_name_needs_a_token_whatever_dns_says(self):
+        # A name that resolves to 127.0.0.1 now may resolve to 0.0.0.0 when
+        # bind() looks it up again: the exemption may not depend on DNS.
+        loop = [(mcp.socket.AF_INET, mcp.socket.SOCK_STREAM, 6, '', ('127.0.0.1', 0))]
+        with patch.object(mcp.socket, 'getaddrinfo', return_value=loop) as dns:
+            self.assertFalse(mcp.is_loopback('rebind.invalid'))
+            refused, cls, err = self.start('rebind.invalid:8765')
+            dns.assert_not_called()
+        self.assertIsNotNone(refused)
+        cls.assert_not_called()
+        self.assertIn('OI_MCP_TOKEN', err)
 
     def test_ipv6_loopback_counts_as_loopback(self):
         self.assertTrue(mcp.is_loopback('::1'))
         self.assertTrue(mcp.is_loopback('127.0.0.1'))
         self.assertTrue(mcp.is_loopback(''))
+        self.assertTrue(mcp.is_loopback('localhost'))
         self.assertFalse(mcp.is_loopback('::'))
         self.assertFalse(mcp.is_loopback('0.0.0.0'))
         self.assertFalse(mcp.is_loopback('192.0.2.10'))
@@ -154,7 +168,8 @@ class RequestTest(unittest.TestCase):
     def test_foreign_host_is_refused(self):
         # DNS rebinding: attacker.example now resolves to 127.0.0.1.
         with Server() as s:
-            for host in (f'attacker.example:{s.port}', 'attacker.example', 'localhost.attacker.example', ''):
+            for host in (f'attacker.example:{s.port}', 'attacker.example', 'localhost.attacker.example', '',
+                         f'[::1].attacker.example:{s.port}', '[127.0.0.1].attacker.example', '[::1]x', '[::1', f'localhost:{s.port}x'):
                 with self.subTest(host=host):
                     self.assertEqual(s.send(CALL, host=host)[0], 403)
             self.assertEqual(s.send(None, method='GET', host='attacker.example')[0], 403)

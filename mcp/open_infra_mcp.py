@@ -1000,7 +1000,8 @@ def _hostname(value):
     without port or brackets; "" when there is none."""
     v = (value or "").strip().lower()
     if v.startswith("["):
-        return v[1:v.index("]")] if "]" in v else ""
+        addr, sep, rest = v[1:].partition("]")
+        return addr if sep and (rest == "" or (rest[:1] == ":" and rest[1:].isdigit())) else ""
     host, sep, port = v.rpartition(":")
     return host if sep and port.isdigit() and ":" not in host else v
 
@@ -1010,18 +1011,16 @@ def _origin(value):
 
 
 def is_loopback(host):
-    """True when a --http address only reaches this machine."""
-    if host == "":
+    """True when a --http address only reaches this machine: "" or
+    localhost (both bound as 127.0.0.1) or a numeric loopback address.
+    No DNS lookup: bind() would look the name up again, and a second answer
+    can differ from the first."""
+    if host in ("", "localhost"):
         return True
     try:
         return ipaddress.ip_address(host).is_loopback
     except ValueError:
-        pass
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except OSError:
         return False
-    return bool(infos) and all(ipaddress.ip_address(i[4][0].split("%")[0]).is_loopback for i in infos)
 
 
 class HttpHandler(http.server.BaseHTTPRequestHandler):
@@ -1111,13 +1110,14 @@ def serve_http(where):
     if not port.isdigit():
         sys.stderr.write(f"open-infra MCP: --http expects [host:]port, e.g. 8765 or 0.0.0.0:8765, not {where!r}\n")
         raise SystemExit(2)
-    host = host or "127.0.0.1"
     if not is_loopback(host) and len(_token()) < MIN_TOKEN:
         sys.stderr.write(
             f"open-infra MCP: will not listen on {where}: off loopback every client must authenticate. "
             f"Set OI_MCP_TOKEN to a random secret of at least {MIN_TOKEN} characters "
             "(e.g. `export OI_MCP_TOKEN=$(openssl rand -hex 32)`), or listen on loopback only (--http 8765).\n")
         raise SystemExit(2)
+    if host in ("", "localhost"):
+        host = "127.0.0.1"
     server = (_Http6Server if ":" in host else http.server.ThreadingHTTPServer)((host, int(port)), HttpHandler)
     server.mcp_host = host
     shown = f"[{host}]" if ":" in host else host
