@@ -49,6 +49,12 @@ pub fn units_of<'a>(codes: impl IntoIterator<Item = &'a str>, overrides: &BTreeM
     Ok(out)
 }
 
+/// Columns shallower than this (m) are left out.
+pub const MIN_DEPTH: f64 = 2.0;
+
+/// Bands thinner than this (m) join a neighbour in the calculations.
+pub const THIN: f64 = 0.2;
+
 /// CPTs and boreholes from the BRO within `radius` m of a line (project
 /// coordinates), as soil columns with their station and offset along it;
 /// the second value lists what was skipped.
@@ -121,12 +127,19 @@ pub fn collect_near(ctx: &Ctx, line: &[XY], kinds: &[Kind], radius: f64, max: us
                 .filter(|l| l.bottom > l.top)
                 .map(|l| (z0 - l.top, z0 - l.bottom, if cpt { soil::of_cpt(l) } else { soil::of_borehole(l) }, l.qc, l.name.clone()))
                 .collect();
-            let layers: Vec<Layer> = model::simplify(raw, min_layer);
+            let mut layers: Vec<Layer> = model::simplify(raw, min_layer);
             if layers.is_empty() {
                 skipped.push(format!("{}: {}", head.id, tr("geen bruikbare lagen", "no usable layers")));
                 continue;
             }
+            // The first unit from the surface level (a predrilled or unmeasured top takes it).
+            layers[0].top = layers[0].top.max(z0);
             let end = layers.last().map(|l| l.bottom).unwrap_or(z0);
+            // Too shallow: its last unit would stand for the whole depth.
+            if z0 - end < MIN_DEPTH {
+                skipped.push(format!("{}: {} {} m", head.id, tr("te ondiep", "too shallow"), num(z0 - end, 2)));
+                continue;
+            }
             columns.push(Column { id: head.id.clone(), kind: if cpt { "cpt" } else { "borehole" }.into(), station: s, offset: off, xy: q, surface: z0, end, layers });
         }
     }
@@ -270,6 +283,34 @@ pub fn band_polygons(samples: &[(f64, Vec<Band>)]) -> Vec<(String, Vec<XY>)> {
             ring.extend(bottom.into_iter().rev());
             if ring.len() >= 3 {
                 out.push((code.clone(), ring));
+            }
+        }
+        start = end;
+    }
+    out
+}
+
+/// The boundaries between the units along x: per run of samples with the
+/// same sequence, the bottom of every unit but the last, as polylines.
+pub fn band_boundaries(samples: &[(f64, Vec<Band>)]) -> Vec<Vec<XY>> {
+    let mut out = Vec::new();
+    let codes = |b: &[Band]| b.iter().map(|x| x.code.clone()).collect::<Vec<_>>();
+    let mut start = 0;
+    while start < samples.len() {
+        let seq = codes(&samples[start].1);
+        let mut end = start + 1;
+        while end < samples.len() && codes(&samples[end].1) == seq {
+            end += 1;
+        }
+        let x_left = if start == 0 { samples[0].0 } else { 0.5 * (samples[start - 1].0 + samples[start].0) };
+        let x_right = if end == samples.len() { samples[end - 1].0 } else { 0.5 * (samples[end - 1].0 + samples[end].0) };
+        for k in 0..seq.len().saturating_sub(1) {
+            let mut line: Vec<XY> = vec![[x_left, samples[start].1[k].bottom]];
+            line.extend(samples[start..end].iter().map(|s| [s.0, s.1[k].bottom]));
+            line.push([x_right, samples[end - 1].1[k].bottom]);
+            line.dedup_by(|a, b| (a[0] - b[0]).abs() < 1e-9);
+            if line.len() >= 2 {
+                out.push(line);
             }
         }
         start = end;

@@ -7,7 +7,7 @@
 use ocs_plugin_api::host::codec::Handle;
 
 use super::model::{self, Model};
-use super::{band_polygons, coloured, disclaimer, hatch, num, side_text, soil, tf, unit_line, SoilArgs};
+use super::{band_boundaries, band_polygons, coloured, disclaimer, hatch, num, side_text, soil, tf, unit_line, SoilArgs};
 use crate::civiel::as_profiel::{self, Alignment};
 use crate::civiel::{api, nice_step, record, station, Ctx, Maaiveld, Out};
 use crate::gis::bro::Kind;
@@ -135,7 +135,9 @@ pub fn soil_profile(opt: &crate::civiel::CivielOptions, req: Request, progress: 
         let pts: Vec<XY> = ring.iter().map(|p| [gx(p[0]), gy(p[1])]).collect();
         let d = record(&[("grondprofiel", name.clone()), ("grondsoort", code.clone()), ("bron", "NEN 9997-1 tabel 2.b".into())]);
         out.put(&fill, [hatch(&pts, &fill, rgb, Some(&d))]);
-        out.put(&bounds, [coloured(pts, true, &bounds, k, Some((60, 60, 60)), None)]);
+    }
+    for line in band_boundaries(&samples) {
+        out.put(&bounds, [coloured(line.iter().map(|p| [gx(p[0]), gy(p[1])]).collect(), false, &bounds, k, Some((60, 60, 60)), None)]);
     }
     // The ground line.
     let mut run: Vec<XY> = Vec::new();

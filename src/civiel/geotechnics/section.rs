@@ -9,7 +9,7 @@ use ocs_plugin_api::host::codec::{CadDocument, Handle};
 
 use super::model::{self, Subsoil};
 use super::stability::{self, Load, Method, SBand, Search, Section};
-use super::{band_polygons, coloured, disclaimer, hatch, num, side_text, soil, tf, SoilArgs};
+use super::{band_boundaries, band_polygons, coloured, disclaimer, hatch, num, side_text, soil, tf, SoilArgs};
 use crate::civiel::as_profiel;
 use crate::civiel::terrein::Tin;
 use crate::civiel::{api, nice_step, record, Ctx, Maaiveld, Out};
@@ -127,7 +127,7 @@ pub fn stability_command(opt: &crate::civiel::CivielOptions, req: Request, progr
         if i % 2 != 0 && i + 1 != plan.len() {
             continue;
         }
-        let bands = model::clip_to_surface(&sub.at(project[i]), surf_at(*x));
+        let bands = model::merge_thin(model::clip_to_surface(&sub.at(project[i]), surf_at(*x)), super::THIN);
         let mut col = Vec::new();
         for b in &bands {
             let u = *index.entry(b.code.clone()).or_insert_with(|| {
@@ -224,7 +224,9 @@ pub fn stability_command(opt: &crate::civiel::CivielOptions, req: Request, progr
         let rgb = soil::row(&code).map(|r| r.rgb()).unwrap_or((210, 210, 210));
         let pts: Vec<XY> = ring.iter().map(|p| [gx(p[0]), gy(p[1].max(zlo))]).collect();
         out.put(&fill, [hatch(&pts, &fill, rgb, None)]);
-        out.put(&bounds, [coloured(pts, true, &bounds, k, Some((70, 70, 70)), None)]);
+    }
+    for line in band_boundaries(&samples) {
+        out.put(&bounds, [coloured(line.iter().map(|p| [gx(p[0]), gy(p[1].max(zlo))]).collect(), false, &bounds, k, Some((70, 70, 70)), None)]);
     }
     out.put(&ground_l, [coloured(surface.iter().map(|p| [gx(p[0]), gy(p[1])]).collect(), false, &ground_l, k, None, None)]);
     out.put(&water_l, [coloured(phreatic.iter().map(|p| [gx(p[0].clamp(x0, x1)), gy(p[1])]).collect(), false, &water_l, k, Some((30, 110, 220)), None)]);

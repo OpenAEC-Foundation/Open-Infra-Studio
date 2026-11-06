@@ -358,6 +358,35 @@ pub fn clip_to_surface(bands: &[Band], z_ground: f64) -> Vec<Band> {
     out
 }
 
+/// Bands thinner than `min` (m) join their thicker neighbour: the thin
+/// wedges near a pinch-out, which would only add noise to a calculation.
+pub fn merge_thin(mut bands: Vec<Band>, min: f64) -> Vec<Band> {
+    while bands.len() > 1 {
+        let Some((i, _)) = bands.iter().enumerate().filter(|(_, b)| b.thickness() < min).min_by(|a, b| a.1.thickness().total_cmp(&b.1.thickness())) else { break };
+        let into = if i == 0 {
+            1
+        } else if i + 1 == bands.len() || bands[i - 1].thickness() >= bands[i + 1].thickness() {
+            i - 1
+        } else {
+            i + 1
+        };
+        let b = bands.remove(i);
+        let j = if into > i { into - 1 } else { into };
+        bands[j].top = bands[j].top.max(b.top);
+        bands[j].bottom = bands[j].bottom.min(b.bottom);
+        let mut k = 1;
+        while k < bands.len() {
+            if bands[k].code == bands[k - 1].code {
+                let n = bands.remove(k);
+                bands[k - 1].bottom = n.bottom;
+            } else {
+                k += 1;
+            }
+        }
+    }
+    bands
+}
+
 /// `LAGEN=top:code;top:code;…` (tops in m NAP, from high to low).
 pub fn parse_layers(text: &str) -> Result<Vec<(f64, String)>, String> {
     let mut out: Vec<(f64, String)> = Vec::new();
@@ -519,5 +548,8 @@ mod tests {
         let b = clip_to_surface(&s.at([0.0, 0.0]), 1.2);
         assert_eq!((b[0].top, b.len(), b[2].bottom), (1.2, 3, -20.0));
         assert_eq!(clip_to_surface(&s.at([0.0, 0.0]), -3.0)[0].code, "veen_slap");
+        let b = |t: f64, m: f64, c: &str| Band { top: t, bottom: m, code: c.into() };
+        let m = merge_thin(vec![b(6.0, 5.94, "veen_slap"), b(5.94, -3.0, "zand_schoon_matig"), b(-3.0, -3.1, "klei_schoon_slap"), b(-3.1, -9.0, "zand_schoon_matig")], 0.2);
+        assert_eq!(m, vec![b(6.0, -9.0, "zand_schoon_matig")]);
     }
 }

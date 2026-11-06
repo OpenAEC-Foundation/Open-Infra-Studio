@@ -60,8 +60,9 @@ fn inside(poly: &[XY], p: XY) -> bool {
     c
 }
 
-/// Settlement band colours, small to large (colour indices).
-const RAMP: [u8; 9] = [130, 110, 90, 70, 50, 40, 30, 20, 10];
+/// Settlement band colours, small to large: light yellow through orange and
+/// red to magenta (colour indices).
+const RAMP: [u8; 9] = [51, 50, 40, 30, 20, 10, 240, 220, 200];
 
 fn tool_layer(name: &str, aci: u8) -> LayerSpec {
     LayerSpec { name: name.to_string(), color: aci, rgb: crate::nlcs::color_rgb(aci), true_color: None, lineweight: None, linetype: "CONTINUOUS".into(), object_id: 0 }
@@ -144,7 +145,8 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
     let (f, k) = (ctx.f, ctx.k);
     let doc = crate::civiel::document(&["tin"], &[])?;
     let existing = Tin::of_status(&doc, 'B');
-    let mut bron = if existing.is_none() { Some(crate::civiel::hoogtebron(&ctx)?) } else { None };
+    // AHN (or the worldwide terrain) where the TIN has no height.
+    let mut bron = if existing.is_none() { Some(crate::civiel::hoogtebron(&ctx)?) } else { crate::civiel::hoogtebron(&ctx).ok() };
     let design = match &req.fill {
         Fill::Design(_) => Some(Tin::of_status(&doc, 'N').ok_or_else(|| tr("geen ontwerpoppervlak (N-…-OG-TRIANGULATIE): maak eerst een ontwerp of geef GEBIED= HOOGTE=", "no design surface (N-…-OG-TRIANGULATIE): make a design first or give GEBIED= HOOGTE=").to_string())?),
         Fill::Area(..) => None,
@@ -152,10 +154,7 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
     // The ground (m) at a point in project coordinates.
     let mut ground_at = |p: XY| -> Option<f64> {
         let d = ctx.to_drawing(p);
-        match &existing {
-            Some(t) => t.height(d).map(|z| z / f),
-            None => bron.as_mut().and_then(|b| b.height(d)),
-        }
+        existing.as_ref().and_then(|t| t.height(d)).map(|z| z / f).or_else(|| bron.as_mut().and_then(|b| b.height(d)))
     };
     // The extent of the load (project coordinates).
     let poly = match &req.fill {
@@ -271,7 +270,7 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
     let cp = at(ci, cj);
     let zg = grounds[cj][ci].ok_or_else(|| tr("geen maaiveldhoogte in het gekozen punt", "no ground level at the chosen point").to_string())?;
     let detail = point(&sub, &rects, cp, zg, req.water, req.method, t_end).ok_or("point")?;
-    let bands = model::clip_to_surface(&sub.at(cp), zg);
+    let bands = model::merge_thin(model::clip_to_surface(&sub.at(cp), zg), super::THIN);
     let water = match req.water {
         Water::Level(z) => z,
         Water::Depth(d) => zg - d,
@@ -316,7 +315,9 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
             let pts: Vec<XY> = line.iter().map(|p| ctx.to_drawing(*p)).collect();
             let mid = pts[pts.len() / 2];
             out.put(&g_l, [coloured(pts, false, &g_l, k, None, None)]);
-            out.put(&t_l, [ctx.text(mid, &format!("{} mm", num(level * 1000.0, 0)), 1.8, 0.0, &t_l, None)]);
+            let mut t = ctx.text(mid, &format!("{} mm", num(level * 1000.0, 0)), 1.8, 0.0, &t_l, None);
+            t.common_mut().color = Color::Rgb { r: 30, g: 30, b: 30 };
+            out.put(&t_l, [t]);
             contour_count += 1;
         }
     }
@@ -329,7 +330,10 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
             values.push(serde_json::json!({"x": p[0], "y": p[1], "ground": grounds[j][i], "fill_m": thick[j][i], "primary_m": results[j * nx + i].map(|r| r.0), "settlement_m": v}));
             if let Some(v) = v {
                 if i % every == 0 && j % every == 0 && *v >= 0.0005 {
-                    out.put(&t_l, [ctx.text(ctx.to_drawing(p), &num(v * 1000.0, 0), 1.5, 0.0, &t_l, None)]);
+                    let mut t = ctx.text(ctx.to_drawing(p), &num(v * 1000.0, 0), 1.5, 0.0, &t_l, None);
+                    // Dark, to read on the colour bands.
+                    t.common_mut().color = Color::Rgb { r: 30, g: 30, b: 30 };
+                    out.put(&t_l, [t]);
                 }
             }
         }
@@ -339,7 +343,10 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
     out.put(&g_l, crate::emit::markers(&[pd], &g_l.name, 1.5 * k, None));
     // Legend and the time graph to the right of the map.
     let right = ctx.to_drawing([ext[2] + margin, ext[3] + margin]);
-    let (lx, mut ly) = (right[0] + 12.0 * k, right[1]);
+    // Beside the map, and clear of the project area when the fill lies in it.
+    let clear = ctx.site.as_ref().map(|site| site.drawing_rect(f)).filter(|r| right[0] <= r[2] && right[1] <= r[3] + 1.0);
+    let lx = clear.map(|r| r[2]).unwrap_or(right[0]).max(right[0]) + 12.0 * k;
+    let mut ly = right[1];
     out.put(&t_l, [side_text(&ctx, [lx, ly], &tf!("Zetting na {} jaar ({:?})", "Settlement after {} years ({:?})", num(req.years, 0), req.method), 2.5, &t_l, false)]);
     for b in (0..n_bands).rev() {
         ly -= 6.0 * k;
@@ -362,7 +369,9 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
     let (gw, gh) = (90.0 * k, 50.0 * k);
     let (g0x, g0y) = (lx + 8.0 * k, ly - 8.0 * k - gh);
     let days_end = (t_end / DAY).max(2.0);
-    let smax = nice_step(curve.iter().map(|c| c.1).fold(0.0f64, f64::max).max(0.001) / 4.0) * 4.0;
+    let top = curve.iter().map(|c| c.1).fold(0.0f64, f64::max).max(0.001);
+    let sstep = nice_step(top / 4.0);
+    let smax = (top / sstep).ceil() * sstep;
     let tx = |d: f64| g0x + d.max(1.0).log10() / days_end.log10() * gw;
     let ty = |s: f64| g0y + gh - s / smax * gh;
     out.put(&g_l, [coloured(vec![[g0x, g0y + gh], [g0x + gw, g0y + gh], [g0x + gw, g0y], [g0x, g0y], [g0x, g0y + gh]], false, &g_l, k, None, None)]);
@@ -372,8 +381,9 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
             out.put(&t_l, [ctx.text([tx(d), g0y - 3.0 * k], lab, 1.5, 0.0, &t_l, None)]);
         }
     }
-    for i in 0..=4 {
-        let s = smax * i as f64 / 4.0;
+    let ticks = (smax / sstep).round().max(1.0) as usize;
+    for i in 0..=ticks {
+        let s = sstep * i as f64;
         out.put(&t_l, [side_text(&ctx, [g0x - 1.5 * k, ty(s)], &format!("{} mm", num(s * 1000.0, 0)), 1.5, &t_l, true)]);
     }
     out.put(&g_l, [coloured(curve.iter().map(|(d, s)| [tx(*d), ty(*s)]).collect(), false, &g_l, k, Some((200, 30, 30)), None)]);
@@ -423,7 +433,7 @@ pub fn settlement_command(opt: &crate::civiel::CivielOptions, req: Request, prog
 
 /// The settlement at one point (project coordinates, ground level zg).
 fn point(sub: &Subsoil, rects: &[Rect], p: XY, zg: f64, water: Water, method: Method, t_end: f64) -> Option<settlement::PointResult> {
-    let bands = model::clip_to_surface(&sub.at(p), zg);
+    let bands = model::merge_thin(model::clip_to_surface(&sub.at(p), zg), super::THIN);
     if bands.is_empty() {
         return None;
     }
