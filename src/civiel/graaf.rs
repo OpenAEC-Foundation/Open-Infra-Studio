@@ -170,4 +170,140 @@ mod tests {
         let gone = Product { as_handle: "FFFFFF".into(), ..product };
         assert_eq!(stale(&doc, &[gone]), vec![Some(String::new())]);
     }
+
+    /// An entity with Open Infra object data.
+    fn with_data(doc: &mut CadDocument, mut e: EntityType, layer: &str, pairs: &[(&str, &str)]) -> Handle {
+        e.common_mut().layer = layer.into();
+        e.common_mut().extended_data.add_record(super::super::record(&pairs.iter().map(|(k, v)| (*k, v.to_string())).collect::<Vec<_>>()));
+        doc.add_entity(e).unwrap()
+    }
+
+    fn line(a: [f64; 2], b: [f64; 2]) -> EntityType {
+        let mut p = LwPolyline::new();
+        p.add_point_with_bulge(Vector2::new(a[0], a[1]), 0.0);
+        p.add_point_with_bulge(Vector2::new(b[0], b[1]), 0.0);
+        EntityType::LwPolyline(p)
+    }
+
+    fn rectangle(x0: f64, y0: f64, x1: f64, y1: f64) -> EntityType {
+        let mut p = LwPolyline::new();
+        for (x, y) in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)] {
+            p.add_point_with_bulge(Vector2::new(x, y), 0.0);
+        }
+        p.is_closed = true;
+        EntityType::LwPolyline(p)
+    }
+
+    fn move_by(doc: &mut CadDocument, h: Handle, dy: f64) {
+        if let Some(EntityType::LwPolyline(p)) = doc.get_entity_mut(h) {
+            for v in &mut p.vertices {
+                v.location.y += dy;
+            }
+        }
+    }
+
+    /// A 100 m axis along y = 0 with a cable 5 m left of it, a far cable,
+    /// a BGT surface and a survey point at the section at 40 m, and one
+    /// survey point between two sections.
+    struct Site {
+        doc: CadDocument,
+        axis: Handle,
+        cable: Handle,
+        far: Handle,
+        surface: Handle,
+        point: Handle,
+        between: Handle,
+    }
+
+    fn site() -> Site {
+        use ocs_plugin_api::host::codec::Point;
+        let mut doc = CadDocument::new();
+        let axis = doc.add_entity(line([0.0, 0.0], [100.0, 0.0])).unwrap();
+        let klic = [("bron", "KLIC"), ("thema", "laagspanning")];
+        let cable = with_data(&mut doc, line([-5.0, 5.0], [105.0, 5.0]), "B-OI-KL-ET_LS-G", &klic);
+        let far = with_data(&mut doc, line([-5.0, 50.0], [105.0, 50.0]), "B-OI-KL-ET_LS-G", &klic);
+        let surface = with_data(&mut doc, rectangle(35.0, -3.0, 45.0, 3.0), "B-XX-VH-GESLOTENVERHARDING_ASFALT-G", &[("bron", "BGT")]);
+        let at = |x: f64, y: f64| EntityType::Point(Point::from_coords(x, y, 0.0));
+        let point = with_data(&mut doc, at(40.3, 2.0), "N-XX-MEETPUNT-S", &[("puntnummer", "12"), ("code", "KABEL"), ("z", "1.25")]);
+        let between = with_data(&mut doc, at(30.0, 2.0), "N-XX-MEETPUNT-S", &[("puntnummer", "13"), ("z", "1.10")]);
+        Site { doc, axis, cable, far, surface, point, between }
+    }
+
+    /// The record `register` makes of cross sections every 20 m, 10 m left
+    /// and right of the axis.
+    fn cross_sections_of(doc: &CadDocument, axis: Handle) -> Product {
+        Product { soort: "dwarsprofielen".into(), as_handle: hex(axis), plaats: None, bronnen: fingerprints(doc, axis).unwrap(), gemaakt: vec![] }
+    }
+
+    fn set_z(doc: &mut CadDocument, h: Handle, z: &str) {
+        let e = doc.get_entity_mut(h).unwrap();
+        let mut r = e.common().extended_data.get_record(bridge::XDATA_APP).unwrap().clone();
+        for v in &mut r.values {
+            if let ocs_plugin_api::host::XDataValue::String(s) = v {
+                if s.starts_with("z=") {
+                    *s = format!("z={z}");
+                }
+            }
+        }
+        e.common_mut().extended_data.add_record(r);
+    }
+
+    #[test]
+    fn what_the_sections_cut_is_a_source() {
+        let s = site();
+        let product = cross_sections_of(&s.doc, s.axis);
+        assert_eq!(stale(&s.doc, std::slice::from_ref(&product)), vec![None]);
+        let check = |doc: &CadDocument, what: &str| {
+            let r = stale(doc, std::slice::from_ref(&product));
+            assert!(r[0].is_some(), "{what}: still up to date");
+            r[0].clone().unwrap()
+        };
+
+        // The cable moves 1 m but still crosses every section.
+        let mut doc = s.doc.clone();
+        move_by(&mut doc, s.cable, 1.0);
+        assert!(check(&doc, "moved cable").contains("KLIC"));
+
+        // A new cable across the section at 40 m.
+        let mut doc = s.doc.clone();
+        with_data(&mut doc, line([38.0, -20.0], [42.0, 20.0]), "B-OI-KL-ET_LS-G", &[("bron", "KLIC"), ("thema", "water")]);
+        assert!(check(&doc, "new cable").contains("KLIC"));
+
+        // The BGT surface the section at 40 m runs through.
+        let mut doc = s.doc.clone();
+        move_by(&mut doc, s.surface, 1.0);
+        assert!(check(&doc, "moved surface").contains("BGT"));
+
+        // A survey height corrected.
+        let mut doc = s.doc.clone();
+        set_z(&mut doc, s.point, "1.40");
+        let r = check(&doc, "survey height");
+        assert!(r.contains("meetpunten") || r.contains("survey points"), "{r}");
+
+        // What no section cuts stays out of it.
+        let mut doc = s.doc.clone();
+        move_by(&mut doc, s.far, 1.0);
+        set_z(&mut doc, s.between, "1.30");
+        assert_eq!(stale(&doc, std::slice::from_ref(&product)), vec![None], "far cable, point between sections");
+
+        // A length profile does not cut anything.
+        let length = Product { soort: "lengteprofiel".into(), ..product.clone() };
+        let mut doc = s.doc.clone();
+        move_by(&mut doc, s.cable, 1.0);
+        assert_eq!(stale(&doc, &[length]), vec![None]);
+    }
+
+    #[test]
+    fn cross_sections_recorded_without_their_cut_objects_are_stale() {
+        // As the graph of version 2026.45.4 stored them: axis and ground only.
+        let s = site();
+        let axis = super::super::labels::entity_fingerprint(s.doc.get_entity(s.axis).unwrap());
+        let json = format!(r#"[{{"soort":"dwarsprofielen","as_handle":"{}","plaats":[0.0,-50.0],"bronnen":[["as:{}","{axis}"],["maaiveld","ahn"]],"gemaakt":["1A"]}},{{"soort":"lengteprofiel","as_handle":"{}","plaats":[0.0,50.0],"bronnen":[["as:{}","{axis}"],["maaiveld","ahn"]],"gemaakt":["2B"]}}]"#, hex(s.axis), hex(s.axis), hex(s.axis), hex(s.axis));
+        let old: Vec<Product> = serde_json::from_str(&json).expect("an old graph still reads");
+        assert_eq!(old.len(), 2);
+        assert_eq!(old[0].gemaakt, vec!["1A".to_string()]);
+        let r = stale(&s.doc, &old);
+        assert!(r[0].is_some(), "cross sections without their cut objects: {r:?}");
+        assert_eq!(r[1], None, "a length profile needs nothing new");
+    }
 }
