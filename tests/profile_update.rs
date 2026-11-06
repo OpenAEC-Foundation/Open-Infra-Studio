@@ -111,6 +111,12 @@ impl PluginRequestSender for Drawing {
             PluginRequest::WriteRecord { .. }
             | PluginRequest::SetDirty
             | PluginRequest::BumpGeometry => PluginResponse::Ok,
+            // No BGT, KLIC or survey points around the axis.
+            PluginRequest::QueryEntities { .. } => PluginResponse::EntityPage(Ok(ocs_plugin_api::host::EntityPage {
+                entities: Vec::new(),
+                count: 0,
+                next_offset: None,
+            })),
             other => return Err(PluginRequestError(format!("onverwacht verzoek: {other:?}"))),
         })
     }
