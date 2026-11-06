@@ -208,15 +208,36 @@ pub fn document(needs: &[&str], extra: &[ocs_plugin_api::host::codec::Handle]) -
     let mut doc = bridge::partial_document(&small, 500)?;
     for chunk in meshes.chunks(4) {
         for e in bridge::entities(chunk)?.into_iter().flatten() {
-            let mut e = e;
-            e.common_mut().owner_handle = ocs_plugin_api::host::codec::Handle::NULL;
-            if !doc.layers.iter().any(|l| l.name == e.common().layer) {
-                let _ = doc.layers.add(ocs_plugin_api::host::codec::tables::Layer::new(e.common().layer.as_str()));
-            }
-            let _ = doc.add_entity(e);
+            put(&mut doc, e);
         }
     }
     Ok(doc)
+}
+
+/// The Open Infra lines and points whose extents touch `area` (drawing
+/// units, `[x0, y0, x1, y1]`) that `doc` does not hold: on a drawing too
+/// large to share, the BGT, KLIC and survey points the index does not list.
+pub fn read_area(doc: &ocs_plugin_api::host::codec::CadDocument, area: [f64; 4]) -> Result<ocs_plugin_api::host::codec::CadDocument, String> {
+    let mut out = ocs_plugin_api::host::codec::CadDocument::new();
+    // By DXF name: the host also matches revision clouds and centre marks by it.
+    for kind in ["LWPOLYLINE", "POLYLINE2D", "POLYLINE3D", "LINE", "POINT"] {
+        let query = serde_json::json!({"type": kind, "xdata_app": bridge::XDATA_APP, "bounds": area});
+        for e in bridge::query(query)? {
+            if doc.get_entity(e.common().handle).is_none() {
+                put(&mut out, e);
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// An entity fetched from the host, into a partial document's model space.
+fn put(doc: &mut ocs_plugin_api::host::codec::CadDocument, mut e: EntityType) {
+    e.common_mut().owner_handle = ocs_plugin_api::host::codec::Handle::NULL;
+    if !doc.layers.iter().any(|l| l.name == e.common().layer) {
+        let _ = doc.layers.add(ocs_plugin_api::host::codec::tables::Layer::new(e.common().layer.as_str()));
+    }
+    let _ = doc.add_entity(e);
 }
 
 /// Entities per NLCS layer, written as one undo step.
