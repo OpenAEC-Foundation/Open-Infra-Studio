@@ -61,19 +61,28 @@ class OcsError(Exception):
 # ── Work folder (managed mode) ───────────────────────────────────────────────
 #
 # In the SuperCloud (OPENAEC_BEHEERD=1) the agent reaches only the files in the
-# work folder OPENAEC_MAP, where Docs puts them. Every path is checked after
-# its symlinks and passed on as that real path; a relative path is relative to
-# the work folder. Outside managed mode paths pass unchanged. The check runs
-# here, before Open CAD Studio opens or writes the file.
+# work folder OPENAEC_MAP, where Docs puts them:
+# - a path becomes its real path inside the work folder (a relative path is
+#   relative to the work folder), or is refused;
+# - the work folder may hold no symlink and no file with more than one hard
+#   link, so the files the plugins name themselves (beside the drawing, in a
+#   delivery folder) stay in it too;
+# - Open Infra commands and QSAVE run only on a drawing saved in the work folder;
+# - no free command lines (oi_command) and no quotes or control characters in
+#   text arguments, so no tool can add an argument to a command.
+# Outside managed mode nothing changes. The checks run here, before Open CAD
+# Studio opens or writes a file.
 
 def managed():
     return os.environ.get("OPENAEC_BEHEERD") == "1"
 
 
 def work_folder():
-    """OPENAEC_MAP as a real path, or None when it is not an existing absolute folder."""
+    """OPENAEC_MAP as a real path, else OcsError."""
     m = os.environ.get("OPENAEC_MAP") or ""
-    return os.path.realpath(m) if os.path.isabs(m) and os.path.isdir(m) else None
+    if not (os.path.isabs(m) and os.path.isdir(m)):
+        raise OcsError("beheerde modus zonder werkmap: OPENAEC_MAP is geen bestaande absolute map")
+    return os.path.realpath(m)
 
 
 def _inside(path, folder):
@@ -87,13 +96,24 @@ def _control(text):
     return any(unicodedata.category(c) in ("Cc", "Zl", "Zp") for c in text)
 
 
+def _no_links(root):
+    """OcsError when the work folder holds a symlink or a file with more than one hard link."""
+    todo = [root]
+    while todo:
+        with os.scandir(todo.pop()) as entries:
+            for e in entries:
+                st = e.stat(follow_symlinks=False)
+                if stat.S_ISLNK(st.st_mode) or (stat.S_ISREG(st.st_mode) and st.st_nlink > 1):
+                    raise OcsError(f"{e.path}: een symbolische of harde link in de werkmap; in beheerde modus mag die er niet zijn")
+                if stat.S_ISDIR(st.st_mode):
+                    todo.append(e.path)
+
+
 def confine(path):
     """In managed mode: `path` as a real path inside the work folder, else OcsError."""
     if not managed():
         return path
     root = work_folder()
-    if root is None:
-        raise OcsError("beheerde modus zonder werkmap: OPENAEC_MAP is geen bestaande absolute map")
     p = str(path)
     if not p.strip() or '"' in p or _control(p) or (os.sep == "/" and "\\" in p):
         raise OcsError(f"pad {p!r}: leeg, of met een aanhalingsteken, backslash of stuurteken")
@@ -101,12 +121,6 @@ def confine(path):
     # A symlink loop leaves the rest of the path unresolved, '..' included.
     if not _inside(real, root) or os.pardir in real.split(os.sep):
         raise OcsError(f"pad {p!r} ligt buiten de werkmap {root}")
-    try:
-        st = os.stat(real)
-    except OSError:
-        return real
-    if stat.S_ISREG(st.st_mode) and st.st_nlink > 1:
-        raise OcsError(f"pad {p!r}: het bestand heeft meer dan één harde link en kan buiten de werkmap liggen")
     return real
 
 
@@ -114,88 +128,39 @@ def _file(a, key="path"):
     return confine(a[key]) if a.get(key) else a.get(key)
 
 
-# Command lines in managed mode. Open Infra commands keep every file argument
-# inside the work folder; host commands only as the tools send them (a view,
-# QSAVE), because their file arguments (OPEN, SAVEAS, EXPORT …) cannot be
-# checked here.
-HOST_COMMANDS = {"ZOOM", "-VIEW", "VSCURRENT", "QSAVE"}
-# Keys that name a file or folder. For the library PAD/PATH are points.
-FILE_KEYS = {"PAD", "PATH", "BESTAND", "FILE", "MAP"}
-POINT_PATH = {"GIS_INFRA_PLACE", "GIS_INFRA_UPDATE"}
-# Commands whose loose words are a file or folder (words in capitals, such as
-# ALLES, are options).
-FILE_WORDS = {
-    "CIV_PUNTEN_IMPORT", "CIV_LANDXML", "CIV_LANDXML_EXPORT", "CIV_KLIC3D", "CIV_CITYGML", "CIV_MESH",
-    "CIV_PUNTENWOLK_TIN", "CIV_PUNTENWOLK_BESTAND", "CIV_RIOOL_IMPORT", "GIS_PLAN_GML", "GIS_NLCSPP_IMPORT",
-    "GIS_EXPORT", "GIS_EXPORT_GPKG", "GIS_EXPORT_GEOJSON", "GIS_KLIC", "GIS_KLIC_IMPORT", "GIS_KLIC_MAP",
-    "GIS_KLIC_VOLGEN", "GIS_RASTER_IMPORT", "GIS_BESTAND", "GIS_FILE", "GIS_BESTAND_IMPORT", "GIS_FILE_IMPORT",
-}
-_OPTION = re.compile(r"[A-Z_]+|(?i:epsg):\d+")
-_KEY = re.compile(r"[A-Za-z0-9_]+")
-_URL = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
+def _text(v):
+    """A text argument: in managed mode without quotes or control characters, so it stays one argument."""
+    if managed() and isinstance(v, str) and ('"' in v or _control(v)):
+        raise OcsError(f"{v!r}: geen aanhalingstekens of stuurtekens in beheerde modus")
+    return v
 
 
-def _split(line):
-    """Words as the plugins split them (civiel::api::Args): on whitespace, with "quoted parts" kept together."""
-    out, cur, quoted = [], "", False
-    for c in line:
-        if c == '"':
-            quoted = not quoted
-        elif c.isspace() and not quoted:
-            if cur:
-                out.append(cur)
-            cur = ""
-        else:
-            cur += c
-    if cur:
-        out.append(cur)
-    return out
+VIEW_COMMANDS = {"ZOOM", "-VIEW", "VSCURRENT"}
 
 
-def _looks_like_path(v):
-    """Absolute, from home, with '..', a backslash or file: (a web address is not a path)."""
-    if _URL.match(v) and not v.lower().startswith("file:"):
-        return False
-    return v.startswith(("/", "~")) or "\\" in v or os.pardir in re.split(r"[/\\]", v) or v.lower().startswith("file:")
-
-
-def _word(w):
-    return f'"{w}"' if any(c.isspace() for c in w) else w
-
-
-def confine_command(line):
-    """A command line in managed mode, with its file arguments as real paths in the work folder, else OcsError."""
-    if _control(line):
-        raise OcsError("opdracht met een regelovergang of stuurteken: niet in beheerde modus")
-    words = _split(line)
-    if not words:
-        return line
-    verb = words[0].upper()
-    if not verb.startswith(("GIS_", "CIV_")):
-        if verb in HOST_COMMANDS and len(words) <= 2 and '"' not in line and all(re.fullmatch(r"[A-Za-z0-9_-]+", w) for w in words):
-            return line
-        raise OcsError(f"{words[0]}: in beheerde modus alleen Open Infra-opdrachten (GIS_…, CIV_…); "
-                       "bestanden via infra_open en infra_opslaan, het beeld via oi_view")
-    out = [words[0]]
-    for w in words[1:]:
-        k, eq, v = w.partition("=")
-        if eq and _KEY.fullmatch(k):
-            if v and ((k.upper() in FILE_KEYS and verb not in POINT_PATH) or _looks_like_path(v)):
-                v = confine(v)
-            out.append(f"{k}={_word(v)}")
-        else:
-            if (verb in FILE_WORDS and not _OPTION.fullmatch(w)) or _looks_like_path(w):
-                w = confine(w)
-            out.append(_word(w))
-    return " ".join(out)
-
-
-def _guard(op, body):
-    """Every automation request in managed mode: paths and command lines stay in the work folder."""
-    if not managed():
+def _guard(ocs, op, body):
+    """An automation request in managed mode (see above); OcsError when it may reach a file outside the work folder."""
+    if not managed() or op == "state":
         return body
+    root = work_folder()
+    _no_links(root)
     if op == "run":
-        body["cmd"] = confine_command(str(body.get("cmd") or ""))
+        cmd = str(body.get("cmd") or "")
+        words = cmd.split()
+        verb = words[0].upper() if words else ""
+        if _control(cmd):
+            raise OcsError("opdracht met een regelovergang of stuurteken: niet in beheerde modus")
+        if verb in VIEW_COMMANDS:
+            if len(words) > 2 or not all(re.fullmatch(r"[A-Za-z0-9_-]+", w) for w in words):
+                raise OcsError(f"{cmd}: alleen een beeldopdracht met één woord")
+            return body
+        if not re.fullmatch(r"(GIS|CIV)_[A-Z0-9_]+|QSAVE", verb) or (verb == "QSAVE" and len(words) > 1):
+            raise OcsError(f"{words[0] if words else cmd}: in beheerde modus alleen de opdrachten van de tools")
+        st = ocs.request("state")
+        docs = st.get("documents") if isinstance(st.get("documents"), list) else []
+        drawing = next((d.get("path") for d in docs if isinstance(d, dict) and d.get("id") == st.get("document_id")), None)
+        if not drawing or not _inside(os.path.realpath(drawing), root):
+            raise OcsError("de tekening staat niet in de werkmap: open er een met infra_open, of sla deze op met infra_opslaan en een pad")
     for key in ("path", "template"):
         v = body.get(key)
         own_capture = op == "capture" and os.path.dirname(str(v)) == RESULTS and os.path.basename(str(v)).startswith("capture-")
@@ -309,7 +274,7 @@ class Ocs:
 
     def request(self, op, body=None, timeout=120):
         """One automation operation (state, run, capture, save, open, …)."""
-        body = _guard(op, dict(body or {}))
+        body = _guard(self, op, dict(body or {}))
         s = self.session or self.pick()
         if s["kind"] == "rest":
             return _rest(s["port"], s["token"], "/state" if op == "state" else f"/{op}", None if op == "state" else body, timeout)
@@ -390,6 +355,7 @@ def _kv(**kw):
     for k, v in kw.items():
         if v is None or v == "" or v == []:
             continue
+        _text(v)
         if isinstance(v, bool):
             v = "ja" if v else "nee"
         elif isinstance(v, (int, float)):
@@ -491,6 +457,8 @@ def t_status(a):
 @tool("oi_command", "Run one command line: Open Infra (GIS_…, CIV_…; waits for its answer) or a host command (e.g. 'ZOOM EXTENTS'). See GIS_HELP and CIV_HELP for the arguments.",
       {"command": STR, "timeout_s": NUM}, ["command"])
 def t_command(a):
+    if managed():
+        raise OcsError("oi_command is niet beschikbaar in beheerde modus: gebruik de tools (infra_open en infra_opslaan voor bestanden)")
     c = a["command"].strip()
     if c.upper().startswith(("GIS_", "CIV_")):
         return OCS.run(c, int(a.get("timeout_s") or 900))
@@ -503,7 +471,7 @@ def t_command(a):
 def t_site(a):
     w, h = a.get("width", 300), a.get("height", a.get("width", 250))
     rel = " RELATIEF" if a.get("relative") else ""
-    name = (" " + a["name"]) if a.get("name") else ""
+    name = (" " + _text(a["name"])) if a.get("name") else ""
     if a.get("x") is not None and a.get("y") is not None:
         return OCS.run(f"GIS_SITE RD {_num(a['x'])} {_num(a['y'])} {_num(w)} {_num(h)}{rel}{name}")
     if a.get("lon") is not None and a.get("lat") is not None:
@@ -613,7 +581,7 @@ def t_points(a):
 
 @tool("civ_points_export", "Export the drawing's points (or the selection) to a point file.", {"path": STR, "format": STR})
 def t_points_export(a):
-    return OCS.run(f"CIV_PUNTEN_EXPORT {_kv(PAD=a.get('path') and _quote(_file(a)), FORMAAT=a.get('format'))}")
+    return OCS.run(f"CIV_PUNTEN_EXPORT {_kv(PAD=_file(a), FORMAAT=a.get('format'))}")
 
 
 @tool("civ_landxml", "Import LandXML: points, surfaces (TIN) and alignments (lines, curves, spirals).", {"path": STR}, ["path"])
@@ -825,13 +793,15 @@ def t_water(a):
 def t_server(a):
     if a.get("year"):
         return OCS.run(f"GIS_Q_SERVER JAAR={int(a['year'])} {_kv(RES=a.get('resolution'))}", 900)
-    return OCS.run(f"GIS_Q_SERVER {a['id']} {_kv(LAAG=a.get('layer'), RES=a.get('resolution'))}", 900)
+    return OCS.run(f"GIS_Q_SERVER {_text(a['id'])} {_kv(LAAG=a.get('layer'), RES=a.get('resolution'))}", 900)
 
 
 @tool("civ_klic3d", "KLIC cables and pipes as 3D tubes under the AHN ground (depth from the delivery, else the usual cover depth per network type), "
       "in IMKL colours. Without path: the delivery imported last. scale thickens the tubes for overview pictures.",
       {"path": STR, "scale": NUM})
 def t_klic3d(a):
+    if managed() and not a.get("path"):
+        raise OcsError("civ_klic3d: geef in beheerde modus het pad van de levering in de werkmap")
     return OCS.run(f"CIV_KLIC3D {_quote(_file(a) or '')} {_kv(VERGROOT=a.get('scale'))}", 1800)
 
 
