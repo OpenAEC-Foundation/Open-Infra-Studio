@@ -99,6 +99,10 @@ const I_CHECK: IconKind = icon!("as-toets.svg");
 const I_SIGHT: IconKind = icon!("zicht.svg");
 const I_RAIL: IconKind = icon!("spoor.svg");
 const I_TURNOUT: IconKind = icon!("wissel.svg");
+// Geotechnics: soil profile, slope stability, settlement.
+const I_SOIL_PROFILE: IconKind = icon!("grondprofiel.svg");
+const I_STABILITY: IconKind = icon!("stabiliteit.svg");
+const I_SETTLEMENT: IconKind = icon!("zetting.svg");
 
 fn command(id: &'static str) -> ModuleEvent {
     ModuleEvent::Command(id.to_string())
@@ -168,6 +172,21 @@ fn terrain_tools() -> Vec<RibbonItem> {
         default: "CIV_STROOMGEBIED",
     });
     tools
+}
+
+/// Geotechnics in the grading group: slope stability and settlement for
+/// any soil (layers given by hand), the soil profile from the BRO with the
+/// Dutch modules.
+fn geotechnics_menu() -> RibbonItem {
+    let mut items = vec![
+        ("CIV_STABILITEIT", tr("Taludstabiliteit", "Slope stability"), I_STABILITY),
+        ("CIV_ZETTING", tr("Zetting ophoging", "Fill settlement"), I_SETTLEMENT),
+        ("CIV_GRONDSOORTEN", tr("Grondsoorten", "Soil units"), I_SOIL_PROFILE),
+    ];
+    if open_infra::lang::dutch() {
+        items.insert(0, ("CIV_GRONDPROFIEL", tr("Grondprofiel (BRO)", "Soil profile (BRO)"), I_SOIL_PROFILE));
+    }
+    RibbonItem::LabeledDropdown { id: "CIV_MENU_GEOTECHNIEK", label: tr("Geotechniek", "Geotechnics"), icon: I_STABILITY, items, default: "CIV_STABILITEIT" }
 }
 
 struct CivielModule;
@@ -254,6 +273,7 @@ impl CadModule for CivielModule {
                             ("CIV_VOLUME_TIN", tr("Grondverzet TIN", "Volume TIN"), I_VOLUME_TIN),
                             ("CIV_GRONDBALANS", tr("Grondbalans", "Mass haul"), I_MASS_HAUL),
                         ], "CIV_VOLUME_TIN"),
+                        geotechnics_menu(),
                     ],
                 },
                 // Pipe networks (sewers).
@@ -340,6 +360,161 @@ fn refuse(host: &mut dyn HostApi, id: Option<String>, label: &str, e: String) {
     if let Some(id) = id {
         api::write(&id, false, &format!("{label}: {e}"), Default::default());
     }
+}
+
+const GEOTECHNICS_HELP: &str = "[Open Infra — Geotechniek / Geotechnics] CIV_GRONDPROFIEL [LIJN=|AS=] [BRON=sonderingen|boringen|alles] [STRAAL=50] [MAX=30] [MINLAAG=0.3] [NAAM=] [GROND=] [PLAATS=x,y]; \
+     CIV_STABILITEIT [LIJN= | AS= STATION=] [LINKS=] [RECHTS=] [FREATISCH=<m NAP>|x:z;x:z] [BELASTING=kPa:van:tot] [METHODE=bishop|fellenius] [OPPERVLAK=AUTO|B|N] [MINDIEPTE=0.5] [NAAM=] [PLAATS=]; \
+     CIV_ZETTING [GEBIED=x,y;… HOOGTE=m | ONTWERP=ja [GEBIED=]] [GAMMA=18] [TIJD=30 (jaar/years)] [CEL=] [PUNT=x,y] [METHODE=koppejan|terzaghi] [FREATISCH=<m NAP>|GRONDWATER=<m onder maaiveld/below ground, 1>] [MARGE=5] [BANDEN=]; \
+     grond/soil: [LAGEN=bovenkant:code;… [BASIS=]] [MODEL=<grondmodel>] [GROND=code:g=,gsat=,c=,phi=,cp=,cs=,cr=,rr=,ca=,cc=,e0=,cv=,pop=;…] [BRON=] [STRAAL=]; CIV_GRONDSOORTEN (NEN 9997-1 tabel 2.b). \
+     Rekenhulpmiddel, geen gewaarmerkt ontwerp / a calculation aid, not a stamped design.";
+
+/// The soil arguments of the geotechnics commands: LAGEN= (with BASIS=),
+/// MODEL=, GROND= overrides, BRON=, STRAAL=, MINLAAG=.
+fn soil_args(args: &Args, radius: f64) -> Result<civiel::geotechnics::SoilArgs, String> {
+    use civiel::geotechnics::{model, soil, SoilArgs, SoilChoice};
+    let choice = match args.str("LAGEN") {
+        Some(l) => SoilChoice::Layers(model::parse_layers(l)?, args.f64("BASIS")?),
+        None => SoilChoice::Model(args.str("MODEL").map(str::to_string)),
+    };
+    Ok(SoilArgs {
+        choice,
+        overrides: soil::parse_overrides(args.str("GROND").unwrap_or(""))?,
+        kinds: civiel::ondergrond::kinds(args.str("BRON"))?,
+        radius: args.f64("STRAAL")?.unwrap_or(radius).clamp(1.0, 1000.0),
+        min_layer: args.f64("MINLAAG")?.unwrap_or(0.3).clamp(0.0, 5.0),
+    })
+}
+
+/// `CIV_GRONDPROFIEL`, `CIV_STABILITEIT`, `CIV_ZETTING`, `CIV_GRONDSOORTEN`.
+fn run_geotechnics(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> Result<(), String> {
+    use civiel::geotechnics::{map, profile, section, settlement, stability};
+    let base = civiel::settings();
+    let soil_keys = ["LAGEN", "BASIS", "MODEL", "GROND", "BRON", "STRAAL", "MINLAAG"];
+    let own = |extra: &[&'static str]| -> Vec<&'static str> { soil_keys.iter().copied().chain(extra.iter().copied()).collect() };
+    let at = place_arg(args)?;
+    match verb {
+        "CIV_GRONDSOORTEN" => {
+            args.apply(&base, &[])?;
+            job(host, tr("Grondsoorten", "Soil units"), id, |_| civiel::geotechnics::list_units());
+        }
+        "CIV_GRONDPROFIEL" => {
+            let o = args.apply(&base, &own(&["LIJN", "AS", "MAX", "NAAM", "PLAATS"]))?;
+            let line = args.handle("LIJN")?.or(args.handle("AS")?);
+            if line.is_none() && host.selection().len() != 1 {
+                return Err(tr("selecteer eerst één lijn of as, of geef LIJN=<handle>", "select one line or alignment first, or give LIJN=<handle>").into());
+            }
+            let soil = soil_args(args, 50.0)?;
+            let req = profile::Request {
+                line,
+                kinds: soil.kinds.clone(),
+                radius: soil.radius,
+                max: args.f64("MAX")?.map(|m| m.clamp(1.0, 200.0) as usize).unwrap_or(30),
+                min_layer: soil.min_layer,
+                name: args.str("NAAM").map(str::to_string),
+                soil,
+                at,
+            };
+            job(host, tr("Grondprofiel", "Soil profile"), id, move |p| profile::soil_profile(&o, req, p));
+        }
+        "CIV_STABILITEIT" => {
+            let o = args.apply(&base, &own(&["LIJN", "AS", "STATION", "FREATISCH", "BELASTING", "METHODE", "OPPERVLAK", "MINDIEPTE", "NAAM", "PLAATS"]))?;
+            let place = match (args.handle("AS")?, args.f64("STATION")?) {
+                (axis, Some(st)) => section::Place::Axis { axis, station: st, left: o.left, right: o.right },
+                (Some(_), None) => return Err(tr("AS= vraagt ook STATION=<m>", "AS= needs STATION=<m> too").into()),
+                (None, None) => {
+                    let line = args.handle("LIJN")?;
+                    if line.is_none() && host.selection().len() != 1 {
+                        return Err(tr("selecteer eerst één lijn dwars over het talud, of geef LIJN=<handle> of AS=<handle> STATION=<m>", "select one line across the slope first, or give LIJN=<handle> or AS=<handle> STATION=<m>").into());
+                    }
+                    section::Place::Line(line)
+                }
+            };
+            let phreatic = match args.str("FREATISCH") {
+                None => section::Phreatic::Auto,
+                Some(v) if v.contains(':') => section::Phreatic::Points(args.pairs("FREATISCH")?.unwrap_or_default()),
+                Some(_) => section::Phreatic::Level(args.f64("FREATISCH")?.unwrap_or(0.0)),
+            };
+            let load = match args.str("BELASTING") {
+                None => None,
+                Some(v) => {
+                    let p: Vec<f64> = v.split(':').map(|t| t.trim().replace(',', ".").parse::<f64>()).collect::<Result<_, _>>().map_err(|_| tr("BELASTING: kPa:van:tot, bijv. 13:2:6", "BELASTING: kPa:from:to, e.g. 13:2:6").to_string())?;
+                    if p.len() != 3 || p[0] < 0.0 {
+                        return Err(tr("BELASTING: kPa:van:tot, bijv. 13:2:6", "BELASTING: kPa:from:to, e.g. 13:2:6").into());
+                    }
+                    Some(stability::Load { q: p[0], from: p[1], to: p[2] })
+                }
+            };
+            let method = match args.str("METHODE") {
+                None => stability::Method::Bishop,
+                Some(m) => stability::Method::parse(m).ok_or(tr("METHODE: bishop of fellenius", "METHODE: bishop or fellenius"))?,
+            };
+            let surface = match args.str("OPPERVLAK").map(|s| s.to_ascii_uppercase()) {
+                None => section::Surface::Auto,
+                Some(s) if s == "AUTO" => section::Surface::Auto,
+                Some(s) if s == "B" || s == "BESTAAND" => section::Surface::Existing,
+                Some(s) if s == "N" || s == "ONTWERP" => section::Surface::Design,
+                Some(_) => return Err(tr("OPPERVLAK: AUTO, B (bestaand) of N (ontwerp)", "OPPERVLAK: AUTO, B (existing) or N (design)").into()),
+            };
+            let req = section::Request {
+                place,
+                phreatic,
+                load,
+                method,
+                surface,
+                soil: soil_args(args, 50.0)?,
+                min_depth: args.f64("MINDIEPTE")?.unwrap_or(0.5).clamp(0.05, 20.0),
+                at,
+                name: args.str("NAAM").map(str::to_string),
+            };
+            job(host, tr("Taludstabiliteit", "Slope stability"), id, move |p| section::stability_command(&o, req, p));
+        }
+        "CIV_ZETTING" => {
+            let o = args.apply(&base, &own(&["GEBIED", "HOOGTE", "ONTWERP", "GAMMA", "TIJD", "PUNT", "METHODE", "FREATISCH", "GRONDWATER", "MARGE"]))?;
+            let area = args.points("GEBIED")?;
+            let design = args.str("ONTWERP").is_some_and(|v| !matches!(v.to_ascii_lowercase().as_str(), "nee" | "no" | "0" | "false"));
+            let fill = match (area, args.f64("HOOGTE")?) {
+                (Some(a), Some(h)) if !design => {
+                    if a.len() < 3 {
+                        return Err(tr("GEBIED: minstens drie punten x,y;x,y;x,y", "GEBIED: at least three points x,y;x,y;x,y").into());
+                    }
+                    if h <= 0.0 {
+                        return Err(tr("HOOGTE: de dikte van de ophoging (m), > 0", "HOOGTE: the fill thickness (m), > 0").into());
+                    }
+                    map::Fill::Area(a, h)
+                }
+                (None, Some(_)) => return Err(tr("HOOGTE= vraagt GEBIED=x,y;x,y;…", "HOOGTE= needs GEBIED=x,y;x,y;…").into()),
+                (a, _) => map::Fill::Design(a.filter(|a| a.len() >= 3)),
+            };
+            let method = match args.str("METHODE") {
+                None => settlement::Method::Koppejan,
+                Some(m) => settlement::Method::parse(m).ok_or(tr("METHODE: koppejan of terzaghi", "METHODE: koppejan or terzaghi"))?,
+            };
+            let water = match (args.f64("FREATISCH")?, args.f64("GRONDWATER")?) {
+                (Some(z), _) => map::Water::Level(z),
+                (None, Some(d)) => map::Water::Depth(d.max(0.0)),
+                (None, None) => map::Water::Depth(1.0),
+            };
+            let point = match args.points("PUNT")? {
+                Some(p) if !p.is_empty() => Some(p[0]),
+                _ => None,
+            };
+            let req = map::Request {
+                fill,
+                gamma: args.f64("GAMMA")?.unwrap_or(18.0).clamp(1.0, 30.0),
+                years: args.f64("TIJD")?.unwrap_or(30.0).clamp(0.01, 1000.0),
+                cell: args.f64("CEL")?,
+                point,
+                method,
+                water,
+                soil: soil_args(args, 50.0)?,
+                margin: args.f64("MARGE")?.unwrap_or(5.0),
+                bands: o.bands,
+            };
+            job(host, tr("Zetting", "Settlement"), id, move |p| map::settlement_command(&o, req, p));
+        }
+        _ => unreachable!(),
+    }
+    Ok(())
 }
 
 /// The selected axis, read by handle (not the whole drawing, which may be huge).
@@ -1563,6 +1738,8 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             };
             job(host, "Sonderingen 3D", id, move |p| civiel::ondergrond::columns(&o, &req, p));
         }
+        // Geotechnics (src/civiel/geotechnics).
+        "CIV_GRONDPROFIEL" | "CIV_STABILITEIT" | "CIV_ZETTING" | "CIV_GRONDSOORTEN" => run_geotechnics(host, verb, args, id)?,
         "CIV_IFC" => {
             opt(&["BESTAND", "PAD", "TEKST"])?;
             let (file, selection, texts) = open_infra::ifc::args(args);
@@ -1790,6 +1967,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             job(host, "Modelinfo", id, |_| civiel::info());
         }
         "CIV_INSTELLINGEN" => open_settings(host),
+        "CIV_HELP" if args.words.first().is_some_and(|w| w.eq_ignore_ascii_case("GEOTECHNIEK") || w.eq_ignore_ascii_case("GEOTECHNICS")) => host.push_info(GEOTECHNICS_HELP),
         "CIV_HELP" => {
             host.push_info(open_infra::lang::tr(
                 "[Open Infra — Civiel] Puntenwolk: CIV_TIN BRON=PUNTENWOLK [BESTAND=las/laz/e57/ply/pts/xyz] [EDITIE=AHN5|AHN4] [GEBIED=x,y;x,y] [KLASSEN=2;9|AUTO] [CEL=0.5] [TOL=0.10] [MAX=200000] [GAT=2] [HELLING=0.3] [VENSTER=18]; \
