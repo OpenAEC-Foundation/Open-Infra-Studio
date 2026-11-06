@@ -407,8 +407,8 @@ fn grow(b: &mut Option<[f64; 4]>, e: &EntityType) {
 
 /// The frame and label of a proposal, in drawing units.
 pub fn marker_entities(id: &str, title: &str, counts: (usize, usize, usize), bbox: [f64; 4], k: f64) -> Vec<EntityType> {
-    let text_h = 3.0 * k;
-    let pad = (0.02 * (bbox[2] - bbox[0]).max(bbox[3] - bbox[1])).max(2.0 * k);
+    let size = (bbox[2] - bbox[0]).max(bbox[3] - bbox[1]);
+    let pad = (0.02 * size).max(2.0 * k);
     let (x0, y0, x1, y1) = (bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad);
     let data = bridge::object_data([("assistant_proposal", id.to_string())]);
     let mut out = crate::emit::polylines(&[(vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]], true)], MARKER_LAYER, 1.0, Some(&data));
@@ -419,7 +419,11 @@ pub fn marker_entities(id: &str, title: &str, counts: (usize, usize, usize), bbo
         counts.1,
         counts.2
     );
-    let w = label.chars().count() as f64 * text_h * 0.6;
+    // As wide as the frame, so it reads at the zoom that shows the frame;
+    // at least 3 mm on paper.
+    let chars = label.chars().count().max(1) as f64;
+    let text_h = ((x1 - x0) / (chars * 0.6)).min(0.03 * size.max(1.0)).max(3.0 * k);
+    let w = chars * text_h * 0.6;
     out.push(crate::emit::text([x0 + w / 2.0, y1 + text_h], &label, text_h, 0.0, MARKER_LAYER, Some(&data)));
     out
 }

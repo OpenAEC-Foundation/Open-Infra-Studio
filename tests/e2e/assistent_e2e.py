@@ -96,23 +96,26 @@ class Mcp:
             self.p.kill()
 
 
-def window_shot(title, path):
-    """A PNG of an X11 window by its title (the workbench window)."""
+def window_shot(title, path, size=(1280, 900)):
+    """A PNG of an X11 window by its title (the workbench window): moved
+    and sized to fit the screen, its client area from xwininfo."""
     try:
         from PIL import ImageGrab
     except ImportError:
         return False, "no Pillow"
-    out = subprocess.run(["wmctrl", "-lG"], capture_output=True, text=True).stdout
-    for line in out.splitlines():
-        parts = line.split(None, 7)
-        if len(parts) == 8 and title in parts[7]:
-            wid, x, y, w, h = parts[0], *map(int, parts[2:6])
-            subprocess.run(["wmctrl", "-i", "-a", wid])
-            time.sleep(1.5)
-            img = ImageGrab.grab(bbox=(x, y, x + w, y + h), xdisplay=os.environ.get("DISPLAY", ":0"))
-            img.save(path)
-            return True, f"{path.name} {w}×{h}"
-    return False, f"no window '{title}'"
+    out = subprocess.run(["wmctrl", "-l"], capture_output=True, text=True).stdout
+    wid = next((line.split()[0] for line in out.splitlines() if title in line), None)
+    if not wid:
+        return False, f"no window '{title}'"
+    subprocess.run(["wmctrl", "-i", "-r", wid, "-e", f"0,60,40,{size[0]},{size[1]}"])
+    subprocess.run(["wmctrl", "-i", "-a", wid])
+    time.sleep(2.0)
+    info = subprocess.run(["xwininfo", "-id", wid], capture_output=True, text=True).stdout
+    val = lambda key: int(next(l.split(":")[1] for l in info.splitlines() if l.strip().startswith(key)))
+    x, y, w, h = val("Absolute upper-left X"), val("Absolute upper-left Y"), val("Width"), val("Height")
+    img = ImageGrab.grab(bbox=(x, y, x + w, y + h), xdisplay=os.environ.get("DISPLAY", ":0"))
+    img.save(path)
+    return True, f"{path.name} {w}×{h}"
 
 
 def main():
@@ -299,7 +302,13 @@ def main():
         return window_shot("Open Infra — Civiel", OUT / "assistent-pagina.png")
 
     try:
-        step("sessions", lambda: (call("oi_sessions")[0].get("selected", "").startswith("rest:"), "REST window"))
+        def sessions():
+            # oi_sessions answers in its text (JSON), without structured data.
+            _, text = call("oi_sessions")
+            selected = json.loads(text).get("selected") or ""
+            return selected == f"rest:{args.port}", f"selected {selected}"
+
+        step("sessions", sessions)
         step("tools: classes and annotations", tools)
         step("site (logged, no proposal)", site)
         if step("propose a TIN and an alignment", propose):

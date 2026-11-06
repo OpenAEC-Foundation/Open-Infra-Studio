@@ -171,10 +171,8 @@ impl AssistantPage {
                         if ui.add_enabled(!busy && !stale && p.restorable, egui::Button::new(tr("Afwijzen", "Reject"))).clicked() {
                             action = Some((p.id.clone(), 1));
                         }
-                        if stale || !p.restorable {
-                            if ui.add_enabled(!busy, egui::Button::new(tr("Laten vervallen", "Dismiss"))).clicked() {
-                                action = Some((p.id.clone(), 2));
-                            }
+                        if (stale || !p.restorable) && ui.add_enabled(!busy, egui::Button::new(tr("Laten vervallen", "Dismiss"))).clicked() {
+                            action = Some((p.id.clone(), 2));
                         }
                         if ui.add_enabled(!busy && p.bbox.is_some(), egui::Button::new(tr("Inzoomen", "Zoom to"))).clicked() {
                             action = Some((p.id.clone(), 3));

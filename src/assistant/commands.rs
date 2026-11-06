@@ -28,6 +28,9 @@ pub const REVIEW_VERBS: &[&str] = &[
     "CIV_PROPOSAL_DISMISS",
 ];
 
+/// accept, reject or dismiss: (proposal, who) → message.
+type Review = fn(&str, &str) -> Result<String, String>;
+
 /// Who reviews: the user, or the MCP client its operator allowed.
 fn reviewer(request: &Option<Request>) -> String {
     match request {
@@ -112,7 +115,7 @@ pub fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>, 
         "CIV_VOORSTEL_ACCEPTEREN" | "CIV_PROPOSAL_ACCEPT" | "CIV_VOORSTEL_AFWIJZEN" | "CIV_PROPOSAL_REJECT" | "CIV_VOORSTEL_VERVALLEN" | "CIV_PROPOSAL_DISMISS" => {
             let which = proposal_arg(args)?;
             let who = reviewer(&request);
-            let (label, f): (&str, fn(&str, &str) -> Result<String, String>) = match verb {
+            let (label, f): (&str, Review) = match verb {
                 "CIV_VOORSTEL_ACCEPTEREN" | "CIV_PROPOSAL_ACCEPT" => (tr("Voorstel accepteren", "Accept proposal"), proposal::accept),
                 "CIV_VOORSTEL_AFWIJZEN" | "CIV_PROPOSAL_REJECT" => (tr("Voorstel afwijzen", "Reject proposal"), proposal::reject),
                 _ => (tr("Voorstel laten vervallen", "Dismiss proposal"), proposal::dismiss),

@@ -739,11 +739,14 @@ pub fn entities(handles: &[Handle]) -> Result<Vec<Option<EntityType>>, String> {
     }
 }
 
+/// What [`for_each_entity_batch`] calls per batch: the handles and their entities.
+pub type EntityBatch<'a> = dyn FnMut(&[Handle], Vec<Option<EntityType>>) + 'a;
+
 /// Entities by handle in batches of `per_request`, halving a batch the host
 /// refuses (a few large meshes can outgrow one message); `f` gets each
 /// batch with its handles. For reads of any number of entities.
-pub fn for_each_entity_batch(handles: &[Handle], per_request: usize, f: &mut dyn FnMut(&[Handle], Vec<Option<EntityType>>)) -> Result<(), String> {
-    fn go(chunk: &[Handle], f: &mut dyn FnMut(&[Handle], Vec<Option<EntityType>>)) -> Result<(), String> {
+pub fn for_each_entity_batch(handles: &[Handle], per_request: usize, f: &mut EntityBatch) -> Result<(), String> {
+    fn go(chunk: &[Handle], f: &mut EntityBatch) -> Result<(), String> {
         match entities(chunk) {
             Ok(v) => {
                 f(chunk, v);
