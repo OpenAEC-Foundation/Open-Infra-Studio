@@ -204,6 +204,56 @@ mod tests {
         assert!(t["Verbinding"].contains(";Riool 2_P1;Riool 2_P2;"));
     }
 
+    /// Each `UNI_IDE` and `LEI_IDE` once, and every pipe end a manhole of the file.
+    fn assert_unique_ids(t: &BTreeMap<&'static str, String>) {
+        let rows = |name: &str| -> Vec<Vec<String>> { t[name].lines().skip(1).map(|r| r.split(';').map(str::to_string).collect()).collect() };
+        let (knp, vrb) = (rows("Knooppunt"), rows("Verbinding"));
+        let manholes: std::collections::BTreeSet<&str> = knp.iter().map(|r| r[0].as_str()).collect();
+        assert_eq!(manholes.len(), knp.len(), "manhole UNI_IDE not unique:\n{}", t["Knooppunt"]);
+        for col in [0, 4] {
+            let ids: std::collections::BTreeSet<&str> = vrb.iter().map(|r| r[col].as_str()).collect();
+            assert_eq!(ids.len(), vrb.len(), "pipe {} not unique:\n{}", VERBINDING.split(';').nth(col).unwrap(), t["Verbinding"]);
+        }
+        for r in &vrb {
+            assert!(manholes.contains(r[1].as_str()) && manholes.contains(r[2].as_str()), "pipe {} refers to a missing manhole", r[0]);
+            assert!(!manholes.contains(r[0].as_str()), "pipe {} has the ID of a manhole", r[0]);
+        }
+    }
+
+    #[test]
+    fn duplicate_pipe_names_get_their_network() {
+        let (a, mut b) = (net(), net());
+        b.naam = "Riool 2".into();
+        let t = tables(&[&a, &b], &|p| Ok(p), "04/11/2026", "").unwrap();
+        assert_unique_ids(&t);
+        assert!(t["Verbinding"].contains("\nRiool 1_P1-P2;Riool 1_P1;Riool 1_P2;GSL;Riool 1_P1-P2;"));
+        assert!(t["Verbinding"].contains("\nRiool 2_P1-P2;Riool 2_P1;Riool 2_P2;GSL;Riool 2_P1-P2;"));
+        // A single network keeps the plain names.
+        let t = tables(&[&a], &|p| Ok(p), "04/11/2026", "").unwrap();
+        assert!(t["Verbinding"].contains("\nP1-P2;P1;P2;GSL;P1-P2;"));
+    }
+
+    #[test]
+    fn pipe_ids_unique_in_every_case() {
+        // Two pipes between the same manholes.
+        let mut a = net();
+        a.leidingen.push(a.leidingen[0].clone());
+        let t = tables(&[&a], &|p| Ok(p), "04/11/2026", "").unwrap();
+        assert_unique_ids(&t);
+        assert!(t["Verbinding"].contains("\nP1-P2;P1;P2;") && t["Verbinding"].contains("\nP1-P2_2;P1;P2;"));
+        // Two networks with the same name.
+        let t = tables(&[&net(), &net()], &|p| Ok(p), "04/11/2026", "").unwrap();
+        assert_unique_ids(&t);
+        // Names that only differ in a separator, and a manhole named like a pipe.
+        let mut c = net();
+        c.putten[0].naam = "P;1".into();
+        c.putten.push(Put::new("P 1".into(), [100.0, 210.0], Stelsel::Dwa, [1000.0, 0.0]));
+        c.putten.push(Put::new("P 1-P2".into(), [100.0, 220.0], Stelsel::Dwa, [1000.0, 0.0]));
+        c.leidingen.push(Leiding::new(2, 1, 250.0, Materiaal::Pvc, Stelsel::Dwa));
+        let t = tables(&[&c], &|p| Ok(p), "04/11/2026", "").unwrap();
+        assert_unique_ids(&t);
+    }
+
     #[test]
     fn date_format() {
         let d = today();
