@@ -64,13 +64,13 @@ fn write(all: &[Product]) -> Result<(), String> {
 }
 
 /// Records a product just made (replacing the one of the same kind and axis).
-pub fn register(doc: &CadDocument, soort: &str, axis: Handle, plaats: XY, made: &[Handle]) {
-    let Some(bronnen) = fingerprints(doc, axis) else { return };
+pub fn register(doc: &CadDocument, soort: &str, axis: Handle, plaats: XY, made: &[Handle]) -> Result<(), String> {
+    let Some(bronnen) = fingerprints(doc, axis) else { return Ok(()) };
     let mut all = read();
     let key = hex(axis);
     all.retain(|p| !(p.soort == soort && p.as_handle == key));
     all.push(Product { soort: soort.into(), as_handle: key, plaats: Some(plaats), bronnen, gemaakt: made.iter().map(|h| hex(*h)).collect() });
-    let _ = write(&all);
+    write(&all)
 }
 
 /// What changed for each product: `None` up to date, `Some(reason)` stale
@@ -97,7 +97,7 @@ pub fn update(opt: &CivielOptions, only_check: bool, progress: &dyn Fn(String)) 
         return Ok(tr("Geen lengte- of dwarsprofielen in de afhankelijkheidsgraaf van deze tekening.", "No length profiles or cross sections in this drawing's dependency graph.").into());
     }
     let axes: Vec<Handle> = products.iter().filter_map(|p| handle(&p.as_handle)).collect();
-    let doc = super::document(&["tin"], &axes)?;
+    let doc = std::sync::Arc::new(super::document(&["tin"], &axes)?);
     let state = stale(&doc, &products);
     let n_stale = state.iter().filter(|s| s.is_some()).count();
     api::note("producten", products.len());
@@ -117,35 +117,66 @@ pub fn update(opt: &CivielOptions, only_check: bool, progress: &dyn Fn(String)) 
     // Length profiles first: the order the products are made in.
     let mut order: Vec<usize> = (0..products.len()).filter(|i| state[*i].is_some()).collect();
     order.sort_by_key(|i| (products[*i].soort != "lengteprofiel") as u8);
-    let mut done = Vec::new();
-    let mut gone = 0;
-    for i in order {
+    // Calculate every replacement first. A later calculation error must
+    // leave even the earlier products and removed-axis products untouched.
+    let mut replacements = Vec::new();
+    for &i in &order {
         let p = &products[i];
         progress(format!("{} {} {}…", tr("Bijwerken:", "Updating:"), p.soort, p.as_handle));
-        let old: Vec<Handle> = p.gemaakt.iter().filter_map(|h| handle(h)).collect();
-        bridge::remove_entities(&format!("{} {}", p.soort, tr("bijwerken", "update")), &old)?;
-        let axis = handle(&p.as_handle);
         if state[i].as_deref() == Some("") {
-            gone += 1;
-            let mut all = read();
-            all.retain(|q| !(q.soort == p.soort && q.as_handle == p.as_handle));
-            write(&all)?;
             continue;
         }
-        let r = match p.soort.as_str() {
-            "lengteprofiel" => super::as_profiel::length_profile(opt, axis, p.plaats, progress),
-            _ => super::as_profiel::cross_sections(opt, axis, p.plaats, progress),
-        };
-        done.push(format!("{} {}: {}", p.soort, p.as_handle, r.unwrap_or_else(|e| format!("{} {e}", tr("fout:", "error:")))));
+        let axis = handle(&p.as_handle);
+        let prepared = match p.soort.as_str() {
+            "lengteprofiel" => super::as_profiel::prepare_length_profile(opt, doc.clone(), axis, p.plaats, progress),
+            _ => super::as_profiel::prepare_cross_sections(opt, doc.clone(), axis, p.plaats, progress),
+        }?;
+        replacements.push((i, prepared));
     }
-    Ok(format!(
-        "{} {} {}{}. {}",
-        done.len(),
-        tr("van", "of"),
-        products.len(),
-        tr(" producten opnieuw gemaakt", " products made again"),
-        if gone > 0 { format!("{gone} {}", tr("met een verwijderde as weggehaald.", "with a removed axis taken out.")) } else { String::new() }
-    ) + &format!(" {}", done.join(" | ")))
+
+    use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
+    bridge::request(PluginRequest::BeginUndoGroup { label: tr("Profielen bijwerken", "Update profiles").into() })?;
+    let result = (|| {
+        let mut done = Vec::new();
+        // Add all replacements before removing any old geometry. Failed
+        // host writes are errors too; the old geometry remains available.
+        for (i, prepared) in replacements {
+            let p = &products[i];
+            done.push(format!("{} {}: {}", p.soort, p.as_handle, prepared.write()?));
+        }
+        let mut gone = 0;
+        for i in order {
+            let p = &products[i];
+            let old: Vec<Handle> = p.gemaakt.iter().filter_map(|h| handle(h)).collect();
+            for e in bridge::entities(&old)?.into_iter().flatten() {
+                let h = e.common().handle;
+                match bridge::request(PluginRequest::RemoveEntity { handle: h })? {
+                    PluginResponse::Bool(true) => {}
+                    _ => return Err(format!("{} {}", tr("Profielelement niet verwijderd:", "Profile element not removed:"), hex(h))),
+                }
+            }
+            if state[i].as_deref() == Some("") {
+                gone += 1;
+                let mut all = read();
+                all.retain(|q| !(q.soort == p.soort && q.as_handle == p.as_handle));
+                write(&all)?;
+            }
+        }
+        Ok(format!(
+            "{} {} {}{}. {}",
+            done.len(),
+            tr("van", "of"),
+            products.len(),
+            tr(" producten opnieuw gemaakt", " products made again"),
+            if gone > 0 { format!("{gone} {}", tr("met een verwijderde as weggehaald.", "with a removed axis taken out.")) } else { String::new() }
+        ) + &format!(" {}", done.join(" | ")))
+    })();
+    // Close the group on both success and error, including all graph and
+    // index writes in the same undo step as the geometry.
+    let closed = bridge::request(PluginRequest::EndUndoGroup);
+    let summary = result?;
+    closed?;
+    Ok(summary)
 }
 
 #[cfg(test)]
