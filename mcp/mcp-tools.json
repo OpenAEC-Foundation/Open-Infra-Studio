@@ -1537,6 +1537,310 @@
   "name": "infra_civ_subsurface"
  },
  {
+  "description": "The soil units of NEN 9997-1 table 2.b (Dutch characteristic soil properties) with their codes and parameters (γ, γsat, c', φ', Koppejan C'p/C's, Cc/(1+e0), Csw/(1+e0), Cα; cv is an estimate). Use the codes in 'layers' and 'overrides'.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {},
+   "required": []
+  },
+  "name": "infra_civ_soil_units"
+ },
+ {
+  "description": "Soil profile along a line or axis from the BRO CPTs (Robertson 2010 classes) and boreholes (NEN-EN-ISO 14688 / NEN 5104 names) within 'radius' m: soil units per NEN 9997-1 table 2.b, layer boundaries interpolated linearly between neighbouring columns (unmatched layers wedge out), drawn as a profile view with the columns, the ground line and a legend, and kept as a soil model for civ_slope_stability and civ_settlement. Netherlands only (BRO).",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "line": {
+     "type": "string",
+     "description": "Handle of a line, polyline or feature line (hex); empty = the selection or points"
+    },
+    "source": {
+     "type": "string",
+     "enum": [
+      "alles",
+      "sonderingen",
+      "boringen"
+     ]
+    },
+    "radius": {
+     "type": "number"
+    },
+    "max": {
+     "type": "number"
+    },
+    "min_layer": {
+     "type": "number"
+    },
+    "name": {
+     "type": "string"
+    },
+    "overrides": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "number"
+      }
+     },
+     "description": "Per unit code: g, gsat, c, phi, cp, cs, cppre, cspre, cr, rr, ca, cc+e0, cv (m²/s), pop (kPa)"
+    },
+    "at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_soil_profile"
+ },
+ {
+  "description": "Slope stability of a cross section (a line across a dike, embankment or ditch bank, or square to an axis at a station) on the design/existing surface: Bishop simplified (iterated) or the ordinary method of slices, a grid of centres with tangent radii and a pattern search for the critical circle, pore pressures from a phreatic level or line, a surcharge strip. Draws the section, the critical circle and slices; returns the factor of safety, circle and slices. A calculation aid.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "line": {
+     "type": "string",
+     "description": "Handle of a line, polyline or feature line (hex); empty = the selection or points"
+    },
+    "axis": {
+     "type": "string",
+     "description": "Handle of the axis (hex, from civ_alignment or oi_status); empty = the selection"
+    },
+    "station": {
+     "type": "number"
+    },
+    "left": {
+     "type": "number"
+    },
+    "right": {
+     "type": "number"
+    },
+    "phreatic": {
+     "type": "number",
+     "description": "Phreatic level (m NAP); default the lowest ground of the section"
+    },
+    "phreatic_points": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+     },
+     "description": "[[x along the section, level], …]"
+    },
+    "load": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 3,
+     "maxItems": 3,
+     "description": "[kPa, from x, to x]"
+    },
+    "method": {
+     "type": "string",
+     "enum": [
+      "bishop",
+      "fellenius"
+     ]
+    },
+    "surface": {
+     "type": "string",
+     "enum": [
+      "AUTO",
+      "B",
+      "N"
+     ]
+    },
+    "min_depth": {
+     "type": "number"
+    },
+    "name": {
+     "type": "string"
+    },
+    "at": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    },
+    "layers": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+     },
+     "description": "Horizontal layers [[top m NAP, unit code], …] from high to low (see civ_soil_units); empty = soil model or BRO"
+    },
+    "base": {
+     "type": "number",
+     "description": "Bottom of the given layers (m NAP)"
+    },
+    "model": {
+     "type": "string",
+     "description": "Name of a soil model kept by civ_soil_profile; empty = the nearest one, else the BRO"
+    },
+    "overrides": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "number"
+      }
+     },
+     "description": "Per unit code: g, gsat, c, phi, cp, cs, cppre, cspre, cr, rr, ca, cc+e0, cv (m²/s), pop (kPa)"
+    },
+    "source": {
+     "type": "string",
+     "enum": [
+      "alles",
+      "sonderingen",
+      "boringen"
+     ]
+    },
+    "radius": {
+     "type": "number",
+     "description": "BRO search distance from the line or area (m), default 50"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_slope_stability"
+ },
+ {
+  "description": "Settlement of a fill: the design surface (N) above the existing ground, or 'height' m over an 'area' polygon; stress below it by Boussinesq integrated over rectangles (Newmark), primary and secondary compression per layer (Koppejan, or Terzaghi with Cc/(1+e0)), consolidation in time (Terzaghi U(T), cv, drainage length). Draws a map in colour bands with contours and values, and a settlement–time graph for one point; returns all values. A calculation aid.",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "area": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "[x, y] or [x, y, z], project coordinates (m)"
+     }
+    },
+    "height": {
+     "type": "number"
+    },
+    "design": {
+     "type": "boolean"
+    },
+    "gamma": {
+     "type": "number"
+    },
+    "years": {
+     "type": "number"
+    },
+    "cell": {
+     "type": "number"
+    },
+    "point": {
+     "type": "array",
+     "items": {
+      "type": "number"
+     },
+     "minItems": 2,
+     "maxItems": 3,
+     "description": "[x, y] or [x, y, z], project coordinates (m)"
+    },
+    "method": {
+     "type": "string",
+     "enum": [
+      "koppejan",
+      "terzaghi"
+     ]
+    },
+    "phreatic": {
+     "type": "number"
+    },
+    "groundwater_depth": {
+     "type": "number",
+     "description": "Phreatic level below the existing ground (m), default 1"
+    },
+    "margin": {
+     "type": "number"
+    },
+    "bands": {
+     "type": "number"
+    },
+    "layers": {
+     "type": "array",
+     "items": {
+      "type": "array",
+      "items": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "string"
+       }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+     },
+     "description": "Horizontal layers [[top m NAP, unit code], …] from high to low (see civ_soil_units); empty = soil model or BRO"
+    },
+    "base": {
+     "type": "number",
+     "description": "Bottom of the given layers (m NAP)"
+    },
+    "model": {
+     "type": "string",
+     "description": "Name of a soil model kept by civ_soil_profile; empty = the nearest one, else the BRO"
+    },
+    "overrides": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "number"
+      }
+     },
+     "description": "Per unit code: g, gsat, c, phi, cp, cs, cppre, cspre, cr, rr, ca, cc+e0, cv (m²/s), pop (kPa)"
+    },
+    "source": {
+     "type": "string",
+     "enum": [
+      "alles",
+      "sonderingen",
+      "boringen"
+     ]
+    },
+    "radius": {
+     "type": "number",
+     "description": "BRO search distance from the line or area (m), default 50"
+    }
+   },
+   "required": []
+  },
+  "name": "infra_civ_settlement"
+ },
+ {
   "description": "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.",
   "inputSchema": {
    "type": "object",

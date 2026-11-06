@@ -725,6 +725,77 @@ def t_subsurface(a):
     return OCS.run(f"CIV_SONDERINGEN3D {_kv(BRON=a.get('source'), MAX=a.get('max'), STRAAL=a.get('radius'), MINLAAG=a.get('min_layer'), QC=a.get('graphs'), LABELS=a.get('labels'))}", 1800)
 
 
+# Geotechnics (#78): soil profile, slope stability, settlement. A calculation aid, not a stamped design.
+SOIL = {
+    "layers": {"type": "array", "items": {"type": "array", "items": [NUM, STR], "minItems": 2, "maxItems": 2},
+               "description": "Horizontal layers [[top m NAP, unit code], …] from high to low (see civ_soil_units); empty = soil model or BRO"},
+    "base": {"type": "number", "description": "Bottom of the given layers (m NAP)"},
+    "model": {"type": "string", "description": "Name of a soil model kept by civ_soil_profile; empty = the nearest one, else the BRO"},
+    "overrides": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": NUM},
+                  "description": "Per unit code: g, gsat, c, phi, cp, cs, cppre, cspre, cr, rr, ca, cc+e0, cv (m²/s), pop (kPa)"},
+    "source": {"type": "string", "enum": ["alles", "sonderingen", "boringen"]},
+    "radius": {"type": "number", "description": "BRO search distance from the line or area (m), default 50"},
+}
+
+
+def _soil(a):
+    layers = ";".join(f"{_num(t)}:{c}" for t, c in (a.get("layers") or []))
+    over = ";".join(f"{code}:" + ",".join(f"{k}={_num(v)}" for k, v in kv.items()) for code, kv in (a.get("overrides") or {}).items())
+    return _kv(LAGEN=layers, BASIS=a.get("base"), MODEL=a.get("model"), GROND=over, BRON=a.get("source"), STRAAL=a.get("radius"))
+
+
+@tool("civ_soil_units", "The soil units of NEN 9997-1 table 2.b (Dutch characteristic soil properties) with their codes and parameters "
+      "(γ, γsat, c', φ', Koppejan C'p/C's, Cc/(1+e0), Csw/(1+e0), Cα; cv is an estimate). Use the codes in 'layers' and 'overrides'.")
+def t_soil_units(a):
+    return OCS.run("CIV_GRONDSOORTEN")
+
+
+@tool("civ_soil_profile", "Soil profile along a line or axis from the BRO CPTs (Robertson 2010 classes) and boreholes (NEN-EN-ISO 14688 / "
+      "NEN 5104 names) within 'radius' m: soil units per NEN 9997-1 table 2.b, layer boundaries interpolated linearly between "
+      "neighbouring columns (unmatched layers wedge out), drawn as a profile view with the columns, the ground line and a legend, "
+      "and kept as a soil model for civ_slope_stability and civ_settlement. Netherlands only (BRO).",
+      {"line": LINE, "source": SOIL["source"], "radius": NUM, "max": NUM, "min_layer": NUM, "name": STR, "overrides": SOIL["overrides"], "at": PT})
+def t_soil_profile(a):
+    over = ";".join(f"{code}:" + ",".join(f"{k}={_num(v)}" for k, v in kv.items()) for code, kv in (a.get("overrides") or {}).items())
+    return OCS.run("CIV_GRONDPROFIEL " + _kv(LIJN=a.get("line"), BRON=a.get("source"), STRAAL=a.get("radius"), MAX=a.get("max"),
+                                            MINLAAG=a.get("min_layer"), NAAM=a.get("name"), GROND=over, PLAATS=a.get("at") and _pt(a["at"])), 1800)
+
+
+@tool("civ_slope_stability", "Slope stability of a cross section (a line across a dike, embankment or ditch bank, or square to an axis at a "
+      "station) on the design/existing surface: Bishop simplified (iterated) or the ordinary method of slices, a grid of centres with "
+      "tangent radii and a pattern search for the critical circle, pore pressures from a phreatic level or line, a surcharge strip. "
+      "Draws the section, the critical circle and slices; returns the factor of safety, circle and slices. A calculation aid.",
+      dict({"line": LINE, "axis": AXIS, "station": NUM, "left": NUM, "right": NUM,
+            "phreatic": {"type": "number", "description": "Phreatic level (m NAP); default the lowest ground of the section"},
+            "phreatic_points": {"type": "array", "items": {"type": "array", "items": NUM, "minItems": 2, "maxItems": 2}, "description": "[[x along the section, level], …]"},
+            "load": {"type": "array", "items": NUM, "minItems": 3, "maxItems": 3, "description": "[kPa, from x, to x]"},
+            "method": {"type": "string", "enum": ["bishop", "fellenius"]}, "surface": {"type": "string", "enum": ["AUTO", "B", "N"]},
+            "min_depth": NUM, "name": STR, "at": PT}, **SOIL))
+def t_slope_stability(a):
+    phreatic = a.get("phreatic")
+    if a.get("phreatic_points"):
+        phreatic = ";".join(f"{_num(x)}:{_num(z)}" for x, z in a["phreatic_points"])
+    load = ":".join(_num(v) for v in a["load"]) if a.get("load") else None
+    return OCS.run("CIV_STABILITEIT " + _kv(LIJN=a.get("line"), AS=a.get("axis"), STATION=a.get("station"), LINKS=a.get("left"), RECHTS=a.get("right"),
+                                           FREATISCH=phreatic, BELASTING=load, METHODE=a.get("method"), OPPERVLAK=a.get("surface"),
+                                           MINDIEPTE=a.get("min_depth"), NAAM=a.get("name"), PLAATS=a.get("at") and _pt(a["at"])) + " " + _soil(a), 1800)
+
+
+@tool("civ_settlement", "Settlement of a fill: the design surface (N) above the existing ground, or 'height' m over an 'area' polygon; "
+      "stress below it by Boussinesq integrated over rectangles (Newmark), primary and secondary compression per layer (Koppejan, or "
+      "Terzaghi with Cc/(1+e0)), consolidation in time (Terzaghi U(T), cv, drainage length). Draws a map in colour bands with contours "
+      "and values, and a settlement–time graph for one point; returns all values. A calculation aid.",
+      dict({"area": PTS, "height": NUM, "design": {"type": "boolean"}, "gamma": NUM, "years": NUM, "cell": NUM, "point": PT,
+            "method": {"type": "string", "enum": ["koppejan", "terzaghi"]}, "phreatic": NUM,
+            "groundwater_depth": {"type": "number", "description": "Phreatic level below the existing ground (m), default 1"},
+            "margin": NUM, "bands": NUM}, **SOIL))
+def t_settlement(a):
+    return OCS.run("CIV_ZETTING " + _kv(GEBIED=a.get("area") and _pts(a["area"]), HOOGTE=a.get("height"), ONTWERP=a.get("design"), GAMMA=a.get("gamma"),
+                                       TIJD=a.get("years"), CEL=a.get("cell"), PUNT=a.get("point") and _pt(a["point"]), METHODE=a.get("method"),
+                                       FREATISCH=a.get("phreatic"), GRONDWATER=a.get("groundwater_depth"), MARGE=a.get("margin"),
+                                       BANDEN=a.get("bands")) + " " + _soil(a), 1800)
+
+
 # Exchange: LandXML 1.2 export (stream uitwisseling).
 EXPORT = {"path": {"type": "string", "description": "Output file; empty = beside the drawing"},
           "all": {"type": "boolean", "description": "Everything (default); false = only the objects in the selection"}}

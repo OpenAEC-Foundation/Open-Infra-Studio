@@ -44,6 +44,20 @@ class InfraMcpTest(unittest.TestCase):
             mcp.t_services({'country':'US;GLOBAL','query':'elevation'})
             self.assertIn('COUNTRY=US;GLOBAL',run.call_args.args[0])
 
+    def test_geotechnics_command_lines(self):
+        with patch.object(mcp.OCS, 'run', return_value={'ok': True}) as run:
+            mcp.t_slope_stability({'line': '1A', 'layers': [[0, 'klei_schoon_slap'], [-3, 'zand_schoon_vast']], 'base': -20,
+                                   'overrides': {'veen_slap': {'c': 2, 'phi': 17}}, 'load': [13, 2, 6], 'phreatic': -1.2})
+            cmd = run.call_args.args[0]
+            for part in ('CIV_STABILITEIT', 'LIJN=1A', 'FREATISCH=-1.2', 'BELASTING=13:2:6', 'LAGEN=0:klei_schoon_slap;-3:zand_schoon_vast', 'BASIS=-20', 'GROND=veen_slap:c=2,phi=17'):
+                self.assertIn(part, cmd)
+            mcp.t_settlement({'area': [[1, 2], [3, 4], [5, 6]], 'height': 1.5, 'years': 30, 'method': 'terzaghi'})
+            cmd = run.call_args.args[0]
+            for part in ('CIV_ZETTING', 'GEBIED=1,2;3,4;5,6', 'HOOGTE=1.5', 'TIJD=30', 'METHODE=terzaghi'):
+                self.assertIn(part, cmd)
+            mcp.t_soil_profile({'line': '2B', 'radius': 40})
+            self.assertEqual(run.call_args.args[0], 'CIV_GRONDPROFIEL LIJN=2B STRAAL=40')
+
 if __name__=='__main__':
     unittest.main()
 
