@@ -282,4 +282,33 @@ mod tests {
         let o = cable("LS", "AANSLUITNET", "400 V", "9x999Zz", "BESTAAND");
         assert_eq!(for_object(&o, Some("Alliander")).unwrap(), "B-OI-KL-ET_LS_AANSLUITNET_400 V_OVERIG-G");
     }
+
+    /// A symbol layer names one kind and no attribute values: those are in
+    /// the symbol's name (`symboolnaam_posities`), not in its layer.
+    #[test]
+    fn symbol_layers_name_their_own_kind() {
+        let cases = [
+            ("B-OI-KL-ET_LS_AANSLUITPUNT-S", "LSoverdrachtspunt"),
+            ("B-OI-KL-ET_MS_AANSLUITPUNT-S", "MSoverdrachtspunt"),
+            ("B-OI-KL-ET_OV_AANSLUITPUNT-S", "OVLoverdrachtspunt"),
+            ("B-OI-KL-ET_LS_MOF-S", "LSmof"),
+            ("B-OI-KL-ET_MS_MOF-S", "MSmof"),
+            ("B-OI-KL-ET_HS_MOF-S", "HSmof"),
+            ("N-OI-KL-ET_LS_MOF-VERLATEN-S", "LSmof"),
+        ];
+        for op in [Some("Alliander"), Some("Enexis"), None] {
+            for (name, kind) in cases {
+                assert_eq!(for_layer(name, op), Some((kind.to_string(), Vec::new())), "{name} ({op:?})");
+            }
+            // The other way, each symbol lands on its own layer.
+            for (name, kind) in cases.iter().take(6) {
+                let o = Object { kind: kind.to_string(), geom: Some(Geom::Point([0.0; 3])), ..Default::default() };
+                assert_eq!(for_object(&o, op).as_deref(), Some(*name), "{kind} ({op:?})");
+            }
+            // A layer that is no kind's symbol layer is not guessed from its parts.
+            for name in ["B-OI-KL-ET_HS_AARDING-S", "B-OI-KL-ET_AANLEGTECHNIEK_GESTUURDE BORING-S"] {
+                assert_eq!(for_layer(name, op), None, "{name} ({op:?})");
+            }
+        }
+    }
 }
