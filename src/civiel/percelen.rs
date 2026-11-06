@@ -20,8 +20,8 @@ use crate::gis::crs::XY;
 use crate::nlcs::Element;
 
 /// Arc segments of a plot or street (polyline bulges) are followed by chords
-/// at most this far from the arc (m): 0.1 mm, so a parcel along 100 m of
-/// arc loses well under 0.01 m².
+/// at most this far from the arc (m): 0.1 mm. The chords leave out about
+/// two thirds of that times the arc length: 0.007 m² per 100 m of arc.
 const ARC_TOLERANCE: f64 = 1e-4;
 
 /// A message in the interface language (Dutch or English).
@@ -562,15 +562,23 @@ fn outline(e: &EntityType, tol: f64) -> Option<(Vec<XY>, bool)> {
 }
 
 /// The sweep for `Direction::Auto`: perpendicular to the longest side
-/// between the plot's own vertices (an arc as its chord); that side acts as
-/// the street.
+/// between the plot's own vertices (an arc as its chord). A straight side
+/// acts as the street, so the frontage is measured along it. An arc side
+/// gives the direction only: its chord is not an edge of the plot, so the
+/// frontage is the width across the dividing lines (what the chord gave
+/// before arcs were followed).
 fn auto_sweep(e: &EntityType, to_m: &dyn Fn(XY) -> XY) -> Option<Sweep> {
     let (corners, _) = outline(e, f64::INFINITY)?;
     let pts: Vec<XY> = corners.iter().map(|p| to_m(*p)).collect();
     let n = pts.len();
     let (i, _) = (0..n).map(|i| (i, len(sub(pts[(i + 1) % n], pts[i])))).max_by(|a, b| a.1.total_cmp(&b.1))?;
     let (a, b) = (pts[i], pts[(i + 1) % n]);
-    Some(Sweep::Street { line: vec![a, b] })
+    // `outline` keeps the vertex order, so corner i starts segment i.
+    let arc = match e {
+        EntityType::LwPolyline(l) => l.vertices.get(i).is_some_and(|v| v.bulge.abs() >= 1e-12),
+        _ => false,
+    };
+    Some(if arc { Sweep::Direction { o: a, u: unit(sub(b, a)) } } else { Sweep::Street { line: vec![a, b] } })
 }
 
 /// How the dividing lines run.
