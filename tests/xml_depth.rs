@@ -42,3 +42,21 @@ fn xml_readers_survive_deep_nesting() {
     let imro = on_command_stack(|| planning::gml::is_imro(&deep("FeatureCollection", DEPTH)));
     assert!(!imro);
 }
+
+#[test]
+fn nested_kml_multigeometry_and_wms_layers_get_an_answer() {
+    let kml = format!(
+        "<kml><Placemark>{}<Point><coordinates>5,52</coordinates></Point>{}</Placemark></kml>",
+        "<MultiGeometry>".repeat(DEPTH),
+        "</MultiGeometry>".repeat(DEPTH)
+    );
+    let points = on_command_stack(move || files::kml(&kml).map(|d| d.features.iter().map(|f| f.points.len()).sum::<usize>()));
+    assert_eq!(points, Ok(1));
+    let wms = format!(
+        "<WMS_Capabilities version=\"1.3.0\"><Capability>{}{}</Capability></WMS_Capabilities>",
+        "<Layer><Name>l</Name><CRS>EPSG:28992</CRS>".repeat(DEPTH),
+        "</Layer>".repeat(DEPTH)
+    );
+    let layers = on_command_stack(move || caps::parse_wms("https://example.org/wms", &wms).map(|c| c.layers.len()));
+    assert!(layers.is_err(), "{layers:?}");
+}
