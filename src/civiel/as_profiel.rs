@@ -1215,7 +1215,7 @@ pub fn length_profile(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
 pub fn cross_sections(opt: &super::CivielOptions, handle: Option<Handle>, at: Option<XY>, progress: &dyn Fn(String)) -> Result<String, String> {
     let opt = opt.clone();
     let ctx = Ctx::new(&opt)?;
-    let doc = super::document(&["tin"], &handle.into_iter().collect::<Vec<_>>())?;
+    let (mut doc, whole) = super::document_whole(&["tin"], &handle.into_iter().collect::<Vec<_>>())?;
     let (al, axis_h, _) = axis(&doc, handle)?;
     let mut ground = Maaiveld::find(&ctx, &doc)?;
     let f = ctx.f;
@@ -1224,6 +1224,14 @@ pub fn cross_sections(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
         return Err(format!("{} dwarsprofielen is te veel: kies een grotere afstand", stations.len()));
     }
     let (left, right) = (opt.left.max(1.0), opt.right.max(1.0));
+    if !whole {
+        // Only the indexed objects: read what the sections cut around the
+        // axis (survey points count up to 1 m beside a section), or stop.
+        let (b, m) = (al.bbox(), (left.max(right) + 2.0) * f);
+        super::read_area(&mut doc, [b[0] - m, b[1] - m, b[2] + m, b[3] + m]).map_err(|e| {
+            format!("{} ({e})", crate::lang::tr("dwarsprofielen niet gemaakt: BGT, KLIC en meetpunten langs de as zijn niet te lezen", "cross sections not made: BGT, KLIC and survey points along the axis cannot be read"))
+        })?;
+    }
     let step = (opt.step.max(0.1)).min((left + right) / 20.0);
     let offsets: Vec<f64> = {
         let mut o = Vec::new();
