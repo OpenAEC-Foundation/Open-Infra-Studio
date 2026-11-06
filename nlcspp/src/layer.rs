@@ -99,12 +99,10 @@ fn templates(operator: Option<&str>) -> &'static [LayerName] {
     cache.get(if operator == Some("Alliander") { "Alliander" } else { "Enexis" }).map(Vec::as_slice).unwrap_or(&[])
 }
 
-/// The positions of an object's attribute values in its layer name (or, for
-/// symbols, in its symbol name).
-fn positions(kind: &str, symbol: bool) -> Vec<(&'static str, usize)> {
-    let m = model();
-    let src = if symbol { m.symboolnaam_posities.get(kind).filter(|p| !p.is_empty()) } else { None }.or_else(|| m.laagnaam_posities.get(kind));
-    src.map(|p| p.iter().map(|(k, v)| (k.as_str(), *v)).collect()).unwrap_or_default()
+/// The positions of an object's attribute values in its layer name. The
+/// positions in a symbol's name (`symboolnaam_posities`) are not layer parts.
+fn positions(kind: &str) -> Vec<(&'static str, usize)> {
+    model().laagnaam_posities.get(kind).map(|p| p.iter().map(|(k, v)| (k.as_str(), *v)).collect()).unwrap_or_default()
 }
 
 #[derive(serde::Deserialize)]
@@ -124,6 +122,28 @@ fn learned() -> &'static Learned {
 
 const SUBTHEMES: [&str; 5] = ["LS", "MS", "HS", "LHS", "OV"];
 
+/// The sub-theme a kind's name starts with (`MSstation` → `MS`,
+/// `OVLoverdrachtspunt` → `OV`) and the length of that prefix.
+fn sub_theme(kind: &str) -> Option<(&'static str, usize)> {
+    ["LHS", "LS", "MS", "HS"].into_iter().find(|p| kind.starts_with(p)).map(|p| (p, p.len())).or(kind.starts_with("OVL").then_some(("OV", 3)))
+}
+
+/// The one layer of a kind that carries no attribute values, as parts
+/// (without status and toestand): a symbol's, or that of a kind without
+/// layer positions. Learned from the examples, else for a symbol the
+/// template layer named after its kind (`MSmof` → `ET_MS_MOF`).
+fn fixed_layer(kind: &str, element: &str, operator: Option<&str>) -> Option<Vec<String>> {
+    if element != "S" && !positions(kind).is_empty() {
+        return None;
+    }
+    if let Some(base) = learned().vaste_lagen.get(kind).and_then(|m| m.get(element)) {
+        return Some(base.split('_').map(str::to_string).collect());
+    }
+    let (sub, n) = sub_theme(kind).filter(|_| element == "S")?;
+    let parts = vec!["ET".to_string(), sub.to_string(), kind[n..].to_ascii_uppercase()];
+    templates(operator).iter().any(|l| l.element == "S" && l.parts == parts).then_some(parts)
+}
+
 /// The fixed parts of a kind's layer: learned from the examples, else from
 /// its name (`MSstation` → `ET`, `MS`); the object's `Thema` (`ET_LS`,
 /// `GAS_LD`) overrides the theme family and a sub-theme.
@@ -134,9 +154,7 @@ fn fixed_parts(o: &Object) -> Vec<(usize, String)> {
         .map(|m| m.iter().filter_map(|(p, v)| p.parse().ok().map(|p: usize| (p, v.clone()))).collect())
         .unwrap_or_default();
     if fixed.is_empty() {
-        let k = &o.kind;
-        let sub = ["LHS", "LS", "MS", "HS"].into_iter().find(|p| k.starts_with(p)).or(k.starts_with("OVL").then_some("OV"));
-        if let Some(sub) = sub {
+        if let Some((sub, _)) = sub_theme(&o.kind) {
             fixed = vec![(0, "ET".into()), (1, sub.into())];
         }
     }
@@ -162,13 +180,10 @@ pub fn for_object(o: &Object, operator: Option<&str>) -> Option<String> {
     let element = element_of(o.geom.as_ref());
     let toestand = o.get("Bedrijfstoestand").filter(|t| !matches!(*t, "IN BEDRIJF" | "GEEN")).map(str::to_string);
     let status: String = status_letter(o.get("Status").unwrap_or("BESTAAND")).into();
-    let attr_pos = positions(&o.kind, false);
-    if let Some(base) = learned().vaste_lagen.get(&o.kind).and_then(|m| m.get(element)) {
-        if element == "S" || attr_pos.is_empty() {
-            return Some(LayerName { status, parts: base.split('_').map(str::to_string).collect(), toestand, haakjes: false, element: element.into() }.compose());
-        }
+    if let Some(parts) = fixed_layer(&o.kind, element, operator) {
+        return Some(LayerName { status, parts, toestand, haakjes: false, element: element.into() }.compose());
     }
-    let pos = if element == "S" { Vec::new() } else { attr_pos };
+    let pos = if element == "S" { Vec::new() } else { positions(&o.kind) };
     let fixed = fixed_parts(o);
     let mut wanted: Vec<(usize, String)> = pos.iter().filter_map(|(attr, p)| o.get(attr).map(|v| (*p, v.to_string()))).collect();
     if wanted.is_empty() && fixed.is_empty() {
@@ -188,7 +203,7 @@ pub fn for_object(o: &Object, operator: Option<&str>) -> Option<String> {
     // A missing attribute: OVERIG where the template has it, else the kind's
     // sub-theme (an LS cable without Functie is LS), as the examples do.
     let missing: Vec<usize> = pos.iter().filter(|(attr, p)| o.get(attr).is_none() && !wanted.iter().any(|w| w.0 == *p)).map(|(_, p)| *p).collect();
-    let sub = ["LHS", "LS", "MS", "HS"].into_iter().find(|p| o.kind.starts_with(p)).or(o.kind.starts_with("OVL").then_some("OV"));
+    let sub = sub_theme(&o.kind).map(|s| s.0);
     for p in missing {
         for guess in std::iter::once("OVERIG").chain(sub) {
             let mut trial = wanted.clone();
@@ -213,15 +228,23 @@ pub fn for_object(o: &Object, operator: Option<&str>) -> Option<String> {
 }
 
 /// The other way: the object kind and attribute values a layer name stands
-/// for. Every object whose positions, filled from the name, give the name
-/// back; the first (fewest positions) wins.
+/// for. A fixed layer (a symbol's, a cabinet's) names its kind and no
+/// values; a symbol layer names nothing else, as a symbol's values are in
+/// its symbol name. Otherwise every object whose layer positions, filled
+/// from the name, give the name back; the one with the most positions wins.
 pub fn for_layer(name: &str, operator: Option<&str>) -> Option<(String, Vec<(String, String)>)> {
     let l = parse(name)?;
-    let symbol = l.element == "S";
     let m = model();
+    let body = l.parts.join("_");
+    if let Some(kind) = m.objecten.keys().find(|k| fixed_layer(k, &l.element, operator).is_some_and(|p| p.join("_").eq_ignore_ascii_case(&body))) {
+        return Some((kind.clone(), Vec::new()));
+    }
+    if l.element == "S" {
+        return None;
+    }
     let mut best: Option<(usize, String, Vec<(String, String)>)> = None;
     for kind in m.objecten.keys() {
-        let pos = positions(kind, symbol);
+        let pos = positions(kind);
         if pos.is_empty() || pos.iter().any(|(_, p)| *p >= l.parts.len()) {
             continue;
         }
@@ -231,7 +254,6 @@ pub fn for_layer(name: &str, operator: Option<&str>) -> Option<(String, Vec<(Str
         }
         o.set("Status", match l.status.as_str() { "N" => "NIEUW", "R" => "REVISIE", "V" => "VERWIJDERD", _ => "BESTAAND" });
         o.geom = Some(match l.element.as_str() {
-            "S" => Geom::Point([0.0; 3]),
             "GV" | "V" => Geom::Polygon(vec![]),
             _ => Geom::Line(vec![]),
         });
@@ -309,6 +331,24 @@ mod tests {
             for name in ["B-OI-KL-ET_HS_AARDING-S", "B-OI-KL-ET_AANLEGTECHNIEK_GESTUURDE BORING-S"] {
                 assert_eq!(for_layer(name, op), None, "{name} ({op:?})");
             }
+        }
+    }
+
+    /// Every fixed layer belongs to one kind only, and gives it back.
+    #[test]
+    fn fixed_layers_are_unique() {
+        for op in [Some("Alliander"), Some("Enexis")] {
+            let mut seen: HashMap<String, &str> = HashMap::new();
+            for kind in model().objecten.keys() {
+                for element in ELEMENTS {
+                    if let Some(parts) = fixed_layer(kind, element, op) {
+                        let name = format!("B-OI-KL-{}-{element}", parts.join("_"));
+                        assert!(seen.insert(name.clone(), kind).is_none(), "{name} twice ({op:?})");
+                        assert_eq!(for_layer(&name, op), Some((kind.clone(), Vec::new())), "{name} ({op:?})");
+                    }
+                }
+            }
+            assert!(seen.len() >= 7, "{seen:?}");
         }
     }
 }
