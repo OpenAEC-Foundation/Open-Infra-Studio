@@ -10,7 +10,7 @@
 //! `GSL` (infiltration pipes `ITR`), flow direction `OPN`, sewage type
 //! `DWA`/`HWA`/`GMD`, existing objects `ACT`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use super::riool::{Materiaal, Net, Stelsel};
@@ -56,30 +56,55 @@ fn n(v: f64, d: usize) -> String {
     format!("{v:.d$}")
 }
 
+/// IDs for the objects named `names[k][i]` in `nets[k]`, unique over the
+/// export: the name, with the network before it when another network has
+/// the same name, and a number after it while the ID is in `taken`. The new
+/// IDs are added to `taken`.
+fn unique_ids(nets: &[&Net], names: Vec<Vec<String>>, taken: &mut BTreeSet<String>) -> Vec<Vec<String>> {
+    let names: Vec<Vec<String>> = names.iter().map(|v| v.iter().map(|s| field(s)).collect()).collect();
+    let mut used_in: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
+    for (k, v) in names.iter().enumerate() {
+        for s in v {
+            used_in.entry(s.as_str()).or_default().insert(k);
+        }
+    }
+    let mut out = Vec::new();
+    for (k, v) in names.iter().enumerate() {
+        let mut ids = Vec::new();
+        for s in v {
+            let base = if used_in[s.as_str()].len() > 1 { field(&format!("{}_{s}", nets[k].naam)) } else { s.clone() };
+            let (mut id, mut nr) = (base.clone(), 1);
+            while !taken.insert(id.clone()) {
+                nr += 1;
+                id = format!("{base}_{nr}");
+            }
+            ids.push(id);
+        }
+        out.push(ids);
+    }
+    out
+}
+
 /// The ten HydX tables for `nets` (coordinates through `rd`), keyed by file name without `.csv`.
 pub fn tables(nets: &[&Net], rd: &dyn Fn(XY) -> Result<XY, String>, date: &str, description: &str) -> Result<BTreeMap<&'static str, String>, String> {
     let mut knp = format!("{KNOOPPUNT}\n");
     let mut vrb = format!("{VERBINDING}\n");
     let mut profiles: BTreeMap<String, String> = BTreeMap::new();
-    // Manhole names must be unique over the file: prefix the network when two share one.
-    let mut count: BTreeMap<&str, usize> = BTreeMap::new();
-    for net in nets {
-        for p in &net.putten {
-            *count.entry(p.naam.as_str()).or_insert(0) += 1;
-        }
-    }
-    let id = |net: &Net, i: usize| -> String {
-        let name = &net.putten[i].naam;
-        if count.get(name.as_str()).copied().unwrap_or(0) > 1 { field(&format!("{}_{name}", net.naam)) } else { field(name) }
-    };
-    for net in nets {
+    // UNI_IDE is unique over the file, for manholes and pipes together:
+    // hydxlib checks it per table, and Debiet and Oppervlak refer to a
+    // manhole or a pipe by it.
+    let mut taken = BTreeSet::new();
+    let manholes = unique_ids(nets, nets.iter().map(|net| net.putten.iter().map(|p| p.naam.clone()).collect()).collect(), &mut taken);
+    let pipes = unique_ids(nets, nets.iter().map(|net| (0..net.leidingen.len()).map(|i| net.naam_leiding(i)).collect()).collect(), &mut taken);
+    for (k, net) in nets.iter().enumerate() {
+        let id = &manholes[k];
         for (i, p) in net.putten.iter().enumerate() {
             let q = rd(p.xy)?;
             let rect = p.maat[1] > 0.0;
             let bottom = net.bob_laagst(i);
             knp.push_str(&format!(
                 "{};{};{};{};{};;{};RES;;BET;{};{};{:.0};{:.0};INS;;{};;;{}\n",
-                id(net, i),
+                id[i],
                 field(&net.naam),
                 field(&p.naam),
                 n(q[0], 2),
@@ -100,11 +125,11 @@ pub fn tables(nets: &[&Net], rd: &dyn Fn(XY) -> Result<XY, String>, date: &str, 
             });
             vrb.push_str(&format!(
                 "{};{};{};{};{};{};{};OPN;{};{};;{};{};;;;;{}\n",
-                field(&net.naam_leiding(i)),
-                id(net, l.van),
-                id(net, l.naar),
+                pipes[k][i],
+                id[l.van],
+                id[l.naar],
                 if l.stelsel == Stelsel::Itr { "ITR" } else { "GSL" },
-                field(&net.naam_leiding(i)),
+                pipes[k][i],
                 n(l.bob_van, 2),
                 n(l.bob_naar, 2),
                 n(net.lengte(i), 2),
@@ -208,10 +233,10 @@ mod tests {
     fn assert_unique_ids(t: &BTreeMap<&'static str, String>) {
         let rows = |name: &str| -> Vec<Vec<String>> { t[name].lines().skip(1).map(|r| r.split(';').map(str::to_string).collect()).collect() };
         let (knp, vrb) = (rows("Knooppunt"), rows("Verbinding"));
-        let manholes: std::collections::BTreeSet<&str> = knp.iter().map(|r| r[0].as_str()).collect();
+        let manholes: BTreeSet<&str> = knp.iter().map(|r| r[0].as_str()).collect();
         assert_eq!(manholes.len(), knp.len(), "manhole UNI_IDE not unique:\n{}", t["Knooppunt"]);
         for col in [0, 4] {
-            let ids: std::collections::BTreeSet<&str> = vrb.iter().map(|r| r[col].as_str()).collect();
+            let ids: BTreeSet<&str> = vrb.iter().map(|r| r[col].as_str()).collect();
             assert_eq!(ids.len(), vrb.len(), "pipe {} not unique:\n{}", VERBINDING.split(';').nth(col).unwrap(), t["Verbinding"]);
         }
         for r in &vrb {
