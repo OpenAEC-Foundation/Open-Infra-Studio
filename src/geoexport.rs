@@ -516,9 +516,67 @@ mod tests {
         let c = &j["features"][0]["geometry"]["coordinates"][0];
         let (lon, lat) = (c[0].as_f64().unwrap(), c[1].as_f64().unwrap());
         assert!((lon - 4.66).abs() < 0.01 && (lat - 51.81).abs() < 0.01, "{lon} {lat}");
-        assert_eq!(c[2].as_f64().unwrap(), 1.5);
+        assert_eq!(c.as_array().unwrap().len(), 2, "no third coordinate: RFC 7946 reads it as height above the WGS 84 ellipsoid");
+        assert_eq!(j["features"][0]["properties"]["cad_hoogte_nap"], 1.5);
         assert_eq!(j["features"][1]["geometry"]["type"], "Polygon");
         assert_eq!(j["features"][0]["properties"]["spanning"], "0,4 kV");
+    }
+
+    /// Every position of a GeoJSON geometry, at any depth.
+    fn positions(v: &serde_json::Value, out: &mut Vec<Vec<f64>>) {
+        let a = v.as_array().unwrap();
+        if a.first().is_some_and(|x| x.is_number()) {
+            out.push(a.iter().map(|x| x.as_f64().unwrap()).collect());
+        } else {
+            a.iter().for_each(|x| positions(x, out));
+        }
+    }
+
+    #[test]
+    fn geojson_keeps_nap_heights_out_of_the_ellipsoid_coordinate() {
+        let s = site();
+        let o = s.from_drawing([0.0, 0.0], 1.0);
+        let at = |x: f64, y: f64, z: f64| [o[0] + x, o[1] + y, z];
+        let ring = |z: f64, d: f64| vec![at(d, d, z), at(10.0 - d, d, z), at(10.0 - d, 10.0 - d, z), at(d, 10.0 - d, z), at(d, d, z)];
+        let feats: Vec<GeoFeature> = [
+            Geom::Point(at(0.0, 0.0, 1.5)),
+            // A sewer pipe sloping from -1.20 to -1.45 m NAP.
+            Geom::Line(vec![at(0.0, 0.0, -1.2), at(10.0, 0.0, -1.45)]),
+            Geom::Line(vec![at(0.0, 0.0, 2.0), at(10.0, 0.0, 2.0)]),
+            // An area with an island at another height.
+            Geom::Polygon(vec![ring(0.5, 0.0), ring(0.75, 3.0)]),
+        ]
+        .into_iter()
+        .map(|geom| GeoFeature { geom, props: BTreeMap::new() })
+        .collect();
+        let j: serde_json::Value = serde_json::from_str(&geojson(&feats, &s).unwrap()).unwrap();
+        let f = |i: usize| &j["features"][i];
+        for i in 0..feats.len() {
+            let mut ps = Vec::new();
+            positions(&f(i)["geometry"]["coordinates"], &mut ps);
+            assert!(!ps.is_empty() && ps.iter().all(|p| p.len() == 2), "feature {i}: {ps:?}");
+        }
+        assert_eq!(f(0)["properties"]["cad_hoogte_nap"], 1.5);
+        assert_eq!(f(1)["properties"]["cad_hoogtes_nap"], serde_json::json!([-1.2, -1.45]), "one height per position");
+        assert!(f(1)["properties"].get("cad_hoogte_nap").is_none());
+        assert_eq!(f(2)["properties"]["cad_hoogte_nap"], 2.0, "a level line has one height");
+        assert!(f(2)["properties"].get("cad_hoogtes_nap").is_none());
+        let mut want = vec![0.5; 5];
+        want.extend([0.75; 5]);
+        assert_eq!(f(3)["properties"]["cad_hoogtes_nap"], serde_json::json!(want), "the rings one after another, as in the coordinates");
+
+        // Outside the Netherlands the drawing's height reference is not NAP.
+        let mut abroad = Site::default();
+        abroad.crs = "EPSG:25832".into();
+        abroad.lon = 6.96;
+        abroad.lat = 50.94;
+        abroad.reproject_origin();
+        let p = abroad.from_drawing([0.0, 0.0], 1.0);
+        let j: serde_json::Value = serde_json::from_str(&geojson(&[GeoFeature { geom: Geom::Point([p[0], p[1], 52.0]), props: BTreeMap::new() }], &abroad).unwrap()).unwrap();
+        let props = &j["features"][0]["properties"];
+        assert_eq!(props["cad_hoogte"], 52.0);
+        assert!(props.get("cad_hoogte_nap").is_none(), "{props}");
+        assert_eq!(j["features"][0]["geometry"]["coordinates"].as_array().unwrap().len(), 2);
     }
 
     #[test]
