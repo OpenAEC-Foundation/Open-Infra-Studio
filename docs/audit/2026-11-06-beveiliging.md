@@ -17,7 +17,7 @@ Labels:
 - **BLOCKING**: a user meets it in normal work, data is lost, or it is a security hole.
 - **FOLLOW-UP**: rare, needs a crafted file to crash the plug-in, text only, a missing test, or clean-up.
 
-The probes are Rust tests against the library (`cargo test --test audit_probe`). They are not part of this PR; their code is quoted where it matters.
+Item 1 is shown by the tests of its fix PR, run in CI on the unchanged code first. Items 3–5 use a small separate program that makes the same library calls as the lines named (roxmltree 0.21.1 and zip 2.6.1, the versions in `Cargo.lock`); it is not part of this PR.
 
 ## Summary
 
@@ -57,13 +57,18 @@ std::process::Command::new("xdg-open").arg(path).spawn()                        
 
 Who can do this: anyone whose delivery zip the user opens: a received or forwarded `Levering_*.zip`, or (with item 6) a file that lands in the Downloads folder.
 
-Probe (`probe_klic_attachment_types`): a delivery zip with one cable and four `Bijlage` entries, read with `klic::read`, each attachment then passed to `attachment_file`:
+Proof: the tests of PR #113, run in CI on the unchanged code (commit `f3c66f0`, [run 42196967522](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/actions/runs/42196967522)). The extracted-delivery test writes `run.bat`, `setup.exe`, a name with `&`, a name with `%PATH%`, `macro.docm` and a file without a type next to a GI-xml; the zip test puts the same names in a delivery zip. Result on main: `484 passed; 3 failed`, the three new tests:
 
 ```
-(probe output follows in the next commit)
+gis::klic_extra::tests::attachments_open_only_as_documents_and_images ... FAILED
+  bronnen/KL1081/run.bat must not be opened
+gis::klic_extra::tests::unsafe_attachments_are_not_extracted_from_the_zip ... FAILED
+  bronnen/KL1081/run.bat must not be extracted
+gis::klic_extra::tests::open_file_refuses_programs_and_scripts ... FAILED
+  run.bat
 ```
 
-Fix: branch `fix/klic-attachment-open`: only PDF and image types are extracted and opened, names with shell characters are refused, and `open_file` checks the same before it starts anything.
+Fix: PR #113 (`fix/klic-attachment-open`): only PDF and image types are extracted and opened, names with shell characters are refused, and `open_file` checks the same before it starts anything.
 
 ### 2. Sheet PDFs: layout names from the drawing become a path and command text
 
@@ -87,7 +92,7 @@ Direction (no fix PR today): before plotting, accept only names that `layout_nam
 
 ### 3. Deep XML nesting overflows the stack
 
-FOLLOW-UP (a crafted file or server answer crashes the plug-in; no data is lost). CONFIRMED for KML and WMS capabilities.
+FOLLOW-UP (a crafted file or server answer crashes the plug-in; no data is lost). CONFIRMED for the parser call itself.
 
 roxmltree tokenises nested elements recursively, as the comment in `src/gis/files.rs:637` says. `files::gml` and `citygml::document` measure the depth first and give the parser enough stack. The other readers call `Document::parse` directly; a stack overflow aborts the process, and `catch_unwind` does not catch it:
 
@@ -96,7 +101,7 @@ roxmltree tokenises nested elements recursively, as the comment in `src/gis/file
 - `src/gis/klic_extra.rs:143` the KLIC extras (every delivery, also in the followed folder).
 - `src/civiel/landxml.rs:102` LandXML, `src/gis/bro.rs:170, 280, 625` BRO answers, `src/gis/qgis.rs:45` QGIS projects.
 
-Probe (`probe_kml_depth`, `probe_caps_depth`, 200,000 levels, run in a thread with 8 MiB of stack, more than a worker thread gets):
+Probe (`xmlprobe depth 200000`): `roxmltree::Document::parse` as in `files.rs:434`, on 200,000 nested `MultiGeometry` elements, in a thread with 8 MiB of stack (more than a worker thread gets):
 
 ```
 (probe output follows in the next commit)
@@ -110,7 +115,7 @@ FOLLOW-UP. CONFIRMED.
 
 Five readers parse with `allow_dtd: true`: `src/gis/caps.rs:62`, `src/gis/klic_extra.rs:142`, `src/gis/citygml.rs:346`, `src/gis/qgis.rs:44` and `nlcspp/src/xml.rs:123`. roxmltree has no external entities (no XXE: nothing is read from disk or the network), and it limits nesting to 10 levels and 255 references inside one entity. It does not limit the total size: each top-level reference can expand to 255 times the largest entity again.
 
-Probe (`probe_klic_dtd_expansion`): a delivery zip whose GI-xml has a 100 kB entity, a second entity with 255 references to it, and 20 references to the second one in a `Bijlage` text.
+Probe (`xmlprobe dtd 100 20`): `parse_with_options` with `allow_dtd: true` as in `klic_extra.rs:142`, on a document with a 100 kB entity, a second entity of 255 references to it, and 20 references to the second one.
 
 ```
 (probe output follows in the next commit)
@@ -124,7 +129,7 @@ FOLLOW-UP. CONFIRMED for KMZ.
 
 `files::kmz` (`src/gis/files.rs:470`), `klic_extra::gi_xml` (`src/gis/klic_extra.rs:211`), `klic_extra::attachment_file` (`:303`) and `klic2geo::convert_zip_bytes` (crates-warehouse) read a whole entry with `read_to_string`/`read_to_end`. Deflate compresses runs of the same byte about 1000 to 1; an allocation failure aborts the process.
 
-Probe (`probe_kmz_bomb`):
+Probe (`xmlprobe kmz 512`): `by_name(..).read_to_string` as in `files.rs:470`, on a KMZ holding 512 MiB of spaces:
 
 ```
 (probe output follows in the next commit)
