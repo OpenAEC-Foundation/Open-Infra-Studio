@@ -55,3 +55,16 @@ fn a_long_spiral_gives_an_answer_within_10_s() {
     let text = SPIRAL.replace("length=\"30\"", "length=\"1e9\"").replace("radiusEnd=\"200\"", "radiusEnd=\"1\"");
     assert!(draw_within_10_s(text).is_some(), "no answer within 10 s");
 }
+
+#[test]
+fn a_long_spiral_far_from_the_origin_gives_an_answer_within_10_s() {
+    // Within a full turn, but so far out that rounding keeps every arc
+    // over the 1 mm tolerance until each piece is halved 24 times.
+    let text = SPIRAL
+        .replace("length=\"30\"", "length=\"1e7\"")
+        .replace("radiusEnd=\"200\"", "radiusEnd=\"1e7\"")
+        .replace("<Start>50 150</Start>", "<Start>1e15 1e15</Start>")
+        .replace("<PI>60 150</PI>", "<PI>1e15 1.00000000000001e15</PI>");
+    let n = draw_within_10_s(text).expect("no answer within 10 s");
+    assert!(n <= 20_000, "{n} vertices");
+}
