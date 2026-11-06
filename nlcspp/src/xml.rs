@@ -117,11 +117,100 @@ fn object(n: roxmltree::Node) -> Object {
     o
 }
 
+/// The deepest element nesting of `text`, counted without parsing it.
+/// roxmltree reads nested elements recursively, so this bounds the stack
+/// the parse needs. Comments, CDATA, processing instructions and quoted
+/// attribute values do not count. An entity in an internal DTD subset can
+/// expand to markup, entity in entity up to ten levels deep, so each `<` in
+/// that subset counts ten times on top of the body's nesting.
+fn nesting(text: &str) -> usize {
+    let b = text.as_bytes();
+    // The index just past `pat` from `at`, or the end of the text.
+    let past = |at: usize, pat: &[u8]| b.get(at..).and_then(|r| r.windows(pat.len()).position(|w| w == pat)).map_or(b.len(), |p| at + p + pat.len());
+    // The index just past the `>` that ends a tag, outside quoted values.
+    let tag_end = |mut i: usize| {
+        let mut quote = None;
+        while let Some(&c) = b.get(i) {
+            i += 1;
+            match (quote, c) {
+                (Some(q), c) if c == q => quote = None,
+                (None, b'"' | b'\'') => quote = Some(c),
+                (None, b'>') => break,
+                _ => {}
+            }
+        }
+        i
+    };
+    let (mut i, mut depth, mut deepest, mut dtd) = (0, 0usize, 0usize, 0usize);
+    while let Some(p) = b.get(i..).and_then(|r| r.iter().position(|&c| c == b'<')) {
+        let at = i + p;
+        let rest = &b[at..];
+        if rest.starts_with(b"<!--") {
+            i = past(at + 4, b"-->");
+        } else if rest.starts_with(b"<![CDATA[") {
+            i = past(at + 9, b"]]>");
+        } else if rest.starts_with(b"<?") {
+            i = past(at + 2, b"?>");
+        } else if rest.starts_with(b"<!") {
+            // A DOCTYPE: skip it with its internal subset (declarations
+            // with quoted values, comments and processing instructions).
+            let (mut j, mut quote, mut subset) = (at + 2, None, false);
+            while let Some(&c) = b.get(j) {
+                j += 1;
+                match (quote, c) {
+                    (Some(q), c) if c == q => quote = None,
+                    (Some(_), b'<') => dtd += 1,
+                    (Some(_), _) => {}
+                    (None, b'"' | b'\'') => quote = Some(c),
+                    (None, b'<') if b[j..].starts_with(b"!--") => j = past(j + 3, b"-->"),
+                    (None, b'<') if b[j..].starts_with(b"?") => j = past(j + 1, b"?>"),
+                    (None, b'<') => dtd += 1,
+                    (None, b'[') => subset = true,
+                    (None, b']') => subset = false,
+                    (None, b'>') if !subset => break,
+                    _ => {}
+                }
+            }
+            i = j;
+        } else if rest.starts_with(b"</") {
+            depth = depth.saturating_sub(1);
+            i = tag_end(at + 2);
+        } else {
+            // A start tag; an empty element is parsed one level down too.
+            i = tag_end(at + 1);
+            deepest = deepest.max(depth + 1);
+            if !b[..i].ends_with(b"/>") {
+                depth += 1;
+            }
+        }
+    }
+    deepest.saturating_add(dtd.saturating_mul(10))
+}
+
+/// Parses `text`, on a thread with enough stack for its nesting: deep but
+/// valid XML still reads, and too deep XML gives an error instead of
+/// aborting the process with a stack overflow.
+fn document(text: &str) -> Result<roxmltree::Document<'_>, String> {
+    let parse = || {
+        let opt = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
+        roxmltree::Document::parse_with_options(text, opt).map_err(|e| format!("NLCS++: {e}"))
+    };
+    let depth = nesting(text);
+    if depth <= 64 {
+        return parse();
+    }
+    let too_deep = || format!("NLCS++: XML te diep genest ({depth} niveaus)");
+    let stack = depth.checked_mul(32 * 1024).and_then(|s| s.checked_add(2 << 20)).ok_or_else(too_deep)?;
+    std::thread::scope(|scope| {
+        let handle = std::thread::Builder::new().stack_size(stack).spawn_scoped(scope, parse).map_err(|_| too_deep())?;
+        handle.join().map_err(|_| "NLCS++: XML-parser gestopt".to_string())?
+    })
+}
+
 /// Reads an NLCS++ XML delivery.
 pub fn read(text: &str) -> Result<Delivery, String> {
     let text = text.trim_start_matches('\u{feff}');
-    let opt = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
-    let doc = roxmltree::Document::parse_with_options(text, opt).map_err(|e| format!("NLCS++: {e}"))?;
+    let doc = document(text)?;
     let root = doc.root_element();
     let name = root.tag_name().name();
     if !name.starts_with("NLCSnetbeheer") {
@@ -248,6 +337,27 @@ mod tests {
     /// One object whose child is nested `depth` elements deep.
     fn nested(depth: usize) -> String {
         format!("<NLCSnetbeheer><LSkabel>{}{}</LSkabel></NLCSnetbeheer>", "<a>".repeat(depth), "</a>".repeat(depth))
+    }
+
+    #[test]
+    fn nesting_counts_elements_only() {
+        assert_eq!(nesting("<a><b/><c><d></d></c></a>"), 3);
+        assert_eq!(nesting("<a x='>' y=\"/>\"><b/></a>"), 2);
+        assert_eq!(nesting("<?xml version=\"1.0\"?><a><!-- <b><c> --><![CDATA[<b><c>]]><?pi <b> ?></a>"), 1);
+        assert_eq!(nesting("<!DOCTYPE a SYSTEM \"a.dtd\"><a><b/></a>"), 2);
+        // Markup in entities can expand anywhere: each `<` in the subset counts ten times.
+        assert_eq!(nesting("<!DOCTYPE a [<!-- ]> --><!ENTITY e \"<b><c/></b>\">]><a>&e;</a>"), 1 + 10 * 4);
+        assert_eq!(nesting("<!DOCTYPE a [<!ENTITY x 'it''s'><?pi ]> ?>]><a><b><c/></b></a>"), 3 + 10);
+        assert_eq!(nesting(&nested(1000)), 1002);
+    }
+
+    #[test]
+    fn deep_markup_from_an_entity_gets_an_answer() {
+        let e = format!("{}{}", "<a>".repeat(20_000), "</a>".repeat(20_000));
+        let text = format!("<!DOCTYPE NLCSnetbeheer [<!ENTITY e \"{e}\">]><NLCSnetbeheer><LSkabel>&e;</LSkabel></NLCSnetbeheer>");
+        // Either a delivery or an error message; no abort.
+        let objects = std::thread::Builder::new().stack_size(2 << 20).spawn(move || read(&text).map(|d| d.objects.len())).unwrap().join().unwrap();
+        assert!(objects.as_ref().map_or_else(|e| e.contains("te diep"), |n| *n == 1), "{objects:?}");
     }
 
     #[test]
