@@ -221,6 +221,19 @@ fn invalid_attachment_path(rel: &str) -> String {
     format!("{} {rel}", tr("ongeldig bijlagepad", "invalid attachment path"))
 }
 
+/// The types an attachment is opened as: letters and conditions as PDF,
+/// sketches as PDF or image. A program or script in a delivery is never
+/// handed to the system.
+const OPENABLE: [&str; 8] = ["pdf", "png", "jpg", "jpeg", "gif", "tif", "tiff", "bmp"];
+
+/// An attachment the system's viewer may open: one of [`OPENABLE`], and no
+/// character that `cmd /C start` (Windows) reads as syntax.
+fn openable(path: &str) -> bool {
+    let shell = path.chars().any(|c| c.is_control() || matches!(c, '&' | '|' | '<' | '>' | '^' | '%' | '!' | '"'));
+    let ext = Path::new(path).extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
+    !shell && ext.is_some_and(|e| OPENABLE.contains(&e.as_str()))
+}
+
 /// Controleer ook bestaande mapdelen en een eventueel al uitgepakt bestand.
 /// Een ontbrekend eindbestand is toegestaan; links worden nooit gevolgd.
 fn attachment_target(root: &Path, relative: &Path, rel: &str, create_parents: bool) -> Result<PathBuf, String> {
@@ -271,7 +284,7 @@ fn attachment_target(root: &Path, relative: &Path, rel: &str, create_parents: bo
 pub fn attachment_file(delivery: &Path, rel: &str, out_dir: &Path) -> Result<PathBuf, String> {
     // ZIP-paden gebruiken '/'. Weiger ook Windows-prefixen op Unix, zodat
     // dezelfde levering op elk platform binnen de bedoelde map blijft.
-    if rel.contains("..") || rel.contains(['\\', ':']) || rel.split('/').any(|part| part.is_empty() || part == ".") {
+    if rel.contains("..") || rel.contains(['\\', ':']) || rel.split('/').any(|part| part.is_empty() || part == ".") || !openable(rel) {
         return Err(invalid_attachment_path(rel));
     }
     let ext = delivery.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
@@ -308,8 +321,12 @@ pub fn attachment_file(delivery: &Path, rel: &str, out_dir: &Path) -> Result<Pat
     Ok(target)
 }
 
-/// Opens a file with the system's viewer (PDF reader, image viewer).
+/// Opens a file with the system's viewer (PDF reader, image viewer). The
+/// whole path is checked: the meldnummer folder comes from the delivery too.
 pub fn open_file(path: &Path) -> Result<(), String> {
+    if !openable(&path.to_string_lossy()) {
+        return Err(invalid_attachment_path(&path.display().to_string()));
+    }
     let status = if cfg!(target_os = "windows") {
         std::process::Command::new("cmd").args(["/C", "start", ""]).arg(path).spawn()
     } else if cfg!(target_os = "macos") {
