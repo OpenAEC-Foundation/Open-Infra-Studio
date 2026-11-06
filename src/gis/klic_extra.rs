@@ -391,4 +391,57 @@ mod tests {
     fn attachment_paths_stay_inside_the_delivery() {
         assert!(attachment_file(Path::new("x.zip"), "../../etc/passwd", Path::new("/tmp")).is_err());
     }
+
+    /// "Openen" hands the file to the system: on Windows `cmd /C start`,
+    /// which runs programs and scripts and reads `&` as a second command.
+    const UNSAFE: [&str; 6] = ["bronnen/KL1081/run.bat", "bronnen/KL1081/setup.exe", "bronnen/KL1081/a&calc&.pdf", "bronnen/KL1081/b%PATH%.pdf", "bronnen/KL1081/macro.docm", "bronnen/KL1081/geen-type"];
+
+    #[test]
+    fn attachments_open_only_as_documents_and_images() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-open-xml-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("bronnen/KL1081")).unwrap();
+        let delivery = dir.join("GI_gebiedsinformatielevering_1_1_V2.xml");
+        for rel in UNSAFE.iter().chain(&["bronnen/KL1081/brief.pdf", "bronnen/KL1081/schets.PNG", "bronnen/KL1081/foto.jpeg"]) {
+            std::fs::write(dir.join(rel), b"x").unwrap();
+        }
+        for rel in UNSAFE {
+            assert!(attachment_file(&delivery, rel, &dir.join("out")).is_err(), "{rel} must not be opened");
+        }
+        for rel in ["bronnen/KL1081/brief.pdf", "bronnen/KL1081/schets.PNG", "bronnen/KL1081/foto.jpeg"] {
+            assert_eq!(attachment_file(&delivery, rel, &dir.join("out")).unwrap(), dir.canonicalize().unwrap().join(rel));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn unsafe_attachments_are_not_extracted_from_the_zip() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-open-zip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let delivery = dir.join("Levering_1_1.zip");
+        {
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&delivery).unwrap());
+            for rel in UNSAFE.iter().chain(&["bronnen/KL1081/brief.pdf"]) {
+                zip.start_file(*rel, zip::write::SimpleFileOptions::default()).unwrap();
+                zip.write_all(b"@echo off").unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        let out = dir.join("out");
+        for rel in UNSAFE {
+            assert!(attachment_file(&delivery, rel, &out).is_err(), "{rel} must not be extracted");
+        }
+        let extracted: Vec<_> = std::fs::read_dir(&out).into_iter().flatten().flatten().flat_map(|d| std::fs::read_dir(d.path().join("bronnen/KL1081")).into_iter().flatten().flatten()).map(|f| f.file_name()).collect();
+        assert!(extracted.is_empty(), "extracted: {extracted:?}");
+        assert!(attachment_file(&delivery, "bronnen/KL1081/brief.pdf", &out).unwrap().ends_with("bronnen/KL1081/brief.pdf"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn open_file_refuses_programs_and_scripts() {
+        for name in ["run.bat", "setup.exe", "x.cmd", "x.js", "x.lnk", "a&calc&.pdf", "geen-type"] {
+            assert!(open_file(&std::env::temp_dir().join(name)).is_err(), "{name}");
+        }
+    }
 }
