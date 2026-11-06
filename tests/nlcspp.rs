@@ -107,3 +107,104 @@ fn the_examples_written_as_v12_1() {
         std::fs::write(out.join(format!("{name}-keuzelijstfouten.json")), serde_json::to_string(&list_errors).unwrap()).unwrap();
     }
 }
+
+/// A drawing in memory for the host requests of an import: the entities it
+/// adds and the XRecords it keeps.
+#[derive(Default)]
+struct Drawing {
+    entities: std::sync::Mutex<Vec<ocs_plugin_api::host::codec::EntityType>>,
+    records: std::sync::Mutex<HashMap<String, Vec<ocs_plugin_api::host::XRecordEntry>>>,
+}
+
+impl ocs_plugin_api::host::PluginRequestSender for Drawing {
+    fn request(&self, request: ocs_plugin_api::ipc::protocol::PluginRequest) -> Result<ocs_plugin_api::ipc::protocol::PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+        use ocs_plugin_api::host::codec::Handle;
+        use ocs_plugin_api::ipc::protocol::{PluginRequest as Q, PluginResponse as A};
+        Ok(match request {
+            Q::AddLayer(_) => A::OptHandle(Some(Handle::from(1000u64))),
+            Q::TableOperation { .. } => A::TableResult(Ok(Handle::from(1001u64))),
+            Q::AddEntities(entities) => {
+                let mut stored = self.entities.lock().unwrap();
+                let handles = (stored.len()..stored.len() + entities.len()).map(|i| Handle::from(i as u64 + 1)).collect();
+                stored.extend(entities);
+                A::Handles(handles)
+            }
+            Q::ReadXRecord { name, .. } => A::XRecordEntries(Ok(self.records.lock().unwrap().get(&name).cloned().unwrap_or_default())),
+            Q::UpdateXRecord { name, entries, .. } => {
+                let mut r = self.records.lock().unwrap();
+                match r.get_mut(&name) {
+                    Some(slot) => {
+                        *slot = entries;
+                        A::XRecordUpdateResult(Ok(Handle::from(1002u64)))
+                    }
+                    None => A::XRecordUpdateResult(Err("no such record".into())),
+                }
+            }
+            Q::CreateXRecord { name, entries, .. } => {
+                self.records.lock().unwrap().insert(name, entries);
+                A::XRecordCreateResult(Ok(Handle::from(1002u64)))
+            }
+            Q::PushUndo { .. } | Q::WriteRecord { .. } | Q::SetDirty | Q::BumpGeometry => A::Ok,
+            other => return Err(ocs_plugin_api::host::PluginRequestError(format!("unexpected host request: {other:?}"))),
+        })
+    }
+}
+
+/// A V12.1 delivery with a cable and two attachments linked to it, one with
+/// a location and one without (the schema allows a relation object without
+/// geometry).
+const LINKED: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<NLCSnetbeheer xmlns="NS_NLCSnetbeheer" xmlns:gml="http://www.opengis.net/gml/3.2" gml:id="NLCSnetbeheer">
+  <AprojectReferentie gml:id="f_PROJECT"><ID>PROJECT</ID><Projectnummer>P-61</Projectnummer><Netbeheerder>Enexis</Netbeheerder><NaamAannemer>Test</NaamAannemer><Tekeningtype>EINDREVISIE</Tekeningtype>
+    <Geometry><gml:Polygon gml:id="g_PROJECT" srsName="EPSG:28992"><gml:exterior><gml:LinearRing><gml:posList>105000 425000 105100 425000 105100 425100 105000 425000</gml:posList></gml:LinearRing></gml:exterior></gml:Polygon></Geometry></AprojectReferentie>
+  <LSkabel gml:id="f_OLD_ASSET"><Handle>1A</Handle><ID>OLD_ASSET</ID><Status>NIEUW</Status><Bedrijfstoestand>IN BEDRIJF</Bedrijfstoestand>
+    <Geometry><gml:LineString gml:id="g_OLD_ASSET" srsName="EPSG:28992" srsDimension="3"><gml:posList>105010 425010 -0.6 105050 425040 -0.7</gml:posList></gml:LineString></Geometry></LSkabel>
+  <AbestandBijlage gml:id="f_OLD_PHOTO"><Handle>1B</Handle><ID>OLD_PHOTO</ID><Bestandsnaam>foto.jpg</Bestandsnaam><Status>NIEUW</Status><AssetObjectID>OLD_ASSET</AssetObjectID>
+    <Geometry><gml:Point gml:id="g_OLD_PHOTO" srsName="EPSG:28992"><gml:pos>105020 425020</gml:pos></gml:Point></Geometry></AbestandBijlage>
+  <AbestandBijlage gml:id="f_OLD_DOC"><Handle>1C</Handle><ID>OLD_DOC</ID><Bestandsnaam>meetrapport.pdf</Bestandsnaam><Status>NIEUW</Status><AssetObjectID>OLD_ASSET</AssetObjectID></AbestandBijlage>
+</NLCSnetbeheer>"#;
+
+/// Import a delivery into a drawing and export it again: every relation
+/// object comes back, and every reference (IDREF) names an ID of the new
+/// delivery.
+#[test]
+fn import_then_export_keeps_relations_and_their_references() {
+    use open_infra::{bridge, gis::site::Site, nlcspp_host};
+    let dir = std::env::temp_dir().join(format!("oi-nlcspp-refs-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("gekoppeld.xml");
+    std::fs::write(&file, LINKED).unwrap();
+    let drawing = std::sync::Arc::new(Drawing::default());
+    let target = || bridge::Target { sender: drawing.clone(), tab_id: 61002, unit_factor: 1.0, doc_path: None };
+    let site = Site::default();
+    bridge::with_command_context(target(), None, None, || nlcspp_host::import(&site, &file, 1.0)).unwrap();
+    let mut doc = ocs_plugin_api::host::codec::CadDocument::new();
+    for e in drawing.entities.lock().unwrap().iter() {
+        doc.add_entity(e.clone()).unwrap();
+    }
+    let project = nlcspp_host::Project { nummer: "P-61".into(), aannemer: "Test".into(), tekeningtype: "EINDREVISIE".into(), ..Default::default() };
+    let (x, _findings, _) = bridge::with_command_context(target(), None, None, || nlcspp_host::delivery(&doc, &site, 1.0, "Enexis", &project)).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    // For tests/test_nlcspp_xsd.py, which validates it against the Enexis XSD.
+    let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/nlcspp");
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join("relaties-v12.1.xml"), &x).unwrap();
+
+    let back = nlcspp::xml::read(&x).unwrap();
+    let ids: Vec<&str> = back.objects.iter().chain(back.project.iter()).filter_map(|o| o.get("ID")).collect();
+    let m = nlcspp::model::model();
+    for o in &back.objects {
+        for f in m.object(&o.kind).unwrap().velden.iter().filter(|f| f.kind == "IDREF") {
+            if let Some(v) = o.get(&f.name) {
+                assert!(ids.contains(&v), "{} {}: {} = {v} names no ID of the delivery ({ids:?})\n{x}", o.kind, o.get("ID").unwrap_or(""), f.name);
+            }
+        }
+    }
+    let cable = back.objects.iter().find(|o| o.kind == "LSkabel").unwrap();
+    let attachments: Vec<_> = back.objects.iter().filter(|o| o.kind == "AbestandBijlage").collect();
+    assert_eq!(attachments.len(), 2, "both attachments delivered\n{x}");
+    assert!(attachments.iter().all(|a| a.get("AssetObjectID") == cable.get("ID")), "{x}");
+    let without = attachments.iter().find(|a| a.get("Bestandsnaam") == Some("meetrapport.pdf")).unwrap();
+    assert_eq!(without.geom, None, "the attachment without a location stays without one");
+    assert_eq!(without.get("Handle"), None, "no CAD handle: it is not drawn");
+}
