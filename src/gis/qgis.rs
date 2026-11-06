@@ -41,8 +41,7 @@ pub fn parse(xml: &str) -> Result<Vec<Connection>, String> {
     // QGIS writes headers as `http-header:<name>` attributes without declaring
     // that prefix, which a namespace-aware parser rejects.
     let xml = [' ', '\n', '\r', '\t'].iter().fold(xml.to_string(), |x, c| x.replace(&format!("{c}http-header:"), &format!("{c}http-header_")));
-    let opt = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
-    let doc = roxmltree::Document::parse_with_options(&xml, opt)
+    let doc = crate::xmldoc::parse(&xml, true)
         .map_err(|_| tr("Geen geldige XML", "Not valid XML").to_string())?;
     let root = doc.root_element();
     let (kind, element) = match root.tag_name().name() {

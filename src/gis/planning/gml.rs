@@ -1,11 +1,11 @@
 //! Local IMRO GML, including nested attributes and in-document geometry references.
 use super::{Data, Object};
-use roxmltree::{Document, Node};
+use roxmltree::Node;
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 
 pub fn is_imro(text: &str) -> bool {
-    Document::parse(text).is_ok_and(|d| {
+    crate::xmldoc::parse(text, false).is_ok_and(|d| {
         d.descendants().any(|n| {
             n.is_element()
                 && n.tag_name()
@@ -250,7 +250,7 @@ fn geometry(
     })
 }
 pub fn parse(text: &str) -> Result<Data, String> {
-    let doc = Document::parse(text).map_err(|e| format!("IMRO GML: {e}"))?;
+    let doc = crate::xmldoc::parse(text, false).map_err(|e| format!("IMRO GML: {e}"))?;
     let mut ids = HashMap::new();
     for n in doc.descendants().filter(|n| n.is_element()) {
         if let Some(id) = n

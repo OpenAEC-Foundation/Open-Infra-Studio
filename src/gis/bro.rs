@@ -167,7 +167,7 @@ pub struct SearchResult {
 /// The objects of a characteristics search (deregistered ones left out).
 /// A damaged object is reported without hiding the other search hits.
 pub fn parse_characteristics(xml: &str) -> Result<SearchResult, String> {
-    let doc = Document::parse(xml).map_err(|e| format!("BRO: onleesbaar antwoord ({e})"))?;
+    let doc = crate::xmldoc::parse(xml, false).map_err(|e| format!("BRO: onleesbaar antwoord ({e})"))?;
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
@@ -277,7 +277,7 @@ pub struct Cpt {
 }
 
 pub fn parse_cpt(xml: &str) -> Result<Cpt, String> {
-    let doc = Document::parse(xml).map_err(|e| format!("BRO: onleesbare sondering ({e})"))?;
+    let doc = crate::xmldoc::parse(xml, false).map_err(|e| format!("BRO: onleesbare sondering ({e})"))?;
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }
@@ -622,7 +622,7 @@ fn layer_of(l: Node) -> Option<Interval> {
 }
 
 pub fn parse_bhr(xml: &str) -> Result<Bhr, String> {
-    let doc = Document::parse(xml).map_err(|e| format!("BRO: onleesbare boring ({e})"))?;
+    let doc = crate::xmldoc::parse(xml, false).map_err(|e| format!("BRO: onleesbare boring ({e})"))?;
     if let Some(r) = rejection(&doc) {
         return Err(format!("BRO: {r}"));
     }

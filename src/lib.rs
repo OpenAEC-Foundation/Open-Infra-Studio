@@ -34,6 +34,7 @@ pub mod planning_commands;
 pub mod nlcs;
 pub mod nlcs_check;
 pub mod tekenblad;
+pub mod xmldoc;
 pub mod ui;
 
 use std::sync::OnceLock;
