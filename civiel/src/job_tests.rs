@@ -22,7 +22,8 @@ impl PluginRequestSender for Drawing {
     fn request(&self, req: Q) -> Result<A, PluginRequestError> {
         Ok(match req {
             Q::OpenDocumentViewV4 { .. } => return Err(PluginRequestError("geen gedeelde weergave".into())),
-            Q::GetSelection => A::Handles(vec![Handle::from(1u64)]),
+            Q::CloseDocumentViewV4 { .. } => A::Ok,
+            Q::GetSelection => A::Selection(vec![Handle::from(1u64)]),
             Q::ReadXRecord { .. } => A::XRecordEntries(Ok(Vec::new())),
             Q::GetEntitiesBatch { handles } => {
                 let pause = self.pause.lock().unwrap().take();
@@ -92,7 +93,7 @@ fn points_export_keeps_its_folder_after_the_active_drawing_changes() {
     bridge::attach(&mut first);
     let opt = civiel::CivielOptions::default();
     job(&mut first, "Punten exporteren", None, move |_| landmeten::export(&opt, None));
-    started.recv_timeout(Duration::from_secs(5)).expect("export leest punten van A");
+    started.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|e| panic!("export leest punten van A: {e}; uitkomst: {:?}", finished.try_recv()));
     bridge::attach(&mut second);
     resume.send(()).unwrap();
     let result = finished.recv_timeout(Duration::from_secs(5)).expect("export afgerond");
