@@ -2,30 +2,50 @@ name: release
 
 # Build the plugins for each desktop platform, sign them with the OpenAEC
 # organisation's credentials and attach them plus plugin.toml to a GitHub
-# Release on a v* tag. Open CAD Studio's Plugin Manager picks the asset for the
-# user's platform and installs it. Run by hand with a tag, it rebuilds that
-# tag, signs it and replaces the assets of its release.
+# Release on a v* tag whose commit is already in main. Open CAD Studio's
+# Plugin Manager picks the asset for the user's platform and installs it.
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Existing release tag to rebuild, sign and replace the assets of (empty: build and sign only)"
-        required: false
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   # Pinned for reproducible builds. Up to plugin API 13 this had to equal the
   # host's rustc; from API 14 the host no longer compares compilers.
   RUST_TOOLCHAIN: "1.99.1"
-  # The release to publish to: the pushed tag, or the tag given by hand.
-  RELEASE_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
+  RELEASE_TAG: ${{ github.ref_name }}
 
 jobs:
+  source:
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a release commit from main
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          commit=$(git rev-parse HEAD)
+          git merge-base --is-ancestor "$commit" refs/remotes/origin/main || {
+            echo "::error::Release tags must point to a commit already merged into main"
+            exit 1
+          }
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: source
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -62,9 +82,10 @@ jobs:
             zip: open-infra-civiel-macos-aarch64.zip
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.source.outputs.commit }}
+          persist-credentials: false
       - name: Version matches the tag
         if: env.RELEASE_TAG != ''
         shell: bash
@@ -74,7 +95,7 @@ jobs:
             got=$(grep -m1 -E '^version = ' "$f" | cut -d'"' -f2)
             [ "$got" = "$want" ] || { echo "::error::$f has version $got, the tag is $RELEASE_TAG: run scripts/version.sh $want"; exit 1; }
           done
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
       # Keep compiled dependencies separate from the offline test cache. The
@@ -111,7 +132,7 @@ jobs:
       # library is zipped; a detached OpenPGP signature per Linux asset.
       - name: Authenticode-sign the libraries (Windows)
         if: runner.os == 'Windows'
-        uses: azure/trusted-signing-action@v1
+        uses: azure/trusted-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -220,11 +241,11 @@ jobs:
           gpg --armor --export "$fingerprint" > openaec-signing-public-key.asc
           printf '%s\n' "$fingerprint" > openaec-signing-fingerprint.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.asset }}
           path: dist/
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         if: env.RELEASE_TAG != ''
         with:
           tag_name: ${{ env.RELEASE_TAG }}
