@@ -193,6 +193,12 @@ pub fn save_site(site: &Site) -> Result<(), String> {
     Ok(())
 }
 
+/// Store a location found in GEODATA. The caller has no explicit command reply.
+pub fn adopt_site(site: &Site) -> Result<bool, String> {
+    save_site(site)?;
+    Ok(true)
+}
+
 /// Request tracing for diagnosis: on with `OI_BRIDGE_TRACE` or a file
 /// `<config>/OpenCADStudio/open-infra/bridge-trace`; every host request is
 /// written before and after, with its thread, to `bridge-trace.log` beside it.
@@ -1000,6 +1006,50 @@ mod command_worker_tests {
         assert_eq!(active_tab, 120005);
         assert!(active_site.is_none(), "lege tekening B kreeg A's projectlocatie");
         assert_eq!(worker_site, "Alleen project A", "de worker ziet zijn opgeslagen locatie");
+    }
+
+    #[test]
+    fn an_earlier_adoption_cannot_replace_a_completed_explicit_site() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        use std::sync::mpsc;
+        use std::time::Duration;
+        struct Writer(Arc<Mutex<Vec<Site>>>);
+        impl PluginRequestSender for Writer {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+                match req {
+                    PluginRequest::UpdateXRecord { entries, .. } => {
+                        for e in entries {
+                            if let XRecordValue::String(value) = e.value { self.0.lock().unwrap().push(serde_json::from_str(&value).unwrap()); }
+                        }
+                        Ok(PluginResponse::XRecordUpdateResult(Ok(Handle::from(1u64))))
+                    }
+                    other => panic!("onverwacht verzoek: {other:?}"),
+                }
+            }
+        }
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let target = Target { sender: Arc::new(Writer(writes.clone())), tab_id: 120006, unit_factor: 1.0, doc_path: None };
+        let adoption_target = target.clone();
+        let (started, entered) = mpsc::channel();
+        let (resume, paused) = mpsc::channel();
+        let worker = std::thread::spawn(move || with_command_context(adoption_target, None, None, || {
+            let mut old = Site::default();
+            old.label = "Oud GEODATA-project".into();
+            started.send(()).unwrap();
+            paused.recv_timeout(Duration::from_secs(5)).unwrap();
+            adopt_site(&old).unwrap()
+        }));
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        with_command_context(target.clone(), None, None, || {
+            let mut requested = Site::default();
+            requested.label = "Expliciet gekozen project".into();
+            save_site(&requested).unwrap();
+        });
+        resume.send(()).unwrap();
+        assert!(!worker.join().unwrap(), "late GEODATA-adoptie had de expliciete keuze moeten behouden");
+        let values = writes.lock().unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].label, "Expliciet gekozen project");
     }
 
 }

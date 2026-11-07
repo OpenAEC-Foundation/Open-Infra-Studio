@@ -1037,11 +1037,12 @@ fn adopt_geodata(host: &mut dyn HostApi) {
         });
         let Some(g) = found else { return };
         let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
-        match gis::geodata::site_from(&g, unit).and_then(|mut site| {site.region=localisation::current();bridge::save_site(&site).map(|_| site)}) {
-            Ok(site) => {
+        match gis::geodata::site_from(&g, unit).and_then(|mut site| {site.region=localisation::current();bridge::adopt_site(&site).map(|stored| stored.then_some(site))}) {
+            Ok(Some(site)) => {
                 bridge::info(&format!("{} {} ({}).", lang::tr("Projectlocatie overgenomen uit het GEODATA-object van de tekening:", "Project location taken from the drawing's GEODATA object:"), site.crs, if site.absolute { lang::tr("absoluut", "absolute") } else { lang::tr("relatief", "relative") }));
                 ui::send(ui::UiMsg::SiteChanged);
             }
+            Ok(None) => {}
             Err(e) => bridge::info(&e),
         }
     }));
