@@ -1258,6 +1258,13 @@ pub(super) fn prepare_cross_sections(opt: &super::CivielOptions, doc: Arc<CadDoc
         return Err(format!("{} dwarsprofielen is te veel: kies een grotere afstand", stations.len()));
     }
     let (left, right) = (opt.left.max(1.0), opt.right.max(1.0));
+    // What the sections cut lies around the axis (survey points up to 1 m
+    // beside a section). A drawing too large to share comes with only the
+    // indexed objects, so ask the host for the rest, or stop.
+    let (b, m) = (al.bbox(), (left.max(right) + 2.0) * f);
+    let around = super::read_area(&doc, [b[0] - m, b[1] - m, b[2] + m, b[3] + m]).map_err(|e| {
+        format!("{} ({e})", crate::lang::tr("dwarsprofielen niet gemaakt: BGT, KLIC en meetpunten langs de as zijn niet te lezen", "cross sections not made: BGT, KLIC and survey points along the axis cannot be read"))
+    })?;
     let step = (opt.step.max(0.1)).min((left + right) / 20.0);
     let offsets: Vec<f64> = {
         let mut o = Vec::new();
@@ -1287,7 +1294,8 @@ pub(super) fn prepare_cross_sections(opt: &super::CivielOptions, doc: Arc<CadDoc
         return Err(ground.error().unwrap_or_else(|| format!("geen hoogtes langs de as ({})", ground.label())));
     }
     // What the sections cut in plan: BGT surfaces and KLIC cables and pipes.
-    let things = super::doorsnede::cuttables(&doc);
+    let mut things = super::doorsnede::cuttables(&doc);
+    things.extend(super::doorsnede::cuttables(&around));
     let (outlines, texts, (surfaces, crossings, measured)) = super::doorsnede::section_cuts(&things, &views, left, right, 0.15, f, 5.0 * ctx.k / f);
     SECTION_OUTLINES.with(|o| *o.borrow_mut() = outlines);
     SECTION_TEXTS.with(|o| *o.borrow_mut() = texts);

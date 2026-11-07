@@ -441,6 +441,29 @@ pub fn partial_document(handles: &[Handle], per_request: usize) -> Result<ocs_pl
     Ok(document_of(all, &[]))
 }
 
+/// The entities matching a host query (the JSON of the control API's
+/// `query` operation, API v14), all pages, for drawings of any size.
+pub fn query(mut query: serde_json::Value) -> Result<Vec<EntityType>, String> {
+    let mut out = Vec::new();
+    let mut offset = 0u64;
+    loop {
+        // Pages small enough for one host message (64 MiB).
+        query["offset"] = offset.into();
+        query["limit"] = 500.into();
+        match request(PluginRequest::QueryEntities { query: query.to_string() })? {
+            PluginResponse::EntityPage(Ok(page)) => {
+                out.extend(page.entities);
+                match page.next_offset {
+                    Some(next) if next > offset => offset = next,
+                    _ => return Ok(out),
+                }
+            }
+            PluginResponse::EntityPage(Err(e)) => return Err(e),
+            other => return Err(format!("onverwacht antwoord op de opvraag: {other:?}")),
+        }
+    }
+}
+
 // ── Layout of generated views ───────────────────────────────────────────────
 
 /// A free place for a view of `size` (width, height): "onder" stacks views

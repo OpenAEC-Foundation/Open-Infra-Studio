@@ -99,7 +99,7 @@ fn unit_of(name: &str) -> f64 {
 }
 
 pub fn parse(text: &str) -> Result<LandXml, String> {
-    let doc = roxmltree::Document::parse(text).map_err(|e| format!("geen geldige XML: {e}"))?;
+    let doc = crate::xmldoc::parse(text, false).map_err(|e| format!("geen geldige XML: {e}"))?;
     let root = doc.root_element();
     if local(&root) != "LandXML" {
         return Err("geen LandXML-bestand".into());
