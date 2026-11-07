@@ -1017,7 +1017,9 @@ fn adopt_geodata(host: &mut dyn HostApi) {
         return;
     }
     TRIED.lock().unwrap().push(tab);
-    bridge::spawn_command(move || {
+    let Some(target) = bridge::target() else { return };
+    // This automatic helper is not the requested command: keep its reply ID.
+    std::thread::spawn(move || bridge::with_command_context(target, None, None, || {
         let Ok(doc) = bridge::snapshot() else { return };
         if bridge::partial() {
             return;
@@ -1042,7 +1044,7 @@ fn adopt_geodata(host: &mut dyn HostApi) {
             }
             Err(e) => bridge::info(&e),
         }
-    });
+    }));
 }
 
 /// `GIS_BESTAND_IMPORT <pad> [EPSG:code]`: a GIS file straight into the drawing.

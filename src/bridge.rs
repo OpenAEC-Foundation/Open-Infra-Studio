@@ -169,22 +169,28 @@ pub fn site() -> Option<Site> {
 
 /// Store the site in memory and in the drawing (NOD XRecord, round-trips DWG).
 pub fn save_site(site: &Site) -> Result<(), String> {
-    shared().lock().unwrap().site = Some(site.clone());
     let t = target().ok_or("geen tekening actief")?;
     let json = serde_json::to_string(site).map_err(|e| e.to_string())?;
     let entries = vec![XRecordEntry::string(1, json)];
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
     let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: SITE_RECORD.into(), entries: entries.clone() };
-    if let Ok(PluginResponse::XRecordUpdateResult(Ok(_))) = traced(trace_on().then(|| "UpdateXRecord SITE".into()), || t.sender.request(update)) {
-        return Ok(());
+    if !matches!(traced(trace_on().then(|| "UpdateXRecord SITE".into()), || t.sender.request(update)), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
+        // Not there yet: create it (and the OPENINFRA dictionary).
+        match traced(trace_on().then(|| "CreateXRecord SITE".into()), || t.sender.request(PluginRequest::CreateXRecord { dictionary_path: path, name: SITE_RECORD.into(), entries })) {
+            Ok(PluginResponse::XRecordCreateResult(Ok(_))) => Ok(()),
+            Ok(PluginResponse::XRecordCreateResult(Err(e))) | Ok(PluginResponse::Error(e)) => Err(e),
+            Ok(other) => Err(format!("onverwacht antwoord: {other:?}")),
+            Err(e) => Err(e.to_string()),
+        }?;
     }
-    // Not there yet: create it (and the OPENINFRA dictionary).
-    match traced(trace_on().then(|| "CreateXRecord SITE".into()), || t.sender.request(PluginRequest::CreateXRecord { dictionary_path: path, name: SITE_RECORD.into(), entries })) {
-        Ok(PluginResponse::XRecordCreateResult(Ok(_))) => Ok(()),
-        Ok(PluginResponse::XRecordCreateResult(Err(e))) | Ok(PluginResponse::Error(e)) => Err(e),
-        Ok(other) => Err(format!("onverwacht antwoord: {other:?}")),
-        Err(e) => Err(e.to_string()),
+    COMMAND_CONTEXT.with(|c| {
+        if let Some(c) = c.borrow_mut().as_mut() { c.site = Some(site.clone()); }
+    });
+    let mut s = shared().lock().unwrap();
+    if s.target.as_ref().is_some_and(|current| current.tab_id == t.tab_id) {
+        s.site = Some(site.clone());
     }
+    Ok(())
 }
 
 /// Request tracing for diagnosis: on with `OI_BRIDGE_TRACE` or a file
