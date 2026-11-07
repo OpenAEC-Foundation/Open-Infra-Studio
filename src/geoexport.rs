@@ -296,23 +296,41 @@ pub fn features(doc: &CadDocument, site: &Site, unit_factor: f64, opt: &Options)
     out
 }
 
-/// GeoJSON (RFC 7946: WGS 84 longitude, latitude, height).
+/// GeoJSON (RFC 7946: WGS 84 longitude and latitude). Project heights have
+/// no known ellipsoidal datum: keep them in `openaec:project_z` (metres),
+/// with the same nesting/order as the positions, instead of a third ordinate.
 pub fn geojson(feats: &[GeoFeature], site: &Site) -> Result<String, String> {
     crs::ensure(&site.crs)?;
     let t = Transformer::new(&site.crs, "EPSG:4326")?;
     let ll = |p: &P3| -> Result<serde_json::Value, String> {
         let q = t.apply([p[0], p[1]])?;
         let r = |v: f64, d: i32| (v * 10f64.powi(d)).round() / 10f64.powi(d);
-        Ok(serde_json::json!([r(q[0], 8), r(q[1], 8), r(p[2], 3)]))
+        Ok(serde_json::json!([r(q[0], 8), r(q[1], 8)]))
+    };
+    let z = |p: &P3| -> Result<serde_json::Value, String> {
+        serde_json::Number::from_f64(p[2]).map(serde_json::Value::Number)
+            .ok_or_else(|| "GeoJSON: project height is not finite".to_string())
     };
     let mut list = Vec::with_capacity(feats.len());
     for f in feats {
+        // Reserve our attribute: never overwrite object data silently.
+        if f.props.contains_key("openaec:project_z") {
+            return Err("GeoJSON: object data already contains the reserved attribute openaec:project_z".into());
+        }
+        let heights = match &f.geom {
+            Geom::Point(p) => z(p)?,
+            Geom::Line(v) => serde_json::json!(v.iter().map(&z).collect::<Result<Vec<_>, _>>()?),
+            Geom::Polygon(r) => serde_json::json!(r.iter().map(|ring| ring.iter().map(&z).collect::<Result<Vec<_>, _>>()).collect::<Result<Vec<_>, _>>()?),
+        };
         let geometry = match &f.geom {
             Geom::Point(p) => serde_json::json!({"type": "Point", "coordinates": ll(p)?}),
             Geom::Line(v) => serde_json::json!({"type": "LineString", "coordinates": v.iter().map(&ll).collect::<Result<Vec<_>, _>>()?}),
             Geom::Polygon(r) => serde_json::json!({"type": "Polygon", "coordinates": r.iter().map(|ring| ring.iter().map(&ll).collect::<Result<Vec<_>, _>>()).collect::<Result<Vec<_>, _>>()?}),
         };
-        list.push(serde_json::json!({"type": "Feature", "geometry": geometry, "properties": f.props}));
+        let mut properties: serde_json::Map<String, serde_json::Value> = f.props.iter()
+            .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone()))).collect();
+        properties.insert("openaec:project_z".into(), heights);
+        list.push(serde_json::json!({"type": "Feature", "geometry": geometry, "properties": properties}));
     }
     serde_json::to_string_pretty(&serde_json::json!({"type": "FeatureCollection", "name": "Open Infra", "features": list})).map_err(|e| e.to_string())
 }
@@ -516,9 +534,54 @@ mod tests {
         let c = &j["features"][0]["geometry"]["coordinates"][0];
         let (lon, lat) = (c[0].as_f64().unwrap(), c[1].as_f64().unwrap());
         assert!((lon - 4.66).abs() < 0.01 && (lat - 51.81).abs() < 0.01, "{lon} {lat}");
-        assert_eq!(c[2].as_f64().unwrap(), 1.5);
+        assert_eq!(c.as_array().unwrap().len(), 2, "NAP is not WGS84 ellipsoidal height");
+        assert_eq!(j["features"][0]["properties"]["openaec:project_z"], serde_json::json!([1.5, 1.5]));
         assert_eq!(j["features"][1]["geometry"]["type"], "Polygon");
         assert_eq!(j["features"][0]["properties"]["spanning"], "0,4 kV");
+    }
+
+    #[test]
+    fn geojson_keeps_project_heights_for_every_position() {
+        let mut s = Site::default();
+        s.crs = "EPSG:4326".into();
+        let p = |x, y, z| [x, y, z];
+        let feats = vec![
+            GeoFeature { geom: Geom::Point(p(4.0, 52.0, 1.5)), props: BTreeMap::from([("naam".into(), "NAP-punt".into())]) },
+            GeoFeature { geom: Geom::Line(vec![p(4.0, 52.0, -2.25), p(4.1, 52.0, 7.125)]), props: BTreeMap::new() },
+            GeoFeature { geom: Geom::Polygon(vec![
+                vec![p(4.0, 52.0, 1.0), p(4.2, 52.0, 2.0), p(4.2, 52.2, 3.0), p(4.0, 52.0, 1.0)],
+                vec![p(4.1, 52.05, 4.0), p(4.15, 52.1, 5.0), p(4.1, 52.1, 6.0), p(4.1, 52.05, 4.0)],
+            ]), props: BTreeMap::new() },
+        ];
+        let j: serde_json::Value = serde_json::from_str(&geojson(&feats, &s).unwrap()).unwrap();
+        let fs = j["features"].as_array().unwrap();
+        assert_eq!(fs[0]["geometry"]["coordinates"], serde_json::json!([4.0, 52.0]));
+        assert_eq!(fs[0]["properties"]["openaec:project_z"], serde_json::json!(1.5));
+        assert_eq!(fs[0]["properties"]["naam"], "NAP-punt");
+        assert_eq!(fs[1]["properties"]["openaec:project_z"], serde_json::json!([-2.25, 7.125]));
+        for pos in fs[1]["geometry"]["coordinates"].as_array().unwrap() {
+            assert_eq!(pos.as_array().unwrap().len(), 2);
+        }
+        assert_eq!(fs[2]["properties"]["openaec:project_z"], serde_json::json!([[1.0, 2.0, 3.0, 1.0], [4.0, 5.0, 6.0, 4.0]]));
+        for ring in fs[2]["geometry"]["coordinates"].as_array().unwrap() {
+            for pos in ring.as_array().unwrap() {
+                assert_eq!(pos.as_array().unwrap().len(), 2);
+            }
+        }
+        assert_eq!(feats[0].props.len(), 1, "export must not mutate source attributes");
+    }
+
+    #[test]
+    fn geojson_refuses_height_loss_or_attribute_overwrite() {
+        let s = site();
+        let mut f = GeoFeature { geom: Geom::Point([104885.0, 425330.0, 1.5]), props: BTreeMap::from([("openaec:project_z".into(), "existing data".into())]) };
+        assert!(geojson(&[f.clone()], &s).unwrap_err().contains("reserved attribute"));
+        assert_eq!(f.props["openaec:project_z"], "existing data");
+        f.props.clear();
+        for z in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            f.geom = Geom::Point([104885.0, 425330.0, z]);
+            assert!(geojson(&[f.clone()], &s).unwrap_err().contains("not finite"));
+        }
     }
 
     #[test]
