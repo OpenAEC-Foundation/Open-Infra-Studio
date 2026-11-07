@@ -53,6 +53,11 @@ Daar draait Open CAD Studio met beide plugins als gestreamde desktop (route B va
   - `infra_stand`: wat er open is, de projectlocatie en het model.
   - `infra_open` met een pad in de werkmap: de SuperCloud zet het bestand uit Docs daar neer.
   - `infra_opslaan`: schrijft naar dat pad, en de SuperCloud bewaart het als nieuwe versie.
+- **Werkmap:** met `OPENAEC_BEHEERD=1` bereikt de server alleen bestanden in de werkmap `OPENAEC_MAP` (in de SuperCloud `/openaec`). Zonder geldige `OPENAEC_MAP` is geen enkel bestand bereikbaar.
+  - Een pad wordt het echte pad in de werkmap, na symbolische links. Een relatief pad is relatief aan de werkmap. Een pad buiten de werkmap weigert de server.
+  - De werkmap mag geen symbolische links en geen bestanden met meer dan één harde link bevatten. Zo blijven ook de bestanden die de plugins zelf naast de tekening maken in de werkmap.
+  - `GIS_`- en `CIV_`-opdrachten en opslaan zonder pad werken alleen op een tekening die in de werkmap staat. Sla een nieuwe tekening dus eerst op met `infra_opslaan` en een pad.
+  - `oi_command` is in deze modus niet beschikbaar, en tekst in een argument mag geen aanhalingsteken of stuurteken bevatten.
 - **Definities:** [`mcp-tools.json`](mcp-tools.json) wordt gemaakt met `--prefix infra --tools-json`. Een test controleert dat het bestand actueel is.
 - **Taal:** de plugins nemen `OPENAEC_TAAL` over (`nl` geeft Nederlands, de andere talen geven Engels).
 - **arm64:** de release bevat ook `openaec.open-infra-linux-aarch64.so` en `open-infra-civiel-linux-aarch64.zip`.
