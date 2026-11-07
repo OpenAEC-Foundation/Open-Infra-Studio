@@ -8,6 +8,7 @@ import importlib.util
 import os
 import re
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -120,6 +121,75 @@ class WorkFolderTest(unittest.TestCase):
             self.assertEqual(mcp.OCS.request('state'), {'document_id': 1})
         self.assertEqual(sent, [first['session_id'], second['session_id']])
         self.assertEqual(mcp.OCS.session, second)
+
+    def test_session_selection_cannot_move_a_guarded_request(self):
+        first = dict(mcp.OCS.session)
+        second = dict(first, session_id='other', port=2)
+        checking = threading.Event()
+        release = threading.Event()
+        selected = threading.Event()
+        choosing = threading.Event()
+        replies = []
+        sent = []
+        states = 0
+        def exchange(desc, request, timeout=120):
+            nonlocal states
+            sent.append((desc['session_id'], request.copy()))
+            if request['op'] == 'state':
+                states += 1
+                if states == 2:
+                    checking.set()
+                    if not release.wait(3):
+                        raise AssertionError('test did not release guard')
+                path = self.window.drawing if desc['session_id'] == first['session_id'] else str(self.outside / 'private.dwg')
+                return {'document_id': 1, 'documents': [{'id': 1, 'path': path}]}
+            return {'ok': True}
+        def save():
+            replies.append(mcp.call_tool('infra_opslaan', {}))
+        def choose():
+            choosing.set()
+            replies.append(mcp.call_tool('oi_sessions', {'select': 'other'}))
+            selected.set()
+        with patch.object(mcp, '_exchange', exchange), patch.object(mcp, 'sessions', return_value=[second]):
+            saving = threading.Thread(target=save)
+            selecting = threading.Thread(target=choose)
+            saving.start()
+            try:
+                self.assertTrue(checking.wait(3), 'save did not reach guard')
+                selecting.start()
+                self.assertTrue(choosing.wait(3))
+                # Before the fix the real pick finishes here and changes the
+                # guarded request's session. With the lock it waits for save.
+                selected.wait(0.1)
+            finally:
+                release.set()
+                saving.join(3)
+                if selecting.ident is not None:
+                    selecting.join(3)
+            self.assertFalse(saving.is_alive())
+            self.assertFalse(selecting.is_alive())
+        self.assertEqual(len(replies), 2)
+        self.assertTrue(all(not r['isError'] for r in replies), replies)
+        self.assertEqual([sid for sid, req in sent if req['op'] == 'run'], [first['session_id']])
+        self.assertTrue(selected.is_set(), 'selection must still finish')
+
+    def test_a_tab_switch_does_not_guard_the_wrong_document(self):
+        states = 0
+        sent = []
+        def exchange(desc, request, timeout=120):
+            nonlocal states
+            if request['op'] == 'state':
+                states += 1
+                # host() read document 2, then the user activated document 1.
+                return {'document_id': 2 if states == 1 else 1,
+                        'documents': [{'id': 1, 'path': self.window.drawing},
+                                      {'id': 2, 'path': str(self.outside / 'private.dwg')}]}
+            sent.append(request)
+            return {'ok': True}
+        with patch.object(mcp, '_exchange', exchange):
+            result = mcp.call_tool('infra_opslaan', {})
+        self.assertTrue(result['isError'], result)
+        self.assertEqual(sent, [], 'QSAVE must not reach the outside document')
 
     def test_sol_cases_open_and_save_outside(self):
         cases = [

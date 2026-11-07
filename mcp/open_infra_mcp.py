@@ -35,6 +35,7 @@ import re
 import socket
 import stat
 import sys
+import threading
 import time
 import unicodedata
 import urllib.error
@@ -177,7 +178,8 @@ def _guard(ocs, op, body):
             raise OcsError(f"{words[0] if words else cmd}: in beheerde modus alleen de opdrachten van de tools")
         st = ocs.request("state")
         docs = st.get("documents") if isinstance(st.get("documents"), list) else []
-        drawing = next((d.get("path") for d in docs if isinstance(d, dict) and d.get("id") == st.get("document_id")), None)
+        document = body.get("document_id", st.get("document_id"))
+        drawing = next((d.get("path") for d in docs if isinstance(d, dict) and d.get("id") == document), None)
         if not drawing or not _inside(os.path.realpath(drawing), root):
             raise OcsError("de tekening staat niet in de werkmap: open er een met infra_open, of sla deze op met infra_opslaan en een pad")
     for key in ("path", "template"):
@@ -277,38 +279,43 @@ def sessions():
 class Ocs:
     def __init__(self):
         self.session = None
+        # Guard, session selection and send share this lock. The guard reads
+        # state through request(), so re-entry on the same thread is needed.
+        self.lock = threading.RLock()
 
     def pick(self, select=None):
-        live = sessions()
-        want = select or os.environ.get("OI_SESSION")
-        if want:
-            match = [s for s in live if want in (s["session_id"], str(s["pid"]), str(s["port"])) or (s.get("document") and want.lower() in str(s["document"]).lower())]
-            if select and not match:
-                raise OcsError(f"geen venster '{select}'; kies uit: " + ", ".join(f"{s['session_id']} ({s.get('document')})" for s in live))
-            live = match or live
-        if not live:
-            raise OcsError("Geen Open CAD Studio-venster gevonden. Start Open CAD Studio (met de Open Infra-plugins).")
-        self.session = live[0]
-        return self.session
+        with self.lock:
+            live = sessions()
+            want = select or os.environ.get("OI_SESSION")
+            if want:
+                match = [s for s in live if want in (s["session_id"], str(s["pid"]), str(s["port"])) or (s.get("document") and want.lower() in str(s["document"]).lower())]
+                if select and not match:
+                    raise OcsError(f"geen venster '{select}'; kies uit: " + ", ".join(f"{s['session_id']} ({s.get('document')})" for s in live))
+                live = match or live
+            if not live:
+                raise OcsError("Geen Open CAD Studio-venster gevonden. Start Open CAD Studio (met de Open Infra-plugins).")
+            self.session = live[0]
+            return self.session
 
     def request(self, op, body=None, timeout=120):
         """One automation operation (state, run, capture, save, open, …)."""
-        body = _guard(self, op, dict(body or {}))
-        s = self.session or self.pick()
-        if s["kind"] == "rest":
-            return _rest(s["port"], s["token"], "/state" if op == "state" else f"/{op}", None if op == "state" else body, timeout)
-        if op != "state":
-            body.setdefault("request_id", "mcp-" + uuid.uuid4().hex)
-        try:
-            return _exchange(s, dict(body, op=op), timeout)
-        except (OSError, ValueError) as e:
-            self.session = None
-            # A lost reply does not tell us whether the write ran. In managed
-            # mode another window can also have a drawing outside the work folder.
-            if managed() and op != "state":
-                raise OcsError("verbinding met Open CAD Studio verbroken; de opdracht kan al zijn uitgevoerd en wordt niet opnieuw verstuurd") from e
-            s = self.pick()
-            return _exchange(s, dict(body, op=op), timeout)
+        with self.lock:
+            body = _guard(self, op, dict(body or {}))
+            s = self.session or self.pick()
+            if s["kind"] == "rest":
+                return _rest(s["port"], s["token"], "/state" if op == "state" else f"/{op}", None if op == "state" else body, timeout)
+            if op != "state":
+                body.setdefault("request_id", "mcp-" + uuid.uuid4().hex)
+            try:
+                return _exchange(s, dict(body, op=op), timeout)
+            except (OSError, ValueError) as e:
+                self.session = None
+                # A lost reply does not tell us whether the write ran. In managed
+                # mode another window can also have a drawing outside the work folder.
+                if managed() and op != "state":
+                    raise OcsError("verbinding met Open CAD Studio verbroken; de opdracht kan al zijn uitgevoerd en wordt niet opnieuw verstuurd") from e
+                s = self.pick()
+                return _exchange(s, dict(body, op=op), timeout)
 
     def document_id(self):
         # While a drawing loads the window may not answer at once.

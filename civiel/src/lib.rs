@@ -334,9 +334,11 @@ impl CadModule for CivielModule {
 /// Run an engine function on a worker (the callback runs inside the host's
 /// input handling; network and big drawings take longer than its timeout).
 fn job(host: &mut dyn HostApi, label: &str, id: Option<String>, f: impl FnOnce(&dyn Fn(String)) -> Result<String, String> + Send + 'static) {
+    let Some(target) = bridge::target() else { return };
+    let site = bridge::site();
     host.push_info(&format!("[Open Infra] {label} …"));
     let label = label.to_string();
-    std::thread::spawn(move || {
+    std::thread::spawn(move || bridge::with_command_context(target, site, None, || {
         let _ = api::take();
         let r = f(&|_| {});
         let data = api::take();
@@ -351,7 +353,7 @@ fn job(host: &mut dyn HostApi, label: &str, id: Option<String>, f: impl FnOnce(&
                 Err(e) => api::write(&id, false, &format!("{label}: {e}"), data),
             }
         }
-    });
+    }));
 }
 
 /// An argument error, reported like a failed job (also to the ID file).
@@ -2000,3 +2002,6 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
 }
 
 ocs_plugin_api::export_plugin!(OpenInfraCiviel);
+
+#[cfg(test)]
+mod job_tests;
