@@ -220,6 +220,27 @@ fn invalid_attachment_path(rel: &str) -> String {
     format!("{} {rel}", tr("ongeldig bijlagepad", "invalid attachment path"))
 }
 
+/// The types an attachment is opened as: letters and conditions as PDF,
+/// sketches as PDF or image. A program or script in a delivery is never
+/// handed to the system.
+const OPENABLE: [&str; 8] = ["pdf", "png", "jpg", "jpeg", "gif", "tif", "tiff", "bmp"];
+
+/// An attachment the system's viewer may open: its type is one of [`OPENABLE`].
+fn openable(name: &str) -> bool {
+    Path::new(name).extension().and_then(|e| e.to_str()).is_some_and(|e| OPENABLE.iter().any(|o| e.eq_ignore_ascii_case(o)))
+}
+
+/// The path as one quoted word for `cmd /C start`: within the quotes
+/// `& | < > ^ ( )` are text, and `/V:OFF` keeps `!` text. `%` is still
+/// expanded within quotes and `"` would end them, so such a path is refused.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn cmd_quoted(path: &str) -> Result<String, String> {
+    if path.contains(['%', '"']) || path.chars().any(char::is_control) {
+        return Err(invalid_attachment_path(path));
+    }
+    Ok(format!("\"{path}\""))
+}
+
 /// Controleer ook bestaande mapdelen en een eventueel al uitgepakt bestand.
 /// Een ontbrekend eindbestand is toegestaan; links worden nooit gevolgd.
 fn attachment_target(root: &Path, relative: &Path, rel: &str, create_parents: bool) -> Result<PathBuf, String> {
@@ -270,7 +291,7 @@ fn attachment_target(root: &Path, relative: &Path, rel: &str, create_parents: bo
 pub fn attachment_file(delivery: &Path, rel: &str, out_dir: &Path) -> Result<PathBuf, String> {
     // ZIP-paden gebruiken '/'. Weiger ook Windows-prefixen op Unix, zodat
     // dezelfde levering op elk platform binnen de bedoelde map blijft.
-    if rel.contains("..") || rel.contains(['\\', ':']) || rel.split('/').any(|part| part.is_empty() || part == ".") {
+    if rel.contains("..") || rel.contains(['\\', ':']) || rel.split('/').any(|part| part.is_empty() || part == ".") || !openable(rel) {
         return Err(invalid_attachment_path(rel));
     }
     let ext = delivery.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase);
@@ -307,16 +328,31 @@ pub fn attachment_file(delivery: &Path, rel: &str, out_dir: &Path) -> Result<Pat
     Ok(target)
 }
 
+/// The system's viewer for `path`. On Windows through `cmd /C start` with the
+/// path as one quoted word, because the meldnummer folder also comes from the
+/// delivery; `/D` skips AutoRun commands.
+#[cfg(windows)]
+fn viewer(path: &Path) -> Result<std::process::Command, String> {
+    use std::os::windows::process::CommandExt;
+    let mut command = std::process::Command::new("cmd");
+    command.args(["/D", "/V:OFF", "/C", "start", ""]).raw_arg(cmd_quoted(&path.to_string_lossy())?);
+    Ok(command)
+}
+
+/// The system's viewer for `path`: `open` and `xdg-open` take it as one argument.
+#[cfg(not(windows))]
+fn viewer(path: &Path) -> Result<std::process::Command, String> {
+    let mut command = std::process::Command::new(if cfg!(target_os = "macos") { "open" } else { "xdg-open" });
+    command.arg(path);
+    Ok(command)
+}
+
 /// Opens a file with the system's viewer (PDF reader, image viewer).
 pub fn open_file(path: &Path) -> Result<(), String> {
-    let status = if cfg!(target_os = "windows") {
-        std::process::Command::new("cmd").args(["/C", "start", ""]).arg(path).spawn()
-    } else if cfg!(target_os = "macos") {
-        std::process::Command::new("open").arg(path).spawn()
-    } else {
-        std::process::Command::new("xdg-open").arg(path).spawn()
-    };
-    status.map(|_| ()).map_err(|e| format!("{}: {e}", path.display()))
+    if !path.file_name().and_then(|n| n.to_str()).is_some_and(openable) {
+        return Err(invalid_attachment_path(&path.display().to_string()));
+    }
+    viewer(path)?.spawn().map(|_| ()).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 #[cfg(test)]
@@ -389,5 +425,87 @@ mod tests {
     #[test]
     fn attachment_paths_stay_inside_the_delivery() {
         assert!(attachment_file(Path::new("x.zip"), "../../etc/passwd", Path::new("/tmp")).is_err());
+    }
+
+    /// "Openen" hands the file to the system, which runs programs and scripts.
+    const UNSAFE: [&str; 4] = ["bronnen/KL1081/run.bat", "bronnen/KL1081/setup.exe", "bronnen/KL1081/macro.docm", "bronnen/KL1081/geen-type"];
+
+    #[test]
+    fn attachments_open_only_as_documents_and_images() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-open-xml-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("bronnen/KL1081")).unwrap();
+        let delivery = dir.join("GI_gebiedsinformatielevering_1_1_V2.xml");
+        for rel in UNSAFE.iter().chain(&["bronnen/KL1081/brief.pdf", "bronnen/KL1081/schets.PNG", "bronnen/KL1081/foto.jpeg"]) {
+            std::fs::write(dir.join(rel), b"x").unwrap();
+        }
+        for rel in UNSAFE {
+            assert!(attachment_file(&delivery, rel, &dir.join("out")).is_err(), "{rel} must not be opened");
+        }
+        for rel in ["bronnen/KL1081/brief.pdf", "bronnen/KL1081/schets.PNG", "bronnen/KL1081/foto.jpeg"] {
+            assert_eq!(attachment_file(&delivery, rel, &dir.join("out")).unwrap(), dir.canonicalize().unwrap().join(rel));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn unsafe_attachments_are_not_extracted_from_the_zip() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-open-zip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let delivery = dir.join("Levering_1_1.zip");
+        {
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&delivery).unwrap());
+            for rel in UNSAFE.iter().chain(&["bronnen/KL1081/brief.pdf"]) {
+                zip.start_file(*rel, zip::write::SimpleFileOptions::default()).unwrap();
+                zip.write_all(b"@echo off").unwrap();
+            }
+            zip.finish().unwrap();
+        }
+        let out = dir.join("out");
+        for rel in UNSAFE {
+            assert!(attachment_file(&delivery, rel, &out).is_err(), "{rel} must not be extracted");
+        }
+        let extracted: Vec<_> = std::fs::read_dir(&out).into_iter().flatten().flatten().flat_map(|d| std::fs::read_dir(d.path().join("bronnen/KL1081")).into_iter().flatten().flatten()).map(|f| f.file_name()).collect();
+        assert!(extracted.is_empty(), "extracted: {extracted:?}");
+        assert!(attachment_file(&delivery, "bronnen/KL1081/brief.pdf", &out).unwrap().ends_with("bronnen/KL1081/brief.pdf"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn open_file_refuses_programs_and_scripts() {
+        for name in ["run.bat", "setup.exe", "x.cmd", "x.js", "x.lnk", "geen-type"] {
+            assert!(open_file(&std::env::temp_dir().join(name)).is_err(), "{name}");
+        }
+    }
+
+    /// A project folder may hold any character the file system allows.
+    #[test]
+    fn a_pdf_in_an_ordinary_project_folder_opens() {
+        let dir = std::env::temp_dir().join(format!("oi-klic-open-Infra & Water 100% (R&D)!-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("bronnen/KL1081")).unwrap();
+        std::fs::write(dir.join("bronnen/KL1081/brief & bijlage.pdf"), b"%PDF").unwrap();
+        let delivery = dir.join("GI_gebiedsinformatielevering_1_1_V2.xml");
+        let file = attachment_file(&delivery, "bronnen/KL1081/brief & bijlage.pdf", &dir.join("out")).unwrap();
+        assert_eq!(file, dir.canonicalize().unwrap().join("bronnen/KL1081/brief & bijlage.pdf"));
+        #[cfg(not(windows))]
+        {
+            let command = viewer(&file).unwrap();
+            assert_eq!(command.get_program(), if cfg!(target_os = "macos") { "open" } else { "xdg-open" });
+            assert_eq!(command.get_args().collect::<Vec<_>>(), [file.as_os_str()]);
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// On Windows the path is one quoted word for `cmd /C start`.
+    #[test]
+    fn windows_start_gets_the_path_as_one_quoted_word() {
+        for path in [r"C:\Projecten\Infra & Water (2026)\brief.pdf", r"\\?\C:\Users\R&D!^\klic-bijlagen\1&2\brief.pdf"] {
+            assert_eq!(cmd_quoted(path).unwrap(), format!("\"{path}\""));
+        }
+        for path in [r"C:\100%\brief.pdf", r"C:\%APPDATA%\brief.pdf", "C:\\a\"b\\brief.pdf", "C:\\a\nb\\brief.pdf"] {
+            assert!(cmd_quoted(path).is_err(), "{path}");
+        }
     }
 }
