@@ -1228,6 +1228,11 @@ impl BuiltinPlugin for OpenInfra {
         let (cmd_owned, id) = bridge::split_id(cmd);
         let cmd = cmd_owned.as_str();
         bridge::expect_reply(id);
+        if let Err(e) = bridge::require_work_folder() {
+            host.push_error(&format!("[Open Infra] {e}"));
+            bridge::reply(false, &e);
+            return true;
+        }
         // An explicit location must not race with automatic GEODATA adoption.
         if verb != "GIS_SITE" { adopt_geodata(host); }
         match verb.as_str() {

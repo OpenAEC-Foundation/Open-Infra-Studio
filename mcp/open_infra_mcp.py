@@ -31,9 +31,13 @@ import http.server
 import ipaddress
 import json
 import os
+import re
 import socket
+import stat
 import sys
+import threading
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 import uuid
@@ -56,6 +60,136 @@ RESULTS = os.path.join(config_dir(), "OpenCADStudio", "open-infra", "api")
 
 class OcsError(Exception):
     pass
+
+
+# ── Work folder (managed mode) ───────────────────────────────────────────────
+#
+# In the SuperCloud (OPENAEC_BEHEERD=1) the agent reaches only the files in the
+# work folder OPENAEC_MAP, where Docs puts them:
+# - a path becomes its real path inside the work folder (a relative path is
+#   relative to the work folder), or is refused;
+# - the work folder may hold no symlink and no file with more than one hard
+#   link, so the files the plugins name themselves (beside the drawing, in a
+#   delivery folder) stay in it too;
+# - Open Infra commands and plain save use a drawing saved in the work folder;
+# - no free command lines (oi_command) and no quotes or control characters in
+#   text arguments, so no tool can add an argument to a command.
+# Outside managed mode nothing changes. The checks run here, before Open CAD
+# Studio opens or writes a file.
+
+def managed():
+    return os.environ.get("OPENAEC_BEHEERD") == "1"
+
+
+def work_folder():
+    """OPENAEC_MAP as a real path, else OcsError."""
+    m = os.environ.get("OPENAEC_MAP") or ""
+    if not (os.path.isabs(m) and os.path.isdir(m)):
+        raise OcsError("beheerde modus zonder werkmap: OPENAEC_MAP is geen bestaande absolute map")
+    return os.path.realpath(m)
+
+
+def _inside(path, folder):
+    try:
+        return os.path.normcase(os.path.commonpath([folder, path])) == os.path.normcase(folder)
+    except ValueError:  # another drive
+        return False
+
+
+def _control(text):
+    return any(unicodedata.category(c) in ("Cc", "Zl", "Zp") for c in text)
+
+
+def _odd_space(text):
+    """Whitespace other than a plain space: the plugins split on it, but only a plain space is quoted."""
+    return any(c.isspace() and c != " " for c in text)
+
+
+def _no_links(root):
+    """OcsError when the work folder holds a symlink or a file with more than one hard link."""
+    todo = [root]
+    while todo:
+        with os.scandir(todo.pop()) as entries:
+            for e in entries:
+                st = e.stat(follow_symlinks=False)
+                if stat.S_ISLNK(st.st_mode) or (stat.S_ISREG(st.st_mode) and st.st_nlink > 1):
+                    raise OcsError(f"{e.path}: een symbolische of harde link in de werkmap; in beheerde modus mag die er niet zijn")
+                if stat.S_ISDIR(st.st_mode):
+                    todo.append(e.path)
+
+
+def confine(path):
+    """In managed mode: `path` as a real path inside the work folder, else OcsError."""
+    if not managed():
+        return path
+    root = work_folder()
+    if not isinstance(path, str):
+        raise OcsError(f"pad {path!r}: geen tekst")
+    p = path
+    if not p.strip() or '"' in p or _control(p) or _odd_space(p) or (os.sep == "/" and "\\" in p):
+        raise OcsError(f"pad {p!r}: leeg, of met een aanhalingsteken, backslash, stuurteken of andere witruimte dan een spatie")
+    real = os.path.realpath(os.path.join(root, p))
+    # A symlink loop leaves the rest of the path unresolved, '..' included.
+    if not _inside(real, root) or os.pardir in real.split(os.sep):
+        raise OcsError(f"pad {p!r} ligt buiten de werkmap {root}")
+    return real
+
+
+def _file(a, key="path"):
+    return confine(a[key]) if a.get(key) else a.get(key)
+
+
+def _text(v):
+    """A text argument: in managed mode only text (not a list or object), without
+    quotes, control characters or whitespace other than a plain space, so it
+    stays one argument."""
+    if managed() and (not isinstance(v, str) or '"' in v or _control(v) or _odd_space(v)):
+        raise OcsError(f"{v!r}: in beheerde modus alleen tekst, zonder aanhalingsteken, stuurteken of andere witruimte dan een spatie")
+    return v
+
+
+def _assembly(v):
+    """An assembly (profieltype): in managed mode only by name, never a .json file."""
+    if managed() and v and ("/" in _text(v) or "\\" in v or v.strip().lower().endswith(".json")):
+        raise OcsError(f"profieltype {v!r}: in beheerde modus alleen op naam (civ_assemblies geeft de namen)")
+    return v
+
+
+VIEW_COMMANDS = {"ZOOM", "-VIEW", "VSCURRENT"}
+
+
+def _guard(ocs, op, body):
+    """An automation request in managed mode (see above); OcsError when it may reach a file outside the work folder."""
+    if not managed() or op == "state":
+        return body
+    root = work_folder()
+    _no_links(root)
+    if op == "run":
+        cmd = str(body.get("cmd") or "")
+        words = cmd.split()
+        verb = words[0].upper() if words else ""
+        if _control(cmd):
+            raise OcsError("opdracht met een regelovergang of stuurteken: niet in beheerde modus")
+        if verb in VIEW_COMMANDS:
+            if len(words) > 2 or not all(re.fullmatch(r"[A-Za-z0-9_-]+", w) for w in words):
+                raise OcsError(f"{cmd}: alleen een beeldopdracht met één woord")
+            return body
+        if not re.fullmatch(r"(GIS|CIV)_[A-Z0-9_]+", verb):
+            raise OcsError(f"{words[0] if words else cmd}: in beheerde modus alleen de opdrachten van de tools")
+        st = ocs.request("state")
+        docs = st.get("documents") if isinstance(st.get("documents"), list) else []
+        document = body.get("document_id", st.get("document_id"))
+        drawing = next((d.get("path") for d in docs if isinstance(d, dict) and d.get("id") == document), None)
+        # Derived files use the host's original document directory. A file
+        # alias outside the work folder must not choose that output directory.
+        if not drawing or not _inside(os.path.realpath(drawing), root) or not _inside(os.path.realpath(os.path.dirname(drawing)), root):
+            raise OcsError("de tekening staat niet in de werkmap: open er een met infra_open, of sla deze op met infra_opslaan en een pad")
+    for key in ("path", "template"):
+        v = body.get(key)
+        own_capture = op == "capture" and os.path.dirname(str(v)) == RESULTS and os.path.basename(str(v)).startswith("capture-")
+        if v and not own_capture:
+            body[key] = confine(v)
+    return body
 
 
 # ── Sessions ─────────────────────────────────────────────────────────────────
@@ -147,35 +281,46 @@ def sessions():
 class Ocs:
     def __init__(self):
         self.session = None
+        # Guard, session selection and send share this lock. The guard reads
+        # state through request(), so re-entry on the same thread is needed.
+        self.lock = threading.RLock()
 
     def pick(self, select=None):
-        live = sessions()
-        want = select or os.environ.get("OI_SESSION")
-        if want:
-            match = [s for s in live if want in (s["session_id"], str(s["pid"]), str(s["port"])) or (s.get("document") and want.lower() in str(s["document"]).lower())]
-            if select and not match:
-                raise OcsError(f"geen venster '{select}'; kies uit: " + ", ".join(f"{s['session_id']} ({s.get('document')})" for s in live))
-            live = match or live
-        if not live:
-            raise OcsError("Geen Open CAD Studio-venster gevonden. Start Open CAD Studio (met de Open Infra-plugins).")
-        self.session = live[0]
-        return self.session
+        with self.lock:
+            live = sessions()
+            want = select or os.environ.get("OI_SESSION")
+            if want:
+                match = [s for s in live if want in (s["session_id"], str(s["pid"]), str(s["port"])) or (s.get("document") and want.lower() in str(s["document"]).lower())]
+                if select and not match:
+                    raise OcsError(f"geen venster '{select}'; kies uit: " + ", ".join(f"{s['session_id']} ({s.get('document')})" for s in live))
+                live = match or live
+            if not live:
+                raise OcsError("Geen Open CAD Studio-venster gevonden. Start Open CAD Studio (met de Open Infra-plugins).")
+            self.session = live[0]
+            return self.session
 
     def request(self, op, body=None, timeout=120):
         """One automation operation (state, run, capture, save, open, …)."""
-        s = self.session or self.pick()
-        body = dict(body or {})
-        if s["kind"] == "rest":
-            return _rest(s["port"], s["token"], "/state" if op == "state" else f"/{op}", None if op == "state" else body, timeout)
-        if op != "state":
-            body.setdefault("request_id", "mcp-" + uuid.uuid4().hex)
-        try:
-            return _exchange(s, dict(body, op=op), timeout)
-        except (OSError, ValueError):
-            # The window went away: find it (or another) again.
-            self.session = None
-            s = self.pick()
-            return _exchange(s, dict(body, op=op), timeout)
+        with self.lock:
+            selected = self.session
+            body = _guard(self, op, dict(body or {}))
+            if op != "state" and selected is not None and self.session is not selected:
+                raise OcsError("het gekozen venster is verdwenen; kies opnieuw en herhaal de opdracht")
+            s = self.session or self.pick()
+            if s["kind"] == "rest":
+                return _rest(s["port"], s["token"], "/state" if op == "state" else f"/{op}", None if op == "state" else body, timeout)
+            if op != "state":
+                body.setdefault("request_id", "mcp-" + uuid.uuid4().hex)
+            try:
+                return _exchange(s, dict(body, op=op), timeout)
+            except (OSError, ValueError) as e:
+                self.session = None
+                # A lost reply does not tell us whether the write ran. In managed
+                # mode another window can also have a drawing outside the work folder.
+                if managed() and op != "state":
+                    raise OcsError("verbinding met Open CAD Studio verbroken; de opdracht kan al zijn uitgevoerd en wordt niet opnieuw verstuurd") from e
+                s = self.pick()
+                return _exchange(s, dict(body, op=op), timeout)
 
     def document_id(self):
         # While a drawing loads the window may not answer at once.
@@ -186,9 +331,34 @@ class Ocs:
             time.sleep(1)
         raise OcsError("Open CAD Studio geeft geen actieve tekening")
 
+    def request_active(self, op, body=None, timeout=120):
+        """Keep the document lookup and its operation on the same window."""
+        with self.lock:
+            selected = self.session or self.pick()
+            body = dict(body or {})
+            body["document_id"] = self.document_id()
+            if self.session is not selected:
+                raise OcsError("het gekozen venster is verdwenen; kies opnieuw en herhaal de opdracht")
+            return self.request(op, body, timeout)
+
     def host(self, cmd):
         """A host command (no Open Infra answer to wait for)."""
-        r = self.request("run", {"cmd": cmd, "document_id": self.document_id()})
+        if managed() and cmd.upper() == "QSAVE":
+            # Carry the checked path to the host: native Save As can rename
+            # the same tab between the state reply and the save operation.
+            with self.lock:
+                selected = self.session or self.pick()
+                document = self.document_id()
+                st = self.request("state")
+                if self.session is not selected:
+                    raise OcsError("het gekozen venster is verdwenen; kies opnieuw en herhaal de opdracht")
+                docs = st.get("documents") if isinstance(st.get("documents"), list) else []
+                drawing = next((d.get("path") for d in docs if isinstance(d, dict) and d.get("id") == document), None)
+                if not drawing:
+                    raise OcsError("sla de tekening eerst op in de werkmap")
+                r = self.request("save", {"path": confine(drawing), "document_id": document}, timeout=300)
+        else:
+            r = self.request_active("run", {"cmd": cmd})
         if r.get("ok") is False:
             raise OcsError(f"{cmd}: {r.get('error')}")
         return r
@@ -197,7 +367,7 @@ class Ocs:
         """An Open Infra command; waits for its JSON answer."""
         rid = "mcp" + uuid.uuid4().hex[:12]
         path = os.path.join(RESULTS, rid + ".json")
-        r = self.request("run", {"cmd": f"{cmd} ID={rid}", "document_id": self.document_id()})
+        r = self.request_active("run", {"cmd": f"{cmd} ID={rid}"})
         # A busy window answers "still running"; the command goes on and
         # its result file comes when it is done.
         busy = "may continue" in str(r.get("error") or "") or r.get("status") in ("pending", "running", "accepted")
@@ -248,8 +418,11 @@ def _kv(**kw):
             v = "ja" if v else "nee"
         elif isinstance(v, (int, float)):
             v = _num(v)
-        elif " " in str(v) and not str(v).startswith('"'):
-            v = f'"{v}"'
+        else:
+            # In managed mode the text as it goes into the command line.
+            v = _text(v) if managed() else str(v)
+            if " " in v and not v.startswith('"'):
+                v = f'"{v}"'
         out.append(f"{k}={v}")
     return " ".join(out)
 
@@ -345,6 +518,8 @@ def t_status(a):
 @tool("oi_command", "Run one command line: Open Infra (GIS_…, CIV_…; waits for its answer) or a host command (e.g. 'ZOOM EXTENTS'). See GIS_HELP and CIV_HELP for the arguments.",
       {"command": STR, "timeout_s": NUM}, ["command"])
 def t_command(a):
+    if managed():
+        raise OcsError("oi_command is niet beschikbaar in beheerde modus: gebruik de tools (infra_open en infra_opslaan voor bestanden)")
     c = a["command"].strip()
     if c.upper().startswith(("GIS_", "CIV_")):
         return OCS.run(c, int(a.get("timeout_s") or 900))
@@ -357,7 +532,7 @@ def t_command(a):
 def t_site(a):
     w, h = a.get("width", 300), a.get("height", a.get("width", 250))
     rel = " RELATIEF" if a.get("relative") else ""
-    name = (" " + a["name"]) if a.get("name") else ""
+    name = (" " + _text(a["name"])) if a.get("name") else ""
     if a.get("x") is not None and a.get("y") is not None:
         return OCS.run(f"GIS_SITE RD {_num(a['x'])} {_num(a['y'])} {_num(w)} {_num(h)}{rel}{name}")
     if a.get("lon") is not None and a.get("lat") is not None:
@@ -418,7 +593,7 @@ def t_planning_import(a):
 
 @tool("planning_gml", "Import local IMRO GML with planning styles and source metadata; no API key required.", {"path": STR}, ["path"])
 def t_planning_gml(a):
-    return OCS.run("GIS_PLAN_GML " + _quote(a["path"]), 1800)
+    return OCS.run("GIS_PLAN_GML " + _quote(_file(a)), 1800)
 
 
 @tool("nlcs_check", "NLCS 5.02 check of the drawing (report beside the drawing); repair=true sets layer styles and ByLayer.",
@@ -445,7 +620,7 @@ def t_mutation(a):
       {"path": STR, "selection": {"type": "boolean"}, "texts": {"type": "boolean"}})
 def t_ifc(a):
     words = (" SELECTIE" if a.get("selection") else "") + (" TEKST=nee" if a.get("texts") is False else "")
-    return OCS.run(f"CIV_IFC {_kv(BESTAND=a.get('path'))}{words}", 1800)
+    return OCS.run(f"CIV_IFC {_kv(BESTAND=_file(a))}{words}", 1800)
 
 
 @tool("quantities", "Quantities per NLCS layer (count, length, area) as CSV beside the drawing.")
@@ -456,7 +631,7 @@ def t_quantities(a):
 @tool("civ_points_import", "Import a survey point file (PNEZD/PENZD/CSV; separator and decimal comma detected).",
       {"path": STR, "format": {"type": "string", "enum": ["AUTO", "PNEZD", "PENZD", "NEZD", "ENZD"]}}, ["path"])
 def t_points_import(a):
-    return OCS.run(f"CIV_PUNTEN_IMPORT {_quote(a['path'])} {_kv(FORMAAT=a.get('format'))}")
+    return OCS.run(f"CIV_PUNTEN_IMPORT {_quote(_file(a))} {_kv(FORMAAT=a.get('format'))}")
 
 
 @tool("civ_points", "Place survey points; without z the ground height (TIN or AHN) is used.",
@@ -467,12 +642,12 @@ def t_points(a):
 
 @tool("civ_points_export", "Export the drawing's points (or the selection) to a point file.", {"path": STR, "format": STR})
 def t_points_export(a):
-    return OCS.run(f"CIV_PUNTEN_EXPORT {_kv(PAD=a.get('path') and _quote(a['path']), FORMAAT=a.get('format'))}")
+    return OCS.run(f"CIV_PUNTEN_EXPORT {_kv(PAD=_file(a), FORMAAT=a.get('format'))}")
 
 
 @tool("civ_landxml", "Import LandXML: points, surfaces (TIN) and alignments (lines, curves, spirals).", {"path": STR}, ["path"])
 def t_landxml(a):
-    return OCS.run(f"CIV_LANDXML {_quote(a['path'])}")
+    return OCS.run(f"CIV_LANDXML {_quote(_file(a))}")
 
 
 @tool("civ_tin", "Make a terrain (TIN, 3D faces on OG-TRIANGULATIE): from AHN in the project area, the survey points, the selection or a layer. status N makes a design surface.",
@@ -543,7 +718,7 @@ def t_sections(a):
 def t_corridor(a):
     views = a.get("sections_at") and _pt(a["sections_at"]) or (True if a.get("sections") else None)
     return OCS.run("CIV_CORRIDOR " + _kv(
-        AS=a.get("axis"), SJABLOON=a.get("assembly"), NIVEAU=a.get("level"), BOVEN=a.get("above_ground"),
+        AS=a.get("axis"), SJABLOON=_assembly(a.get("assembly")), NIVEAU=a.get("level"), BOVEN=a.get("above_ground"),
         RIJSTROOK=a.get("lane_width"), BERM=a.get("shoulder_width"), HELLING=a.get("cross_slope_pct"), BERMHELLING=a.get("shoulder_slope_pct"),
         TALUD=a.get("fill_slope"), INGRAVING=a.get("cut_slope"), KRUIN=a.get("crest_half_width"), VERKANTING=a.get("superelevation_pct"),
         REIKWIJDTE=a.get("reach"), FREQUENTIE=a.get("frequency"), DWARSPROFIELEN=views))
@@ -618,7 +793,7 @@ def t_mass_haul(a):
       {"name": STR, "copy_to": STR, "at": PT})
 def t_assemblies(a):
     if a.get("name"):
-        return OCS.run(f"CIV_PROFIELTYPE {_kv(NAAM=a['name'], KOPIE=a.get('copy_to'), PLAATS=a.get('at') and _pt(a['at']))}")
+        return OCS.run(f"CIV_PROFIELTYPE {_kv(NAAM=_assembly(a['name']), KOPIE=a.get('copy_to'), PLAATS=a.get('at') and _pt(a['at']))}")
     return OCS.run("CIV_PROFIELTYPEN")
 
 
@@ -628,7 +803,7 @@ def t_assemblies(a):
        "level": NUM, "frequency": NUM, "sections": {"type": "boolean"}}, ["assembly"])
 def t_corridor_range(a):
     targets = ";".join(f"{k}:{v}" for k, v in (a.get("targets") or {}).items())
-    return OCS.run("CIV_CORRIDOR " + _kv(AS=a.get("axis"), PROFIELTYPE=a["assembly"], VAN=a.get("from_station"), TOT=a.get("to_station"), DOELEN=targets,
+    return OCS.run("CIV_CORRIDOR " + _kv(AS=a.get("axis"), PROFIELTYPE=_assembly(a["assembly"]), VAN=a.get("from_station"), TOT=a.get("to_station"), DOELEN=targets,
                                          NIVEAU=a.get("level"), FREQUENTIE=a.get("frequency"), DWARSPROFIELEN=True if a.get("sections") else None))
 
 
@@ -638,8 +813,8 @@ def t_corridor_range(a):
       ["main", "side"])
 def t_junction(a):
     radii = ";".join(_num(r) for r in a.get("radii") or [])
-    return OCS.run("CIV_KRUISPUNT " + _kv(HOOFD=a["main"], ZIJ=a["side"], R=radii, PROFIELTYPE=a.get("assembly"), PROFIELTYPE_HOOFD=a.get("main_assembly"),
-                                           PROFIELTYPE_ZIJ=a.get("side_assembly"), NIVEAU=a.get("level")))
+    return OCS.run("CIV_KRUISPUNT " + _kv(HOOFD=a["main"], ZIJ=a["side"], R=radii, PROFIELTYPE=_assembly(a.get("assembly")), PROFIELTYPE_HOOFD=_assembly(a.get("main_assembly")),
+                                           PROFIELTYPE_ZIJ=_assembly(a.get("side_assembly")), NIVEAU=a.get("level")))
 
 
 @tool("civ_roundabout", "A single-lane roundabout after CROW publication 126 on 2+ axes (3–6 arms): outer diameter, carriageway, overrunnable strip, "
@@ -648,7 +823,7 @@ def t_junction(a):
       ["axes"])
 def t_roundabout(a):
     return OCS.run("CIV_ROTONDE " + _kv(ASSEN=";".join(a["axes"]), MIDDEN=a.get("centre") and _pt(a["centre"]), TYPE=a.get("kind"), D=a.get("diameter"),
-                                         PROFIELTYPE=a.get("assembly"), NIVEAU=a.get("level")))
+                                         PROFIELTYPE=_assembly(a.get("assembly")), NIVEAU=a.get("level")))
 
 
 @tool("civ_bag3d", "3D BAG buildings of the project area (LoD 1.2, 1.3 or 2.2): roof and wall meshes per building. "
@@ -679,14 +854,17 @@ def t_water(a):
 def t_server(a):
     if a.get("year"):
         return OCS.run(f"GIS_Q_SERVER JAAR={int(a['year'])} {_kv(RES=a.get('resolution'))}", 900)
-    return OCS.run(f"GIS_Q_SERVER {a['id']} {_kv(LAAG=a.get('layer'), RES=a.get('resolution'))}", 900)
+    return OCS.run(f"GIS_Q_SERVER {_text(a['id'])} {_kv(LAAG=a.get('layer'), RES=a.get('resolution'))}", 900)
 
 
 @tool("civ_klic3d", "KLIC cables and pipes as 3D tubes under the AHN ground (depth from the delivery, else the usual cover depth per network type), "
       "in IMKL colours. Without path: the delivery imported last. scale thickens the tubes for overview pictures.",
       {"path": STR, "scale": NUM})
 def t_klic3d(a):
-    return OCS.run(f"CIV_KLIC3D {a.get('path') or ''} {_kv(VERGROOT=a.get('scale'))}", 1800)
+    # Without an existing path the plugin falls back to the delivery imported last, which may lie outside.
+    if managed() and not (a.get("path") and os.path.exists(confine(a["path"]))):
+        raise OcsError("civ_klic3d: geef in beheerde modus het pad van een bestaande levering in de werkmap")
+    return OCS.run(f"CIV_KLIC3D {_quote(_file(a) or '')} {_kv(VERGROOT=a.get('scale'))}", 1800)
 
 
 @tool("civ_see_through", "Make the ground surfaces transparent (percent, default 70) so cables, pipes and CPT columns show beneath; "
@@ -704,7 +882,7 @@ def t_see_through(a):
       "The file's CRS is transformed to the project location.",
       {"path": STR, "style": {"type": "string", "enum": ["mooi", "maquette", "realistisch", "nlcs"]}}, ["path"])
 def t_citygml(a):
-    return OCS.run(f"CIV_CITYGML {a['path']} {_kv(STIJL=a.get('style'))}", 1800)
+    return OCS.run(f"CIV_CITYGML {_quote(_file(a))} {_kv(STIJL=a.get('style'))}", 1800)
 
 
 @tool("civ_bgt3d", "BGT in 3D: areas draped on the ground, buildings and walls extruded to the AHN surface, water at its level, bridges at deck height, posts and trees as symbols.",
@@ -806,7 +984,7 @@ EXPORT = {"path": {"type": "string", "description": "Output file; empty = beside
 
 @tool("civ_landxml_export", "Export LandXML 1.2: survey points, TINs (existing and design), alignments with ground and design profile, corridor feature lines.", EXPORT)
 def t_landxml_export(a):
-    return OCS.run(f"CIV_LANDXML_EXPORT {_kv(BESTAND=a.get('path'))}{' ALLES' if a.get('all', True) else ''}")
+    return OCS.run(f"CIV_LANDXML_EXPORT {_kv(BESTAND=_file(a))}{' ALLES' if a.get('all', True) else ''}")
 
 
 
@@ -829,14 +1007,14 @@ def t_view(a):
 @tool("oi_capture", "Capture the drawing viewport as PNG (returned as an image). region = [xmin, ymin, xmax, ymax] in drawing coordinates.",
       {"region": {"type": "array", "items": NUM, "minItems": 4, "maxItems": 4}, "max_dimension": NUM, "path": STR})
 def t_capture(a):
-    path = a.get("path") or os.path.join(RESULTS, "capture-" + uuid.uuid4().hex[:8] + ".png")
+    path = _file(a) or os.path.join(RESULTS, "capture-" + uuid.uuid4().hex[:8] + ".png")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    body = {"path": path, "document_id": OCS.document_id()}
+    body = {"path": path}
     if a.get("region"):
-        body.update({"view": "region", "bounds": a["region"]})
+        body.update({"view": "region", "bounds": [float(v) for v in a["region"]]})
     if a.get("max_dimension"):
         body["max_dimension"] = int(a["max_dimension"])
-    r = OCS.request("capture", body, timeout=180)
+    r = OCS.request_active("capture", body, timeout=180)
     if r.get("ok") is False:
         raise OcsError(f"capture: {r.get('error')}")
     # The window writes the image after answering.
@@ -854,17 +1032,21 @@ def t_capture(a):
 @tool("oi_save", "Save the drawing (QSAVE), or as a new file with path.", {"path": STR})
 def t_save(a):
     if a.get("path"):
-        r = OCS.request("save", {"path": a["path"], "document_id": OCS.document_id()}, timeout=300)
+        path = confine(a["path"])
+        r = OCS.request_active("save", {"path": path}, timeout=300)
         if not r.get("ok"):
             raise OcsError(f"save: {r.get('error')}")
-        return {"ok": True, "message": f"opgeslagen: {a['path']}"}
+        return {"ok": True, "message": f"opgeslagen: {path}"}
     OCS.host("QSAVE")
     return {"ok": True, "message": "opgeslagen"}
 
 
 @tool("oi_open", "Open a drawing (DWG/DXF) or start a new one from a template.", {"path": STR, "template": STR})
 def t_open(a):
-    r = OCS.request("open", {"path": a["path"]}, timeout=300) if a.get("path") else OCS.request("new", {"template": a.get("template", "")}, timeout=300)
+    if a.get("path"):
+        r = OCS.request("open", {"path": confine(a["path"])}, timeout=300)
+    else:
+        r = OCS.request("new", {"template": _file(a, "template") or ""}, timeout=300)
     if not r.get("ok", True) and r.get("error"):
         raise OcsError(f"open: {r.get('error')}")
     return {"ok": True, "message": json.dumps(r)[:300]}

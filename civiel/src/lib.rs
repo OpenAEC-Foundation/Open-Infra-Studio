@@ -334,9 +334,11 @@ impl CadModule for CivielModule {
 /// Run an engine function on a worker (the callback runs inside the host's
 /// input handling; network and big drawings take longer than its timeout).
 fn job(host: &mut dyn HostApi, label: &str, id: Option<String>, f: impl FnOnce(&dyn Fn(String)) -> Result<String, String> + Send + 'static) {
+    let Some(target) = bridge::target() else { return };
+    let site = bridge::site();
     host.push_info(&format!("[Open Infra] {label} …"));
     let label = label.to_string();
-    std::thread::spawn(move || {
+    std::thread::spawn(move || bridge::with_command_context(target, site, None, || {
         let _ = api::take();
         let r = f(&|_| {});
         let data = api::take();
@@ -351,7 +353,7 @@ fn job(host: &mut dyn HostApi, label: &str, id: Option<String>, f: impl FnOnce(&
                 Err(e) => api::write(&id, false, &format!("{label}: {e}"), data),
             }
         }
-    });
+    }));
 }
 
 /// An argument error, reported like a failed job (also to the ID file).
@@ -528,20 +530,16 @@ fn selected_axis(host: &mut dyn HostApi) -> Option<as_profiel::Alignment> {
 }
 
 /// `CIV_PUNT`: click points; each gets the next number and its ground height.
-struct PlaceCmd;
-
-fn placer() -> &'static Mutex<Option<landmeten::Placer>> {
-    static P: OnceLock<Mutex<Option<landmeten::Placer>>> = OnceLock::new();
-    P.get_or_init(|| Mutex::new(None))
-}
+struct PlaceCmd { placer: std::sync::Arc<Mutex<Option<landmeten::Placer>>> }
 
 impl InteractiveCommand for PlaceCmd {
     fn prompt(&self) -> String {
         "Civiel: plaats een punt [Enter = klaar]".into()
     }
     fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
-        std::thread::spawn(move || {
-            let mut guard = placer().lock().unwrap();
+        let placer = self.placer.clone();
+        bridge::spawn_command(move || {
+            let mut guard = placer.lock().unwrap();
             if guard.is_none() {
                 match landmeten::Placer::new(&civiel::settings()) {
                     Ok(p) => *guard = Some(p),
@@ -572,7 +570,7 @@ impl InteractiveCommand for StationCmd {
     }
     fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
         let text = as_profiel::station_offset_text(&self.axis, [pt[0], pt[1]], self.f);
-        std::thread::spawn(move || bridge::info(&text));
+        bridge::spawn_command(move || bridge::info(&text));
         CommandStep::NeedPoint
     }
     fn on_enter(&mut self) -> CommandStep {
@@ -608,7 +606,7 @@ impl InteractiveCommand for PlaceViewCmd {
     }
     fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
         let (what, at) = (self.what, [pt[0], pt[1]]);
-        std::thread::spawn(move || {
+        bridge::spawn_command(move || {
             let r = match what {
                 Place::LengthProfile => as_profiel::length_profile(&civiel::settings(), None, Some(at), &|_| {}),
                 Place::CrossSections => as_profiel::cross_sections(&civiel::settings(), None, Some(at), &|_| {}),
@@ -653,7 +651,7 @@ impl InteractiveCommand for SlopeSideCmd {
             }
         }
         let (side, h) = (best.1, self.handle);
-        std::thread::spawn(move || {
+        bridge::spawn_command(move || {
             let o = grading::design_options(&civiel::settings(), false);
             let req = grading::SlopeRequest {
                 source: grading::Source::Handle(h),
@@ -690,7 +688,7 @@ impl InteractiveCommand for HeightPointCmd {
     }
     fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
         let h = self.handle;
-        std::thread::spawn(move || {
+        bridge::spawn_command(move || {
             let _one = edit_lock().lock().unwrap_or_else(|e| e.into_inner());
             let o = civiel::settings();
             let at = match civiel::Ctx::new(&o) {
@@ -712,11 +710,7 @@ impl InteractiveCommand for HeightPointCmd {
 /// `CIV_WATERDRUPPEL`: click points; each gets the path of a drop.
 struct DropCmd {
     cell: f64,
-}
-
-fn drops() -> &'static Mutex<Option<civiel::hydrologie::DropSession>> {
-    static D: OnceLock<Mutex<Option<civiel::hydrologie::DropSession>>> = OnceLock::new();
-    D.get_or_init(|| Mutex::new(None))
+    drops: std::sync::Arc<Mutex<Option<civiel::hydrologie::DropSession>>>,
 }
 
 impl InteractiveCommand for DropCmd {
@@ -725,8 +719,9 @@ impl InteractiveCommand for DropCmd {
     }
     fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
         let cell = self.cell;
-        std::thread::spawn(move || {
-            let mut guard = drops().lock().unwrap();
+        let drops = self.drops.clone();
+        bridge::spawn_command(move || {
+            let mut guard = drops.lock().unwrap();
             if guard.is_none() {
                 match civiel::hydrologie::DropSession::new(&civiel::settings(), cell, &|_| {}) {
                     Ok(s) => *guard = Some(s),
@@ -824,7 +819,7 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
                         let Some(handle) = h.or(sel.first().copied().filter(|_| sel.len() == 1)) else {
                             return Err(tr("selecteer eerst één kantlijn, of geef KANTLIJN=<handle> BIJ=x,y [Z=]", "select one feature line first, or give KANTLIJN=<handle> BIJ=x,y [Z=]").into());
                         };
-                        host.start_interactive(Box::new(HeightPointCmd { handle }));
+                        bridge::start_interactive(host, Box::new(HeightPointCmd { handle }));
                         return Ok(true);
                     }
                 },
@@ -876,7 +871,7 @@ fn run_grading(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<Strin
                 let Some(line) = e.as_ref().and_then(grading::line_of) else {
                     return Err(tr("selecteer eerst één lijn of kantlijn voor het talud", "select one line or feature line for the slope first").into());
                 };
-                host.start_interactive(Box::new(SlopeSideCmd { line: line.pts, handle: sel[0] }));
+                bridge::start_interactive(host, Box::new(SlopeSideCmd { line: line.pts, handle: sel[0] }));
                 return Ok(true);
             }
             let side = match args.str("ZIJDE").map(|s| s.to_ascii_uppercase()) {
@@ -989,7 +984,7 @@ impl InteractiveCommand for OutletCmd {
             return CommandStep::Cancel;
         }
         req.outlets.points = std::mem::take(&mut self.points);
-        std::thread::spawn(move || match civiel::hydrologie::catchment(&civiel::settings(), req, &|_| {}) {
+        bridge::spawn_command(move || match civiel::hydrologie::catchment(&civiel::settings(), req, &|_| {}) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("{}: {e}", open_infra::lang::tr("Stroomgebied", "Catchment"))),
         });
@@ -1082,7 +1077,7 @@ impl InteractiveCommand for RioolCmd {
     fn on_enter(&mut self) -> CommandStep {
         if self.pts.len() >= 2 {
             let (pts, design, opt) = (std::mem::take(&mut self.pts), self.design.clone(), self.opt.clone());
-            std::thread::spawn(move || match riool::ontwerp(&opt, riool::Invoer::Punten(pts), design, &|_| {}) {
+            bridge::spawn_command(move || match riool::ontwerp(&opt, riool::Invoer::Punten(pts), design, &|_| {}) {
                 Ok(m) => bridge::info(&m),
                 Err(e) => bridge::error(&format!("{}: {e}", open_infra::lang::tr("Riool ontwerpen", "Design sewer"))),
             });
@@ -1138,7 +1133,7 @@ impl InteractiveCommand for TurnoutCmd {
     fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
         let (s, off) = self.axis.station_offset([pt[0], pt[1]]);
         let (h, st) = (self.handle, self.axis.start + s / self.f);
-        std::thread::spawn(move || match civiel::spoor::turnout(&civiel::settings(), Some(h), st, "1:9", off < 0.0, true, 50.0, None) {
+        bridge::spawn_command(move || match civiel::spoor::turnout(&civiel::settings(), Some(h), st, "1:9", off < 0.0, true, 50.0, None) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&e),
         });
@@ -1245,6 +1240,7 @@ fn named_handles(args: &Args, key: &str) -> Result<Vec<(String, ocs_plugin_api::
 /// One command: from the ribbon (no arguments: selection and clicks) or
 /// from a script (arguments; see CIV_HELP).
 fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> Result<(), String> {
+    bridge::require_work_folder()?;
     let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
     let scripted = !args.is_empty();
     let base = civiel::settings();
@@ -1281,8 +1277,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
         "CIV_PUNT" => {
             let coords = args.coords()?;
             if coords.is_empty() {
-                *placer().lock().unwrap() = None;
-                host.start_interactive(Box::new(PlaceCmd));
+                bridge::start_interactive(host, Box::new(PlaceCmd { placer: Default::default() }));
                 return Ok(());
             }
             let o = opt(&["NR", "CODE"])?;
@@ -1396,14 +1391,14 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
                 return Err("selecteer eerst één as (polylijn, lijn of boog) en kies dan de opdracht, of geef AS=<handle>".into());
             };
             match verb {
-                "CIV_STATION" => host.start_interactive(Box::new(StationCmd { axis, f: unit })),
+                "CIV_STATION" => bridge::start_interactive(host, Box::new(StationCmd { axis, f: unit })),
                 "CIV_LENGTEPROFIEL" => {
                     let k = base.nlcs.scale / 1000.0 * unit;
-                    host.start_interactive(Box::new(PlaceViewCmd { what: Place::LengthProfile, size: [axis.length(), 80.0 * k] }));
+                    bridge::start_interactive(host, Box::new(PlaceViewCmd { what: Place::LengthProfile, size: [axis.length(), 80.0 * k] }));
                 }
                 _ => {
                     let (w, h) = as_profiel::sections_extent(&axis, &base, unit);
-                    host.start_interactive(Box::new(PlaceViewCmd { what: Place::CrossSections, size: [w, h] }));
+                    bridge::start_interactive(host, Box::new(PlaceViewCmd { what: Place::CrossSections, size: [w, h] }));
                 }
             }
         }
@@ -1670,8 +1665,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let mut pts: Vec<[f64; 2]> = args.points("PUNTEN")?.unwrap_or_default();
             pts.extend(args.coords()?.into_iter().map(|c| [c[0], c[1]]));
             if pts.is_empty() {
-                *drops().lock().unwrap() = None;
-                host.start_interactive(Box::new(DropCmd { cell }));
+                bridge::start_interactive(host, Box::new(DropCmd { cell, drops: Default::default() }));
                 return Ok(());
             }
             let pts: Vec<[f64; 2]> = pts.into_iter().map(to_drawing).collect::<Result<_, _>>()?;
@@ -1685,7 +1679,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
                 if scripted && id.is_some() {
                     return Err(open_infra::lang::tr("geef afvoerpunten: PUNTEN=x,y;… of LAAG=<laag>, bijv. LAAG=*KOLK*", "give outlets: PUNTEN=x,y;… or LAAG=<layer>, e.g. LAAG=*KOLK*").into());
                 }
-                host.start_interactive(Box::new(OutletCmd { points: Vec::new(), req: Some(req) }));
+                bridge::start_interactive(host, Box::new(OutletCmd { points: Vec::new(), req: Some(req) }));
                 return Ok(());
             }
             let label = if ponds_only { open_infra::lang::tr("Plassen", "Ponds") } else { open_infra::lang::tr("Stroomgebied", "Catchment") };
@@ -1831,7 +1825,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
                 (None, Some(h)) => riool::Invoer::Lijn(Some(h)),
                 (None, None) if host.selection().len() == 1 => riool::Invoer::Lijn(None),
                 (None, None) => {
-                    host.start_interactive(Box::new(RioolCmd { pts: Vec::new(), design, opt: o }));
+                    bridge::start_interactive(host, Box::new(RioolCmd { pts: Vec::new(), design, opt: o }));
                     return Ok(());
                 }
             };
@@ -1960,7 +1954,7 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
             let Some(axis) = selected_axis(host) else {
                 return Err(tr("selecteer eerst één spooras en kies dan Wissel, of geef AS= STATION= TYPE= ZIJDE=", "select one track first, then Turnout, or give AS= STATION= TYPE= ZIJDE=").into());
             };
-            host.start_interactive(Box::new(TurnoutCmd { axis, handle: sel[0], f: unit }));
+            bridge::start_interactive(host, Box::new(TurnoutCmd { axis, handle: sel[0], f: unit }));
         }
         "CIV_INFO" => {
             opt(&[])?;
@@ -2000,3 +1994,6 @@ fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> R
 }
 
 ocs_plugin_api::export_plugin!(OpenInfraCiviel);
+
+#[cfg(test)]
+mod job_tests;

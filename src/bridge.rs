@@ -147,6 +147,9 @@ pub fn attach(host: &mut dyn HostApi) {
             None => {}
         }
     }
+    // Unit discovery can write the UNITS record. Refuse an outside target
+    // before that write; dispatch reports the same refusal to its caller.
+    if require_work_folder().is_err() { return; }
     // With the target in place the units can be asked for without the drawing.
     let f = units(host, tab_id, false);
     if let Some(t) = shared().lock().unwrap().target.as_mut() {
@@ -214,6 +217,23 @@ pub fn target() -> Option<Target> {
 pub fn site() -> Option<Site> {
     if let Some(s) = COMMAND_CONTEXT.with(|c| c.borrow().as_ref().map(|v| v.site.clone())) { return s; }
     shared().lock().unwrap().site.clone()
+}
+
+/// Check the path captured from the host at dispatch, before any worker starts.
+/// A native Save As can change that path without changing the tab number.
+pub fn require_work_folder() -> Result<(), String> {
+    if std::env::var("OPENAEC_BEHEERD").as_deref() != Ok("1") { return Ok(()) }
+    let root = std::env::var_os("OPENAEC_MAP").map(PathBuf::from)
+        .filter(|p| p.is_absolute() && p.is_dir())
+        .and_then(|p| p.canonicalize().ok())
+        .ok_or("beheerde modus zonder bestaande absolute werkmap")?;
+    let drawing = target().and_then(|t| t.doc_path).ok_or("sla de tekening eerst op in de werkmap")?;
+    let path = drawing.canonicalize().map_err(|_| "de tekening staat niet in de werkmap")?;
+    let parent = drawing.parent().and_then(|p| p.canonicalize().ok()).ok_or("de tekening staat niet in de werkmap")?;
+    if !path.starts_with(&root) || !parent.starts_with(&root) {
+        return Err("de tekening staat niet in de werkmap".into());
+    }
+    Ok(())
 }
 
 /// Store the site in memory and in the drawing (NOD XRecord, round-trips DWG).
@@ -949,7 +969,16 @@ pub fn zoom_extents() {
 /// A file beside the drawing (`<tekening>_<suffix>`), or in the plugin's
 /// config folder while the drawing has not been saved.
 pub fn beside_drawing(suffix: &str) -> PathBuf {
-    match target().and_then(|t| t.doc_path) {
+    file_beside(target().and_then(|t| t.doc_path), suffix)
+}
+
+/// `<folder of doc>/<stem>_<suffix>` as one file name: a name in the suffix
+/// (an axis, a sewer, from the drawing or an agent) cannot add folders or
+/// `..` to the path.
+fn file_beside(doc: Option<PathBuf>, suffix: &str) -> PathBuf {
+    let suffix: String = suffix.chars().map(|c| if c == '/' || c == '\\' || c.is_control() { '_' } else { c }).collect();
+    let suffix = suffix.as_str();
+    match doc {
         Some(p) => {
             let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("tekening").to_string();
             p.parent().map(|d| d.join(format!("{stem}_{suffix}"))).unwrap_or_else(|| crate::gis::servers::config_dir().join(suffix))
@@ -973,6 +1002,22 @@ pub fn image_dir() -> PathBuf {
             p.parent().map(|d| d.join(format!("{stem}_GIS"))).unwrap_or_else(|| crate::gis::servers::config_dir().join("kaarten"))
         }
         None => crate::gis::servers::config_dir().join("kaarten"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_name_stays_one_file_beside_the_drawing() {
+        let doc = PathBuf::from("/werkmap/tekening.dwg");
+        assert_eq!(file_beside(Some(doc.clone()), "punten.csv"), PathBuf::from("/werkmap/tekening_punten.csv"));
+        // An axis named "a/../../../outside/overwrite" (review of #103).
+        let out = file_beside(Some(doc.clone()), "corridor_a/../../../outside/overwrite.csv");
+        assert_eq!(out, PathBuf::from("/werkmap/tekening_corridor_a_.._.._.._outside_overwrite.csv"));
+        assert_eq!(out.parent(), Some(std::path::Path::new("/werkmap")));
+        assert_eq!(file_beside(Some(doc), "a\\..\\b\nc.csv"), PathBuf::from("/werkmap/tekening_a_.._b_c.csv"));
     }
 }
 
