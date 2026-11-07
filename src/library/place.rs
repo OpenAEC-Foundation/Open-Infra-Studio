@@ -641,5 +641,5 @@ pub fn swept_command(host: &mut dyn ocs_plugin_api::host::HostApi, cmd: &str) {
         });
         return;
     }
-    host.start_interactive(Box::new(sc));
+    bridge::start_interactive(host, Box::new(sc));
 }

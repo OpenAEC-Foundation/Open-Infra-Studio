@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use ocs_plugin_api::host::{
     codec::{Color, EntityType, Handle, LineWeight},
-    ExtendedDataRecord, HostApi, LayerConfig, PluginRequestSender, TableOperation, XDataValue, XRecordEntry, XRecordValue,
+    CommandStep, ExtendedDataRecord, HostApi, InteractiveCommand, LayerConfig, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
 };
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 
@@ -47,7 +47,56 @@ pub fn spawn_command(f: impl FnOnce() + Send + 'static) {
     std::thread::spawn(move || with_command_context(target, site, reply, f));
 }
 
-pub fn take_reply_id() -> Option<String> { pending_reply().lock().unwrap().take() }
+pub fn take_reply_id() -> Option<String> {
+    let bound = COMMAND_CONTEXT.with(|c| c.borrow_mut().as_mut().map(|v| v.reply.take()));
+    bound.unwrap_or_else(|| pending_reply().lock().unwrap().take())
+}
+
+/// The host keeps interactive commands per tab without dispatching again
+/// on their later clicks. Keep that command's context until its final worker.
+pub fn start_interactive(host: &mut dyn HostApi, command: Box<dyn InteractiveCommand>) {
+    let Some(target) = target() else { return };
+    let context = CommandContext { target, site: site(), reply: take_reply_id() };
+    host.start_interactive(Box::new(BoundInteractive { command, context }));
+}
+
+struct BoundInteractive {
+    command: Box<dyn InteractiveCommand>,
+    context: CommandContext,
+}
+
+impl BoundInteractive {
+    fn call<R>(&mut self, f: impl FnOnce(&mut dyn InteractiveCommand) -> R) -> R {
+        with_command_context(self.context.target.clone(), self.context.site.clone(), self.context.reply.take(), || {
+            let out = f(self.command.as_mut());
+            COMMAND_CONTEXT.with(|c| {
+                let mut c = c.borrow_mut();
+                let active = c.as_mut().unwrap();
+                self.context.site = active.site.clone();
+                self.context.reply = active.reply.take();
+            });
+            out
+        })
+    }
+}
+
+impl InteractiveCommand for BoundInteractive {
+    fn prompt(&self) -> String { self.command.prompt() }
+    fn on_point(&mut self, pt: [f64; 3]) -> CommandStep { self.call(|c| c.on_point(pt)) }
+    fn on_enter(&mut self) -> CommandStep { self.call(|c| c.on_enter()) }
+    fn needs_object_pick(&self) -> bool { self.command.needs_object_pick() }
+    fn on_object_pick(&mut self, h: Handle, pt: [f64; 3]) -> CommandStep { self.call(|c| c.on_object_pick(h, pt)) }
+    fn on_cursor_move(&mut self, pt: [f64; 3]) -> Vec<PreviewWire> { self.call(|c| c.on_cursor_move(pt)) }
+    fn is_selection_gathering(&self) -> bool { self.command.is_selection_gathering() }
+    fn accepts_drag_selection(&self) -> bool { self.command.accepts_drag_selection() }
+    fn on_selection_complete(&mut self, handles: Vec<Handle>) -> CommandStep { self.call(|c| c.on_selection_complete(handles)) }
+    fn selection_rejects_locked_layers(&self) -> bool { self.command.selection_rejects_locked_layers() }
+    fn modal_dialog(&self) -> Option<ocs_plugin_api::dialog::DialogDef> { self.command.modal_dialog() }
+    fn on_dialog_response(&mut self, response: ocs_plugin_api::dialog::DialogResponse) -> CommandStep { self.call(|c| c.on_dialog_response(response)) }
+    fn take_pending_panel_updates(&mut self) -> Vec<(String, std::collections::HashMap<String, ocs_plugin_api::dialog::DialogValue>)> {
+        self.call(|c| c.take_pending_panel_updates())
+    }
+}
 
 #[derive(Default)]
 struct Shared {

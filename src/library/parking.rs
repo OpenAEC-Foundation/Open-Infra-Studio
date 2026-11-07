@@ -739,7 +739,7 @@ pub fn command(host: &mut dyn HostApi, cmd: &str) {
         });
         return;
     }
-    host.start_interactive(Box::new(pc));
+    bridge::start_interactive(host, Box::new(pc));
 }
 
 #[cfg(test)]

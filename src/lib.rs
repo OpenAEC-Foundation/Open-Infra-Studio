@@ -1180,7 +1180,7 @@ fn vehicle_command(host: &mut dyn HostApi, cmd: &str) {
     };
     let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
     let view = if side { library::draw::View::Side } else { library::draw::View::Top };
-    host.start_interactive(Box::new(library::place::InsertCmd::new(v, view, unit)));
+    bridge::start_interactive(host, Box::new(library::place::InsertCmd::new(v, view, unit)));
 }
 
 /// `GIS_VEEGPAD <id> [interval] [ACHTERUIT] [KNIK=] [PAD=]`: drive a vehicle
@@ -1201,7 +1201,7 @@ fn catalogue_command(host: &mut dyn HostApi, cmd: &str) {
         return;
     }
     let view = if side { library::draw::View::Side } else { library::draw::View::Top };
-    host.start_interactive(Box::new(library::place::CatalogueCmd { list, view }));
+    bridge::start_interactive(host, Box::new(library::place::CatalogueCmd { list, view }));
 }
 
 impl BuiltinPlugin for OpenInfra {
@@ -1266,7 +1266,7 @@ impl BuiltinPlugin for OpenInfra {
                 };
                 nlcs_command(host, v);
             }
-            "GIS_HOEVEELHEDEN_TABEL" => host.start_interactive(Box::new(TableCmd)),
+            "GIS_HOEVEELHEDEN_TABEL" => bridge::start_interactive(host, Box::new(TableCmd)),
             "GIS_BGT_MUTATIE" => mutation_command(host, cmd),
             "GIS_IFC" => ifc_command(host, cmd),
             "GIS_NLCSPP_IMPORT" | "GIS_NLCSPP_EXPORT" | "GIS_NLCSPP_CONTROLE" => nlcspp_command(host, &verb, cmd),
@@ -1278,9 +1278,9 @@ impl BuiltinPlugin for OpenInfra {
                 match selected_route(host) {
                     Some(route) => {
                         host.push_info("[Open Infra] Profiel langs de geselecteerde lijn.");
-                        host.start_interactive(Box::new(ProfileCmd { route, picking_route: false, site }));
+                        bridge::start_interactive(host, Box::new(ProfileCmd { route, picking_route: false, site }));
                     }
-                    None => host.start_interactive(Box::new(ProfileCmd { route: Vec::new(), picking_route: true, site })),
+                    None => bridge::start_interactive(host, Box::new(ProfileCmd { route: Vec::new(), picking_route: true, site })),
                 }
             }
             "GIS_SITE" => site_command(host, cmd),
@@ -1337,9 +1337,9 @@ impl BuiltinPlugin for OpenInfra {
                 site.register_crs();
                 let unit_factor = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
                 if verb == "GIS_GEBIED" {
-                    host.start_interactive(Box::new(AreaCmd { first: None, site, unit_factor }));
+                    bridge::start_interactive(host, Box::new(AreaCmd { first: None, site, unit_factor }));
                 } else {
-                    host.start_interactive(Box::new(PointCmd { site, unit_factor }));
+                    bridge::start_interactive(host, Box::new(PointCmd { site, unit_factor }));
                 }
             }
             "GIS_VOERTUIGEN" | "GIS_VEHICLES" | "GIS_BIBLIOTHEEK" | "GIS_LIBRARY" => open(host, ui::Tab::Library),
