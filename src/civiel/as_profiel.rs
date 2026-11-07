@@ -27,6 +27,10 @@ pub enum Seg {
     Spiral { a: XY, dir: f64, len: f64, k0: f64, k1: f64 },
 }
 
+/// The most halvings one clothoid gets in [`Seg::vertices`]: far more than
+/// a real transition curve needs, few enough to end quickly.
+const SPIRAL_SPLITS: usize = 16_384;
+
 /// Gauss–Legendre nodes and weights (10 points on [−1, 1]).
 const GL_X: [f64; 5] = [0.148_874_338_981_631_2, 0.433_395_394_129_247_2, 0.679_409_568_299_024_4, 0.865_063_366_688_984_5, 0.973_906_528_517_171_7];
 const GL_W: [f64; 5] = [0.295_524_224_714_752_9, 0.269_266_719_309_996_3, 0.219_086_362_515_982, 0.149_451_349_150_580_6, 0.066_671_344_308_688_1];
@@ -177,8 +181,12 @@ impl Seg {
                 let turn = (self.at(len).1 - self.at(0.0).1).abs().max(self.curvature(0.0).abs().max(self.curvature(len).abs()) * len);
                 let n = ((turn / 0.2).ceil() as usize).clamp(1, 4096);
                 let mut out = Vec::new();
+                // Rounding far from the origin can keep every arc over the
+                // tolerance: a budget of halvings for the whole clothoid
+                // instead of 2^24 per piece.
+                let mut splits = SPIRAL_SPLITS;
                 for i in 0..n {
-                    self.arcs(len * i as f64 / n as f64, len * (i + 1) as f64 / n as f64, d, tol.max(1e-9), 0, &mut out);
+                    self.arcs(len * i as f64 / n as f64, len * (i + 1) as f64 / n as f64, d, tol.max(1e-9), 0, &mut splits, &mut out);
                 }
                 out
             }
@@ -186,7 +194,7 @@ impl Seg {
     }
 
     /// Arcs from `s0` to `s1` on the clothoid moved `d`, into `out`.
-    fn arcs(&self, s0: f64, s1: f64, d: f64, tol: f64, depth: u32, out: &mut Vec<(XY, f64)>) {
+    fn arcs(&self, s0: f64, s1: f64, d: f64, tol: f64, depth: u32, splits: &mut usize, out: &mut Vec<(XY, f64)>) {
         let (p0, p1) = (self.offset_point(s0, d), self.offset_point(s1, d));
         let turn = self.at(s1).1 - self.at(s0).1;
         let bulge = (turn / 4.0).tan();
@@ -203,10 +211,11 @@ impl Seg {
             ((q[0] - c[0]).hypot(q[1] - c[1]) - r.abs()).abs()
         };
         let worst = [0.2, 0.5, 0.8].iter().map(|t| stray(self.offset_point(s0 + (s1 - s0) * t, d))).fold(0.0, f64::max);
-        if depth < 24 && worst > tol {
+        if depth < 24 && worst > tol && *splits > 0 {
+            *splits -= 1;
             let sm = (s0 + s1) / 2.0;
-            self.arcs(s0, sm, d, tol, depth + 1, out);
-            self.arcs(sm, s1, d, tol, depth + 1, out);
+            self.arcs(s0, sm, d, tol, depth + 1, splits, out);
+            self.arcs(sm, s1, d, tol, depth + 1, splits, out);
         } else {
             out.push((p0, bulge));
         }
