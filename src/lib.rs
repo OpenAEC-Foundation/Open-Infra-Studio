@@ -1227,7 +1227,8 @@ impl BuiltinPlugin for OpenInfra {
         let (cmd_owned, id) = bridge::split_id(cmd);
         let cmd = cmd_owned.as_str();
         bridge::expect_reply(id);
-        adopt_geodata(host);
+        // An explicit location must not race with automatic GEODATA adoption.
+        if verb != "GIS_SITE" { adopt_geodata(host); }
         match verb.as_str() {
             "GIS_INFRA_LIBRARY" | "GIS_INFRA_BIBLIOTHEEK" => { open(host, ui::Tab::Library); ui::send(ui::UiMsg::InfraLibrary); bridge::reply(true, "Infra-bibliotheek geopend"); }
             "GIS_INFRA_CATALOG" | "GIS_INFRA_CATALOGUS" | "GIS_INFRA_PLACE" | "GIS_INFRA_PLAATS" | "GIS_INFRA_INSPECT" | "GIS_INFRA_UPDATE" => library::infra::commands::dispatch(host, cmd),
