@@ -191,6 +191,20 @@ class WorkFolderTest(unittest.TestCase):
         self.assertTrue(result['isError'], result)
         self.assertEqual(sent, [], 'QSAVE must not reach the outside document')
 
+    def test_an_outside_file_alias_cannot_choose_an_outside_output_folder(self):
+        alias = self.outside / 'alias.dwg'
+        os.symlink(self.work / 'tekening.dwg', alias)
+        self.window.drawing = str(alias)
+        self.refused('infra_civ_points_export', {})
+        self.assertFalse((self.outside / 'alias_punten.csv').exists())
+
+    def test_a_directory_alias_with_outputs_inside_the_work_folder_is_allowed(self):
+        alias = self.outside / 'werkmap-link'
+        os.symlink(self.work, alias)
+        self.window.drawing = str(alias / 'tekening.dwg')
+        sent = self.allowed('infra_civ_points_export', {})
+        self.assertEqual(sent[0]['cmd'].split()[0], 'CIV_PUNTEN_EXPORT')
+
     def test_sol_cases_open_and_save_outside(self):
         cases = [
             ('infra_open', {'path': '../../outside/private.dwg'}),

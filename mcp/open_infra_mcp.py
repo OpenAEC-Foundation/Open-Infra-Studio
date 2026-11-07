@@ -180,7 +180,9 @@ def _guard(ocs, op, body):
         docs = st.get("documents") if isinstance(st.get("documents"), list) else []
         document = body.get("document_id", st.get("document_id"))
         drawing = next((d.get("path") for d in docs if isinstance(d, dict) and d.get("id") == document), None)
-        if not drawing or not _inside(os.path.realpath(drawing), root):
+        # Derived files use the host's original document directory. A file
+        # alias outside the work folder must not choose that output directory.
+        if not drawing or not _inside(os.path.realpath(drawing), root) or not _inside(os.path.realpath(os.path.dirname(drawing)), root):
             raise OcsError("de tekening staat niet in de werkmap: open er een met infra_open, of sla deze op met infra_opslaan en een pad")
     for key in ("path", "template"):
         v = body.get(key)
