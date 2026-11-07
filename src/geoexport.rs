@@ -297,8 +297,9 @@ pub fn features(doc: &CadDocument, site: &Site, unit_factor: f64, opt: &Options)
 }
 
 /// GeoJSON (RFC 7946: WGS 84 longitude and latitude). Project heights have
-/// no known ellipsoidal datum: keep them in `openaec:project_z` (metres),
+/// no known ellipsoidal datum: keep them in an unused height property (metres),
 /// with the same nesting/order as the positions, instead of a third ordinate.
+/// `openaec:project_z_property` names that property for the whole collection.
 pub fn geojson(feats: &[GeoFeature], site: &Site) -> Result<String, String> {
     crs::ensure(&site.crs)?;
     let t = Transformer::new(&site.crs, "EPSG:4326")?;
@@ -311,12 +312,16 @@ pub fn geojson(feats: &[GeoFeature], site: &Site) -> Result<String, String> {
         serde_json::Number::from_f64(p[2]).map(serde_json::Value::Number)
             .ok_or_else(|| "GeoJSON: project height is not finite".to_string())
     };
+    // Imported exports keep earlier height attributes as object data. Pick
+    // one free name for the entire file, preserving every existing attribute.
+    let mut height_property = "openaec:project_z".to_string();
+    let mut suffix = 1;
+    while feats.iter().any(|f| f.props.contains_key(&height_property)) {
+        height_property = format!("openaec:project_z_{suffix}");
+        suffix += 1;
+    }
     let mut list = Vec::with_capacity(feats.len());
     for f in feats {
-        // Reserve our attribute: never overwrite object data silently.
-        if f.props.contains_key("openaec:project_z") {
-            return Err("GeoJSON: object data already contains the reserved attribute openaec:project_z".into());
-        }
         let heights = match &f.geom {
             Geom::Point(p) => z(p)?,
             Geom::Line(v) => serde_json::json!(v.iter().map(&z).collect::<Result<Vec<_>, _>>()?),
@@ -329,10 +334,10 @@ pub fn geojson(feats: &[GeoFeature], site: &Site) -> Result<String, String> {
         };
         let mut properties: serde_json::Map<String, serde_json::Value> = f.props.iter()
             .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone()))).collect();
-        properties.insert("openaec:project_z".into(), heights);
+        properties.insert(height_property.clone(), heights);
         list.push(serde_json::json!({"type": "Feature", "geometry": geometry, "properties": properties}));
     }
-    serde_json::to_string_pretty(&serde_json::json!({"type": "FeatureCollection", "name": "Open Infra", "features": list})).map_err(|e| e.to_string())
+    serde_json::to_string_pretty(&serde_json::json!({"type": "FeatureCollection", "name": "Open Infra", "openaec:project_z_property": height_property, "features": list})).map_err(|e| e.to_string())
 }
 
 /// WKB (little endian, ISO Z) of a geometry.
