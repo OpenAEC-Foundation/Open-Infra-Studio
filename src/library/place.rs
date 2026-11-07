@@ -250,7 +250,7 @@ impl InsertCmd {
     fn finish(&self, at: [f64; 2], rotation: f64, mirror: bool) -> CommandStep {
         let (v, view) = (self.vehicle, self.view);
         // A worker: this callback runs inside the host's input handling.
-        std::thread::spawn(move || match place(v, view, at, rotation, mirror) {
+        bridge::spawn_command(move || match place(v, view, at, rotation, mirror) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("{}: {e}", v.name())),
         });
@@ -309,7 +309,7 @@ impl InteractiveCommand for CatalogueCmd {
     }
     fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
         let (list, view, at) = (self.list.clone(), self.view, [pt[0], pt[1]]);
-        std::thread::spawn(move || match catalogue(&list, view, at, &|_| {}) {
+        bridge::spawn_command(move || match catalogue(&list, view, at, &|_| {}) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&e),
         });
@@ -488,7 +488,7 @@ impl SweptCmd {
 
     fn run(&self) -> CommandStep {
         let (v, path, o) = (self.vehicle, self.path.clone(), self.options());
-        std::thread::spawn(move || match swept_path(v, &path, &o) {
+        bridge::spawn_command(move || match swept_path(v, &path, &o) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("{}: {e}", tr("Veegpad", "Swept path"))),
         });
@@ -635,11 +635,8 @@ pub fn swept_command(host: &mut dyn ocs_plugin_api::host::HostApi, cmd: &str) {
     let sel = host.selection();
     if sel.len() == 1 {
         host.push_info(&format!("[Open Infra] {}", tr("Veegpad langs de geselecteerde lijn.", "Swept path along the selected line.")));
-        std::thread::spawn(move || match selected_line(&sel) {
-            Ok(p) => {
-                sc.path = p;
-                swept_now(&sc);
-            }
+        bridge::spawn_command(move || match selected_line(&sel).and_then(|p| swept_path(sc.vehicle, &p, &sc.options())) {
+            Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("{}: {e}", tr("Veegpad", "Swept path"))),
         });
         return;
