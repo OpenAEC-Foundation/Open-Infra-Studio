@@ -944,7 +944,7 @@ mod command_worker_tests {
         use std::time::Duration;
         struct Restore(Option<Shared>);
         impl Drop for Restore {
-            fn drop(&mut self) { *shared().lock().unwrap() = self.0.take().unwrap(); }
+            fn drop(&mut self) { *shared().lock().unwrap_or_else(|e| e.into_inner()) = self.0.take().unwrap(); }
         }
         let _restore = Restore(Some(std::mem::take(&mut *shared().lock().unwrap())));
         struct Writer(Arc<Mutex<Vec<String>>>);
@@ -987,9 +987,12 @@ mod command_worker_tests {
         resume.send(()).unwrap();
         let worker_site = finished.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(writes.lock().unwrap().len(), 1, "A is opgeslagen");
-        let s = shared().lock().unwrap();
-        assert_eq!(s.target.as_ref().unwrap().tab_id, 120005);
-        assert!(s.site.is_none(), "lege tekening B kreeg A's projectlocatie");
+        let (active_tab, active_site) = {
+            let s = shared().lock().unwrap();
+            (s.target.as_ref().unwrap().tab_id, s.site.clone())
+        };
+        assert_eq!(active_tab, 120005);
+        assert!(active_site.is_none(), "lege tekening B kreeg A's projectlocatie");
         assert_eq!(worker_site, "Alleen project A", "de worker ziet zijn opgeslagen locatie");
     }
 
