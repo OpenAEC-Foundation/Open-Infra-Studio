@@ -14,7 +14,7 @@ struct Drawing {
     drawn: Mutex<Vec<EntityType>>,
     pause: Mutex<Option<(mpsc::SyncSender<()>, mpsc::Receiver<()>)>>,
     pause_on_read: bool,
-    done: mpsc::Sender<bool>,
+    done: mpsc::Sender<Result<String, String>>,
 }
 impl PluginRequestSender for Drawing {
     fn request(&self, req: Q) -> Result<A, PluginRequestError> {
@@ -31,6 +31,8 @@ impl PluginRequestSender for Drawing {
                 Some(EntityType::Line(Line::from_points(Vector3::new(0.0, 0.0, 0.0), Vector3::new(100.0, 0.0, 0.0))))
             }).collect())),
             Q::AddLayer(_) => A::OptHandle(Some(Handle::from(1000u64))),
+            // The vehicle blocks already exist in this test drawing.
+            Q::TableOperation { .. } => A::TableResult(Ok(Handle::from(1001u64))),
             Q::PushUndo { .. } | Q::SetDirty | Q::BumpGeometry => A::Ok,
             Q::AddEntities(entities) => {
                 let mut all = self.drawn.lock().unwrap();
@@ -39,8 +41,8 @@ impl PluginRequestSender for Drawing {
                 A::Handles(handles)
             }
             Q::WriteRecord { .. } => A::Bool(true),
-            Q::PushInfo(_) => { self.done.send(true).unwrap(); A::Ok }
-            Q::PushError(_) => { self.done.send(false).unwrap(); A::Ok }
+            Q::PushInfo(msg) => { self.done.send(Ok(msg)).unwrap(); A::Ok }
+            Q::PushError(msg) => { self.done.send(Err(msg)).unwrap(); A::Ok }
             other => return Err(PluginRequestError(format!("onverwacht verzoek: {other:?}"))),
         })
     }
@@ -108,7 +110,8 @@ fn parking_and_swept_path_keep_their_drawing_and_reply_on_explicit_and_selected_
         bridge::attach(&mut b);
         bridge::expect_reply(None); // A later user command in B owns no script reply.
         resume.send(()).unwrap();
-        assert!(finished.recv_timeout(Duration::from_secs(5)).unwrap(), "{name} mislukt");
+        let completion = finished.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(completion.is_ok(), "{name}: {completion:?}");
         assert!(!first.drawn.lock().unwrap().is_empty(), "{name}: A kreeg geen geometrie");
         assert!(second.drawn.lock().unwrap().is_empty(), "{name}: geometrie kwam in B");
         let result = open_infra::civiel::api::result_dir().join(format!("{id}.json"));
