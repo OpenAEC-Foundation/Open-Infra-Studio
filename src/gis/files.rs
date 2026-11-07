@@ -1275,7 +1275,7 @@ mod tests {
         assert_eq!(data.features.len(), 2);
         assert_eq!(data.warnings.len(), 1);
         assert!(data.warnings[0].contains(&format!("{} 8", tr("geometriesoort", "geometry type"))));
-        assert!(!data.warnings[0].contains("onleesbaar"));
+        assert!(!data.warnings[0].contains(tr("onleesbare geometrie", "unreadable geometry")));
     }
 
     #[test]
@@ -1546,7 +1546,7 @@ mod tests {
         assert_eq!(data.features[0].points.len(), 1);
         assert_eq!(data.features[0].props["id"], 2);
         assert_eq!(data.warnings.len(), 1);
-        assert!(data.warnings[0].contains("rij 1"));
+        assert!(data.warnings[0].contains(&format!("{} 1", tr("rij", "row"))));
         assert_eq!(data.skipped, 1);
     }
 
