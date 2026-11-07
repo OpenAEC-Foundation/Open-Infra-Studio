@@ -108,6 +108,21 @@ class WorkFolderTest(unittest.TestCase):
                 self.assertIsNone(mcp.OCS.session)
         mcp.OCS.session = first
 
+    def test_native_save_as_cannot_redirect_managed_save(self):
+        original = self.window.drawing
+        written = []
+        def exchange(desc, request, timeout=120):
+            if request['op'] == 'state':
+                return {'document_id': 1, 'documents': [{'id': 1, 'path': original}]}
+            # Native Save As completed after both checks; the tab ID stays 1.
+            current = str(self.outside / 'native-save-as.dwg')
+            written.append(request.get('path') if request['op'] == 'save' else current)
+            return {'ok': True}
+        with patch.object(mcp, '_exchange', exchange):
+            result = mcp.call_tool('infra_opslaan', {})
+        self.assertFalse(result['isError'], result)
+        self.assertEqual(written, [original], 'save must carry the checked path to the host')
+
     def test_state_can_reconnect_after_a_window_goes_away(self):
         first = dict(mcp.OCS.session)
         second = dict(first, session_id='other', port=2)
