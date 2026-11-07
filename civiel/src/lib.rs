@@ -1240,6 +1240,7 @@ fn named_handles(args: &Args, key: &str) -> Result<Vec<(String, ocs_plugin_api::
 /// One command: from the ribbon (no arguments: selection and clicks) or
 /// from a script (arguments; see CIV_HELP).
 fn run(host: &mut dyn HostApi, verb: &str, args: &Args, id: Option<String>) -> Result<(), String> {
+    bridge::require_work_folder()?;
     let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
     let scripted = !args.is_empty();
     let base = civiel::settings();

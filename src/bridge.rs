@@ -147,6 +147,9 @@ pub fn attach(host: &mut dyn HostApi) {
             None => {}
         }
     }
+    // Unit discovery can write the UNITS record. Refuse an outside target
+    // before that write; dispatch reports the same refusal to its caller.
+    if require_work_folder().is_err() { return; }
     // With the target in place the units can be asked for without the drawing.
     let f = units(host, tab_id, false);
     if let Some(t) = shared().lock().unwrap().target.as_mut() {
@@ -214,6 +217,23 @@ pub fn target() -> Option<Target> {
 pub fn site() -> Option<Site> {
     if let Some(s) = COMMAND_CONTEXT.with(|c| c.borrow().as_ref().map(|v| v.site.clone())) { return s; }
     shared().lock().unwrap().site.clone()
+}
+
+/// Check the path captured from the host at dispatch, before any worker starts.
+/// A native Save As can change that path without changing the tab number.
+pub fn require_work_folder() -> Result<(), String> {
+    if std::env::var("OPENAEC_BEHEERD").as_deref() != Ok("1") { return Ok(()) }
+    let root = std::env::var_os("OPENAEC_MAP").map(PathBuf::from)
+        .filter(|p| p.is_absolute() && p.is_dir())
+        .and_then(|p| p.canonicalize().ok())
+        .ok_or("beheerde modus zonder bestaande absolute werkmap")?;
+    let drawing = target().and_then(|t| t.doc_path).ok_or("sla de tekening eerst op in de werkmap")?;
+    let path = drawing.canonicalize().map_err(|_| "de tekening staat niet in de werkmap")?;
+    let parent = drawing.parent().and_then(|p| p.canonicalize().ok()).ok_or("de tekening staat niet in de werkmap")?;
+    if !path.starts_with(&root) || !parent.starts_with(&root) {
+        return Err("de tekening staat niet in de werkmap".into());
+    }
+    Ok(())
 }
 
 /// Store the site in memory and in the drawing (NOD XRecord, round-trips DWG).

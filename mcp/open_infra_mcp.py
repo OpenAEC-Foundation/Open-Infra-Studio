@@ -71,7 +71,7 @@ class OcsError(Exception):
 # - the work folder may hold no symlink and no file with more than one hard
 #   link, so the files the plugins name themselves (beside the drawing, in a
 #   delivery folder) stay in it too;
-# - Open Infra commands and QSAVE run only on a drawing saved in the work folder;
+# - Open Infra commands and plain save use a drawing saved in the work folder;
 # - no free command lines (oi_command) and no quotes or control characters in
 #   text arguments, so no tool can add an argument to a command.
 # Outside managed mode nothing changes. The checks run here, before Open CAD
@@ -174,7 +174,7 @@ def _guard(ocs, op, body):
             if len(words) > 2 or not all(re.fullmatch(r"[A-Za-z0-9_-]+", w) for w in words):
                 raise OcsError(f"{cmd}: alleen een beeldopdracht met één woord")
             return body
-        if not re.fullmatch(r"(GIS|CIV)_[A-Z0-9_]+|QSAVE", verb) or (verb == "QSAVE" and len(words) > 1):
+        if not re.fullmatch(r"(GIS|CIV)_[A-Z0-9_]+", verb):
             raise OcsError(f"{words[0] if words else cmd}: in beheerde modus alleen de opdrachten van de tools")
         st = ocs.request("state")
         docs = st.get("documents") if isinstance(st.get("documents"), list) else []
@@ -343,7 +343,22 @@ class Ocs:
 
     def host(self, cmd):
         """A host command (no Open Infra answer to wait for)."""
-        r = self.request_active("run", {"cmd": cmd})
+        if managed() and cmd.upper() == "QSAVE":
+            # Carry the checked path to the host: native Save As can rename
+            # the same tab between the state reply and the save operation.
+            with self.lock:
+                selected = self.session or self.pick()
+                document = self.document_id()
+                st = self.request("state")
+                if self.session is not selected:
+                    raise OcsError("het gekozen venster is verdwenen; kies opnieuw en herhaal de opdracht")
+                docs = st.get("documents") if isinstance(st.get("documents"), list) else []
+                drawing = next((d.get("path") for d in docs if isinstance(d, dict) and d.get("id") == document), None)
+                if not drawing:
+                    raise OcsError("sla de tekening eerst op in de werkmap")
+                r = self.request("save", {"path": confine(drawing), "document_id": document}, timeout=300)
+        else:
+            r = self.request_active("run", {"cmd": cmd})
         if r.get("ok") is False:
             raise OcsError(f"{cmd}: {r.get('error')}")
         return r

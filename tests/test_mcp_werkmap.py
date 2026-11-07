@@ -86,7 +86,7 @@ class WorkFolderTest(unittest.TestCase):
     def test_managed_writes_are_not_replayed_on_another_window(self):
         first = dict(mcp.OCS.session)
         second = dict(first, session_id='other', port=2)
-        attempts = [('run', {'cmd': 'QSAVE', 'document_id': 1}),
+        attempts = [('run', {'cmd': 'CIV_PUNTEN_EXPORT', 'document_id': 1}),
                     ('save', {'path': str(self.work / 'nieuw.dwg')}),
                     ('open', {'path': str(self.work / 'tekening.dwg')})]
         for op, body in attempts:
@@ -185,7 +185,7 @@ class WorkFolderTest(unittest.TestCase):
             self.assertFalse(selecting.is_alive())
         self.assertEqual(len(replies), 2)
         self.assertTrue(all(not r['isError'] for r in replies), replies)
-        self.assertEqual([sid for sid, req in sent if req['op'] == 'run'], [first['session_id']])
+        self.assertEqual([sid for sid, req in sent if req['op'] != 'state'], [first['session_id']])
         self.assertTrue(selected.is_set(), 'selection must still finish')
 
     def test_document_lookup_and_send_keep_the_same_window(self):
@@ -229,7 +229,7 @@ class WorkFolderTest(unittest.TestCase):
             self.assertFalse(selecting.is_alive())
         self.assertEqual(len(replies), 2)
         self.assertTrue(all(not r['isError'] for r in replies), replies)
-        self.assertEqual([sid for sid, req in sent if req['op'] == 'run'], [first['session_id']])
+        self.assertEqual([sid for sid, req in sent if req['op'] != 'state'], [first['session_id']])
         self.assertTrue(selected.is_set(), 'selection must still finish')
 
     def test_a_reconnect_during_document_validation_cannot_move_a_write(self):
@@ -343,7 +343,7 @@ class WorkFolderTest(unittest.TestCase):
         sent = self.allowed('infra_opslaan', {'path': 'plannen/nieuw.dwg'})
         self.assertEqual((sent[0]['op'], sent[0]['path']), ('save', os.path.join(self.real, 'plannen', 'nieuw.dwg')))
         sent = self.allowed('infra_opslaan', {})
-        self.assertEqual((sent[0]['op'], sent[0]['cmd']), ('run', 'QSAVE'))
+        self.assertEqual((sent[0]['op'], sent[0]['path']), ('save', self.window.drawing))
         sent = self.allowed('infra_oi_open', {})
         self.assertEqual(sent[0]['op'], 'new')
 

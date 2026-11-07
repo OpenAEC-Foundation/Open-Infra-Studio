@@ -57,6 +57,7 @@ Daar draait Open CAD Studio met beide plugins als gestreamde desktop (route B va
   - Een pad wordt het echte pad in de werkmap, na symbolische links. Een relatief pad is relatief aan de werkmap. Een pad buiten de werkmap weigert de server.
   - De werkmap mag geen symbolische links en geen bestanden met meer dan één harde link bevatten. Zo blijven ook de bestanden die de plugins zelf naast de tekening maken in de werkmap.
   - `GIS_`- en `CIV_`-opdrachten en opslaan zonder pad werken alleen op een tekening die in de werkmap staat. Sla een nieuwe tekening dus eerst op met `infra_opslaan` en een pad.
+  - De plugins controleren het ontvangen tekeningspad ook vóór de opdracht start. Native ‘Opslaan als’ kan dat pad wijzigen zonder nieuw documentnummer. Gewoon opslaan stuurt daarom het gecontroleerde pad expliciet mee; een kale `QSAVE` wordt in beheerde modus geweigerd.
   - `oi_command` is in deze modus niet beschikbaar, en tekst in een argument mag geen aanhalingsteken of stuurteken bevatten.
 - **Definities:** [`mcp-tools.json`](mcp-tools.json) wordt gemaakt met `--prefix infra --tools-json`. Een test controleert dat het bestand actueel is.
 - **Taal:** de plugins nemen `OPENAEC_TAAL` over (`nl` geeft Nederlands, de andere talen geven Engels).
