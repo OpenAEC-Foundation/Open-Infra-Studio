@@ -82,6 +82,45 @@ class WorkFolderTest(unittest.TestCase):
         self.window.sent.clear()
         return sent
 
+    def test_managed_writes_are_not_replayed_on_another_window(self):
+        first = dict(mcp.OCS.session)
+        second = dict(first, session_id='other', port=2)
+        attempts = [('run', {'cmd': 'QSAVE', 'document_id': 1}),
+                    ('save', {'path': str(self.work / 'nieuw.dwg')}),
+                    ('open', {'path': str(self.work / 'tekening.dwg')})]
+        for op, body in attempts:
+            with self.subTest(op=op):
+                sent = []
+                mcp.OCS.session = first
+                def exchange(desc, request, timeout=120):
+                    if request['op'] == 'state':
+                        path = self.window.drawing if desc['session_id'] == first['session_id'] else str(self.outside / 'private.dwg')
+                        return {'document_id': 1, 'documents': [{'id': 1, 'path': path}]}
+                    sent.append((desc['session_id'], request))
+                    if desc['session_id'] == first['session_id']:
+                        raise OSError('answer lost after request')
+                    return {'ok': True}
+                with patch.object(mcp, '_exchange', exchange), patch.object(mcp, 'sessions', return_value=[second]):
+                    with self.assertRaises(mcp.OcsError):
+                        mcp.OCS.request(op, body)
+                self.assertEqual([sid for sid, _ in sent], [first['session_id']])
+                self.assertIsNone(mcp.OCS.session)
+        mcp.OCS.session = first
+
+    def test_state_can_reconnect_after_a_window_goes_away(self):
+        first = dict(mcp.OCS.session)
+        second = dict(first, session_id='other', port=2)
+        sent = []
+        def exchange(desc, request, timeout=120):
+            sent.append(desc['session_id'])
+            if desc['session_id'] == first['session_id']:
+                raise OSError('window closed')
+            return {'document_id': 1}
+        with patch.object(mcp, '_exchange', exchange), patch.object(mcp, 'sessions', return_value=[second]):
+            self.assertEqual(mcp.OCS.request('state'), {'document_id': 1})
+        self.assertEqual(sent, [first['session_id'], second['session_id']])
+        self.assertEqual(mcp.OCS.session, second)
+
     def test_sol_cases_open_and_save_outside(self):
         cases = [
             ('infra_open', {'path': '../../outside/private.dwg'}),

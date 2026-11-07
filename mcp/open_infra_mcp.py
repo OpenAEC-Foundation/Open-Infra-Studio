@@ -301,9 +301,12 @@ class Ocs:
             body.setdefault("request_id", "mcp-" + uuid.uuid4().hex)
         try:
             return _exchange(s, dict(body, op=op), timeout)
-        except (OSError, ValueError):
-            # The window went away: find it (or another) again.
+        except (OSError, ValueError) as e:
             self.session = None
+            # A lost reply does not tell us whether the write ran. In managed
+            # mode another window can also have a drawing outside the work folder.
+            if managed() and op != "state":
+                raise OcsError("verbinding met Open CAD Studio verbroken; de opdracht kan al zijn uitgevoerd en wordt niet opnieuw verstuurd") from e
             s = self.pick()
             return _exchange(s, dict(body, op=op), timeout)
 
