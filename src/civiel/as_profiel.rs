@@ -1038,6 +1038,9 @@ pub(super) struct PreparedProfile {
     title: String,
     summary: String,
     suffix: String,
+    /// Cross sections: their layout and the objects they were cut from, for
+    /// the dependency graph.
+    cut_from: Option<(super::graaf::Snijlijnen, Vec<super::doorsnede::Cuttable>)>,
 }
 
 impl PreparedProfile {
@@ -1053,7 +1056,7 @@ impl PreparedProfile {
                 crate::bridge::index_add("lengteprofiel", &self.name, &[*h], false);
             }
         }
-        super::graaf::register(&self.doc, self.kind, self.axis, self.at, &handles)?;
+        super::graaf::register(&self.doc, self.kind, self.axis, self.at, self.cut_from.as_ref().map(|(s, t)| (*s, t.as_slice())), &handles)?;
         Ok(format!("{}, {} elementen.{}", self.summary, handles.len(), self.suffix))
     }
 }
@@ -1236,7 +1239,7 @@ pub(super) fn prepare_length_profile(opt: &super::CivielOptions, doc: Arc<CadDoc
     super::api::note("maaiveld_max", zmax);
     super::api::note("plaats", serde_json::json!([at[0], at[1]]));
     let summary = format!("{title}: {} m, {} – {} m ({})", format!("{:.1}", len / f).replace('.', ","), nap(zmin, 2), nap(zmax, 2), ground.label());
-    Ok(PreparedProfile { out, doc, kind: "lengteprofiel", axis: axis_h, at, name: al.name, title, summary, suffix: String::new() })
+    Ok(PreparedProfile { out, doc, kind: "lengteprofiel", axis: axis_h, at, name: al.name, title, summary, suffix: String::new(), cut_from: None })
 }
 
 /// Cross sections every `section_every` m (and at every tangent point)
@@ -1253,16 +1256,17 @@ pub(super) fn prepare_cross_sections(opt: &super::CivielOptions, doc: Arc<CadDoc
     let (al, axis_h, _) = axis(&doc, handle)?;
     let mut ground = Maaiveld::find(&ctx, &doc)?;
     let f = ctx.f;
-    let stations = al.stations(opt.section_every.max(1.0) * f, true);
+    // The layout the dependency graph keeps, to find what the sections cut.
+    let layout = super::graaf::Snijlijnen { afstand: opt.section_every.max(1.0), links: opt.left.max(1.0), rechts: opt.right.max(1.0), eenheid: f };
+    let stations = layout.stations(&al);
     if stations.len() > 400 {
         return Err(format!("{} dwarsprofielen is te veel: kies een grotere afstand", stations.len()));
     }
-    let (left, right) = (opt.left.max(1.0), opt.right.max(1.0));
+    let (left, right) = (layout.links, layout.rechts);
     // What the sections cut lies around the axis (survey points up to 1 m
     // beside a section). A drawing too large to share comes with only the
     // indexed objects, so ask the host for the rest, or stop.
-    let (b, m) = (al.bbox(), (left.max(right) + 2.0) * f);
-    let around = super::read_area(&doc, [b[0] - m, b[1] - m, b[2] + m, b[3] + m]).map_err(|e| {
+    let around = super::read_area(&doc, layout.area(&al)).map_err(|e| {
         format!("{} ({e})", crate::lang::tr("dwarsprofielen niet gemaakt: BGT, KLIC en meetpunten langs de as zijn niet te lezen", "cross sections not made: BGT, KLIC and survey points along the axis cannot be read"))
     })?;
     let step = (opt.step.max(0.1)).min((left + right) / 20.0);
@@ -1288,7 +1292,7 @@ pub(super) fn prepare_cross_sections(opt: &super::CivielOptions, doc: Arc<CadDoc
         let plan_at = |d: f64| [p[0] + right_n[0] * d * f, p[1] + right_n[1] * d * f];
         let zs: Vec<(f64, Option<f64>)> = offsets.iter().map(|d| (*d, ground.height(plan_at(*d), f))).collect();
         let axis_z = ground.height(p, f);
-        views.push(SectionView { s: *s, ground: zs, design: Vec::new(), axis_z, cut: None, fill: None, plan: (plan_at(-left), plan_at(right)) });
+        views.push(SectionView { s: *s, ground: zs, design: Vec::new(), axis_z, cut: None, fill: None, plan: layout.line(&al, *s) });
     }
     if views.iter().all(|v| v.ground.iter().all(|p| p.1.is_none())) {
         return Err(ground.error().unwrap_or_else(|| format!("geen hoogtes langs de as ({})", ground.label())));
@@ -1318,7 +1322,7 @@ pub(super) fn prepare_cross_sections(opt: &super::CivielOptions, doc: Arc<CadDoc
         String::new()
     };
     let summary = format!("{title}: {} profielen in {rows} rij(en) van {} ({label})", views.len(), opt.per_row.max(1));
-    Ok(PreparedProfile { out, doc, kind: "dwarsprofielen", axis: axis_h, at, name: al.name, title, summary, suffix: cut })
+    Ok(PreparedProfile { out, doc, kind: "dwarsprofielen", axis: axis_h, at, name: al.name, title, summary, suffix: cut, cut_from: Some((layout, things)) })
 }
 
 /// The area views keep clear of: the project area and the axis.

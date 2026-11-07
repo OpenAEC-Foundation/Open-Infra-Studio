@@ -13,3 +13,7 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 8. **Opgelost tijdens review: onderbroken uitvoertabel in README** (#119). De nieuwe GeoJSON-uitleg stond tussen de tabelregels. Daardoor vielen de laatste zes uitvoerregels buiten de tabel. De uitleg staat nu onder de volledige tabel; alle veertien uitvoerregels blijven aaneengesloten.
 
 9. **Opgelost tijdens review: te ruime uitleg over hoogtebehoud na import** (#119). De README vermeldt nu de bestaande importgrenzen: maximaal 40 attributen en 255 bytes per `sleutel=waarde`. Een lange hoogtearray kan na import onvolledig zijn. De uitvoerreparatie verandert deze importgrenzen niet.
+
+10. **Dwarsprofielen: elke voorbereide vervanging houdt alle bronobjecten in het geheugen** (#116). `src/civiel/as_profiel.rs` bewaart alle `Cuttable`-objecten per voorbereid dwarsprofielproduct. `src/civiel/graaf.rs` houdt alle vervangingen tegelijk vast. Bij meerdere assen blijven daardoor meerdere volledige bronlijsten bestaan. Richting: bereken de vingerafdrukken tijdens de voorbereiding en bewaar alleen de indeling en de drie vingerafdrukken.
+
+11. **Dwarsprofielen: volledige proef na een bronwijziging ontbreekt** (#116). `tests/doorsnede_grote_tekening.rs` controleert tekenen, kabel verplaatsen en `CONTROLE`. De vervangingsproeven in `tests/profile_update.rs` gebruiken geen BGT-, KLIC- of meetpuntbron. Richting: wijzig of verwijder een kabel, controleer veroudering, werk bij, controleer de nieuwe geometrie en daarna de actuele staat.
