@@ -328,9 +328,16 @@ class Ocs:
             time.sleep(1)
         raise OcsError("Open CAD Studio geeft geen actieve tekening")
 
+    def request_active(self, op, body=None, timeout=120):
+        """Keep the document lookup and its operation on the same window."""
+        with self.lock:
+            body = dict(body or {})
+            body["document_id"] = self.document_id()
+            return self.request(op, body, timeout)
+
     def host(self, cmd):
         """A host command (no Open Infra answer to wait for)."""
-        r = self.request("run", {"cmd": cmd, "document_id": self.document_id()})
+        r = self.request_active("run", {"cmd": cmd})
         if r.get("ok") is False:
             raise OcsError(f"{cmd}: {r.get('error')}")
         return r
@@ -339,7 +346,7 @@ class Ocs:
         """An Open Infra command; waits for its JSON answer."""
         rid = "mcp" + uuid.uuid4().hex[:12]
         path = os.path.join(RESULTS, rid + ".json")
-        r = self.request("run", {"cmd": f"{cmd} ID={rid}", "document_id": self.document_id()})
+        r = self.request_active("run", {"cmd": f"{cmd} ID={rid}"})
         # A busy window answers "still running"; the command goes on and
         # its result file comes when it is done.
         busy = "may continue" in str(r.get("error") or "") or r.get("status") in ("pending", "running", "accepted")
@@ -981,12 +988,12 @@ def t_view(a):
 def t_capture(a):
     path = _file(a) or os.path.join(RESULTS, "capture-" + uuid.uuid4().hex[:8] + ".png")
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    body = {"path": path, "document_id": OCS.document_id()}
+    body = {"path": path}
     if a.get("region"):
         body.update({"view": "region", "bounds": [float(v) for v in a["region"]]})
     if a.get("max_dimension"):
         body["max_dimension"] = int(a["max_dimension"])
-    r = OCS.request("capture", body, timeout=180)
+    r = OCS.request_active("capture", body, timeout=180)
     if r.get("ok") is False:
         raise OcsError(f"capture: {r.get('error')}")
     # The window writes the image after answering.
@@ -1005,7 +1012,7 @@ def t_capture(a):
 def t_save(a):
     if a.get("path"):
         path = confine(a["path"])
-        r = OCS.request("save", {"path": path, "document_id": OCS.document_id()}, timeout=300)
+        r = OCS.request_active("save", {"path": path}, timeout=300)
         if not r.get("ok"):
             raise OcsError(f"save: {r.get('error')}")
         return {"ok": True, "message": f"opgeslagen: {path}"}

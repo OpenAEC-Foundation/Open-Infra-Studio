@@ -173,6 +173,50 @@ class WorkFolderTest(unittest.TestCase):
         self.assertEqual([sid for sid, req in sent if req['op'] == 'run'], [first['session_id']])
         self.assertTrue(selected.is_set(), 'selection must still finish')
 
+    def test_document_lookup_and_send_keep_the_same_window(self):
+        first = dict(mcp.OCS.session)
+        second = dict(first, session_id='other', port=2)
+        looked_up = threading.Event()
+        choosing = threading.Event()
+        selected = threading.Event()
+        sent = []
+        replies = []
+        document_id = mcp.OCS.document_id
+        def lookup():
+            doc = document_id()
+            looked_up.set()
+            if not choosing.wait(3):
+                raise AssertionError('selection did not start')
+            selected.wait(0.1)
+            return doc
+        def exchange(desc, request, timeout=120):
+            sent.append((desc['session_id'], request.copy()))
+            if request['op'] == 'state':
+                # Both windows are allowed and both use document number 1.
+                path = self.work / ('tekening.dwg' if desc['session_id'] == first['session_id'] else 'ander.dwg')
+                return {'document_id': 1, 'documents': [{'id': 1, 'path': str(path)}]}
+            return {'ok': True}
+        def choose():
+            if not looked_up.wait(3):
+                raise AssertionError('save did not read its document')
+            choosing.set()
+            replies.append(mcp.call_tool('oi_sessions', {'select': 'other'}))
+            selected.set()
+        with patch.object(mcp.OCS, 'document_id', lookup), \
+                patch.object(mcp, '_exchange', exchange), \
+                patch.object(mcp, 'sessions', return_value=[second]):
+            selecting = threading.Thread(target=choose)
+            selecting.start()
+            try:
+                replies.append(mcp.call_tool('infra_opslaan', {}))
+            finally:
+                selecting.join(3)
+            self.assertFalse(selecting.is_alive())
+        self.assertEqual(len(replies), 2)
+        self.assertTrue(all(not r['isError'] for r in replies), replies)
+        self.assertEqual([sid for sid, req in sent if req['op'] == 'run'], [first['session_id']])
+        self.assertTrue(selected.is_set(), 'selection must still finish')
+
     def test_a_tab_switch_does_not_guard_the_wrong_document(self):
         states = 0
         sent = []
