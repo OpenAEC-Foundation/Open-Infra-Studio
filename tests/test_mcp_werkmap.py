@@ -217,6 +217,29 @@ class WorkFolderTest(unittest.TestCase):
         self.assertEqual([sid for sid, req in sent if req['op'] == 'run'], [first['session_id']])
         self.assertTrue(selected.is_set(), 'selection must still finish')
 
+    def test_a_reconnect_during_document_validation_cannot_move_a_write(self):
+        first = dict(mcp.OCS.session)
+        second = dict(first, session_id='other', port=2)
+        for lost_state in (1, 2):
+            with self.subTest(lost_state=lost_state):
+                states = 0
+                sent = []
+                mcp.OCS.session = first
+                def exchange(desc, request, timeout=120):
+                    nonlocal states
+                    if request['op'] == 'state':
+                        states += 1
+                        if states == lost_state:
+                            raise OSError('window vanished before the operation')
+                        path = self.work / ('tekening.dwg' if desc['session_id'] == first['session_id'] else 'ander.dwg')
+                        return {'document_id': 1, 'documents': [{'id': 1, 'path': str(path)}]}
+                    sent.append(desc['session_id'])
+                    return {'ok': True}
+                with patch.object(mcp, '_exchange', exchange), patch.object(mcp, 'sessions', return_value=[second]):
+                    result = mcp.call_tool('infra_opslaan', {})
+                self.assertTrue(result['isError'], result)
+                self.assertEqual(sent, [], 'a reconnect must not redirect a write')
+
     def test_a_tab_switch_does_not_guard_the_wrong_document(self):
         states = 0
         sent = []

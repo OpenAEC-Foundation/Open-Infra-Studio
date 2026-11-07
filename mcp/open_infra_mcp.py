@@ -302,7 +302,10 @@ class Ocs:
     def request(self, op, body=None, timeout=120):
         """One automation operation (state, run, capture, save, open, …)."""
         with self.lock:
+            selected = self.session
             body = _guard(self, op, dict(body or {}))
+            if op != "state" and selected is not None and self.session is not selected:
+                raise OcsError("het gekozen venster is verdwenen; kies opnieuw en herhaal de opdracht")
             s = self.session or self.pick()
             if s["kind"] == "rest":
                 return _rest(s["port"], s["token"], "/state" if op == "state" else f"/{op}", None if op == "state" else body, timeout)
@@ -331,8 +334,11 @@ class Ocs:
     def request_active(self, op, body=None, timeout=120):
         """Keep the document lookup and its operation on the same window."""
         with self.lock:
+            selected = self.session or self.pick()
             body = dict(body or {})
             body["document_id"] = self.document_id()
+            if self.session is not selected:
+                raise OcsError("het gekozen venster is verdwenen; kies opnieuw en herhaal de opdracht")
             return self.request(op, body, timeout)
 
     def host(self, cmd):
