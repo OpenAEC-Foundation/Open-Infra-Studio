@@ -47,7 +47,7 @@ impl FilesPage {
                 Ok(d) => {
                     let site = bridge::site().unwrap_or_default();
                     self.opt = Some(FileOptions::for_file(&PathBuf::from(self.path.trim()), &d, &site));
-                    self.message = Some((true, format!("{}: {} {}", d.format, d.features.len(), tr("objecten gelezen", "features read"))));
+                    self.message = Some((true, d.report(format!("{}: {} {}", d.format, d.features.len(), tr("objecten gelezen", "features read")))));
                     self.data = Some(d);
                 }
                 Err(e) => self.message = Some((false, e)),
@@ -227,8 +227,8 @@ mod tests {
         let page = load_page(&text, "gml");
         let data = page.data.as_ref().unwrap();
         assert_eq!(data.features.len(), 2);
-        assert!(data.warnings.iter().any(|w| w == "zone: geen tekenbare geometrie"));
-        assert!(data.warnings.iter().any(|w| w == "maten: geen tekenbare geometrie"));
+        assert!(data.warnings.iter().any(|w| w == &format!("zone: {}", tr("geen tekenbare geometrie", "no drawable geometry"))));
+        assert!(data.warnings.iter().any(|w| w == &format!("maten: {}", tr("geen tekenbare geometrie", "no drawable geometry"))));
         assert_eq!(page.message, Some((true, format!("IMRO: 2 {}\n{}", tr("objecten gelezen", "features read"), data.warnings.join("\n")))));
     }
 
