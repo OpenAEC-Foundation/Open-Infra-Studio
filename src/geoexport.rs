@@ -572,16 +572,29 @@ mod tests {
     }
 
     #[test]
-    fn geojson_refuses_height_loss_or_attribute_overwrite() {
+    fn geojson_refuses_nonfinite_project_heights() {
         let s = site();
-        let mut f = GeoFeature { geom: Geom::Point([104885.0, 425330.0, 1.5]), props: BTreeMap::from([("openaec:project_z".into(), "existing data".into())]) };
-        assert!(geojson(&[f.clone()], &s).unwrap_err().contains("reserved attribute"));
-        assert_eq!(f.props["openaec:project_z"], "existing data");
-        f.props.clear();
+        let mut f = GeoFeature { geom: Geom::Point([104885.0, 425330.0, 1.5]), props: BTreeMap::new() };
         for z in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             f.geom = Geom::Point([104885.0, 425330.0, z]);
             assert!(geojson(&[f.clone()], &s).unwrap_err().contains("not finite"));
         }
+    }
+
+    #[test]
+    fn geojson_uses_one_unused_height_property_without_overwriting_object_data() {
+        let s = site();
+        let first = GeoFeature { geom: Geom::Point([104885.0, 425330.0, 1.5]), props: BTreeMap::from([
+            ("openaec:project_z".into(), "existing data".into()),
+            ("openaec:project_z_1".into(), "also existing".into()),
+        ]) };
+        let second = GeoFeature { geom: Geom::Point([104886.0, 425330.0, -2.0]), props: BTreeMap::new() };
+        let j: serde_json::Value = serde_json::from_str(&geojson(&[first, second], &s).unwrap()).unwrap();
+        assert_eq!(j["openaec:project_z_property"], "openaec:project_z_2");
+        assert_eq!(j["features"][0]["properties"]["openaec:project_z"], "existing data");
+        assert_eq!(j["features"][0]["properties"]["openaec:project_z_1"], "also existing");
+        assert_eq!(j["features"][0]["properties"]["openaec:project_z_2"], serde_json::json!(1.5));
+        assert_eq!(j["features"][1]["properties"]["openaec:project_z_2"], serde_json::json!(-2.0));
     }
 
     #[test]
