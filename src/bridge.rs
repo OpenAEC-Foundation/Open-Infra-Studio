@@ -38,6 +38,15 @@ pub fn with_command_context<R>(target: Target, site: Option<Site>, reply: Option
     f()
 }
 
+/// Start command work with the originating drawing, site and script reply.
+/// A worker without an originating drawing must not attach to a later one.
+pub fn spawn_command(f: impl FnOnce() + Send + 'static) {
+    let Some(target) = target() else { return };
+    let site = site();
+    let reply = take_reply_id();
+    std::thread::spawn(move || with_command_context(target, site, reply, f));
+}
+
 pub fn take_reply_id() -> Option<String> { pending_reply().lock().unwrap().take() }
 
 #[derive(Default)]
@@ -883,5 +892,45 @@ pub fn image_dir() -> PathBuf {
             p.parent().map(|d| d.join(format!("{stem}_GIS"))).unwrap_or_else(|| crate::gis::servers::config_dir().join("kaarten"))
         }
         None => crate::gis::servers::config_dir().join("kaarten"),
+    }
+}
+
+#[cfg(test)]
+mod command_worker_tests {
+    use super::*;
+    #[test]
+    fn command_worker_keeps_the_originating_drawing_and_site() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+        struct Sender;
+        impl PluginRequestSender for Sender {
+            fn request(&self, _: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+                Ok(PluginResponse::Ok)
+            }
+        }
+        let drawing = |tab_id, name: &str| Target {
+            sender: Arc::new(Sender), tab_id, unit_factor: 1.0,
+            doc_path: Some(PathBuf::from(name)),
+        };
+        let mut first_site = Site::default();
+        first_site.label = "Oorspronkelijk project".into();
+        let mut other_site = Site::default();
+        other_site.label = "Ander project".into();
+        let (resume, paused) = mpsc::channel();
+        let (done, finished) = mpsc::channel();
+        with_command_context(drawing(120001, "/werkmap/a.dwg"), Some(first_site), None, || {
+            spawn_command(move || {
+                paused.recv_timeout(Duration::from_secs(5)).unwrap();
+                done.send((target().unwrap().tab_id, site().unwrap().label, beside_drawing("export.csv"))).unwrap();
+            });
+        });
+        with_command_context(drawing(120002, "/buiten/b.dwg"), Some(other_site), None, || {
+            resume.send(()).unwrap();
+            let (tab, label, path) = finished.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert_eq!(tab, 120001);
+            assert_eq!(label, "Oorspronkelijk project");
+            assert_eq!(path, PathBuf::from("/werkmap/a_export.csv"));
+            assert_eq!(target().unwrap().tab_id, 120002);
+        });
     }
 }
