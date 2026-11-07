@@ -185,8 +185,14 @@ mod tests {
     use super::*;
 
     fn load_page(text: &str, extension: &str) -> FilesPage {
-        let path = std::env::temp_dir().join(format!("oi-file-message-{}.{extension}", std::process::id()));
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let serial = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("oi-file-message-{}-{serial}.{extension}", std::process::id()));
         std::fs::write(&path, text).unwrap();
+        load_page_path(path)
+    }
+
+    fn load_page_path(path: PathBuf) -> FilesPage {
         let ctx = egui::Context::default();
         let mut page = FilesPage::default();
         page.open(&ctx, path.clone());
@@ -207,15 +213,15 @@ mod tests {
     }
 
     #[test]
-    fn sol_csv_file_page_keeps_read_diagnostics_out_of_the_visible_message() {
+    fn csv_file_page_reports_the_skipped_row_and_reason() {
         let page = load_page("x,y\n100,200\nbad,220\n", "csv");
         let data = page.data.as_ref().unwrap();
         assert_eq!((data.features.len(), data.skipped, data.warnings.len()), (1, 1, 1));
-        assert_eq!(page.message, Some((true, format!("CSV: 1 {}", tr("objecten gelezen", "features read")))));
+        assert_eq!(page.message, Some((true, format!("CSV: 1 {}\n{}", tr("objecten gelezen", "features read"), data.warnings.join("\n")))));
     }
 
     #[test]
-    fn sol_imro_file_page_preserves_the_complete_original_read_message() {
+    fn imro_file_page_reports_each_unreadable_object() {
         let text = include_str!("../../tests/fixtures/planning/synthetic-imro.gml")
             .replace("<imro:geometrie xlink:href=\"#polygon\"/>", "");
         let page = load_page(&text, "gml");
@@ -223,6 +229,39 @@ mod tests {
         assert_eq!(data.features.len(), 2);
         assert!(data.warnings.iter().any(|w| w == "zone: geen tekenbare geometrie"));
         assert!(data.warnings.iter().any(|w| w == "maten: geen tekenbare geometrie"));
-        assert_eq!(page.message, Some((true, format!("IMRO: 2 {}", tr("objecten gelezen", "features read")))));
+        assert_eq!(page.message, Some((true, format!("IMRO: 2 {}\n{}", tr("objecten gelezen", "features read"), data.warnings.join("\n")))));
     }
+
+    #[test]
+    fn clean_file_page_keeps_the_existing_message() {
+        let page = load_page("x,y\n100,200\n", "csv");
+        assert_eq!(page.message, Some((true, format!("CSV: 1 {}", tr("objecten gelezen", "features read")))));
+    }
+
+    #[test]
+    fn gml_file_page_reports_the_broken_object_and_keeps_its_neighbour() {
+        let page = load_page(include_str!("../../tests/fixtures/gml/mixed.gml"), "gml");
+        let data = page.data.as_ref().unwrap();
+        assert_eq!(data.features.len(), 1);
+        assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
+        assert_eq!((data.skipped, data.warnings.len()), (1, 1));
+        assert!(data.warnings[0].contains("broken-line"));
+        assert_eq!(page.message, Some((true, format!("GML: 1 {}\n{}", tr("objecten gelezen", "features read"), data.warnings[0]))));
+    }
+
+    #[test]
+    fn gpkg_file_page_reports_the_broken_row_and_keeps_layer_choices() {
+        let path = std::env::temp_dir().join(format!("oi-gpkg-message-{}.gpkg", std::process::id()));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch(include_str!("../../tests/fixtures/geopackage/partial.sql")).unwrap();
+        drop(db);
+        let page = load_page_path(path);
+        let data = page.data.as_ref().unwrap();
+        assert_eq!(data.features.len(), 2);
+        assert_eq!(data.layers, vec!["a_mix", "b_good"]);
+        assert_eq!((data.skipped, data.warnings.len()), (1, 1));
+        assert!(data.warnings[0].contains("a_mix") && data.warnings[0].contains('2'));
+        assert_eq!(page.message, Some((true, format!("GeoPackage: 2 {}\n{}", tr("objecten gelezen", "features read"), data.warnings[0]))));
+    }
+
 }
