@@ -1446,3 +1446,6 @@ impl BuiltinPlugin for OpenInfra {
 
 #[cfg(feature = "plugin")]
 ocs_plugin_api::export_plugin!(OpenInfra);
+
+#[cfg(test)]
+mod gis_worker_tests;

@@ -896,10 +896,14 @@ pub fn image_dir() -> PathBuf {
 }
 
 #[cfg(test)]
+pub(crate) static COMMAND_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+#[cfg(test)]
 mod command_worker_tests {
     use super::*;
     #[test]
     fn command_worker_keeps_the_originating_drawing_and_site() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         use std::sync::mpsc;
         use std::time::Duration;
         struct Sender;
@@ -933,4 +937,60 @@ mod command_worker_tests {
             assert_eq!(target().unwrap().tab_id, 120002);
         });
     }
+    #[test]
+    fn a_site_worker_does_not_change_a_later_empty_drawing() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        use std::sync::mpsc;
+        use std::time::Duration;
+        struct Restore(Option<Shared>);
+        impl Drop for Restore {
+            fn drop(&mut self) { *shared().lock().unwrap() = self.0.take().unwrap(); }
+        }
+        let _restore = Restore(Some(std::mem::take(&mut *shared().lock().unwrap())));
+        struct Writer(Arc<Mutex<Vec<String>>>);
+        impl PluginRequestSender for Writer {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+                match req {
+                    PluginRequest::UpdateXRecord { name, entries, .. } => {
+                        assert_eq!(name, "SITE");
+                        for e in entries {
+                            if let XRecordValue::String(value) = e.value { self.0.lock().unwrap().push(value); }
+                        }
+                        Ok(PluginResponse::XRecordUpdateResult(Ok(Handle::from(1u64))))
+                    }
+                    other => panic!("onverwacht verzoek: {other:?}"),
+                }
+            }
+        }
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let sender = Arc::new(Writer(writes.clone()));
+        let drawing = |tab_id| Target { sender: sender.clone(), tab_id, unit_factor: 1.0, doc_path: None };
+        {
+            let mut s = shared().lock().unwrap();
+            s.target = Some(drawing(120004));
+            s.site = Some(Site::default());
+        }
+        let (resume, paused) = mpsc::channel();
+        let (done, finished) = mpsc::channel();
+        spawn_command(move || {
+            paused.recv_timeout(Duration::from_secs(5)).unwrap();
+            let mut updated = Site::default();
+            updated.label = "Alleen project A".into();
+            save_site(&updated).unwrap();
+            done.send(site().unwrap().label).unwrap();
+        });
+        {
+            let mut s = shared().lock().unwrap();
+            s.target = Some(drawing(120005));
+            s.site = None;
+        }
+        resume.send(()).unwrap();
+        let worker_site = finished.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(writes.lock().unwrap().len(), 1, "A is opgeslagen");
+        let s = shared().lock().unwrap();
+        assert_eq!(s.target.as_ref().unwrap().tab_id, 120005);
+        assert!(s.site.is_none(), "lege tekening B kreeg A's projectlocatie");
+        assert_eq!(worker_site, "Alleen project A", "de worker ziet zijn opgeslagen locatie");
+    }
+
 }
