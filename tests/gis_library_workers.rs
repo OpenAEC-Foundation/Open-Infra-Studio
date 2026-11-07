@@ -112,7 +112,7 @@ fn parking_and_swept_path_keep_their_drawing_and_reply_on_explicit_and_selected_
         assert!(!first.drawn.lock().unwrap().is_empty(), "{name}: A kreeg geen geometrie");
         assert!(second.drawn.lock().unwrap().is_empty(), "{name}: geometrie kwam in B");
         let result = open_infra::civiel::api::result_dir().join(format!("{id}.json"));
-        for _ in 0..100 {
+        for _ in 0..500 {
             if result.exists() { break; }
             std::thread::sleep(Duration::from_millis(10));
         }

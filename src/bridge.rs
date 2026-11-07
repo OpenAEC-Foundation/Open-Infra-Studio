@@ -170,6 +170,19 @@ pub fn site() -> Option<Site> {
 /// Store the site in memory and in the drawing (NOD XRecord, round-trips DWG).
 pub fn save_site(site: &Site) -> Result<(), String> {
     let t = target().ok_or("geen tekening actief")?;
+    let tab = t.tab_id;
+    let mut written = site_writes().lock().unwrap();
+    store_site(site, t)?;
+    written.insert(tab);
+    Ok(())
+}
+
+fn site_writes() -> &'static Mutex<HashSet<u64>> {
+    static WRITTEN: OnceLock<Mutex<HashSet<u64>>> = OnceLock::new();
+    WRITTEN.get_or_init(Default::default)
+}
+
+fn store_site(site: &Site, t: Target) -> Result<(), String> {
     let json = serde_json::to_string(site).map_err(|e| e.to_string())?;
     let entries = vec![XRecordEntry::string(1, json)];
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
@@ -195,7 +208,14 @@ pub fn save_site(site: &Site) -> Result<(), String> {
 
 /// Store a location found in GEODATA. The caller has no explicit command reply.
 pub fn adopt_site(site: &Site) -> Result<bool, String> {
-    save_site(site)?;
+    let t = target().ok_or("geen tekening actief")?;
+    let tab = t.tab_id;
+    // Check and store under the same lock as explicit saves. Adoption only
+    // initializes a tab; it may never replace a location already saved here.
+    let mut written = site_writes().lock().unwrap();
+    if written.contains(&tab) { return Ok(false); }
+    store_site(site, t)?;
+    written.insert(tab);
     Ok(true)
 }
 
@@ -1047,9 +1067,24 @@ mod command_worker_tests {
         });
         resume.send(()).unwrap();
         assert!(!worker.join().unwrap(), "late GEODATA-adoptie had de expliciete keuze moeten behouden");
-        let values = writes.lock().unwrap();
-        assert_eq!(values.len(), 1);
-        assert_eq!(values[0].label, "Expliciet gekozen project");
+        {
+            let values = writes.lock().unwrap();
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0].label, "Expliciet gekozen project");
+        }
+        let mut fresh = target;
+        fresh.tab_id = 120007;
+        with_command_context(fresh, None, None, || {
+            let mut automatic = Site::default();
+            automatic.label = "Eerste automatische locatie".into();
+            assert!(adopt_site(&automatic).unwrap(), "een nieuwe tekening mag GEODATA overnemen");
+            assert!(!adopt_site(&automatic).unwrap(), "adoptie initialiseert een tekening maar eenmaal");
+            let mut explicit = Site::default();
+            explicit.label = "Nieuwe expliciete locatie".into();
+            save_site(&explicit).unwrap();
+            assert_eq!(site().unwrap().label, explicit.label);
+        });
+        assert_eq!(writes.lock().unwrap().len(), 3);
     }
 
 }
