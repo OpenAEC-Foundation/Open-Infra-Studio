@@ -719,6 +719,8 @@ fn klic_aanvraag_command(host: &mut dyn HostApi, cmd: &str) {
 /// NLCS++ Netbeheer deliveries (see `nlcspp_host`).
 fn nlcspp_command(host: &mut dyn HostApi, verb: &str, cmd: &str) {
     let Some(site) = require_site(host) else { return };
+    let Some(target) = bridge::target() else { return };
+    let reply = bridge::take_reply_id();
     let rest = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim()).unwrap_or("");
     let args = civiel::api::Args::parse(rest);
     let verb = verb.to_string();
@@ -732,7 +734,7 @@ fn nlcspp_command(host: &mut dyn HostApi, verb: &str, cmd: &str) {
     };
     let path = args.str("PAD").map(str::to_string).or_else(|| (verb == "GIS_NLCSPP_IMPORT").then(|| rest.trim_matches('"').to_string()));
     host.push_info(&format!("[Open Infra] {verb} …"));
-    std::thread::spawn(move || {
+    std::thread::spawn(move || bridge::with_command_context(target, Some(site.clone()), reply, || {
         let run = || -> Result<String, String> {
             let t = bridge::target().ok_or("geen tekening actief")?;
             if verb == "GIS_NLCSPP_IMPORT" {
@@ -764,7 +766,7 @@ fn nlcspp_command(host: &mut dyn HostApi, verb: &str, cmd: &str) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("{verb}: {e}")),
         }
-    });
+    }));
 }
 
 /// `GIS_EXPORT [<pad.gpkg|pad.geojson>] [LAGEN=<tekst>] [SELECTIE] [ALLES]`
