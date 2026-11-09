@@ -1,12 +1,13 @@
 use crate::klic_extra::{attachment_file, open_file};
 use std::{ffi::OsStr, fs, os::windows::ffi::OsStrExt, path::Path, ptr, time::{Duration, Instant}};
 use windows_sys::Win32::System::Registry::*;
+use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
 
 fn wide(s: &OsStr) -> Vec<u16> { s.encode_wide().chain(Some(0)).collect() }
 
 // HKCR wordt alleen binnen dit testproces omgeleid. De bestaande PDF-associatie
 // van de gebruiker wordt niet gewijzigd. Ook bij een mislukte assertie opruimen.
-struct Association { key: HKEY, name: Vec<u16> }
+struct Association { key: HKEY, name: Vec<u16>, overridden: bool }
 
 impl Association {
     fn new(viewer: &Path) -> Self {
@@ -16,11 +17,12 @@ impl Association {
             assert_eq!(RegCreateKeyExW(HKEY_CURRENT_USER, name.as_ptr(), 0, ptr::null(), 0,
                                       KEY_ALL_ACCESS, ptr::null(), &mut key, ptr::null_mut()), 0);
         }
-        let association = Self { key, name };
+        let mut association = Self { key, name, overridden: false };
         association.set(".pdf", "OpenInfra.KlicTest.Pdf");
         association.set(r"OpenInfra.KlicTest.Pdf\shell\open\command",
                         &format!("\"{}\" --viewer \"%1\"", viewer.display()));
         unsafe { assert_eq!(RegOverridePredefKey(HKEY_CLASSES_ROOT, key), 0); }
+        association.overridden = true;
         association
     }
 
@@ -32,15 +34,42 @@ impl Association {
                                       value.as_ptr().cast(), (value.len() * 2) as u32), 0);
         }
     }
+
+    fn cleanup(&mut self) -> Vec<String> {
+        let mut errors = Vec::new();
+        unsafe {
+            if self.overridden {
+                let status = RegOverridePredefKey(HKEY_CLASSES_ROOT, ptr::null_mut());
+                if status == ERROR_SUCCESS {
+                    self.overridden = false;
+                } else {
+                    errors.push(format!("registeromleiding herstellen: foutcode {status}"));
+                }
+            }
+            if !self.key.is_null() {
+                let status = RegCloseKey(self.key);
+                if status == ERROR_SUCCESS {
+                    self.key = ptr::null_mut();
+                } else {
+                    errors.push(format!("registersleutel sluiten: foutcode {status}"));
+                }
+            }
+            // Met een subsleutelnaam verwijdert RegDeleteTreeW ook die sleutel.
+            // Een tweede RegDeleteKeyW zou ERROR_FILE_NOT_FOUND opleveren.
+            let status = RegDeleteTreeW(HKEY_CURRENT_USER, self.name.as_ptr());
+            if status != ERROR_SUCCESS && status != ERROR_FILE_NOT_FOUND {
+                errors.push(format!("registersleutel verwijderen: foutcode {status}"));
+            }
+        }
+        errors
+    }
 }
 
 impl Drop for Association {
     fn drop(&mut self) {
-        unsafe {
-            assert_eq!(RegOverridePredefKey(HKEY_CLASSES_ROOT, ptr::null_mut()), 0);
-            RegCloseKey(self.key);
-            assert_eq!(RegDeleteTreeW(HKEY_CURRENT_USER, self.name.as_ptr()), 0);
-            assert_eq!(RegDeleteKeyW(HKEY_CURRENT_USER, self.name.as_ptr()), 0);
+        // Ook bij een eerdere panic opruimen, zonder een tweede panic te maken.
+        for error in self.cleanup() {
+            eprintln!("Opruimen testassociatie: {error}");
         }
     }
 }
@@ -84,7 +113,8 @@ fn windows_document_association() {
     fs::copy(&probe, &program).unwrap();
     assert!(std::process::Command::new(&program).status().unwrap().success());
     assert!(program.with_extension("executed").exists(), "positieve controle: echt uitvoerbaar PE-programma");
-    let _association = Association::new(Path::new(&probe));
+    println!("Positieve controle: PE als .exe uitgevoerd.");
+    let mut association = Association::new(Path::new(&probe));
     let mut errors = Vec::new();
 
     // De vermomde bijlage gaat via de ZIP-route, precies zoals bij Openen.
@@ -97,7 +127,13 @@ fn windows_document_association() {
         zip.finish().unwrap();
     }
     let disguised = attachment_file(&delivery, "bronnen/KL1001/brief.pdf", &dir.join("cache")).unwrap();
-    if let Err(e) = reaches_viewer(&disguised) { errors.push(format!("PE als PDF: {e}")); }
+    match reaches_viewer(&disguised) {
+        Ok(()) => println!("PE als PDF: alleen naar viewer; exact pad ontvangen; geen uitvoeringsmarkering."),
+        Err(e) => {
+            eprintln!("PE als PDF: {e}");
+            errors.push(format!("PE als PDF: {e}"));
+        }
+    }
 
     // Geldige PDF in een geldige map met procenttekens, ook een letterlijke
     // omgevingsvariabelenaam. Controleer het volledige pad bij de echte viewer.
@@ -105,7 +141,13 @@ fn windows_document_association() {
     fs::create_dir_all(project.join("bronnen/KL1001")).unwrap();
     fs::write(project.join("bronnen/KL1001/brief.pdf"), pdf()).unwrap();
     let file = attachment_file(&project.join("GI_levering.xml"), "bronnen/KL1001/brief.pdf", &dir.join("out")).unwrap();
-    if let Err(e) = reaches_viewer(&file) { errors.push(format!("PDF in %-map: {e}")); }
+    match reaches_viewer(&file) {
+        Ok(()) => println!("PDF in %-map: viewer ontving het exacte pad, inclusief letterlijk %TEMP%."),
+        Err(e) => {
+            eprintln!("PDF in %-map: {e}");
+            errors.push(format!("PDF in %-map: {e}"));
+        }
+    }
 
     assert!(attachment_file(&delivery, "bronnen/KL1001/brief.exe", &dir.join("cache")).is_err());
     assert!(open_file(&program).is_err());
@@ -120,8 +162,15 @@ fn windows_document_association() {
             errors.push("zonder documentassociatie toch geopend".into());
         }
     }
-    drop(_association);
-    fs::remove_dir_all(&dir).unwrap();
+    errors.extend(association.cleanup());
+    // Controleer de werkelijke registerstaat na het opruimen.
+    let mut key = ptr::null_mut();
+    let status = unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, association.name.as_ptr(), 0, KEY_READ, &mut key) };
+    if status != ERROR_FILE_NOT_FOUND {
+        if !key.is_null() { unsafe { RegCloseKey(key); } }
+        errors.push(format!("testregistersleutel na opruimen nog aanwezig: foutcode {status}"));
+    }
+    if let Err(e) = fs::remove_dir_all(&dir) { errors.push(format!("testmap opruimen: {e}")); }
     assert!(errors.is_empty(), "{}", errors.join("\n"));
     println!("PE als .exe uitvoerbaar; PE als .pdf alleen naar viewer; PDF in %-map naar viewer; exact pad behouden; .exe geweigerd; ontbrekend bestand en ontbrekende associatie geweigerd.");
 }
