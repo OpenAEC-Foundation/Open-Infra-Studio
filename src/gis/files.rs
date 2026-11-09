@@ -30,7 +30,7 @@ pub struct FileData {
 impl FileData {
     /// Keep object-level read diagnostics in the final import result.
     pub fn report(&self, message: String) -> String {
-        if self.warnings.is_empty() { message } else { format!("{message}\n{}", self.warnings.join("\n")) }
+        report(message, &self.warnings)
     }
 
     /// Coordinate bounds of all features (file CRS).
@@ -50,6 +50,11 @@ impl FileData {
     pub fn fields(&self) -> Vec<String> {
         vector::property_names(&self.features).into_iter().filter(|k| !k.starts_with("__imro_")).collect()
     }
+}
+
+/// Attach the same object diagnostics before or after FileData is available.
+pub(crate) fn report(message: String, warnings: &[String]) -> String {
+    if warnings.is_empty() { message } else { format!("{message}\n{}", warnings.join("\n")) }
 }
 
 /// Read a file by its extension. `layer` picks a GeoPackage table.

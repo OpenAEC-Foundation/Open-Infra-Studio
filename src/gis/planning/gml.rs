@@ -347,7 +347,7 @@ pub fn parse(text: &str) -> Result<Data, String> {
         });
     }
     if objects.is_empty() {
-        return Err("Geen IMRO-planobjecten met geometrie gevonden".into());
+        return Err(crate::gis::files::report("Geen IMRO-planobjecten met geometrie gevonden".into(), &warnings));
     }
     let plans: Vec<_> = objects
         .iter()
