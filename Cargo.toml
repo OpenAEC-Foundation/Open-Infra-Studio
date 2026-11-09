@@ -71,6 +71,9 @@ eframe = { version = "0.37", default-features = false, features = ["default_font
 winit = "0.30"
 egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
 [profile.dev]
 # Keep file/line backtraces without generating full type and variable debug
 # information. Tests inherit this profile; distribution builds do not.

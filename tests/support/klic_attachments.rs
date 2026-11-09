@@ -8,9 +8,9 @@ mod lang {
 mod crs {
     pub type XY = [f64; 2];
 }
-#[path = "../src/gis/klic_extra.rs"]
+#[path = "../../src/gis/klic_extra.rs"]
 mod klic_extra;
 
 #[cfg(windows)]
-#[path = "support/klic_windows.rs"]
+#[path = "klic_windows.rs"]
 mod windows;

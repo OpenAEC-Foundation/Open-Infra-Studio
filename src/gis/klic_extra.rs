@@ -221,25 +221,14 @@ fn invalid_attachment_path(rel: &str) -> String {
     format!("{} {rel}", tr("ongeldig bijlagepad", "invalid attachment path"))
 }
 
-/// The types an attachment is opened as: letters and conditions as PDF,
-/// sketches as PDF or image. A program or script in a delivery is never
-/// handed to the system.
+/// Toegestane bestandsextensies voor brieven, voorwaarden en schetsen.
+/// Dit controleert de naam, niet de inhoud. De viewer moet de inhoud lezen;
+/// op Windows wordt daarvoor expliciet de documentassociatie gebruikt.
 const OPENABLE: [&str; 8] = ["pdf", "png", "jpg", "jpeg", "gif", "tif", "tiff", "bmp"];
 
-/// An attachment the system's viewer may open: its type is one of [`OPENABLE`].
+/// De extensie staat in [`OPENABLE`]; dit is geen inhoudscontrole.
 fn openable(name: &str) -> bool {
     Path::new(name).extension().and_then(|e| e.to_str()).is_some_and(|e| OPENABLE.iter().any(|o| e.eq_ignore_ascii_case(o)))
-}
-
-/// The path as one quoted word for `cmd /C start`: within the quotes
-/// `& | < > ^ ( )` are text, and `/V:OFF` keeps `!` text. `%` is still
-/// expanded within quotes and `"` would end them, so such a path is refused.
-#[cfg_attr(not(windows), allow(dead_code))]
-fn cmd_quoted(path: &str) -> Result<String, String> {
-    if path.contains(['%', '"']) || path.chars().any(char::is_control) {
-        return Err(invalid_attachment_path(path));
-    }
-    Ok(format!("\"{path}\""))
 }
 
 /// Controleer ook bestaande mapdelen en een eventueel al uitgepakt bestand.
@@ -329,15 +318,42 @@ pub fn attachment_file(delivery: &Path, rel: &str, out_dir: &Path) -> Result<Pat
     Ok(target)
 }
 
-/// The system's viewer for `path`. On Windows through `cmd /C start` with the
-/// path as one quoted word, because the meldnummer folder also comes from the
-/// delivery; `/D` skips AutoRun commands.
+/// Open via de documentassociatie van de al gecontroleerde extensie.
+/// De expliciete klasse voorkomt dat Windows het bestand als programma kiest.
+/// Het pad is UTF-16-data; er is geen cmd, quoting of variabele-expansie.
 #[cfg(windows)]
-fn viewer(path: &Path) -> Result<std::process::Command, String> {
-    use std::os::windows::process::CommandExt;
-    let mut command = std::process::Command::new("cmd");
-    command.args(["/D", "/V:OFF", "/C", "start", ""]).raw_arg(cmd_quoted(&path.to_string_lossy())?);
-    Ok(command)
+fn open_document(path: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::{Foundation::RPC_E_CHANGED_MODE, System::Com::*, UI::{Shell::*, WindowsAndMessaging::SW_SHOWNORMAL}};
+
+    let file: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    if file[..file.len() - 1].contains(&0) {
+        return Err(invalid_attachment_path(&path.display().to_string()));
+    }
+    // open_file heeft deze extensie al gecontroleerd.
+    let class: Vec<u16> = Some(b'.' as u16).into_iter().chain(path.extension().unwrap().encode_wide()).chain(Some(0)).collect();
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_CLASSNAME | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI,
+        lpVerb: windows_sys::core::w!("open"),
+        lpFile: file.as_ptr(),
+        lpClass: class.as_ptr(),
+        nShow: SW_SHOWNORMAL,
+        ..Default::default()
+    };
+    // Een bestaande COM-initialisatie in een ander model blijft geldig.
+    // De buffers blijven leven tot de synchrone ShellExecuteExW-aanroep terug is.
+    let com = unsafe { CoInitializeEx(std::ptr::null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32) };
+    if com < 0 && com != RPC_E_CHANGED_MODE {
+        return Err(format!("{}: HRESULT {com:#x}", path.display()));
+    }
+    let result = if unsafe { ShellExecuteExW(&mut info) } == 0 {
+        Err(format!("{}: {}", path.display(), std::io::Error::last_os_error()))
+    } else {
+        Ok(())
+    };
+    if com >= 0 { unsafe { CoUninitialize(); } }
+    result
 }
 
 /// The system's viewer for `path`: `open` and `xdg-open` take it as one argument.
@@ -353,7 +369,10 @@ pub fn open_file(path: &Path) -> Result<(), String> {
     if !path.file_name().and_then(|n| n.to_str()).is_some_and(openable) {
         return Err(invalid_attachment_path(&path.display().to_string()));
     }
-    viewer(path)?.spawn().map(|_| ()).map_err(|e| format!("{}: {e}", path.display()))
+    #[cfg(windows)]
+    { open_document(path) }
+    #[cfg(not(windows))]
+    { viewer(path)?.spawn().map(|_| ()).map_err(|e| format!("{}: {e}", path.display())) }
 }
 
 #[cfg(test)]
@@ -428,7 +447,7 @@ mod tests {
         assert!(attachment_file(Path::new("x.zip"), "../../etc/passwd", Path::new("/tmp")).is_err());
     }
 
-    /// "Openen" hands the file to the system, which runs programs and scripts.
+    /// Deze extensies mogen niet worden uitgepakt of aan de viewer gegeven.
     const UNSAFE: [&str; 4] = ["bronnen/KL1081/run.bat", "bronnen/KL1081/setup.exe", "bronnen/KL1081/macro.docm", "bronnen/KL1081/geen-type"];
 
     #[test]
@@ -480,7 +499,8 @@ mod tests {
         }
     }
 
-    /// A project folder may hold any character the file system allows.
+    /// Controleert uitpakken en op Unix het argument van de vieweropdracht.
+    /// De daadwerkelijke Windows-associatie staat in tests/support/klic_windows.rs.
     #[test]
     fn a_pdf_in_an_ordinary_project_folder_opens() {
         let dir = std::env::temp_dir().join(format!("oi-klic-open-Infra & Water 100% (R&D)!-{}", std::process::id()));
@@ -497,16 +517,5 @@ mod tests {
             assert_eq!(command.get_args().collect::<Vec<_>>(), [file.as_os_str()]);
         }
         let _ = std::fs::remove_dir_all(dir);
-    }
-
-    /// On Windows the path is one quoted word for `cmd /C start`.
-    #[test]
-    fn windows_start_gets_the_path_as_one_quoted_word() {
-        for path in [r"C:\Projecten\Infra & Water (2026)\brief.pdf", r"\\?\C:\Users\R&D!^\klic-bijlagen\1&2\brief.pdf", r"C:\Projecten\Ontwerp 100%\bronnen\KL1001\brief.pdf"] {
-            assert_eq!(cmd_quoted(path).unwrap(), format!("\"{path}\""));
-        }
-        for path in ["C:\\a\"b\\brief.pdf", "C:\\a\nb\\brief.pdf"] {
-            assert!(cmd_quoted(path).is_err(), "{path}");
-        }
     }
 }

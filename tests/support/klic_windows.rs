@@ -110,11 +110,18 @@ fn windows_document_association() {
     assert!(attachment_file(&delivery, "bronnen/KL1001/brief.exe", &dir.join("cache")).is_err());
     assert!(open_file(&program).is_err());
     // Een fout van de documentassociatie moet als fout terugkomen.
-    if open_file(&dir.join("ontbreekt.pdf")).is_ok() {
-        errors.push("ontbrekend bestand niet als fout gemeld".into());
+    if errors.is_empty() {
+        if open_file(&dir.join("ontbreekt.pdf")).is_ok() {
+            errors.push("ontbrekend bestand niet als fout gemeld".into());
+        }
+        let unassociated = dir.join("zonder-viewer.png");
+        fs::copy(&probe, &unassociated).unwrap();
+        if open_file(&unassociated).is_ok() || unassociated.with_extension("executed").exists() {
+            errors.push("zonder documentassociatie toch geopend".into());
+        }
     }
     drop(_association);
     fs::remove_dir_all(&dir).unwrap();
     assert!(errors.is_empty(), "{}", errors.join("\n"));
-    println!("PE als .exe uitvoerbaar; PE als .pdf alleen naar viewer; PDF in %-map naar viewer; exact pad behouden; .exe geweigerd; ontbrekend bestand geweigerd.");
+    println!("PE als .exe uitvoerbaar; PE als .pdf alleen naar viewer; PDF in %-map naar viewer; exact pad behouden; .exe geweigerd; ontbrekend bestand en ontbrekende associatie geweigerd.");
 }

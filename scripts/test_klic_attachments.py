@@ -27,7 +27,7 @@ publish = false
 [workspace]
 
 [lib]
-path = {json.dumps((ROOT / "tests/klic_attachments.rs").as_posix())}
+path = {json.dumps((ROOT / "tests/support/klic_attachments.rs").as_posix())}
 
 [dependencies]
 roxmltree = {json.dumps(manifest["dependencies"]["roxmltree"])}
@@ -42,7 +42,7 @@ windows-sys = {{ version = "0.61.2", features = ["Win32_System_Com", "Win32_Syst
         subprocess.run(["rustc", "--edition=2021", str(ROOT / "tests/support/klic_document_probe.rs"),
                         "-o", str(probe)], check=True)
         os.environ["KLIC_DOCUMENT_PROBE"] = str(probe)
-    command = ["cargo", "test", "--manifest-path", str(OUT / "Cargo.toml"), "--jobs", "1"]
+    command = ["cargo", "test", "--manifest-path", str(OUT / "Cargo.toml"), "--lib", "--jobs", "1"]
     if os.name == "nt":
         command += ["windows::windows_document_association", "--", "--exact", "--nocapture"]
     else:
