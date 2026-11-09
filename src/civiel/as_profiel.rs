@@ -4,6 +4,7 @@
 
 use std::collections::HashSet;
 use std::f64::consts::{FRAC_PI_2, PI};
+use std::sync::Arc;
 
 use ocs_plugin_api::host::codec::entities::{TextHorizontalAlignment, TextVerticalAlignment};
 use ocs_plugin_api::host::codec::{CadDocument, EntityType, Handle, LwPolyline, Vector2};
@@ -1031,9 +1032,47 @@ fn heights(ground: &mut Maaiveld, pts: &[XY], f: f64) -> Vec<Option<f64>> {
 /// `GIS_AS_LENGTEPROFIEL`: the length profile of the selected axis with its
 /// lower-left corner at `at`.
 pub fn length_profile(opt: &super::CivielOptions, handle: Option<Handle>, at: Option<XY>, progress: &dyn Fn(String)) -> Result<String, String> {
+    let doc = Arc::new(super::document(&["tin"], &handle.into_iter().collect::<Vec<_>>())?);
+    prepare_length_profile(opt, doc, handle, at, progress)?.write()
+}
+
+/// A fully calculated profile, before any drawing or graph writes.
+pub(super) struct PreparedProfile {
+    out: Out,
+    doc: Arc<CadDocument>,
+    kind: &'static str,
+    axis: Handle,
+    at: XY,
+    name: String,
+    title: String,
+    summary: String,
+    suffix: String,
+    /// Cross sections: their layout and the objects they were cut from, for
+    /// the dependency graph.
+    cut_from: Option<(super::graaf::Snijlijnen, Vec<super::doorsnede::Cuttable>)>,
+}
+
+impl PreparedProfile {
+    pub(super) fn write(self) -> Result<String, String> {
+        let expected: usize = self.out.layers.iter().map(|(_, entities)| entities.len()).sum();
+        let handles = self.out.write_handles(&self.title)?;
+        if handles.len() != expected {
+            return Err(crate::lang::tr("Niet alle profielelementen zijn toegevoegd.", "Not all profile elements were added.").into());
+        }
+        if self.kind == "lengteprofiel" {
+            if let Some(h) = handles.first() {
+                super::api::note("lengteprofiel", super::api::handle_text(*h));
+                crate::bridge::index_add("lengteprofiel", &self.name, &[*h], false);
+            }
+        }
+        super::graaf::register(&self.doc, self.kind, self.axis, self.at, self.cut_from.as_ref().map(|(s, t)| (*s, t.as_slice())), &handles)?;
+        Ok(format!("{}, {} elementen.{}", self.summary, handles.len(), self.suffix))
+    }
+}
+
+pub(super) fn prepare_length_profile(opt: &super::CivielOptions, doc: Arc<CadDocument>, handle: Option<Handle>, at: Option<XY>, progress: &dyn Fn(String)) -> Result<PreparedProfile, String> {
     let opt = opt.clone();
     let ctx = Ctx::new(&opt)?;
-    let doc = super::document(&["tin"], &handle.into_iter().collect::<Vec<_>>())?;
     let (al, axis_h, _) = axis(&doc, handle)?;
     let wanted = at;
     let mut ground = Maaiveld::find(&ctx, &doc)?;
@@ -1204,35 +1243,41 @@ pub fn length_profile(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
     let sub = format!("{} · horizontaal 1:{} · verticaal 1:{} (overhoging {}×) · lengte {:.1} m", ground.label(), opt.nlcs.scale, (opt.nlcs.scale / v).round(), v, len / f);
     let t = ctx.text([x0, y1 + 4.0 * k], &sub.replace('.', ","), 1.8, 0.0, &frame_t, None);
     out.put(&frame_t, [aligned(t, TextHorizontalAlignment::Left, TextVerticalAlignment::Middle)]);
-    let handles = out.write_handles(&title)?;
-    let n = handles.len();
     ground.note_source();
-    if let Some(h) = handles.first() {
-        super::api::note("lengteprofiel", super::api::handle_text(*h));
-        crate::bridge::index_add("lengteprofiel", &al.name, &[*h], false);
-    }
-    super::graaf::register(&doc, "lengteprofiel", axis_h, at, &handles);
     super::api::note("maaiveld_min", zmin);
     super::api::note("maaiveld_max", zmax);
     super::api::note("plaats", serde_json::json!([at[0], at[1]]));
-    Ok(format!("{title}: {} m, {} – {} m ({}), {n} elementen.", format!("{:.1}", len / f).replace('.', ","), nap(zmin, 2), nap(zmax, 2), ground.label()))
+    let summary = format!("{title}: {} m, {} – {} m ({})", format!("{:.1}", len / f).replace('.', ","), nap(zmin, 2), nap(zmax, 2), ground.label());
+    Ok(PreparedProfile { out, doc, kind: "lengteprofiel", axis: axis_h, at, name: al.name, title, summary, suffix: String::new(), cut_from: None })
 }
 
 /// Cross sections every `section_every` m (and at every tangent point)
 /// of the selected axis, in a grid with its upper-left corner at `at`; the
 /// section lines in plan.
 pub fn cross_sections(opt: &super::CivielOptions, handle: Option<Handle>, at: Option<XY>, progress: &dyn Fn(String)) -> Result<String, String> {
+    let doc = Arc::new(super::document(&["tin"], &handle.into_iter().collect::<Vec<_>>())?);
+    prepare_cross_sections(opt, doc, handle, at, progress)?.write()
+}
+
+pub(super) fn prepare_cross_sections(opt: &super::CivielOptions, doc: Arc<CadDocument>, handle: Option<Handle>, at: Option<XY>, progress: &dyn Fn(String)) -> Result<PreparedProfile, String> {
     let opt = opt.clone();
     let ctx = Ctx::new(&opt)?;
-    let doc = super::document(&["tin"], &handle.into_iter().collect::<Vec<_>>())?;
     let (al, axis_h, _) = axis(&doc, handle)?;
     let mut ground = Maaiveld::find(&ctx, &doc)?;
     let f = ctx.f;
-    let stations = al.stations(opt.section_every.max(1.0) * f, true);
+    // The layout the dependency graph keeps, to find what the sections cut.
+    let layout = super::graaf::Snijlijnen { afstand: opt.section_every.max(1.0), links: opt.left.max(1.0), rechts: opt.right.max(1.0), eenheid: f };
+    let stations = layout.stations(&al);
     if stations.len() > 400 {
         return Err(format!("{} dwarsprofielen is te veel: kies een grotere afstand", stations.len()));
     }
-    let (left, right) = (opt.left.max(1.0), opt.right.max(1.0));
+    let (left, right) = (layout.links, layout.rechts);
+    // What the sections cut lies around the axis (survey points up to 1 m
+    // beside a section). A drawing too large to share comes with only the
+    // indexed objects, so ask the host for the rest, or stop.
+    let around = super::read_area(&doc, layout.area(&al)).map_err(|e| {
+        format!("{} ({e})", crate::lang::tr("dwarsprofielen niet gemaakt: BGT, KLIC en meetpunten langs de as zijn niet te lezen", "cross sections not made: BGT, KLIC and survey points along the axis cannot be read"))
+    })?;
     let step = (opt.step.max(0.1)).min((left + right) / 20.0);
     let offsets: Vec<f64> = {
         let mut o = Vec::new();
@@ -1256,13 +1301,14 @@ pub fn cross_sections(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
         let plan_at = |d: f64| [p[0] + right_n[0] * d * f, p[1] + right_n[1] * d * f];
         let zs: Vec<(f64, Option<f64>)> = offsets.iter().map(|d| (*d, ground.height(plan_at(*d), f))).collect();
         let axis_z = ground.height(p, f);
-        views.push(SectionView { s: *s, ground: zs, design: Vec::new(), axis_z, cut: None, fill: None, plan: (plan_at(-left), plan_at(right)) });
+        views.push(SectionView { s: *s, ground: zs, design: Vec::new(), axis_z, cut: None, fill: None, plan: layout.line(&al, *s) });
     }
     if views.iter().all(|v| v.ground.iter().all(|p| p.1.is_none())) {
         return Err(ground.error().unwrap_or_else(|| format!("geen hoogtes langs de as ({})", ground.label())));
     }
     // What the sections cut in plan: BGT surfaces and KLIC cables and pipes.
-    let things = super::doorsnede::cuttables(&doc);
+    let mut things = super::doorsnede::cuttables(&doc);
+    things.extend(super::doorsnede::cuttables(&around));
     let (outlines, texts, (surfaces, crossings, measured)) = super::doorsnede::section_cuts(&things, &views, left, right, 0.15, f, 5.0 * ctx.k / f);
     SECTION_OUTLINES.with(|o| *o.borrow_mut() = outlines);
     SECTION_TEXTS.with(|o| *o.borrow_mut() = texts);
@@ -1273,9 +1319,6 @@ pub fn cross_sections(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
     SECTION_TEXTS.with(|o| o.borrow_mut().clear());
     let (rows, at) = drawn?;
     let title = format!("Dwarsprofielen {}", if al.name.is_empty() { "as" } else { &al.name });
-    let handles = out.write_handles(&title)?;
-    let n = handles.len();
-    super::graaf::register(&doc, "dwarsprofielen", axis_h, at, &handles);
     ground.note_source();
     super::api::note("dwarsprofielen", views.len());
     super::api::note("plaats", serde_json::json!([at[0], at[1]]));
@@ -1287,7 +1330,8 @@ pub fn cross_sections(opt: &super::CivielOptions, handle: Option<Handle>, at: Op
     } else {
         String::new()
     };
-    Ok(format!("{title}: {} profielen in {rows} rij(en) van {} ({label}), {n} elementen.{cut}", views.len(), opt.per_row.max(1)))
+    let summary = format!("{title}: {} profielen in {rows} rij(en) van {} ({label})", views.len(), opt.per_row.max(1));
+    Ok(PreparedProfile { out, doc, kind: "dwarsprofielen", axis: axis_h, at, name: al.name, title, summary, suffix: cut, cut_from: Some((layout, things)) })
 }
 
 /// The area views keep clear of: the project area and the axis.

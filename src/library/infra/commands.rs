@@ -189,7 +189,7 @@ pub fn dispatch(host_api: &mut dyn HostApi, cmd: &str) {
                 if a.str("AT").is_some() || a.str("PATH").is_some() || p.link.is_some() {
                     worker(move || host::place(p));
                 } else {
-                    host_api.start_interactive(Box::new(Insert::new(p)));
+                    crate::bridge::start_interactive(host_api, Box::new(Insert::new(p)));
                 }
             }
             Err(e) => {

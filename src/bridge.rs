@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use ocs_plugin_api::host::{
     codec::{Color, EntityType, Handle, LineWeight},
-    ExtendedDataRecord, HostApi, LayerConfig, PluginRequestSender, TableOperation, XDataValue, XRecordEntry, XRecordValue,
+    CommandStep, ExtendedDataRecord, HostApi, InteractiveCommand, LayerConfig, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
 };
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 
@@ -38,7 +38,65 @@ pub fn with_command_context<R>(target: Target, site: Option<Site>, reply: Option
     f()
 }
 
-pub fn take_reply_id() -> Option<String> { pending_reply().lock().unwrap().take() }
+/// Start command work with the originating drawing, site and script reply.
+/// A worker without an originating drawing must not attach to a later one.
+pub fn spawn_command(f: impl FnOnce() + Send + 'static) {
+    let Some(target) = target() else { return };
+    let site = site();
+    let reply = take_reply_id();
+    std::thread::spawn(move || with_command_context(target, site, reply, f));
+}
+
+pub fn take_reply_id() -> Option<String> {
+    let bound = COMMAND_CONTEXT.with(|c| c.borrow_mut().as_mut().map(|v| v.reply.take()));
+    bound.unwrap_or_else(|| pending_reply().lock().unwrap().take())
+}
+
+/// The host keeps interactive commands per tab without dispatching again
+/// on their later clicks. Keep that command's context until its final worker.
+pub fn start_interactive(host: &mut dyn HostApi, command: Box<dyn InteractiveCommand>) {
+    let Some(target) = target() else { return };
+    let context = CommandContext { target, site: site(), reply: take_reply_id() };
+    host.start_interactive(Box::new(BoundInteractive { command, context }));
+}
+
+struct BoundInteractive {
+    command: Box<dyn InteractiveCommand>,
+    context: CommandContext,
+}
+
+impl BoundInteractive {
+    fn call<R>(&mut self, f: impl FnOnce(&mut dyn InteractiveCommand) -> R) -> R {
+        with_command_context(self.context.target.clone(), self.context.site.clone(), self.context.reply.take(), || {
+            let out = f(self.command.as_mut());
+            COMMAND_CONTEXT.with(|c| {
+                let mut c = c.borrow_mut();
+                let active = c.as_mut().unwrap();
+                self.context.site = active.site.clone();
+                self.context.reply = active.reply.take();
+            });
+            out
+        })
+    }
+}
+
+impl InteractiveCommand for BoundInteractive {
+    fn prompt(&self) -> String { self.command.prompt() }
+    fn on_point(&mut self, pt: [f64; 3]) -> CommandStep { self.call(|c| c.on_point(pt)) }
+    fn on_enter(&mut self) -> CommandStep { self.call(|c| c.on_enter()) }
+    fn needs_object_pick(&self) -> bool { self.command.needs_object_pick() }
+    fn on_object_pick(&mut self, h: Handle, pt: [f64; 3]) -> CommandStep { self.call(|c| c.on_object_pick(h, pt)) }
+    fn on_cursor_move(&mut self, pt: [f64; 3]) -> Vec<PreviewWire> { self.call(|c| c.on_cursor_move(pt)) }
+    fn is_selection_gathering(&self) -> bool { self.command.is_selection_gathering() }
+    fn accepts_drag_selection(&self) -> bool { self.command.accepts_drag_selection() }
+    fn on_selection_complete(&mut self, handles: Vec<Handle>) -> CommandStep { self.call(|c| c.on_selection_complete(handles)) }
+    fn selection_rejects_locked_layers(&self) -> bool { self.command.selection_rejects_locked_layers() }
+    fn modal_dialog(&self) -> Option<ocs_plugin_api::dialog::DialogDef> { self.command.modal_dialog() }
+    fn on_dialog_response(&mut self, response: ocs_plugin_api::dialog::DialogResponse) -> CommandStep { self.call(|c| c.on_dialog_response(response)) }
+    fn take_pending_panel_updates(&mut self) -> Vec<(String, std::collections::HashMap<String, ocs_plugin_api::dialog::DialogValue>)> {
+        self.call(|c| c.take_pending_panel_updates())
+    }
+}
 
 #[derive(Default)]
 struct Shared {
@@ -160,22 +218,54 @@ pub fn site() -> Option<Site> {
 
 /// Store the site in memory and in the drawing (NOD XRecord, round-trips DWG).
 pub fn save_site(site: &Site) -> Result<(), String> {
-    shared().lock().unwrap().site = Some(site.clone());
     let t = target().ok_or("geen tekening actief")?;
+    let tab = t.tab_id;
+    let mut written = site_writes().lock().unwrap();
+    store_site(site, t)?;
+    written.insert(tab);
+    Ok(())
+}
+
+fn site_writes() -> &'static Mutex<HashSet<u64>> {
+    static WRITTEN: OnceLock<Mutex<HashSet<u64>>> = OnceLock::new();
+    WRITTEN.get_or_init(Default::default)
+}
+
+fn store_site(site: &Site, t: Target) -> Result<(), String> {
     let json = serde_json::to_string(site).map_err(|e| e.to_string())?;
     let entries = vec![XRecordEntry::string(1, json)];
     let path: Vec<String> = SITE_DICT.iter().map(|s| s.to_string()).collect();
     let update = PluginRequest::UpdateXRecord { dictionary_path: path.clone(), name: SITE_RECORD.into(), entries: entries.clone() };
-    if let Ok(PluginResponse::XRecordUpdateResult(Ok(_))) = traced(trace_on().then(|| "UpdateXRecord SITE".into()), || t.sender.request(update)) {
-        return Ok(());
+    if !matches!(traced(trace_on().then(|| "UpdateXRecord SITE".into()), || t.sender.request(update)), Ok(PluginResponse::XRecordUpdateResult(Ok(_)))) {
+        // Not there yet: create it (and the OPENINFRA dictionary).
+        match traced(trace_on().then(|| "CreateXRecord SITE".into()), || t.sender.request(PluginRequest::CreateXRecord { dictionary_path: path, name: SITE_RECORD.into(), entries })) {
+            Ok(PluginResponse::XRecordCreateResult(Ok(_))) => Ok(()),
+            Ok(PluginResponse::XRecordCreateResult(Err(e))) | Ok(PluginResponse::Error(e)) => Err(e),
+            Ok(other) => Err(format!("onverwacht antwoord: {other:?}")),
+            Err(e) => Err(e.to_string()),
+        }?;
     }
-    // Not there yet: create it (and the OPENINFRA dictionary).
-    match traced(trace_on().then(|| "CreateXRecord SITE".into()), || t.sender.request(PluginRequest::CreateXRecord { dictionary_path: path, name: SITE_RECORD.into(), entries })) {
-        Ok(PluginResponse::XRecordCreateResult(Ok(_))) => Ok(()),
-        Ok(PluginResponse::XRecordCreateResult(Err(e))) | Ok(PluginResponse::Error(e)) => Err(e),
-        Ok(other) => Err(format!("onverwacht antwoord: {other:?}")),
-        Err(e) => Err(e.to_string()),
+    COMMAND_CONTEXT.with(|c| {
+        if let Some(c) = c.borrow_mut().as_mut() { c.site = Some(site.clone()); }
+    });
+    let mut s = shared().lock().unwrap();
+    if s.target.as_ref().is_some_and(|current| current.tab_id == t.tab_id) {
+        s.site = Some(site.clone());
     }
+    Ok(())
+}
+
+/// Store a location found in GEODATA. The caller has no explicit command reply.
+pub fn adopt_site(site: &Site) -> Result<bool, String> {
+    let t = target().ok_or("geen tekening actief")?;
+    let tab = t.tab_id;
+    // Check and store under the same lock as explicit saves. Adoption only
+    // initializes a tab; it may never replace a location already saved here.
+    let mut written = site_writes().lock().unwrap();
+    if written.contains(&tab) { return Ok(false); }
+    store_site(site, t)?;
+    written.insert(tab);
+    Ok(true)
 }
 
 /// Request tracing for diagnosis: on with `OI_BRIDGE_TRACE` or a file
@@ -439,6 +529,29 @@ pub fn partial_document(handles: &[Handle], per_request: usize) -> Result<ocs_pl
         all.extend(entities(chunk)?.into_iter().flatten());
     }
     Ok(document_of(all, &[]))
+}
+
+/// The entities matching a host query (the JSON of the control API's
+/// `query` operation, API v14), all pages, for drawings of any size.
+pub fn query(mut query: serde_json::Value) -> Result<Vec<EntityType>, String> {
+    let mut out = Vec::new();
+    let mut offset = 0u64;
+    loop {
+        // Pages small enough for one host message (64 MiB).
+        query["offset"] = offset.into();
+        query["limit"] = 500.into();
+        match request(PluginRequest::QueryEntities { query: query.to_string() })? {
+            PluginResponse::EntityPage(Ok(page)) => {
+                out.extend(page.entities);
+                match page.next_offset {
+                    Some(next) if next > offset => offset = next,
+                    _ => return Ok(out),
+                }
+            }
+            PluginResponse::EntityPage(Err(e)) => return Err(e),
+            other => return Err(format!("onverwacht antwoord op de opvraag: {other:?}")),
+        }
+    }
 }
 
 // ── Layout of generated views ───────────────────────────────────────────────
@@ -861,4 +974,166 @@ pub fn image_dir() -> PathBuf {
         }
         None => crate::gis::servers::config_dir().join("kaarten"),
     }
+}
+
+#[cfg(test)]
+pub(crate) static COMMAND_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+#[cfg(test)]
+mod command_worker_tests {
+    use super::*;
+    #[test]
+    fn command_worker_keeps_the_originating_drawing_and_site() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        use std::sync::mpsc;
+        use std::time::Duration;
+        struct Sender;
+        impl PluginRequestSender for Sender {
+            fn request(&self, _: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+                Ok(PluginResponse::Ok)
+            }
+        }
+        let drawing = |tab_id, name: &str| Target {
+            sender: Arc::new(Sender), tab_id, unit_factor: 1.0,
+            doc_path: Some(PathBuf::from(name)),
+        };
+        let mut first_site = Site::default();
+        first_site.label = "Oorspronkelijk project".into();
+        let mut other_site = Site::default();
+        other_site.label = "Ander project".into();
+        let (resume, paused) = mpsc::channel();
+        let (done, finished) = mpsc::channel();
+        with_command_context(drawing(120001, "/werkmap/a.dwg"), Some(first_site), None, || {
+            spawn_command(move || {
+                paused.recv_timeout(Duration::from_secs(5)).unwrap();
+                done.send((target().unwrap().tab_id, site().unwrap().label, beside_drawing("export.csv"))).unwrap();
+            });
+        });
+        with_command_context(drawing(120002, "/buiten/b.dwg"), Some(other_site), None, || {
+            resume.send(()).unwrap();
+            let (tab, label, path) = finished.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert_eq!(tab, 120001);
+            assert_eq!(label, "Oorspronkelijk project");
+            assert_eq!(path, PathBuf::from("/werkmap/a_export.csv"));
+            assert_eq!(target().unwrap().tab_id, 120002);
+        });
+    }
+    #[test]
+    fn a_site_worker_does_not_change_a_later_empty_drawing() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        use std::sync::mpsc;
+        use std::time::Duration;
+        struct Restore(Option<Shared>);
+        impl Drop for Restore {
+            fn drop(&mut self) { *shared().lock().unwrap_or_else(|e| e.into_inner()) = self.0.take().unwrap(); }
+        }
+        let _restore = Restore(Some(std::mem::take(&mut *shared().lock().unwrap())));
+        struct Writer(Arc<Mutex<Vec<String>>>);
+        impl PluginRequestSender for Writer {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+                match req {
+                    PluginRequest::UpdateXRecord { name, entries, .. } => {
+                        assert_eq!(name, "SITE");
+                        for e in entries {
+                            if let XRecordValue::String(value) = e.value { self.0.lock().unwrap().push(value); }
+                        }
+                        Ok(PluginResponse::XRecordUpdateResult(Ok(Handle::from(1u64))))
+                    }
+                    other => panic!("onverwacht verzoek: {other:?}"),
+                }
+            }
+        }
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let sender = Arc::new(Writer(writes.clone()));
+        let drawing = |tab_id| Target { sender: sender.clone(), tab_id, unit_factor: 1.0, doc_path: None };
+        {
+            let mut s = shared().lock().unwrap();
+            s.target = Some(drawing(120004));
+            s.site = Some(Site::default());
+        }
+        let (resume, paused) = mpsc::channel();
+        let (done, finished) = mpsc::channel();
+        spawn_command(move || {
+            paused.recv_timeout(Duration::from_secs(5)).unwrap();
+            let mut updated = Site::default();
+            updated.label = "Alleen project A".into();
+            save_site(&updated).unwrap();
+            done.send(site().unwrap().label).unwrap();
+        });
+        {
+            let mut s = shared().lock().unwrap();
+            s.target = Some(drawing(120005));
+            s.site = None;
+        }
+        resume.send(()).unwrap();
+        let worker_site = finished.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(writes.lock().unwrap().len(), 1, "A is opgeslagen");
+        let (active_tab, active_site) = {
+            let s = shared().lock().unwrap();
+            (s.target.as_ref().unwrap().tab_id, s.site.clone())
+        };
+        assert_eq!(active_tab, 120005);
+        assert!(active_site.is_none(), "lege tekening B kreeg A's projectlocatie");
+        assert_eq!(worker_site, "Alleen project A", "de worker ziet zijn opgeslagen locatie");
+    }
+
+    #[test]
+    fn an_earlier_adoption_cannot_replace_a_completed_explicit_site() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        use std::sync::mpsc;
+        use std::time::Duration;
+        struct Writer(Arc<Mutex<Vec<Site>>>);
+        impl PluginRequestSender for Writer {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+                match req {
+                    PluginRequest::UpdateXRecord { entries, .. } => {
+                        for e in entries {
+                            if let XRecordValue::String(value) = e.value { self.0.lock().unwrap().push(serde_json::from_str(&value).unwrap()); }
+                        }
+                        Ok(PluginResponse::XRecordUpdateResult(Ok(Handle::from(1u64))))
+                    }
+                    other => panic!("onverwacht verzoek: {other:?}"),
+                }
+            }
+        }
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let target = Target { sender: Arc::new(Writer(writes.clone())), tab_id: 120006, unit_factor: 1.0, doc_path: None };
+        let adoption_target = target.clone();
+        let (started, entered) = mpsc::channel();
+        let (resume, paused) = mpsc::channel();
+        let worker = std::thread::spawn(move || with_command_context(adoption_target, None, None, || {
+            let mut old = Site::default();
+            old.label = "Oud GEODATA-project".into();
+            started.send(()).unwrap();
+            paused.recv_timeout(Duration::from_secs(5)).unwrap();
+            adopt_site(&old).unwrap()
+        }));
+        entered.recv_timeout(Duration::from_secs(5)).unwrap();
+        with_command_context(target.clone(), None, None, || {
+            let mut requested = Site::default();
+            requested.label = "Expliciet gekozen project".into();
+            save_site(&requested).unwrap();
+        });
+        resume.send(()).unwrap();
+        assert!(!worker.join().unwrap(), "late GEODATA-adoptie had de expliciete keuze moeten behouden");
+        {
+            let values = writes.lock().unwrap();
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0].label, "Expliciet gekozen project");
+        }
+        let mut fresh = target;
+        fresh.tab_id = 120007;
+        with_command_context(fresh, None, None, || {
+            let mut automatic = Site::default();
+            automatic.label = "Eerste automatische locatie".into();
+            assert!(adopt_site(&automatic).unwrap(), "een nieuwe tekening mag GEODATA overnemen");
+            assert!(!adopt_site(&automatic).unwrap(), "adoptie initialiseert een tekening maar eenmaal");
+            let mut explicit = Site::default();
+            explicit.label = "Nieuwe expliciete locatie".into();
+            save_site(&explicit).unwrap();
+            assert_eq!(site().unwrap().label, explicit.label);
+        });
+        assert_eq!(writes.lock().unwrap().len(), 3);
+    }
+
 }

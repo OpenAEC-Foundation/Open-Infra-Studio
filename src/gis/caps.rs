@@ -59,8 +59,7 @@ fn parse(xml: &str) -> Result<Document<'_>, String> {
         return Err(e);
     }
     // WMS 1.1.1 capabilities often start with a DOCTYPE (WMS_MS_Capabilities.dtd).
-    let opt = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
-    Document::parse_with_options(xml, opt).map_err(|e| format!("ongeldig antwoord van de server: {e}"))
+    crate::xmldoc::parse(xml, true).map_err(|e| format!("ongeldig antwoord van de server: {e}"))
 }
 
 fn href(n: Node) -> Option<String> {
@@ -137,7 +136,12 @@ pub fn parse_wms(url: &str, xml: &str) -> Result<WmsCaps, String> {
         .unwrap_or_default();
 
     let mut layers = Vec::new();
-    fn walk(n: Node, inherited: &[String], parent_bbox: Option<[f64; 4]>, out: &mut Vec<WmsLayer>) {
+    // Layers nest a few levels in real services. A tree hundreds of levels
+    // deep would overflow the stack and copy the inherited CRS per level.
+    fn walk(n: Node, inherited: &[String], parent_bbox: Option<[f64; 4]>, depth: usize, out: &mut Vec<WmsLayer>) -> Result<(), String> {
+        if depth > 64 {
+            return Err("WMS-lagen te diep genest".into());
+        }
         let mut crs: Vec<String> = inherited.to_vec();
         let bbox = wgs84_bbox(n).or(parent_bbox);
         for c in children(n, "CRS").chain(children(n, "SRS")) {
@@ -154,11 +158,12 @@ pub fn parse_wms(url: &str, xml: &str) -> Result<WmsCaps, String> {
             out.push(WmsLayer { title: if title.is_empty() { name.clone() } else { title }, name, crs: crs.clone(), bbox });
         }
         for sub in children(n, "Layer") {
-            walk(sub, &crs, bbox, out);
+            walk(sub, &crs, bbox, depth + 1, out)?;
         }
+        Ok(())
     }
     for top in children(capability, "Layer") {
-        walk(top, &[], None, &mut layers);
+        walk(top, &[], None, 0, &mut layers)?;
     }
     Ok(WmsCaps {
         version,

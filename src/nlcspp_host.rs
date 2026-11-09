@@ -6,6 +6,10 @@
 //! - export: the drawing as a V12.1 delivery (`Handle` is the CAD handle,
 //!   `ID` follows from it) with a project reference over the project area;
 //!   objects are found by their object data, else by their layer name;
+//!   references (`AssetObjectID`, …) follow their objects to the new IDs;
+//! - objects without geometry (relation objects such as an `AbestandBijlage`
+//!   without a location) are kept in the drawing's data on import
+//!   ([`RELATIONS`]) and delivered again on export;
 //! - check: the schema rules per operator plus whether each object lies on
 //!   the layer its attributes ask for, as a report.
 
@@ -54,8 +58,15 @@ pub fn import(site: &Site, path: &std::path::Path, unit_factor: f64) -> Result<S
     let mut batch = crate::basisdata::Batch::new();
     let (mut drawn, mut no_rule) = (0usize, 0usize);
     let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
+    let mut kept: Vec<&Object> = Vec::new();
+    // References name objects of the same import: two deliveries may use the same IDs.
+    let import = import_key();
     for o in &d.objects {
-        let Some(g) = &o.geom else { continue };
+        let Some(g) = &o.geom else {
+            kept.push(o);
+            *kinds.entry(o.kind.clone()).or_insert(0) += 1;
+            continue;
+        };
         let name = match layer::for_object(o, op.as_deref()) {
             Some(n) => n,
             None => {
@@ -64,7 +75,7 @@ pub fn import(site: &Site, path: &std::path::Path, unit_factor: f64) -> Result<S
             }
         };
         let s = spec(&name);
-        let mut pairs: Vec<(&str, String)> = vec![("bron", "NLCS++".into()), ("nlcspp_object", o.kind.clone())];
+        let mut pairs: Vec<(&str, String)> = vec![("bron", "NLCS++".into()), ("nlcspp_object", o.kind.clone()), (IMPORT, import.clone())];
         pairs.extend(o.attrs.iter().map(|(k, v)| (k.as_str(), v.clone())));
         let data = crate::bridge::object_data(pairs);
         let mut ents: Vec<EntityType> = Vec::new();
@@ -107,6 +118,9 @@ pub fn import(site: &Site, path: &std::path::Path, unit_factor: f64) -> Result<S
         *kinds.entry(o.kind.clone()).or_insert(0) += 1;
     }
     let (n, layers) = batch.write("NLCS++")?;
+    // After the entities, so the record can join their undo step.
+    keep_relations(&import, &kept)?;
+    drawn += kept.len();
     crate::bridge::note_source(&format!("NLCS++ {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("")));
     let top: Vec<String> = {
         let mut v: Vec<(&String, &usize)> = kinds.iter().collect();
@@ -137,8 +151,103 @@ pub struct Project {
     pub toelichting: String,
 }
 
+/// The object data key with the import an object came with.
+const IMPORT: &str = "nlcspp_levering";
+
+/// A key unique per import.
+fn import_key() -> String {
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    format!("{t:x}-{}", N.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+}
+
+/// The XRecord (`OPENINFRA/NLCSPP`) with the imported objects that have no
+/// geometry: relation objects the schema allows without a location, each
+/// with its import. Nothing in the drawing shows them; the export delivers
+/// them again.
+const RELATIONS: &str = "NLCSPP";
+
+fn relations() -> Result<Vec<(String, Object)>, String> {
+    let Some(text) = crate::bridge::json_record_read(RELATIONS) else { return Ok(Vec::new()) };
+    let v: Vec<(String, String, Vec<(String, String)>)> = serde_json::from_str(&text).map_err(|e| format!("OPENINFRA/{RELATIONS}: {e}"))?;
+    Ok(v.into_iter().map(|(import, kind, attrs)| (import, Object { kind, attrs, ..Default::default() })).collect())
+}
+
+/// Adds the objects of one import to [`RELATIONS`].
+fn keep_relations(import: &str, new: &[&Object]) -> Result<(), String> {
+    if new.is_empty() {
+        return Ok(());
+    }
+    // Imports run on their own threads: one read-and-write at a time.
+    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut all: Vec<(String, String, Vec<(String, String)>)> = relations()?.into_iter().map(|(i, o)| (i, o.kind, o.attrs)).collect();
+    all.extend(new.iter().map(|o| (import.to_string(), o.kind.clone(), o.attrs.clone())));
+    crate::bridge::json_record_write(RELATIONS, &serde_json::to_string(&all).map_err(|e| e.to_string())?)
+}
+
+fn take(o: &mut Object, k: &str) -> Option<String> {
+    let i = o.attrs.iter().position(|(a, _)| a == k)?;
+    Some(o.attrs.remove(i).1)
+}
+
+/// The number of references (IDREF fields) an object has.
+fn references(o: &Object) -> usize {
+    model::model().object(&o.kind).map_or(0, |d| d.velden.iter().filter(|f| f.kind == "IDREF" && o.get(&f.name).is_some()).count())
+}
+
+/// Gives the objects of a delivery their IDs (a drawn object's follows
+/// from its CAD handle, a kept relation is numbered) and points their
+/// references at them. A kept relation whose references all name objects
+/// that are not delivered is left out, until no more drop out. Returns the
+/// objects and the findings about references.
+fn with_ids(drawn: Vec<Object>, kept: Vec<(String, Object)>) -> (Vec<Object>, Vec<Finding>) {
+    let mut objs = Vec::with_capacity(drawn.len() + kept.len());
+    let mut source = Vec::with_capacity(drawn.len() + kept.len());
+    for mut o in drawn {
+        // Drawn before imports kept their import: one shared one.
+        let import = take(&mut o, IMPORT).unwrap_or_default();
+        source.push(take(&mut o, "ID").map(|id| (import, id)));
+        let id = xml::xml_id("H", o.get("Handle").unwrap_or(""));
+        o.set("ID", id);
+        objs.push(o);
+    }
+    let first_kept = objs.len();
+    for (i, (import, mut o)) in kept.into_iter().enumerate() {
+        source.push(take(&mut o, "ID").map(|id| (import, id)));
+        // Its handle in the source drawing: nothing in this drawing.
+        take(&mut o, "Handle");
+        o.set("ID", format!("R{}", i + 1));
+        objs.push(o);
+    }
+    let refs: Vec<usize> = objs.iter().map(references).collect();
+    let mut gone = vec![false; objs.len()];
+    let (delivered, dangling) = loop {
+        let left: Vec<usize> = (0..objs.len()).filter(|&i| !gone[i]).collect();
+        let mut trial: Vec<Object> = left.iter().map(|&i| objs[i].clone()).collect();
+        let dangling = xml::relink(&mut trial, &left.iter().map(|&i| source[i].clone()).collect::<Vec<_>>());
+        let more: Vec<usize> = left.iter().enumerate().filter(|&(j, &i)| i >= first_kept && refs[i] > 0 && dangling.iter().filter(|d| d.object == j).count() == refs[i]).map(|(_, &i)| i).collect();
+        if more.is_empty() {
+            break (trial, dangling);
+        }
+        for i in more {
+            gone[i] = true;
+        }
+    };
+    let label = |o: &Object| format!("{} {}", o.kind, o.get("Handle").or(o.get("ID")).unwrap_or(""));
+    let mut findings = Vec::new();
+    for d in &dangling {
+        findings.push(Finding { level: nlcspp::Level::Waarschuwing, object: label(&delivered[d.object]), field: d.field.clone(), message: format!("verwijst naar ID {}, dat niet in de tekening staat; de verwijzing wordt niet geleverd", d.id) });
+    }
+    for (o, _) in objs.iter().zip(&gone).filter(|(_, g)| **g) {
+        findings.push(Finding { level: nlcspp::Level::Waarschuwing, object: label(o), field: String::new(), message: "object zonder geometrie uit een import; de objecten waar het naar verwijst worden niet geleverd, dus dit object ook niet".into() });
+    }
+    (delivered, findings)
+}
+
 /// The NLCS++ objects of a drawing (by object data, else by layer name)
-/// with their entity layer, in RD.
+/// with their entity layer, in RD. `ID` is an imported object's ID in its
+/// source, [`IMPORT`] the import it came with.
 pub fn objects(doc: &CadDocument, site: &Site, unit_factor: f64, operator: &str) -> Result<Vec<(Object, String)>, String> {
     let feats = crate::geoexport::features(doc, site, unit_factor, &crate::geoexport::Options { annotation: false, ..Default::default() });
     let rd = (site.crs != "EPSG:28992").then(|| Transformer::new(&site.crs, "EPSG:28992")).transpose()?;
@@ -181,7 +290,7 @@ pub fn objects(doc: &CadDocument, site: &Site, unit_factor: f64, operator: &str)
         const OURS: [&str; 6] = ["bron", "nlcspp_object", "laag", "cad_type", "cad_handle", "tekst"];
         for (k, v) in &f.props {
             let model_field = def.velden.iter().any(|fd| &fd.name == k);
-            let internal = OURS.contains(&k.as_str()) || k.starts_with("nlcs_") || k == "Handle" || k == "ID" || k == "blok";
+            let internal = OURS.contains(&k.as_str()) || k.starts_with("nlcs_") || k == "Handle" || k == "blok";
             if !internal && (model_field || imported) {
                 o.set(k, v.clone());
             }
@@ -241,8 +350,10 @@ pub fn delivery(doc: &CadDocument, site: &Site, unit_factor: f64, operator: &str
             findings.push(w);
         }
     }
-    let n = found.len();
-    d.objects = found.into_iter().map(|(o, _)| o).collect();
+    let (objects, refs) = with_ids(found.into_iter().map(|(o, _)| o).collect(), relations()?);
+    let n = objects.len();
+    d.objects = objects;
+    findings.extend(refs);
     findings.extend(check::check(&d, Some(operator)));
     findings.sort_by(|a, b| a.level.cmp(&b.level).then(a.object.cmp(&b.object)));
     Ok((xml::write(&d, operator, "EPSG:28992"), findings, n))

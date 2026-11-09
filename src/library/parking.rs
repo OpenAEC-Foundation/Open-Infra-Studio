@@ -614,7 +614,7 @@ pub struct ParkingCmd {
 impl ParkingCmd {
     fn run(&self) -> CommandStep {
         let (path, req) = (self.path.clone(), self.req.clone());
-        std::thread::spawn(move || match draw(&path, &req) {
+        bridge::spawn_command(move || match draw(&path, &req) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("{}: {e}", tr("Parkeervakken", "Parking bays"))),
         });
@@ -733,16 +733,13 @@ pub fn command(host: &mut dyn HostApi, cmd: &str) {
     }
     let sel = host.selection();
     if sel.len() == 1 {
-        std::thread::spawn(move || match super::place::selected_line(&sel) {
-            Ok(p) => {
-                pc.path = p;
-                let _ = pc.run();
-            }
+        bridge::spawn_command(move || match super::place::selected_line(&sel).and_then(|p| draw(&p, &pc.req)) {
+            Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("{}: {e}", tr("Parkeervakken", "Parking bays"))),
         });
         return;
     }
-    host.start_interactive(Box::new(pc));
+    bridge::start_interactive(host, Box::new(pc));
 }
 
 #[cfg(test)]
