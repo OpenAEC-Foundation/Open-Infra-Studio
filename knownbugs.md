@@ -41,3 +41,9 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 24. **Windows-workflow: de rode stap hangt af van een historische commit** (#113, Terra). De job haalt de oude bron uit `5a4e2de`. Als die geschiedenis verandert of de commit ontbreekt, breekt de job. Richting: bewaar de oude bron als vaste testfixture met herkomst.
 
 25. **Windows-bijlagen: de COM-aanroep draait zonder berichtenlus** (#113, Terra). `open_document` initialiseert COM en roept de documentassociatie synchroon aan, zonder eigen berichtenlus. Richting: onderzoek welke associatiehandlers een berichtenlus vereisen en dek die route native af.
+
+26. **IMRO: onbruikbare invoer heeft in een Engelse sessie nog een Nederlandse foutkop** (#118, Terra ronde 2). `src/gis/planning/gml.rs:350` geeft `Geen IMRO-planobjecten met geometrie gevonden`; de Engelse regressietest verwacht die zin ook. Richting: vertaal de kopzin via de bestaande taalroute en pas de NL/EN-proef aan.
+
+27. **IMRO: een latere leesfout verliest eerder verzamelde oorzaken** (#118, Terra ronde 2). Een fout via `?`, bijvoorbeeld een kapotte geometriereferentie in `src/gis/planning/gml.rs:307`, stopt de parser zonder de al bewaarde objectmeldingen. Richting: voeg die meldingen ook bij deze vroege foutuitgangen toe.
+
+28. **IMRO: GIS_PLAN_GML verliest waarschuwingen bij een mislukte coördinatenomzetting** (#118, Terra ronde 2). De aparte opdracht via `plannen::import_path` geeft de fout uit `place_with_text` (`src/plannen.rs:478`) zonder de bewaarde objectmeldingen terug. De gewone bestandsroute voegt ze wel toe. Richting: behoud de meldingen ook in het foutresultaat van de aparte opdracht.
