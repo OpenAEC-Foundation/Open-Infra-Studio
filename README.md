@@ -431,6 +431,10 @@ Beside the drawing, unless the command is given a path.
 | **IFC 4.3** | IFC4X3_ADD2: `<drawing>_IFC4X3.ifc` (see [IFC 4.3 export](#ifc-43-export)) | `GIS_IFC`, `CIV_IFC` |
 | **Command results** | JSON per call: `<config>/OpenCADStudio/open-infra/api/<ID>.json` | any `CIV_` or GIS data command with `ID=<name>` |
 
+GeoJSON writes longitude and latitude only. Current project heights in metres stay in one feature attribute: a number for a point, an array for a line, or an array per ring for a polygon. The order follows the geometry positions. The collection member `openaec:project_z_property` names that attribute. The default is `openaec:project_z`; if object data already uses it, the exporter chooses the first unused numbered name for the whole file. Existing object attributes remain intact. These are project heights (NAP when the project uses NAP), without a vertical datum transformation. The existing reader imports XY geometry; earlier height attributes remain available as object data after import and re-export. GeoPackage keeps its original project coordinates and heights.
+
+Import keeps at most 40 object attributes and truncates each `key=value` record to 255 bytes; longer height arrays can therefore be incomplete after import.
+
 ### Web services and data APIs
 
 | Protocol | Formats | Used for |

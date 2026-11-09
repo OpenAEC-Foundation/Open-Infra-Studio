@@ -38,7 +38,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-VERSION = "2026.45"
+VERSION = "2026.46.0"
 PROTOCOL = "2025-06-18"
 
 

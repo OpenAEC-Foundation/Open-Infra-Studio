@@ -1,6 +1,7 @@
 //! Cross sections on a drawing too large for the shared view (#61, point 6):
 //! the BGT surfaces, KLIC cables and survey points along the axis must still
 //! be cut, or the command must refuse.
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use ocs_plugin_api::host::{
@@ -21,6 +22,8 @@ struct Drawing {
     entities: Vec<EntityType>,
     queries: bool,
     added: Mutex<Vec<EntityType>>,
+    /// XRecords the plugin wrote, such as the dependency graph.
+    records: Mutex<HashMap<String, Vec<XRecordEntry>>>,
 }
 
 fn bbox(e: &EntityType) -> Option<[f64; 4]> {
@@ -67,7 +70,7 @@ impl PluginRequestSender for Drawing {
                 XRecordEntry::string(1, "tin\tB\t20 21"),
                 XRecordEntry::string(1, "punten\t\t40"),
             ])),
-            PluginRequest::ReadXRecord { .. } => PluginResponse::XRecordEntries(Ok(Vec::new())),
+            PluginRequest::ReadXRecord { name, .. } => PluginResponse::XRecordEntries(Ok(self.records.lock().unwrap().get(&name).cloned().unwrap_or_default())),
             PluginRequest::GetSelection => PluginResponse::Selection(Vec::new()),
             PluginRequest::GetEntitiesBatch { handles } => PluginResponse::GetEntitiesBatchResult(Ok(handles
                 .iter()
@@ -91,8 +94,14 @@ impl PluginRequestSender for Drawing {
                 added.extend(entities);
                 PluginResponse::Handles(handles)
             }
-            PluginRequest::UpdateXRecord { .. } => PluginResponse::XRecordUpdateResult(Ok(Handle::from(1002u64))),
-            PluginRequest::CreateXRecord { .. } => PluginResponse::XRecordCreateResult(Ok(Handle::from(1002u64))),
+            PluginRequest::UpdateXRecord { name, entries, .. } => {
+                self.records.lock().unwrap().insert(name, entries);
+                PluginResponse::XRecordUpdateResult(Ok(Handle::from(1002u64)))
+            }
+            PluginRequest::CreateXRecord { name, entries, .. } => {
+                self.records.lock().unwrap().insert(name, entries);
+                PluginResponse::XRecordCreateResult(Ok(Handle::from(1002u64)))
+            }
             PluginRequest::PushUndo { .. }
             | PluginRequest::WriteRecord { .. }
             | PluginRequest::SetDirty
@@ -146,7 +155,14 @@ fn drawing(queries: bool) -> Drawing {
         ],
         queries,
         added: Mutex::new(Vec::new()),
+        records: Mutex::new(HashMap::new()),
     }
+}
+
+/// `CIV_BIJWERKEN CONTROLE`.
+fn check(d: Arc<Drawing>, tab: u64) -> Result<String, String> {
+    let target = bridge::Target { sender: d, tab_id: tab, unit_factor: 1.0, doc_path: None };
+    bridge::with_command_context(target, None, None, || civiel::graaf::update(&civiel::CivielOptions::default(), true, &|_| {}))
 }
 
 fn run(d: Arc<Drawing>, tab: u64) -> Result<String, String> {
@@ -170,4 +186,30 @@ fn large_drawing_without_query_support_refuses_cross_sections() {
     let err = run(d.clone(), 61_602).unwrap_err();
     assert!(err.contains(&open_infra::lang::tr("BGT, KLIC en meetpunten", "BGT, KLIC and survey points")), "{err}");
     assert!(d.added.lock().unwrap().is_empty(), "er is toch een onvolledige doorsnede getekend");
+}
+
+#[test]
+fn large_drawing_check_sees_a_moved_cable() {
+    // The cable is not in the index: the check must read it around the axis,
+    // as the cross sections did (#61, point 5).
+    let d = Arc::new(drawing(true));
+    run(d.clone(), 61_603).unwrap();
+    let msg = check(d.clone(), 61_604).unwrap();
+    assert!(msg.contains(open_infra::lang::tr("alle actueel", "all up to date")), "{msg}");
+    let mut moved = drawing(true);
+    *moved.records.lock().unwrap() = d.records.lock().unwrap().clone();
+    let cable = moved.entities.iter_mut().find(|e| e.common().handle == Handle::from(0x31u64)).unwrap();
+    *cable = polyline(0x31, "B-KL-LAAGSPANNING-G", &[[55.0, -30.0], [75.0, 30.0]], false, &[("bron", "KLIC"), ("thema", "laagspanning")]);
+    let msg = check(Arc::new(moved), 61_605).unwrap();
+    assert!(msg.contains("KLIC"), "{msg}");
+}
+
+#[test]
+fn large_drawing_check_refuses_without_query_support() {
+    let d = Arc::new(drawing(true));
+    run(d.clone(), 61_606).unwrap();
+    let blind = drawing(false);
+    *blind.records.lock().unwrap() = d.records.lock().unwrap().clone();
+    let err = check(Arc::new(blind), 61_607).unwrap_err();
+    assert!(err.contains(open_infra::lang::tr("gesneden objecten", "cut objects")), "{err}");
 }

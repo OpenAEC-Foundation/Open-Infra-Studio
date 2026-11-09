@@ -27,6 +27,10 @@ pub enum Seg {
     Spiral { a: XY, dir: f64, len: f64, k0: f64, k1: f64 },
 }
 
+/// The most halvings one clothoid gets in [`Seg::vertices`]: far more than
+/// a real transition curve needs, few enough to end quickly.
+const SPIRAL_SPLITS: usize = 16_384;
+
 /// Gauss–Legendre nodes and weights (10 points on [−1, 1]).
 const GL_X: [f64; 5] = [0.148_874_338_981_631_2, 0.433_395_394_129_247_2, 0.679_409_568_299_024_4, 0.865_063_366_688_984_5, 0.973_906_528_517_171_7];
 const GL_W: [f64; 5] = [0.295_524_224_714_752_9, 0.269_266_719_309_996_3, 0.219_086_362_515_982, 0.149_451_349_150_580_6, 0.066_671_344_308_688_1];
@@ -177,8 +181,12 @@ impl Seg {
                 let turn = (self.at(len).1 - self.at(0.0).1).abs().max(self.curvature(0.0).abs().max(self.curvature(len).abs()) * len);
                 let n = ((turn / 0.2).ceil() as usize).clamp(1, 4096);
                 let mut out = Vec::new();
+                // Rounding far from the origin can keep every arc over the
+                // tolerance: a budget of halvings for the whole clothoid
+                // instead of 2^24 per piece.
+                let mut splits = SPIRAL_SPLITS;
                 for i in 0..n {
-                    self.arcs(len * i as f64 / n as f64, len * (i + 1) as f64 / n as f64, d, tol.max(1e-9), 0, &mut out);
+                    self.arcs(len * i as f64 / n as f64, len * (i + 1) as f64 / n as f64, d, tol.max(1e-9), 0, &mut splits, &mut out);
                 }
                 out
             }
@@ -186,7 +194,7 @@ impl Seg {
     }
 
     /// Arcs from `s0` to `s1` on the clothoid moved `d`, into `out`.
-    fn arcs(&self, s0: f64, s1: f64, d: f64, tol: f64, depth: u32, out: &mut Vec<(XY, f64)>) {
+    fn arcs(&self, s0: f64, s1: f64, d: f64, tol: f64, depth: u32, splits: &mut usize, out: &mut Vec<(XY, f64)>) {
         let (p0, p1) = (self.offset_point(s0, d), self.offset_point(s1, d));
         let turn = self.at(s1).1 - self.at(s0).1;
         let bulge = (turn / 4.0).tan();
@@ -203,10 +211,11 @@ impl Seg {
             ((q[0] - c[0]).hypot(q[1] - c[1]) - r.abs()).abs()
         };
         let worst = [0.2, 0.5, 0.8].iter().map(|t| stray(self.offset_point(s0 + (s1 - s0) * t, d))).fold(0.0, f64::max);
-        if depth < 24 && worst > tol {
+        if depth < 24 && worst > tol && *splits > 0 {
+            *splits -= 1;
             let sm = (s0 + s1) / 2.0;
-            self.arcs(s0, sm, d, tol, depth + 1, out);
-            self.arcs(sm, s1, d, tol, depth + 1, out);
+            self.arcs(s0, sm, d, tol, depth + 1, splits, out);
+            self.arcs(sm, s1, d, tol, depth + 1, splits, out);
         } else {
             out.push((p0, bulge));
         }
@@ -1038,6 +1047,9 @@ pub(super) struct PreparedProfile {
     title: String,
     summary: String,
     suffix: String,
+    /// Cross sections: their layout and the objects they were cut from, for
+    /// the dependency graph.
+    cut_from: Option<(super::graaf::Snijlijnen, Vec<super::doorsnede::Cuttable>)>,
 }
 
 impl PreparedProfile {
@@ -1053,7 +1065,7 @@ impl PreparedProfile {
                 crate::bridge::index_add("lengteprofiel", &self.name, &[*h], false);
             }
         }
-        super::graaf::register(&self.doc, self.kind, self.axis, self.at, &handles)?;
+        super::graaf::register(&self.doc, self.kind, self.axis, self.at, self.cut_from.as_ref().map(|(s, t)| (*s, t.as_slice())), &handles)?;
         Ok(format!("{}, {} elementen.{}", self.summary, handles.len(), self.suffix))
     }
 }
@@ -1236,7 +1248,7 @@ pub(super) fn prepare_length_profile(opt: &super::CivielOptions, doc: Arc<CadDoc
     super::api::note("maaiveld_max", zmax);
     super::api::note("plaats", serde_json::json!([at[0], at[1]]));
     let summary = format!("{title}: {} m, {} – {} m ({})", format!("{:.1}", len / f).replace('.', ","), nap(zmin, 2), nap(zmax, 2), ground.label());
-    Ok(PreparedProfile { out, doc, kind: "lengteprofiel", axis: axis_h, at, name: al.name, title, summary, suffix: String::new() })
+    Ok(PreparedProfile { out, doc, kind: "lengteprofiel", axis: axis_h, at, name: al.name, title, summary, suffix: String::new(), cut_from: None })
 }
 
 /// Cross sections every `section_every` m (and at every tangent point)
@@ -1253,16 +1265,17 @@ pub(super) fn prepare_cross_sections(opt: &super::CivielOptions, doc: Arc<CadDoc
     let (al, axis_h, _) = axis(&doc, handle)?;
     let mut ground = Maaiveld::find(&ctx, &doc)?;
     let f = ctx.f;
-    let stations = al.stations(opt.section_every.max(1.0) * f, true);
+    // The layout the dependency graph keeps, to find what the sections cut.
+    let layout = super::graaf::Snijlijnen { afstand: opt.section_every.max(1.0), links: opt.left.max(1.0), rechts: opt.right.max(1.0), eenheid: f };
+    let stations = layout.stations(&al);
     if stations.len() > 400 {
         return Err(format!("{} dwarsprofielen is te veel: kies een grotere afstand", stations.len()));
     }
-    let (left, right) = (opt.left.max(1.0), opt.right.max(1.0));
+    let (left, right) = (layout.links, layout.rechts);
     // What the sections cut lies around the axis (survey points up to 1 m
     // beside a section). A drawing too large to share comes with only the
     // indexed objects, so ask the host for the rest, or stop.
-    let (b, m) = (al.bbox(), (left.max(right) + 2.0) * f);
-    let around = super::read_area(&doc, [b[0] - m, b[1] - m, b[2] + m, b[3] + m]).map_err(|e| {
+    let around = super::read_area(&doc, layout.area(&al)).map_err(|e| {
         format!("{} ({e})", crate::lang::tr("dwarsprofielen niet gemaakt: BGT, KLIC en meetpunten langs de as zijn niet te lezen", "cross sections not made: BGT, KLIC and survey points along the axis cannot be read"))
     })?;
     let step = (opt.step.max(0.1)).min((left + right) / 20.0);
@@ -1288,7 +1301,7 @@ pub(super) fn prepare_cross_sections(opt: &super::CivielOptions, doc: Arc<CadDoc
         let plan_at = |d: f64| [p[0] + right_n[0] * d * f, p[1] + right_n[1] * d * f];
         let zs: Vec<(f64, Option<f64>)> = offsets.iter().map(|d| (*d, ground.height(plan_at(*d), f))).collect();
         let axis_z = ground.height(p, f);
-        views.push(SectionView { s: *s, ground: zs, design: Vec::new(), axis_z, cut: None, fill: None, plan: (plan_at(-left), plan_at(right)) });
+        views.push(SectionView { s: *s, ground: zs, design: Vec::new(), axis_z, cut: None, fill: None, plan: layout.line(&al, *s) });
     }
     if views.iter().all(|v| v.ground.iter().all(|p| p.1.is_none())) {
         return Err(ground.error().unwrap_or_else(|| format!("geen hoogtes langs de as ({})", ground.label())));
@@ -1318,7 +1331,7 @@ pub(super) fn prepare_cross_sections(opt: &super::CivielOptions, doc: Arc<CadDoc
         String::new()
     };
     let summary = format!("{title}: {} profielen in {rows} rij(en) van {} ({label})", views.len(), opt.per_row.max(1));
-    Ok(PreparedProfile { out, doc, kind: "dwarsprofielen", axis: axis_h, at, name: al.name, title, summary, suffix: cut })
+    Ok(PreparedProfile { out, doc, kind: "dwarsprofielen", axis: axis_h, at, name: al.name, title, summary, suffix: cut, cut_from: Some((layout, things)) })
 }
 
 /// The area views keep clear of: the project area and the axis.

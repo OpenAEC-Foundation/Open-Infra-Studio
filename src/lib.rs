@@ -326,7 +326,7 @@ impl InteractiveCommand for AreaCmd {
         site.height = (h * 10.0).round() / 10.0;
         // Write from a worker: this callback runs inside the host's input
         // handling and must not wait on another host round-trip.
-        std::thread::spawn(move || match bridge::save_site(&site) {
+        bridge::spawn_command(move || match bridge::save_site(&site) {
             Ok(()) => {
                 bridge::info(&format!("Importgebied {} × {} m rond X {:.2} Y {:.2} ({}).", site.width, site.height, site.origin_e, site.origin_n, site.crs));
                 ui::send(ui::UiMsg::SiteChanged);
@@ -358,7 +358,7 @@ impl InteractiveCommand for PointCmd {
     fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
         let p = self.site.from_drawing([pt[0], pt[1]], self.unit_factor);
         let (site, unit) = (self.site.crs.clone(), self.unit_factor);
-        std::thread::spawn(move || {
+        bridge::spawn_command(move || {
             let mut lines = vec![format!("{site}: X {:.3}  Y {:.3}", p[0], p[1])];
             if let Ok(ll) = gis::crs::transform(&site, "EPSG:4326", p) {
                 lines.push(format!("WGS 84: {:.8} N  {:.8} E", ll[1], ll[0]));
@@ -411,7 +411,7 @@ impl InteractiveCommand for ProfileCmd {
         }
         let (site, route, at) = (self.site.clone(), self.route.clone(), [pt[0], pt[1]]);
         // A worker: this callback runs inside the host's input handling.
-        std::thread::spawn(move || {
+        bridge::spawn_command(move || {
             let opt = hoogte::settings();
             match hoogte::profile(&site, &route, at, &opt, &|_| {}) {
                 Ok(m) => bridge::info(&m),
@@ -470,7 +470,7 @@ fn ahn_command(host: &mut dyn HostApi, verb: &str) {
     let Some(site) = require_site(host) else { return };
     let verb = verb.to_string();
     host.push_info(&format!("[Open Infra] {verb} …"));
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         let opt = hoogte::settings();
         let progress = |_: String| {};
         let result = match verb.as_str() {
@@ -495,7 +495,7 @@ impl InteractiveCommand for TableCmd {
     }
     fn on_point(&mut self, pt: [f64; 3]) -> CommandStep {
         let at = [pt[0], pt[1]];
-        std::thread::spawn(move || match quantities_table(at) {
+        bridge::spawn_command(move || match quantities_table(at) {
             Ok(m) => bridge::info(&m),
             Err(e) => bridge::error(&format!("Hoeveelhedenstaat: {e}")),
         });
@@ -529,7 +529,7 @@ fn quantities_table(at: [f64; 2]) -> Result<String, String> {
 fn nlcs_command(host: &mut dyn HostApi, verb: &str) {
     let verb = verb.to_string();
     host.push_info(&format!("[Open Infra] {verb} …"));
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         let result = || -> Result<String, String> {
             let t = bridge::target().ok_or("geen tekening actief")?;
             let doc = bridge::snapshot()?;
@@ -606,7 +606,7 @@ fn mutation_command(host: &mut dyn HostApi, cmd: &str) {
     let bronhouder = args.str("BRONHOUDER").unwrap_or("").to_string();
     let as_built = flag("GEREALISEERD");
     host.push_info("[Open Infra] BGT-mutatie maken …");
-    std::thread::spawn(move || match bgt_mutatie::export(&bronhouder, as_built, only) {
+    bridge::spawn_command(move || match bgt_mutatie::export(&bronhouder, as_built, only) {
         Ok(m) => bridge::info(&m),
         Err(e) => bridge::error(&format!("GIS_BGT_MUTATIE: {e}")),
     });
@@ -618,7 +618,7 @@ fn ifc_command(host: &mut dyn HostApi, cmd: &str) {
     let args = civiel::api::Args::parse(cmd.split_once(char::is_whitespace).map(|(_, a)| a).unwrap_or(""));
     let (path, selection, texts) = ifc::args(&args);
     host.push_info("[Open Infra] IFC 4x3 exporteren …");
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         let _ = civiel::api::take();
         match ifc::command(path, selection, texts, &|_| {}) {
             Ok(m) => bridge::info(&m),
@@ -635,7 +635,7 @@ fn geodata_command(host: &mut dyn HostApi, cmd: &str) {
     let Some(site) = require_site(host) else { return };
     let arg = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim().trim_matches('"').to_string()).unwrap_or_default();
     host.push_info(&format!("[Open Infra] GEODATA {} …", lang::tr("schrijven", "writing")));
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         let run = || -> Result<String, String> {
             let t = bridge::target().ok_or("geen tekening actief")?;
             let mut doc = bridge::snapshot()?;
@@ -704,7 +704,7 @@ fn klic_aanvraag_command(host: &mut dyn HostApi, cmd: &str) {
     ));
     let path = args.str("PAD").map(std::path::PathBuf::from).unwrap_or_else(|| bridge::beside_drawing("klic-aanvraag.json"));
     let fallback = site.label.clone();
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         let a = gis::klic_aanvraag::from_args(&args, ring, &fallback);
         match gis::klic_aanvraag::prepare(a, &path) {
             Ok(m) => bridge::info(&m),
@@ -732,7 +732,7 @@ fn nlcspp_command(host: &mut dyn HostApi, verb: &str, cmd: &str) {
     };
     let path = args.str("PAD").map(str::to_string).or_else(|| (verb == "GIS_NLCSPP_IMPORT").then(|| rest.trim_matches('"').to_string()));
     host.push_info(&format!("[Open Infra] {verb} …"));
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         let run = || -> Result<String, String> {
             let t = bridge::target().ok_or("geen tekening actief")?;
             if verb == "GIS_NLCSPP_IMPORT" {
@@ -780,7 +780,7 @@ fn export_command(host: &mut dyn HostApi, verb: &str, cmd: &str) {
     let opt = geoexport::Options { selection: None, layers: args.str("LAGEN").map(str::to_string), annotation: flag("ALLES") || flag("ALL") };
     let selection = flag("SELECTIE") || flag("SELECTION");
     host.push_info(&format!("[Open Infra] {} {} …", lang::tr("Exporteren naar", "Exporting to"), path.display()));
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         let run = || -> Result<String, String> {
             let t = bridge::target().ok_or("geen tekening actief")?;
             let doc = bridge::snapshot()?;
@@ -839,7 +839,7 @@ fn server_command(host: &mut dyn HostApi, cmd: &str) {
     let layer = kv("LAAG");
     let res = kv("RES").and_then(|r| r.replace(',', ".").parse::<f64>().ok());
     host.push_info(&format!("[Open Infra] {id} ophalen…"));
-    std::thread::spawn(move || match import::run_server(&site, &id, layer.as_deref(), res, &|_| {}) {
+    bridge::spawn_command(move || match import::run_server(&site, &id, layer.as_deref(), res, &|_| {}) {
         Ok(m) => bridge::info(&m),
         Err(e) => bridge::error(&format!("GIS_Q_SERVER {id}: {e}")),
     });
@@ -864,7 +864,7 @@ fn open(host: &mut dyn HostApi, tab: ui::Tab) {
 fn quick(host: &mut dyn HostApi, q: &'static Quick, label: &'static str) {
     let Some(site) = require_site(host) else { return };
     host.push_info(&format!("[Open Infra] {label} ophalen…"));
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         let progress = |_: String| {};
         let result = match q {
             Quick::Data(d) => import::run_dataset(&site, d, &progress),
@@ -935,7 +935,7 @@ fn site_command(host: &mut dyn HostApi, cmd: &str) {
     };
     // A CRS that is not built in comes from epsg.io first (off the host's
     // thread); without it the origin would keep the previous location.
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         if let Err(e) = gis::crs::ensure(&site.crs) {
             return bridge::error(&format!("GIS_SITE: {}: {e}", site.crs));
         }
@@ -968,7 +968,7 @@ fn base_data(host: &mut dyn HostApi, verb: &str, arg: &str) {
     let verb = verb.to_string();
     let arg = arg.trim().trim_matches('"').to_string();
     host.push_info(&format!("[Open Infra] {verb} …"));
-    std::thread::spawn(move || {
+    bridge::spawn_command(move || {
         let progress = |_: String| {};
         let opt = basisdata::NlcsOptions::default();
         let result = match verb.as_str() {
@@ -1017,7 +1017,9 @@ fn adopt_geodata(host: &mut dyn HostApi) {
         return;
     }
     TRIED.lock().unwrap().push(tab);
-    std::thread::spawn(move || {
+    let Some(target) = bridge::target() else { return };
+    // This automatic helper is not the requested command: keep its reply ID.
+    std::thread::spawn(move || bridge::with_command_context(target, None, None, || {
         let Ok(doc) = bridge::snapshot() else { return };
         if bridge::partial() {
             return;
@@ -1035,14 +1037,15 @@ fn adopt_geodata(host: &mut dyn HostApi) {
         });
         let Some(g) = found else { return };
         let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
-        match gis::geodata::site_from(&g, unit).and_then(|mut site| {site.region=localisation::current();bridge::save_site(&site).map(|_| site)}) {
-            Ok(site) => {
+        match gis::geodata::site_from(&g, unit).and_then(|mut site| {site.region=localisation::current();bridge::adopt_site(&site).map(|stored| stored.then_some(site))}) {
+            Ok(Some(site)) => {
                 bridge::info(&format!("{} {} ({}).", lang::tr("Projectlocatie overgenomen uit het GEODATA-object van de tekening:", "Project location taken from the drawing's GEODATA object:"), site.crs, if site.absolute { lang::tr("absoluut", "absolute") } else { lang::tr("relatief", "relative") }));
                 ui::send(ui::UiMsg::SiteChanged);
             }
+            Ok(None) => {}
             Err(e) => bridge::info(&e),
         }
-    });
+    }));
 }
 
 /// `GIS_BESTAND_IMPORT <pad> [EPSG:code]`: a GIS file straight into the drawing.
@@ -1054,7 +1057,7 @@ fn file_import(host: &mut dyn HostApi, path: &str, crs: Option<String>) {
     }
     let path = std::path::PathBuf::from(path);
     host.push_info(&format!("[Open Infra] {} {} …", lang::tr("Importeren", "Importing"), path.display()));
-    std::thread::spawn(move || match bestand::import_path(&site, &path, crs.as_deref(), &|_| {}) {
+    bridge::spawn_command(move || match bestand::import_path(&site, &path, crs.as_deref(), &|_| {}) {
         Ok(m) => bridge::info(&m),
         Err(e) => bridge::error(&format!("{}: {e}", path.display())),
     });
@@ -1156,7 +1159,7 @@ fn service_load_command(host: &mut dyn HostApi, cmd: &str) {
     };
     host.push_info(&format!("[Open Infra] {} {} …", service.name, lang::tr("laden", "loading")));
     let server = service.to_map_server();
-    std::thread::spawn(move || match import::service_layer(&site, &server, None, None, layer.as_deref(), res, limit, &|_| {}) {
+    bridge::spawn_command(move || match import::service_layer(&site, &server, None, None, layer.as_deref(), res, limit, &|_| {}) {
         Ok(m) => bridge::info(&m),
         Err(e) => bridge::error(&format!("GIS_SERVICE_LOAD {}: {e}", server.id)),
     });
@@ -1177,7 +1180,7 @@ fn vehicle_command(host: &mut dyn HostApi, cmd: &str) {
     };
     let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
     let view = if side { library::draw::View::Side } else { library::draw::View::Top };
-    host.start_interactive(Box::new(library::place::InsertCmd::new(v, view, unit)));
+    bridge::start_interactive(host, Box::new(library::place::InsertCmd::new(v, view, unit)));
 }
 
 /// `GIS_VEEGPAD <id> [interval] [ACHTERUIT] [KNIK=] [PAD=]`: drive a vehicle
@@ -1198,7 +1201,7 @@ fn catalogue_command(host: &mut dyn HostApi, cmd: &str) {
         return;
     }
     let view = if side { library::draw::View::Side } else { library::draw::View::Top };
-    host.start_interactive(Box::new(library::place::CatalogueCmd { list, view }));
+    bridge::start_interactive(host, Box::new(library::place::CatalogueCmd { list, view }));
 }
 
 impl BuiltinPlugin for OpenInfra {
@@ -1225,7 +1228,8 @@ impl BuiltinPlugin for OpenInfra {
         let (cmd_owned, id) = bridge::split_id(cmd);
         let cmd = cmd_owned.as_str();
         bridge::expect_reply(id);
-        adopt_geodata(host);
+        // An explicit location must not race with automatic GEODATA adoption.
+        if verb != "GIS_SITE" { adopt_geodata(host); }
         match verb.as_str() {
             "GIS_INFRA_LIBRARY" | "GIS_INFRA_BIBLIOTHEEK" => { open(host, ui::Tab::Library); ui::send(ui::UiMsg::InfraLibrary); bridge::reply(true, "Infra-bibliotheek geopend"); }
             "GIS_INFRA_CATALOG" | "GIS_INFRA_CATALOGUS" | "GIS_INFRA_PLACE" | "GIS_INFRA_PLAATS" | "GIS_INFRA_INSPECT" | "GIS_INFRA_UPDATE" => library::infra::commands::dispatch(host, cmd),
@@ -1262,7 +1266,7 @@ impl BuiltinPlugin for OpenInfra {
                 };
                 nlcs_command(host, v);
             }
-            "GIS_HOEVEELHEDEN_TABEL" => host.start_interactive(Box::new(TableCmd)),
+            "GIS_HOEVEELHEDEN_TABEL" => bridge::start_interactive(host, Box::new(TableCmd)),
             "GIS_BGT_MUTATIE" => mutation_command(host, cmd),
             "GIS_IFC" => ifc_command(host, cmd),
             "GIS_NLCSPP_IMPORT" | "GIS_NLCSPP_EXPORT" | "GIS_NLCSPP_CONTROLE" => nlcspp_command(host, &verb, cmd),
@@ -1274,9 +1278,9 @@ impl BuiltinPlugin for OpenInfra {
                 match selected_route(host) {
                     Some(route) => {
                         host.push_info("[Open Infra] Profiel langs de geselecteerde lijn.");
-                        host.start_interactive(Box::new(ProfileCmd { route, picking_route: false, site }));
+                        bridge::start_interactive(host, Box::new(ProfileCmd { route, picking_route: false, site }));
                     }
-                    None => host.start_interactive(Box::new(ProfileCmd { route: Vec::new(), picking_route: true, site })),
+                    None => bridge::start_interactive(host, Box::new(ProfileCmd { route: Vec::new(), picking_route: true, site })),
                 }
             }
             "GIS_SITE" => site_command(host, cmd),
@@ -1289,7 +1293,7 @@ impl BuiltinPlugin for OpenInfra {
                 let dir = args.str("MAP").map(str::to_string).or_else(|| (!args.words.is_empty()).then(|| args.words.join(" "))).map(|d| std::path::PathBuf::from(d.trim_matches('"')));
                 let follow = args.str("VOLGEN").map(|v| matches!(v.to_ascii_lowercase().as_str(), "ja" | "yes" | "aan" | "on" | "1" | "true")).or((verb == "GIS_KLIC_VOLGEN").then_some(true));
                 host.push_info("[Open Infra] GIS_KLIC_MAP …");
-                std::thread::spawn(move || match klic_map::command(site, dir, follow) {
+                bridge::spawn_command(move || match klic_map::command(site, dir, follow) {
                     Ok(m) => bridge::info(&m),
                     Err(e) => bridge::error(&format!("GIS_KLIC_MAP: {e}")),
                 });
@@ -1322,7 +1326,7 @@ impl BuiltinPlugin for OpenInfra {
                     bridge::reply(false, "geef een bestand");
                 } else {
                     host.push_info("[Open Infra] GIS_RASTER_IMPORT …");
-                    std::thread::spawn(move || match gis::rasterbestand::import_path(&site, std::path::Path::new(&arg), &|_| {}) {
+                    bridge::spawn_command(move || match gis::rasterbestand::import_path(&site, std::path::Path::new(&arg), &|_| {}) {
                         Ok(m) => bridge::info(&m),
                         Err(e) => bridge::error(&format!("GIS_RASTER_IMPORT: {e}")),
                     });
@@ -1333,9 +1337,9 @@ impl BuiltinPlugin for OpenInfra {
                 site.register_crs();
                 let unit_factor = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
                 if verb == "GIS_GEBIED" {
-                    host.start_interactive(Box::new(AreaCmd { first: None, site, unit_factor }));
+                    bridge::start_interactive(host, Box::new(AreaCmd { first: None, site, unit_factor }));
                 } else {
-                    host.start_interactive(Box::new(PointCmd { site, unit_factor }));
+                    bridge::start_interactive(host, Box::new(PointCmd { site, unit_factor }));
                 }
             }
             "GIS_VOERTUIGEN" | "GIS_VEHICLES" | "GIS_BIBLIOTHEEK" | "GIS_LIBRARY" => open(host, ui::Tab::Library),
@@ -1349,7 +1353,7 @@ impl BuiltinPlugin for OpenInfra {
                     let Some(site) = require_site(host) else { return true };
                     let path = std::path::PathBuf::from(arg);
                     host.push_info(&format!("[Open Infra] {} {} …", lang::tr("Importeren", "Importing"), path.display()));
-                    std::thread::spawn(move || match gis::rasterbestand::import_path(&site, &path, &|_| {}) {
+                    bridge::spawn_command(move || match gis::rasterbestand::import_path(&site, &path, &|_| {}) {
                         Ok(m) => bridge::info(&m),
                         Err(e) => bridge::error(&format!("{}: {e}", path.display())),
                     });
@@ -1366,7 +1370,7 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_BGT_BIJWERKEN" | "GIS_BGT_UPDATE" => {
                 let Some(site) = require_site(host) else { return true };
                 host.push_info(&format!("[Open Infra] {} …", lang::tr("BGT bijwerken", "Updating the BGT")));
-                std::thread::spawn(move || match bijwerken::bgt_update(&site, &basisdata::NlcsOptions::default(), &|_| {}) {
+                bridge::spawn_command(move || match bijwerken::bgt_update(&site, &basisdata::NlcsOptions::default(), &|_| {}) {
                     Ok(m) => bridge::info(&m),
                     Err(e) => bridge::error(&format!("BGT: {e}")),
                 });
@@ -1374,7 +1378,7 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_Q_GWSW" | "GIS_GWSW" => {
                 let Some(site) = require_site(host) else { return true };
                 host.push_info(&format!("[Open Infra] GWSW {} …", lang::tr("riolering ophalen", "sewers")));
-                std::thread::spawn(move || {
+                bridge::spawn_command(move || {
                     let cols: Vec<&str> = gis::gwsw::COLLECTIONS.iter().map(|(c, _)| *c).collect();
                     match riolering::import(&site, &cols, &basisdata::NlcsOptions::default(), &|_| {}) {
                         Ok(m) => bridge::info(&m),
@@ -1397,7 +1401,7 @@ impl BuiltinPlugin for OpenInfra {
                     }
                 };
                 host.push_info(&format!("[Open Infra] {} …", lang::tr("Sonderingen en boringen (BRO) ophalen", "Fetching CPTs and boreholes (BRO)")));
-                std::thread::spawn(move || match civiel::ondergrond::overview(&civiel::settings(), &kinds, &|_| {}) {
+                bridge::spawn_command(move || match civiel::ondergrond::overview(&civiel::settings(), &kinds, &|_| {}) {
                     Ok(m) => bridge::info(&m),
                     Err(e) => bridge::error(&format!("BRO: {e}")),
                 });
@@ -1446,3 +1450,6 @@ impl BuiltinPlugin for OpenInfra {
 
 #[cfg(feature = "plugin")]
 ocs_plugin_api::export_plugin!(OpenInfra);
+
+#[cfg(test)]
+mod gis_worker_tests;
