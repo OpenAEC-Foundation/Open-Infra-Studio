@@ -1,6 +1,6 @@
 [package]
 name = "open-infra"
-version = "2026.45.4"
+version = "2026.46.0"
 edition = "2021"
 description = "Open Infra — GIS-workbench voor Open CAD Studio (infra en civiele techniek, NL en wereldwijd)."
 license = "GPL-3.0-only"
