@@ -8,6 +8,8 @@ mod lang {
 mod crs {
     pub type XY = [f64; 2];
 }
+#[path = "../../src/xmldoc.rs"]
+mod xmldoc;
 #[path = "../../src/gis/klic_extra.rs"]
 mod klic_extra;
 

@@ -18,6 +18,8 @@ def main():
     # Gebruik dezelfde versies en ZIP-features als de productiecode. De kopie
     # van Cargo.lock houdt ook de transitieve dependencies op dezelfde versies.
     zip_dep = manifest["dependencies"]["zip"]
+    windows_dep = manifest["target"]["cfg(windows)"]["dependencies"]["windows-sys"]
+    windows_features = windows_dep["features"] + ["Win32_Security"]
     (OUT / "Cargo.toml").write_text(f'''[package]
 name = "klic-attachments-test"
 version = "0.0.0"
@@ -34,7 +36,7 @@ roxmltree = {json.dumps(manifest["dependencies"]["roxmltree"])}
 zip = {{ version = {json.dumps(zip_dep["version"])}, default-features = false, features = {json.dumps(zip_dep["features"])} }}
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = {{ version = "0.61.2", features = ["Win32_System_Com", "Win32_System_Registry", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }}
+windows-sys = {{ version = {json.dumps(windows_dep["version"])}, features = {json.dumps(windows_features)} }}
 ''', encoding="utf-8")
     shutil.copyfile(ROOT / "Cargo.lock", OUT / "Cargo.lock")
     if os.name == "nt":
@@ -46,7 +48,7 @@ windows-sys = {{ version = "0.61.2", features = ["Win32_System_Com", "Win32_Syst
     if os.name == "nt":
         command += ["windows::windows_document_association", "--", "--exact", "--nocapture"]
     else:
-        command += sys.argv[1:]
+        command += sys.argv[1:] or ["klic_extra::tests::"]
     return subprocess.run(command, cwd=ROOT).returncode
 
 

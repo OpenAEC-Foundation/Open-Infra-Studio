@@ -139,8 +139,7 @@ fn child_href<'a>(n: roxmltree::Node<'a, 'a>, name: &str) -> Option<&'a str> {
 
 /// Reads the extras from the GI-xml text of a delivery.
 pub fn parse(xml: &str) -> Result<Extras, String> {
-    let opt = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
-    let doc = roxmltree::Document::parse_with_options(xml, opt).map_err(|e| format!("KLIC: {e}"))?;
+    let doc = crate::xmldoc::parse(xml, true).map_err(|e| format!("KLIC: {e}"))?;
     let id_of = |n: roxmltree::Node| n.attributes().find(|a| a.name() == "id").map(|a| a.value().to_string()).unwrap_or_default();
     // Network id → theme, for the EV areas that point to their network.
     let mut themes = std::collections::HashMap::new();
