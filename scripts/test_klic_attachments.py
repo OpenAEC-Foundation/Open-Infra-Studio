@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Test de echte bijlagecode zonder de CAD-interface te compileren."""
 from pathlib import Path
+import hashlib
 import json
 import os
 import shutil
@@ -44,6 +45,13 @@ windows-sys = {{ version = {json.dumps(windows_dep["version"])}, features = {jso
         subprocess.run(["rustc", "--edition=2021", str(ROOT / "tests/support/klic_document_probe.rs"),
                         "-o", str(probe)], check=True)
         os.environ["KLIC_DOCUMENT_PROBE"] = str(probe)
+    print("Bijlagebron SHA256:", hashlib.sha256((ROOT / "src/gis/klic_extra.rs").read_bytes()).hexdigest(), flush=True)
+    # De workflow herstelt de productiebron met zijn oorspronkelijke mtime.
+    # Cargo kan daardoor de binary van de oude bron als actueel beschouwen.
+    # Verwijder alleen deze kleine testcrate, zodat elke proef de huidige bron
+    # compileert. De gecompileerde dependencies blijven beschikbaar.
+    subprocess.run(["cargo", "clean", "--manifest-path", str(OUT / "Cargo.toml"),
+                    "--package", "klic-attachments-test"], cwd=ROOT, check=True)
     command = ["cargo", "test", "--manifest-path", str(OUT / "Cargo.toml"), "--lib", "--jobs", "1"]
     if os.name == "nt":
         command += ["windows::windows_document_association", "--", "--exact", "--nocapture"]
