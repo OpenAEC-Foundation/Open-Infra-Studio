@@ -502,10 +502,10 @@ mod tests {
     /// On Windows the path is one quoted word for `cmd /C start`.
     #[test]
     fn windows_start_gets_the_path_as_one_quoted_word() {
-        for path in [r"C:\Projecten\Infra & Water (2026)\brief.pdf", r"\\?\C:\Users\R&D!^\klic-bijlagen\1&2\brief.pdf"] {
+        for path in [r"C:\Projecten\Infra & Water (2026)\brief.pdf", r"\\?\C:\Users\R&D!^\klic-bijlagen\1&2\brief.pdf", r"C:\Projecten\Ontwerp 100%\bronnen\KL1001\brief.pdf"] {
             assert_eq!(cmd_quoted(path).unwrap(), format!("\"{path}\""));
         }
-        for path in [r"C:\100%\brief.pdf", r"C:\%APPDATA%\brief.pdf", "C:\\a\"b\\brief.pdf", "C:\\a\nb\\brief.pdf"] {
+        for path in ["C:\\a\"b\\brief.pdf", "C:\\a\nb\\brief.pdf"] {
             assert!(cmd_quoted(path).is_err(), "{path}");
         }
     }

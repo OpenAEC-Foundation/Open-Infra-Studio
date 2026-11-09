@@ -1,0 +1,53 @@
+name: KLIC document openen op Windows
+
+on:
+  pull_request:
+    paths:
+      - "src/gis/klic_extra.rs"
+      - "tests/klic_attachments.rs"
+      - "tests/support/klic_*.rs"
+      - "scripts/test_klic_attachments.py"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/klic-attachments.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  windows-klic:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.99.1"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: De twee regressies op 5a4e2de aantonen en de bron herstellen
+        shell: pwsh
+        run: |
+          $source = 'src/gis/klic_extra.rs'
+          $before = (Get-FileHash $source -Algorithm SHA256).Hash
+          Copy-Item $source "$source.saved"
+          try {
+            python -c "import subprocess; from pathlib import Path; Path('$source').write_bytes(subprocess.check_output(['git', 'show', '5a4e2de0b920a2bf6d74832b197ae0f900179e0a:$source']))"
+            if ($LASTEXITCODE -ne 0) { throw 'Oude bron niet opgehaald' }
+            python scripts/test_klic_attachments.py *> target-klic-red.log
+            $redExit = $LASTEXITCODE
+            Get-Content target-klic-red.log
+            $redLog = Get-Content target-klic-red.log -Raw
+            if ($redExit -ne 101) { throw "Verwacht testexit 101, kreeg $redExit" }
+            if (!$redLog.Contains('PE als PDF: bijlage als programma uitgevoerd:')) { throw 'PE-uitvoering niet aangetoond' }
+            if (!$redLog.Contains('PDF in %-map: ongeldig bijlagepad')) { throw 'Procentregressie niet aangetoond' }
+          } finally {
+            Move-Item -Force "$source.saved" $source
+            if ((Get-FileHash $source -Algorithm SHA256).Hash -ne $before) { throw 'Bron niet identiek hersteld' }
+          }
+          exit 0
+      - name: Dezelfde gerichte proef op de nieuwe bron
+        run: python scripts/test_klic_attachments.py
