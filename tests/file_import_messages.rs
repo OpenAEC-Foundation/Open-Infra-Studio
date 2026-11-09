@@ -1,42 +1,12 @@
 //! De echte bestandsimport bewaart goede objecten en meldt overgeslagen invoer.
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use ocs_plugin_api::host::{codec::{EntityType, Handle}, PluginRequestError, PluginRequestSender};
-use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 use open_infra::{bestand, bridge, gis::{files, site::Site}, lang::tr};
 
-#[derive(Default)]
-struct Drawing {
-    entities: Mutex<Vec<EntityType>>,
-    undo: Mutex<Vec<String>>,
-    unexpected: Mutex<Vec<String>>,
-}
-
-impl PluginRequestSender for Drawing {
-    fn request(&self, request: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
-        Ok(match request {
-            PluginRequest::AddLayer(_) => PluginResponse::OptHandle(Some(Handle::from(1000u64))),
-            PluginRequest::PushUndo { label } => {
-                self.undo.lock().unwrap().push(label);
-                PluginResponse::Ok
-            }
-            PluginRequest::AddEntities(entities) => {
-                let mut stored = self.entities.lock().unwrap();
-                let handles = (stored.len()..stored.len() + entities.len()).map(|i| Handle::from(i as u64 + 1)).collect();
-                stored.extend(entities);
-                PluginResponse::Handles(handles)
-            }
-            PluginRequest::WriteRecord { .. } | PluginRequest::SetDirty | PluginRequest::BumpGeometry => PluginResponse::Ok,
-            PluginRequest::ExecuteCommand(command) if command == "ZOOMEXTENTS" => PluginResponse::Bool(true),
-            other => {
-                let error = format!("onverwacht hostverzoek: {other:?}");
-                self.unexpected.lock().unwrap().push(error.clone());
-                return Err(PluginRequestError(error));
-            }
-        })
-    }
-}
+#[path = "support/import_drawing.rs"]
+mod import_drawing;
+use import_drawing::Drawing;
 
 fn place(data: &files::FileData, tab: u64) -> (Result<String, String>, Arc<Drawing>) {
     let site = Site { crs: "EPSG:2056".into(), origin_e: 2600000.0, origin_n: 1200000.0, ..Site::default() };

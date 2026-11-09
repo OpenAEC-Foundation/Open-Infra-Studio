@@ -184,6 +184,10 @@ impl FilesPage {
 mod tests {
     use super::*;
 
+    mod import_drawing {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/support/import_drawing.rs"));
+    }
+
     fn load_page(text: &str, extension: &str) -> FilesPage {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let serial = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -208,7 +212,6 @@ mod tests {
         }
         std::fs::remove_file(path).unwrap();
         assert!(page.read.is_none(), "bestandslezing niet binnen vijf seconden afgerond");
-        assert!(page.data.is_some(), "{:?}", page.message);
         page
     }
 
@@ -262,6 +265,100 @@ mod tests {
         assert_eq!((data.skipped, data.warnings.len()), (1, 1));
         assert!(data.warnings[0].contains("a_mix") && data.warnings[0].contains('2'));
         assert_eq!(page.message, Some((true, format!("GeoPackage: 2 {}\n{}", tr("objecten gelezen", "features read"), data.warnings[0]))));
+    }
+
+    // The language is cached once per app session. Each probe therefore runs
+    // in its own process instead of changing the parallel test process.
+    fn imro_language_probes(cases: &[&str]) {
+        let mut failures = Vec::new();
+        for case in cases {
+            for language in ["nl", "en"] {
+                let output = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", "ui::files::tests::imro_message_probe_in_isolated_language", "--ignored", "--nocapture"])
+                    .env("OPENAEC_TAAL", language)
+                    .env("OIS_IMRO_MESSAGE_CASE", case)
+                    .output().unwrap();
+                if !output.status.success() {
+                    failures.push(format!("{case}/{language}: {}\n{}\n{}", output.status, String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)));
+                }
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[test]
+    fn sol_unusable_imro_page_and_command_keep_the_object_reason_in_both_languages() {
+        imro_language_probes(&["page-unusable", "command-unusable"]);
+    }
+
+    #[test]
+    fn imro_partial_import_uses_the_selected_language_and_one_line_per_warning() {
+        imro_language_probes(&["page-partial", "command-partial"]);
+    }
+
+    #[test]
+    #[ignore = "alleen via de procesproeven met een vaste taal"]
+    fn imro_message_probe_in_isolated_language() {
+        let language = std::env::var("OPENAEC_TAAL").unwrap();
+        let dutch = language == "nl";
+        assert_eq!(crate::lang::current(), if dutch { crate::lang::Lang::Nl } else { crate::lang::Lang::En });
+        let case = std::env::var("OIS_IMRO_MESSAGE_CASE").unwrap();
+        let partial = case.ends_with("partial");
+        let text = if partial {
+            include_str!("../../tests/fixtures/planning/partial-imro.gml")
+        } else {
+            include_str!("../../tests/fixtures/planning/unusable-imro.gml")
+        };
+        let reason = if dutch { "geen tekenbare geometrie" } else { "no drawable geometry" };
+        let warnings = if partial { format!("zone: {reason}\nmaten: {reason}") } else { format!("zone: {reason}") };
+        let drawing = std::sync::Arc::new(import_drawing::Drawing::default());
+        let target = bridge::Target { sender: drawing.clone(), tab_id: 74118, unit_factor: 1.0, doc_path: None };
+        let site = crate::gis::site::Site::default();
+        if case.starts_with("page-") {
+            let page = bridge::with_command_context(target, Some(site), None, || load_page(text, "gml"));
+            assert!(drawing.entities.lock().unwrap().is_empty());
+            assert!(drawing.undo.lock().unwrap().is_empty());
+            assert!(drawing.unexpected.lock().unwrap().is_empty());
+            if partial {
+                let data = page.data.as_ref().unwrap();
+                assert_eq!(data.features.len(), 1);
+                assert_eq!(data.warnings.len(), 2);
+                let read = if dutch { "objecten gelezen" } else { "features read" };
+                assert_eq!(page.message, Some((true, format!("IMRO: 1 {read}\n{warnings}"))));
+            } else {
+                assert!(page.data.is_none());
+                assert!(page.opt.is_none());
+                assert_eq!(page.message, Some((false, format!("Geen IMRO-planobjecten met geometrie gevonden\n{warnings}"))));
+            }
+        } else {
+            assert!(case.starts_with("command-"));
+            let path = std::env::temp_dir().join(format!("oi-imro-message-command-{}.gml", std::process::id()));
+            std::fs::write(&path, text).unwrap();
+            let result = bridge::with_command_context(target, Some(site.clone()), None, || {
+                bestand::import_path(&site, &path, None, &|_| {})
+            });
+            std::fs::remove_file(path).unwrap();
+            assert!(drawing.unexpected.lock().unwrap().is_empty());
+            if partial {
+                let n = drawing.entities.lock().unwrap().len();
+                assert!(n > 0);
+                assert_eq!(drawing.undo.lock().unwrap().len(), 1);
+                let layers = drawing.layers.lock().unwrap().len();
+                let summary = if dutch {
+                    format!("IMRO: 1 objecten, {n} elementen op {layers} lagen. Kaartgegevens; controleer actuele regels en rechtsgeldigheid.")
+                } else {
+                    format!("IMRO: 1 features, {n} entities on {layers} layers. Map data; check current rules and legal validity.")
+                };
+                let message = result.unwrap();
+                assert_eq!(message, format!("{summary}\n{warnings}"));
+                assert_eq!(message.matches("zone:").count(), 1);
+                assert_eq!(message.matches("maten:").count(), 1);
+            } else {
+                assert!(drawing.entities.lock().unwrap().is_empty());
+                assert!(drawing.undo.lock().unwrap().is_empty());
+                assert_eq!(result.unwrap_err(), format!("Geen IMRO-planobjecten met geometrie gevonden\n{warnings}"));
+            }
+        }
     }
 
 }
