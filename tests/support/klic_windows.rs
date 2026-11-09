@@ -90,6 +90,16 @@ fn pdf() -> Vec<u8> {
     bytes
 }
 
+fn verify_received_file(file: &Path, received: &str) -> Result<(), String> {
+    // Windows mag het uitgebreide padvoorvoegsel verwijderen. Het ontvangen
+    // pad moet wel naar precies het bedoelde bestand wijzen; canonicalize
+    // breidt een letterlijke omgevingsvariabelenaam zoals %TEMP% niet uit.
+    let expected = file.canonicalize().map_err(|e| e.to_string())?;
+    let actual = Path::new(received).canonicalize().map_err(|e| format!("ontvangen pad bestaat niet: {received}: {e}"))?;
+    if actual != expected { return Err(format!("ander bestand ontvangen: {received}")); }
+    Ok(())
+}
+
 fn reaches_viewer(file: &Path) -> Result<(), String> {
     // De gewone en uitgebreide padvorm verwijzen naar hetzelfde bestand.
     // Elke aanroep moet eigen, nieuwe markeringen opleveren.
@@ -106,8 +116,7 @@ fn reaches_viewer(file: &Path) -> Result<(), String> {
     }
     if executed.exists() { return Err(format!("bijlage als programma uitgevoerd: {}", file.display())); }
     let received = fs::read_to_string(viewed).map_err(|e| format!("viewer ontving geen bestand: {e}"))?;
-    if received != file.to_str().unwrap() { return Err(format!("ander pad ontvangen: {received}")); }
-    Ok(())
+    verify_received_file(file, &received)
 }
 
 #[test]
@@ -139,10 +148,15 @@ fn windows_document_association() {
     println!("Positieve controle: hetzelfde uitgepakte PE als .pdf rechtstreeks uitgevoerd.");
     let ordinary = PathBuf::from(disguised.to_str().unwrap().strip_prefix(r"\\?\").unwrap_or(disguised.to_str().unwrap()));
     assert_eq!(fs::read(&ordinary).unwrap(), fs::read(&disguised).unwrap());
+    assert!(verify_received_file(&disguised, ordinary.to_str().unwrap()).is_ok());
+    // De .exe bevat dezelfde bytes, maar is een ander bestand. Alleen gelijke
+    // inhoud is geen bewijs dat de viewer de bedoelde bijlage heeft ontvangen.
+    assert!(verify_received_file(&disguised, program.to_str().unwrap()).is_err());
+    println!("Padcontrole: beide notaties gelijk; ander bestand met dezelfde inhoud geweigerd.");
     for (label, file) in [("PE als PDF", &ordinary), ("PE als PDF met uitgepakt pad", &disguised)] {
         println!("{label}: te openen pad {}", file.display());
         match reaches_viewer(file) {
-            Ok(()) => println!("{label}: alleen naar viewer; exact pad ontvangen; geen uitvoeringsmarkering."),
+            Ok(()) => println!("{label}: alleen naar viewer; hetzelfde bestand ontvangen; geen uitvoeringsmarkering."),
             Err(e) => {
                 eprintln!("{label}: {e}");
                 errors.push(format!("{label}: {e}"));
@@ -157,7 +171,7 @@ fn windows_document_association() {
     fs::write(project.join("bronnen/KL1001/brief.pdf"), pdf()).unwrap();
     let file = attachment_file(&project.join("GI_levering.xml"), "bronnen/KL1001/brief.pdf", &dir.join("out")).unwrap();
     match reaches_viewer(&file) {
-        Ok(()) => println!("PDF in %-map: viewer ontving het exacte pad, inclusief letterlijk %TEMP%."),
+        Ok(()) => println!("PDF in %-map: viewer ontving hetzelfde bestand; letterlijk %TEMP% behouden."),
         Err(e) => {
             eprintln!("PDF in %-map: {e}");
             errors.push(format!("PDF in %-map: {e}"));
@@ -187,5 +201,5 @@ fn windows_document_association() {
     }
     if let Err(e) = fs::remove_dir_all(&dir) { errors.push(format!("testmap opruimen: {e}")); }
     assert!(errors.is_empty(), "{}", errors.join("\n"));
-    println!("PE als .exe uitvoerbaar; PE als .pdf alleen naar viewer; PDF in %-map naar viewer; exact pad behouden; .exe geweigerd; ontbrekend bestand en ontbrekende associatie geweigerd.");
+    println!("PE als .exe uitvoerbaar; PE als .pdf alleen naar viewer; PDF in %-map naar viewer; hetzelfde bestand ontvangen; .exe geweigerd; ontbrekend bestand en ontbrekende associatie geweigerd.");
 }
