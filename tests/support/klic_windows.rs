@@ -1,5 +1,5 @@
 use crate::klic_extra::{attachment_file, open_file};
-use std::{ffi::OsStr, fs, os::windows::ffi::OsStrExt, path::Path, ptr, time::{Duration, Instant}};
+use std::{ffi::OsStr, fs, os::windows::ffi::OsStrExt, path::{Path, PathBuf}, ptr, time::{Duration, Instant}};
 use windows_sys::Win32::System::Registry::*;
 use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
 
@@ -91,6 +91,12 @@ fn pdf() -> Vec<u8> {
 }
 
 fn reaches_viewer(file: &Path) -> Result<(), String> {
+    // De gewone en uitgebreide padvorm verwijzen naar hetzelfde bestand.
+    // Elke aanroep moet eigen, nieuwe markeringen opleveren.
+    for extension in ["viewed", "executed"] {
+        let marker = file.with_extension(extension);
+        if marker.exists() { fs::remove_file(marker).map_err(|e| e.to_string())?; }
+    }
     open_file(file)?;
     let viewed = file.with_extension("viewed");
     let executed = file.with_extension("executed");
@@ -127,11 +133,20 @@ fn windows_document_association() {
         zip.finish().unwrap();
     }
     let disguised = attachment_file(&delivery, "bronnen/KL1001/brief.pdf", &dir.join("cache")).unwrap();
-    match reaches_viewer(&disguised) {
-        Ok(()) => println!("PE als PDF: alleen naar viewer; exact pad ontvangen; geen uitvoeringsmarkering."),
-        Err(e) => {
-            eprintln!("PE als PDF: {e}");
-            errors.push(format!("PE als PDF: {e}"));
+    // Controleer ook dat precies deze uitgepakte bytes als PE uitvoerbaar zijn.
+    assert!(std::process::Command::new(&disguised).status().unwrap().success());
+    assert!(disguised.with_extension("executed").exists());
+    println!("Positieve controle: hetzelfde uitgepakte PE als .pdf rechtstreeks uitgevoerd.");
+    let ordinary = PathBuf::from(disguised.to_str().unwrap().strip_prefix(r"\\?\").unwrap_or(disguised.to_str().unwrap()));
+    assert_eq!(fs::read(&ordinary).unwrap(), fs::read(&disguised).unwrap());
+    for (label, file) in [("PE als PDF", &ordinary), ("PE als PDF met uitgepakt pad", &disguised)] {
+        println!("{label}: te openen pad {}", file.display());
+        match reaches_viewer(file) {
+            Ok(()) => println!("{label}: alleen naar viewer; exact pad ontvangen; geen uitvoeringsmarkering."),
+            Err(e) => {
+                eprintln!("{label}: {e}");
+                errors.push(format!("{label}: {e}"));
+            }
         }
     }
 
