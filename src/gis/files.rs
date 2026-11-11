@@ -7,6 +7,8 @@ use std::path::Path;
 
 use serde_json::{Map, Value};
 
+use crate::lang::tr;
+
 use super::crs::XY;
 use super::vector::{self, Feature};
 
@@ -26,6 +28,11 @@ pub struct FileData {
 }
 
 impl FileData {
+    /// Keep object-level read diagnostics in the final import result.
+    pub fn report(&self, message: String) -> String {
+        report(message, &self.warnings)
+    }
+
     /// Coordinate bounds of all features (file CRS).
     pub fn bounds(&self) -> Option<[f64; 4]> {
         let mut b = [f64::MAX, f64::MAX, f64::MIN, f64::MIN];
@@ -43,6 +50,11 @@ impl FileData {
     pub fn fields(&self) -> Vec<String> {
         vector::property_names(&self.features).into_iter().filter(|k| !k.starts_with("__imro_")).collect()
     }
+}
+
+/// Attach the same object diagnostics before or after FileData is available.
+pub(crate) fn report(message: String, warnings: &[String]) -> String {
+    if warnings.is_empty() { message } else { format!("{message}\n{}", warnings.join("\n")) }
 }
 
 /// Read a file by its extension. `layer` picks a GeoPackage table.
@@ -371,15 +383,15 @@ pub fn geopackage(path: &Path, layer: Option<&str>) -> Result<FileData, String> 
                 if let ValueRef::Blob(b) = v {
                     if let Err(error) = gpkg_geometry_result(b, &mut f) {
                         let reason = match error {
-                            GpkgGeometryError::Corrupt => "onleesbare geometrie".to_string(),
-                            GpkgGeometryError::Unsupported(kind) => format!("niet ondersteunde geometriesoort {kind}"),
-                            GpkgGeometryError::UnsupportedEncoding => "niet ondersteunde uitgebreide geometrie".to_string(),
+                            GpkgGeometryError::Corrupt => tr("onleesbare geometrie", "unreadable geometry").to_string(),
+                            GpkgGeometryError::Unsupported(kind) => format!("{} {kind}", tr("niet ondersteunde geometriesoort", "unsupported geometry type")),
+                            GpkgGeometryError::UnsupportedEncoding => tr("niet ondersteunde uitgebreide geometrie", "unsupported extended geometry").to_string(),
                         };
-                        warnings.push(format!("GeoPackage: {reason} in laag {table}, rij {row_index}; object overgeslagen"));
+                        warnings.push(format!("GeoPackage: {} {table}, {} {row_index} {}: {reason}", tr("laag", "layer"), tr("rij", "row"), tr("overgeslagen", "skipped")));
                         continue 'rows;
                     }
                 } else if !matches!(v, ValueRef::Null) {
-                    warnings.push(format!("GeoPackage: geometrie is geen blob in laag {table}, rij {row_index}; object overgeslagen"));
+                    warnings.push(format!("GeoPackage: {} {table}, {} {row_index} {}: {}", tr("laag", "layer"), tr("rij", "row"), tr("overgeslagen", "skipped"), tr("geometrie is geen blob", "geometry is not a blob")));
                     continue 'rows;
                 }
                 continue;
@@ -510,8 +522,8 @@ pub fn gpx(text: &str) -> Result<FileData, String> {
 
 fn gml_numbers(text: &str, separator: Option<char>) -> Result<Vec<f64>, String> {
     text.split(|c: char| separator.map_or_else(|| c.is_whitespace(), |s| c == s)).filter(|t| separator.is_some() || !t.is_empty()).map(|t| {
-        let v = t.trim().parse::<f64>().map_err(|_| format!("GML: ongeldig coördinaatgetal '{t}'"))?;
-        if !v.is_finite() { return Err(format!("GML: niet-eindig coördinaatgetal '{t}'")); }
+        let v = t.trim().parse::<f64>().map_err(|_| format!("GML: {} '{t}'", tr("ongeldig coördinaatgetal", "invalid coordinate number")))?;
+        if !v.is_finite() { return Err(format!("GML: {} '{t}'", tr("niet-eindig coördinaatgetal", "non-finite coordinate number"))); }
         Ok(v)
     }).collect()
 }
@@ -520,7 +532,7 @@ fn gml_dimension(node: roxmltree::Node, fallback: usize) -> Result<usize, String
     match node.ancestors().find_map(|n| n.attribute("srsDimension")) {
         Some(text) => match text.trim().parse::<usize>() {
             Ok(d) if d >= 2 => Ok(d),
-            _ => Err(format!("GML: srsDimension '{text}' kan niet naar XY worden gelezen")),
+            _ => Err(format!("GML: srsDimension '{text}' {}", tr("kan niet naar XY worden gelezen", "cannot be read as XY"))),
         },
         None => Ok(fallback),
     }
@@ -537,14 +549,14 @@ fn gml_coords(node: roxmltree::Node, dim: usize) -> Result<Vec<XY>, String> {
     if let Some(list) = node.descendants().find(|d| d.has_tag_name("posList")) {
         let d = gml_dimension(list, dim)?;
         let v = gml_numbers(gml_text(list).trim(), None)?;
-        if v.len() % d != 0 { return Err("GML: onvolledige coördinaat in posList".into()); }
+        if v.len() % d != 0 { return Err(tr("GML: onvolledige coördinaat in posList", "GML: incomplete coordinate in posList").into()); }
         return Ok(v.chunks_exact(d).map(|c| [c[0], c[1]]).collect());
     }
     let mut pos = Vec::new();
     for p in node.descendants().filter(|d| d.has_tag_name("pos")) {
         let v = gml_numbers(gml_text(p).trim(), None)?;
         let d = gml_dimension(p, v.len())?;
-        if d < 2 || v.len() != d { return Err("GML: onvolledige coördinaat in pos".into()); }
+        if d < 2 || v.len() != d { return Err(tr("GML: onvolledige coördinaat in pos", "GML: incomplete coordinate in pos").into()); }
         pos.push([v[0], v[1]]);
     }
     if !pos.is_empty() { return Ok(pos); }
@@ -554,7 +566,7 @@ fn gml_coords(node: roxmltree::Node, dim: usize) -> Result<Vec<XY>, String> {
         return gml_text(c).split_whitespace().map(|tuple| {
             let v = gml_numbers(tuple, Some(','))?;
             let d = *dimension.get_or_insert(gml_dimension(c, v.len())?);
-            if d < 2 || v.len() != d { return Err("GML: onvolledige coordinates-tuple".into()); }
+            if d < 2 || v.len() != d { return Err(tr("GML: onvolledige coordinates-tuple", "GML: incomplete coordinates tuple").into()); }
             Ok([v[0], v[1]])
         }).collect();
     }
@@ -570,26 +582,26 @@ fn gml_curve(root: roxmltree::Node) -> Result<Vec<XY>, String> {
         let name = node.tag_name().name();
         if matches!(name, "LineString" | "LineStringSegment" | "LinearRing") {
             let next = gml_coords(node, 2)?;
-            if next.len() < if name == "LinearRing" { 3 } else { 2 } { return Err(format!("GML: te weinig coördinaten in {name}")); }
+            if next.len() < if name == "LinearRing" { 3 } else { 2 } { return Err(format!("GML: {} {name}", tr("te weinig coördinaten in", "too few coordinates in"))); }
             let shared = points.last().is_some_and(|p| *p == next[0]);
-            if !points.is_empty() && !shared { return Err("GML: curveonderdelen sluiten niet aan".into()); }
+            if !points.is_empty() && !shared { return Err(tr("GML: curveonderdelen sluiten niet aan", "GML: curve parts do not connect").into()); }
             points.extend(next.into_iter().skip(usize::from(shared)));
             continue;
         }
         let parts: Vec<_> = match name {
             "Curve" => node.children().find(|n| n.has_tag_name("segments"))
-                .ok_or("GML: Curve zonder segments")?.children().filter(|n| n.is_element()).collect(),
+                .ok_or(tr("GML: Curve zonder segments", "GML: Curve without segments"))?.children().filter(|n| n.is_element()).collect(),
             "Ring" | "CompositeCurve" => {
                 let mut parts = Vec::new();
                 for member in node.children().filter(|n| n.has_tag_name("curveMember")) {
                     let part = member.children().find(|n| n.is_element())
-                        .ok_or("GML: curveMember zonder inline curve wordt niet ondersteund")?;
+                        .ok_or(tr("GML: curveMember zonder inline curve wordt niet ondersteund", "GML: curveMember without inline curve is unsupported"))?;
                     parts.push(part);
                 }
-                if parts.is_empty() { return Err(format!("GML: {name} zonder curveMember")); }
+                if parts.is_empty() { return Err(format!("GML: {name} {} curveMember", tr("zonder", "without"))); }
                 parts
             }
-            _ => return Err(format!("GML: curveonderdeel {name} wordt niet ondersteund")),
+            _ => return Err(format!("GML: {} {name}", tr("niet ondersteund curveonderdeel", "unsupported curve part"))),
         };
         // XML nodes form an acyclic tree. An explicit stack keeps arbitrary
         // nesting off the Rust call stack without imposing a schema limit.
@@ -607,13 +619,13 @@ fn gml_geometry(node: roxmltree::Node, f: &mut Feature) -> Result<bool, String> 
         match name {
             "Point" => {
                 let points = gml_coords(node, 2)?;
-                if points.len() != 1 { return Err("GML: Point verwacht één coördinaat".into()); }
+                if points.len() != 1 { return Err(tr("GML: Point verwacht één coördinaat", "GML: Point expects one coordinate").into()); }
                 f.points.extend(points);
             }
             "LineString" | "Curve" | "LineStringSegment" | "LinearRing" | "Ring" | "CompositeCurve" => {
                 let ring = matches!(name, "LinearRing" | "Ring");
                 let points = gml_curve(node)?;
-                if ring && points.len() < 3 { return Err(format!("GML: te weinig coördinaten in {name}")); }
+                if ring && points.len() < 3 { return Err(format!("GML: {} {name}", tr("te weinig coördinaten in", "too few coordinates in"))); }
                 if !points.is_empty() { f.lines.push((points, ring)); }
             }
             "Polygon" | "Surface" | "PolygonPatch" => {
@@ -680,7 +692,7 @@ pub fn gml(text: &str) -> Result<FileData, String> {
         })();
         match parsed {
             Ok(f) => features.push(f),
-            Err(error) => warnings.push(format!("GML: object {} overgeslagen: {error}", id.unwrap_or_else(|| (index + 1).to_string()))),
+            Err(error) => warnings.push(format!("GML: object {} {}: {}", id.filter(|id| !id.trim().is_empty()).unwrap_or_else(|| (index + 1).to_string()), tr("overgeslagen", "skipped"), error.strip_prefix("GML: ").unwrap_or(&error))),
         }
     }
     let skipped = warnings.len();
@@ -924,7 +936,7 @@ mod tests {
         let data = gml(&text).unwrap();
         assert_eq!(data.format, "IMRO");
         assert!(!data.features.is_empty());
-        assert!(data.warnings.iter().any(|w| w == "zone: geen tekenbare geometrie"));
+        assert!(data.warnings.iter().any(|w| w == &format!("zone: {}", tr("geen tekenbare geometrie", "no drawable geometry"))));
     }
 
     const GML: &str = include_str!("../../tests/fixtures/gml/features.gml");
@@ -966,7 +978,7 @@ mod tests {
             let data = gml(&bad).unwrap();
             assert_eq!(data.features.len(), 1, "{from} -> {to}");
             assert_eq!(data.warnings.len(), 1, "{from} -> {to}");
-            assert!(data.warnings[0].contains("overgeslagen"));
+            assert!(data.warnings[0].contains(tr("overgeslagen", "skipped")));
         }
     }
 
@@ -1048,7 +1060,7 @@ mod tests {
         assert_eq!(data.features.len(), 1);
         assert_eq!(data.features[0].points, vec![[2600005.0, 1200005.0]]);
         assert_eq!(data.warnings.len(), 1);
-        assert!(data.warnings[0].contains("line-1 overgeslagen"));
+        assert!(data.warnings[0].contains(&format!("line-1 {}", tr("overgeslagen", "skipped"))));
         assert_eq!(data.skipped, 1);
     }
 
@@ -1267,8 +1279,8 @@ mod tests {
         std::fs::remove_file(path).unwrap();
         assert_eq!(data.features.len(), 2);
         assert_eq!(data.warnings.len(), 1);
-        assert!(data.warnings[0].contains("geometriesoort 8"));
-        assert!(!data.warnings[0].contains("onleesbaar"));
+        assert!(data.warnings[0].contains(&format!("{} 8", tr("geometriesoort", "geometry type"))));
+        assert!(!data.warnings[0].contains(tr("onleesbare geometrie", "unreadable geometry")));
     }
 
     #[test]
@@ -1279,7 +1291,7 @@ mod tests {
         std::fs::remove_file(path).unwrap();
         assert_eq!(data.features.len(), 2);
         assert_eq!(data.warnings.len(), 1);
-        assert!(data.warnings[0].contains("onleesbare"));
+        assert!(data.warnings[0].contains(tr("onleesbare geometrie", "unreadable geometry")));
     }
 
     #[test]
@@ -1345,8 +1357,8 @@ mod tests {
         std::fs::remove_file(path).unwrap();
         assert_eq!(data.features.len(), 2);
         assert_eq!(data.warnings.len(), 1);
-        assert!(data.warnings[0].contains("onleesbare geometrie"));
-        assert!(!data.warnings[0].contains("niet ondersteunde"));
+        assert!(data.warnings[0].contains(tr("onleesbare geometrie", "unreadable geometry")));
+        assert!(!data.warnings[0].contains(tr("niet ondersteunde", "unsupported")));
     }
 
     #[test]
@@ -1539,7 +1551,7 @@ mod tests {
         assert_eq!(data.features[0].points.len(), 1);
         assert_eq!(data.features[0].props["id"], 2);
         assert_eq!(data.warnings.len(), 1);
-        assert!(data.warnings[0].contains("rij 1"));
+        assert!(data.warnings[0].contains(&format!("{} 1", tr("rij", "row"))));
         assert_eq!(data.skipped, 1);
     }
 

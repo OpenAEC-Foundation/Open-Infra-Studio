@@ -68,9 +68,9 @@ pub fn import_path(site: &Site, path: &Path, crs: Option<&str>, progress: &dyn F
 pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, progress: &dyn Fn(String)) -> Result<String, String> {
     if data.format == "IMRO" {
         if opt.clip { return Err("IMRO-vlakken worden met volledige binnenringen ingelezen; zet bijsnijden uit.".into()); }
-        let mut plans = crate::gis::planning::Data::from_file_data(data)?;
+        let mut plans = crate::gis::planning::Data::from_file_data(data).map_err(|e| data.report(e))?;
         plans.crs = opt.crs.clone();
-        return crate::plannen::place_with_text(site, &plans, source, opt.text_m, progress);
+        return crate::plannen::place_with_text(site, &plans, source, opt.text_m, progress).map_err(|e| data.report(e));
     }
     let t = bridge::target().ok_or_else(|| tr("geen tekening actief — klik in Open CAD Studio op een knop van het GIS-tabblad", "no drawing active — click a button of the GIS tab in Open CAD Studio").to_string())?;
     let f = t.unit_factor;
@@ -117,11 +117,11 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         }
     }
     if out.is_empty() {
-        return Err(if opt.clip {
+        return Err(data.report(if opt.clip {
             tr("geen objecten binnen het importgebied (zet 'bijsnijden' uit of controleer het coördinatenstelsel)", "no features inside the import area (turn clipping off or check the coordinate system)").into()
         } else {
             tr("geen tekenbare objecten in het bestand", "no drawable features in the file").into()
-        });
+        }));
     }
     for l in &layers {
         bridge::ensure_layer(l, Color::from_index(opt.aci));
@@ -132,7 +132,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     }
     bridge::note_source(source);
     bridge::zoom_extents();
-    Ok(format!(
+    Ok(data.report(format!(
         "{} {n_features} {} ({}, {}) — {} {} {}.",
         data.format,
         tr("objecten", "features"),
@@ -141,5 +141,5 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         handles.len(),
         tr("elementen op", "entities on"),
         if layers.len() == 1 { layers[0].clone() } else { format!("{} {}", layers.len(), tr("lagen", "layers")) }
-    ))
+    )))
 }
