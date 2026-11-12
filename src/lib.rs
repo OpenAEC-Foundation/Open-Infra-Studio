@@ -10,6 +10,7 @@
 
 #![cfg_attr(not(feature = "plugin"), allow(dead_code))]
 
+pub mod assistant;
 pub mod bridge;
 pub mod civiel;
 pub mod emit;
@@ -86,6 +87,7 @@ const I_TABLE: IconKind = IconKind::Svg(include_bytes!("../assets/hoeveelhedenst
 const I_MUTATION: IconKind = IconKind::Svg(include_bytes!("../assets/bgt-mutatie.svg"));
 const I_CPT: IconKind = IconKind::Svg(include_bytes!("../assets/sonderingen.svg"));
 const I_SERVICES: IconKind = IconKind::Svg(include_bytes!("../assets/services.svg"));
+const I_ASSISTANT: IconKind = IconKind::Svg(include_bytes!("../assets/assistent.svg"));
 
 /// One-click imports from the ribbon (no window): command → what to fetch.
 enum Quick {
@@ -224,6 +226,8 @@ impl CadModule for GisModule {
                             ("GIS_GEODATA", tr("DWG met GEODATA", "DWG with GEODATA"), I_LOCATION),
                         ], "GIS_IFC"),
                         small("GIS_SERVERS", "Servers", I_SERVER),
+                        // An assistant's proposals and the activity log.
+                        small("GIS_ASSISTENT", tr("Assistent", "Assistant"), I_ASSISTANT),
                     ],
                 },
                 // Block libraries (vehicles), like the vehicle sets of
@@ -1227,6 +1231,15 @@ impl BuiltinPlugin for OpenInfra {
         // Scripts: ID=<name> answers in <config>/api/<name>.json.
         let (cmd_owned, id) = bridge::split_id(cmd);
         let cmd = cmd_owned.as_str();
+        // An assistant's command (the MCP server's request file): recorded
+        // as a proposal or logged when it answers.
+        if let Err(e) = assistant::capture::begin(id.as_deref(), cmd) {
+            host.push_error(&format!("[Open Infra] {verb}: {e}"));
+            if let Some(id) = &id {
+                civiel::api::write(id, false, &format!("{verb}: {e}"), Default::default());
+            }
+            return true;
+        }
         bridge::expect_reply(id);
         // An explicit location must not race with automatic GEODATA adoption.
         if verb != "GIS_SITE" { adopt_geodata(host); }
@@ -1234,6 +1247,11 @@ impl BuiltinPlugin for OpenInfra {
             "GIS_INFRA_LIBRARY" | "GIS_INFRA_BIBLIOTHEEK" => { open(host, ui::Tab::Library); ui::send(ui::UiMsg::InfraLibrary); bridge::reply(true, "Infra-bibliotheek geopend"); }
             "GIS_INFRA_CATALOG" | "GIS_INFRA_CATALOGUS" | "GIS_INFRA_PLACE" | "GIS_INFRA_PLAATS" | "GIS_INFRA_INSPECT" | "GIS_INFRA_UPDATE" => library::infra::commands::dispatch(host, cmd),
             "GIS_LOCATIE" | "GIS_WERKBANK" => open(host, ui::Tab::Location),
+            "GIS_ASSISTENT" | "GIS_ASSISTANT" => {
+                open(host, ui::Tab::Assistant);
+                ui::send(ui::UiMsg::AssistantChanged);
+                bridge::reply(true, lang::tr("Pagina Assistent geopend", "Assistant page opened"));
+            }
             "GIS_KAART" | "GIS_WMS" => open(host, ui::Tab::Raster),
             "GIS_WFS" => open(host, ui::Tab::Wfs),
             "GIS_OSM" => open(host, ui::Tab::Osm),

@@ -39,6 +39,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 # Large drawings: entities of the host's shared-memory view are bincode-encoded
 bincode = "1"
+# Assistant proposals: the state to restore, compressed into an XRecord
+# (both MIT/Apache-2.0, already in the dependency tree)
+flate2 = "1"
+base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # KLIC (IMKL 2.0) reader from the OpenAEC crates warehouse (MIT)
 klic2geo = { git = "https://github.com/OpenAEC-Foundation/crates-warehouse" }
