@@ -24,10 +24,10 @@ ui-test = ["eframe/accesskit"]
 members = [".", "civiel", "nlcspp"]
 
 [dependencies]
-# Stable host contract, pinned to the Open CAD Studio v2026.44 release tag (API 14).
+# Stable host contract, pinned to the Open CAD Studio v2026.45 release tag (API 14).
 # From API 14 the plugin runs its own runner loop: the host no longer compares
 # compiler and opencadcodec commit, only the shape of the types on the wire.
-ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "537ab37095b681cab899c1cf48b2927d06e194b9", features = ["host"] }
+ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "fb0a667e269b6c924233ecd450a11dd7cba40eea", features = ["host"] }
 
 # GIS engine
 proj4rs = "0.2"
@@ -88,8 +88,3 @@ opt-level = 3
 inherits = "release"
 debug = "line-tables-only"
 
-# HakanSeven12/acadrust no longer exists (404), but Open CAD Studio v2026.44
-# and opencaddocument still name it. hakanaktt/acadrust holds the same commit,
-# so fetch it from there (#75). Same commit hash, so the host sees the same codec.
-[patch."https://github.com/HakanSeven12/acadrust.git"]
-acadrust = { git = "https://github.com/hakanaktt/acadrust.git", rev = "53e6420c4df4d207409798c2719d32fc6cf2811d" }
