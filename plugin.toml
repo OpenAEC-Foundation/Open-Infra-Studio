@@ -1,7 +1,7 @@
 [plugin]
 id = "openaec.open-infra"
 name = "Open Infra — GIS"
-version = "2026.46.0"
+version = "2026.46.1"
 description = "GIS-workbench en NLCS-basisdata voor infra en civiele techniek: projectlocatie, WMS/WFS-servers, OpenStreetMap, BGT, kadaster en KLIC conform NLCS. Nederland (PDOK) en wereldwijd."
 author = "OpenAEC Foundation"
 license = "GPL-3.0-only"
