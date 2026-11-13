@@ -8,7 +8,7 @@ license = "GPL-3.0-only"
 repository = "OpenAEC-Foundation/Open-Infra-Studio"
 
 [opencad]
-api_version = 14
+api_version = 16
 # Filled at build time (scripts/install.sh, release workflow), like the GIS plugin.
 rustc_version = "__RUSTC_VERSION__"
 acadrust_source = "__ACADRUST_SOURCE__"

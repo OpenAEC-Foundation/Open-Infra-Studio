@@ -1453,3 +1453,11 @@ ocs_plugin_api::export_plugin!(OpenInfra);
 
 #[cfg(test)]
 mod gis_worker_tests;
+
+// OCS v2026.45, revision fb0a667e269b; issue #122 reports this host schema.
+// Runs in the offline lane and in every release platform before publication.
+#[cfg(test)]
+#[test]
+fn released_host_wire_schema() {
+    assert_eq!(ocs_plugin_api::version_info::wire_schema(), "c47b6ee4d4051440");
+}
