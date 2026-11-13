@@ -87,4 +87,3 @@ opt-level = 3
 [profile.ui-test]
 inherits = "release"
 debug = "line-tables-only"
-
