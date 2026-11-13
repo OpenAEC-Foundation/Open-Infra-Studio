@@ -6,6 +6,7 @@ release requires an explicit pin update and validation before publishing Infra.
 Requires Python 3.11+ and gh (GH_TOKEN in Actions); fails closed on API errors.
 """
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -18,12 +19,16 @@ def gh(path):
     return json.loads(subprocess.check_output(['gh', 'api', f'repos/{HOST}/{path}']))
 
 
-def check(root, revision, host_lock):
+def check(root, revision, host_lock, api_version):
     for name in ('Cargo.toml', 'civiel/Cargo.toml'):
         manifest = tomllib.loads((root / name).read_text())
         api = manifest['dependencies']['ocs_plugin_api']
         if api.get('git') != f'https://github.com/{HOST}' or api.get('rev') != revision:
             raise ValueError(f'{name}: pin ocs_plugin_api to released host {revision}')
+    for name in ('plugin.toml', 'civiel/plugin.toml'):
+        manifest = tomllib.loads((root / name).read_text())
+        if manifest['opencad']['api_version'] != api_version:
+            raise ValueError(f'{name}: api_version must equal exported API {api_version}')
     packages = tomllib.loads((root / 'Cargo.lock').read_text())['package']
     api = [p for p in packages if p['name'] == 'ocs_plugin_api']
     expected = f'git+https://github.com/{HOST}?rev={revision}#{revision}'
@@ -46,7 +51,10 @@ def main():
     revision = gh(f'commits/{release}')['sha']
     content = gh(f'contents/Cargo.lock?ref={revision}')['content']
     host_lock = tomllib.loads(base64.b64decode(content).decode())
-    check(root, revision, host_lock)
+    source = gh(f'contents/crates/ocs_plugin_api/src/manifest.rs?ref={revision}')['content']
+    source = base64.b64decode(source).decode()
+    api_version = int(re.search(r'^pub const API_VERSION: u32 = (\d+);$', source, re.M)[1])
+    check(root, revision, host_lock, api_version)
     print(f'Both plugins match {release} ({revision}), including locked codec sources')
 
 

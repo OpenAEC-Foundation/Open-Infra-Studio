@@ -24,7 +24,7 @@ ui-test = ["eframe/accesskit"]
 members = [".", "civiel", "nlcspp"]
 
 [dependencies]
-# Stable host contract, pinned to the Open CAD Studio v2026.45 release tag (API 14).
+# Stable host contract, pinned to the Open CAD Studio v2026.45 release tag (API 16).
 # From API 14 the plugin runs its own runner loop: the host no longer compares
 # compiler and opencadcodec commit, only the shape of the types on the wire.
 ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "fb0a667e269b6c924233ecd450a11dd7cba40eea", features = ["host"] }

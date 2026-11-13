@@ -13,7 +13,7 @@ Infra's now-obsolete URL patch). The released host instead locks
 opencaddocument `b9e1762969f3897e67e1801a2199445b6cf83b5d` and acadrust
 `eababc03c625eaf9cfc5169953d7ee88f2015338`.
 
-API 14 runs the plugin's own runner. `version_info::wire_schema()` hashes the
+Since API 14 the plugin runs its own runner; v2026.45 exports API 16. `version_info::wire_schema()` hashes the
 embedded serde type registry with FNV-1a. `runner.rs` compares it with the
 host's OCS_WIRE_SCHEMA before accepting requests. The user's report records
 old plugin `08f0b6fd7d9a870e`, released host `c47b6ee4d4051440`.
@@ -48,3 +48,11 @@ Local validation: five Python gate tests pass; the live gate rejects the
 unchanged origin/main manifests and accepts these pins and lockfile. No local
 Rust/Tauri build or full test suite. CI must establish compile compatibility
 and the actual generated schema. No release is created by this change.
+
+Terra review round 1 rejected head 157f0e6: plugin manifests still declared API
+14 while the new API exports version 16. Both manifest declarations now say 16.
+The live gate reads API_VERSION from the released API source and requires both
+plugin manifests to declare that same exported version. A sixth Python test
+exercises stale declarations in either manifest; it failed before the manifest
+repair and passes afterwards. OCS v2026.44 must reject this update at install,
+rather than install an API 16 plugin and then fail to run it.

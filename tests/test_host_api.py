@@ -18,7 +18,7 @@ class HostApiTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        for name in ('Cargo.toml', 'civiel/Cargo.toml', 'Cargo.lock'):
+        for name in ('Cargo.toml', 'civiel/Cargo.toml', 'Cargo.lock', 'plugin.toml', 'civiel/plugin.toml'):
             dest = self.root / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, dest)
@@ -28,11 +28,11 @@ class HostApiTest(unittest.TestCase):
                      (p['name'] == 'acadrust' and p['version'] == '0.6.8')]}
 
     def test_matching(self):
-        gate.check(self.root, REV, self.host)
+        gate.check(self.root, REV, self.host, 16)
 
     def test_new_host_release(self):
         with self.assertRaisesRegex(ValueError, 'Cargo.toml'):
-            gate.check(self.root, 'a' * 40, self.host)
+            gate.check(self.root, 'a' * 40, self.host, 16)
 
     def test_either_plugin_pin(self):
         for name in ('Cargo.toml', 'civiel/Cargo.toml'):
@@ -41,14 +41,14 @@ class HostApiTest(unittest.TestCase):
                 original = p.read_text()
                 p.write_text(original.replace(REV, 'b' * 40))
                 with self.assertRaisesRegex(ValueError, name):
-                    gate.check(self.root, REV, self.host)
+                    gate.check(self.root, REV, self.host, 16)
                 p.write_text(original)
 
     def test_stale_lock(self):
         p = self.root / 'Cargo.lock'
         p.write_text(p.read_text().replace(REV, 'b' * 40))
         with self.assertRaisesRegex(ValueError, 'resolved ocs_plugin_api'):
-            gate.check(self.root, REV, self.host)
+            gate.check(self.root, REV, self.host, 16)
 
     def test_transitive_drift(self):
         for package in self.host['package']:
@@ -56,5 +56,15 @@ class HostApiTest(unittest.TestCase):
                 original = package['source']
                 package['source'] = original + '-changed'
                 with self.assertRaisesRegex(ValueError, package['name']):
-                    gate.check(self.root, REV, self.host)
+                    gate.check(self.root, REV, self.host, 16)
                 package['source'] = original
+
+    def test_either_manifest_api(self):
+        for name in ('plugin.toml', 'civiel/plugin.toml'):
+            with self.subTest(name=name):
+                p = self.root / name
+                original = p.read_text()
+                p.write_text(original.replace('api_version = 16', 'api_version = 14'))
+                with self.assertRaisesRegex(ValueError, name):
+                    gate.check(self.root, REV, self.host, 16)
+                p.write_text(original)
