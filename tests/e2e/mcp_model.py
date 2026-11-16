@@ -35,6 +35,8 @@ OUT = ROOT / "target" / "e2e" / "mcp"
 class Client:
     def __init__(self, window):
         env = dict(os.environ, OI_SESSION=window) if window else dict(os.environ)
+        # A batch build: changes applied at once, not kept as proposals (#92).
+        env.setdefault("OI_ASSISTANT", "apply")
         self.p = subprocess.Popen([sys.executable, str(SERVER)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env)
         self.n = 0
         self.info = self.rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "mcp_model", "version": "1"}})

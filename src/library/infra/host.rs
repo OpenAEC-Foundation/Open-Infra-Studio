@@ -242,8 +242,13 @@ pub fn place(p: Placement) -> Result<serde_json::Value, String> {
     let expected = es.len();
     let handles = match request(PluginRequest::AddEntities(es))? {
         PluginResponse::Handles(h) if h.len() == expected => h,
+        PluginResponse::Handles(h) => {
+            crate::assistant::capture::added(&h);
+            return Err("host heeft niet alle objectonderdelen bevestigd; controleer Undo".into());
+        }
         _ => return Err("host heeft niet alle objectonderdelen bevestigd; controleer Undo".into()),
     };
+    crate::assistant::capture::added(&handles);
     let _ = request(PluginRequest::SetDirty);
     let _ = request(PluginRequest::BumpGeometry);
     result(item, p, &handles)
@@ -333,11 +338,13 @@ pub fn update(
         }
         replacements.extend(es);
     }
+    let replaced: Vec<Handle> = replacements.iter().map(|e| e.common().handle).collect();
+    let before = crate::assistant::capture::prepare(&replaced);
     match request(PluginRequest::UpdateEntitiesTransaction {
         label: "Open Infra: verbonden infra bijwerken".into(),
         entities: replacements,
     })? {
-        PluginResponse::EntityTransactionResult(Ok(())) => {}
+        PluginResponse::EntityTransactionResult(Ok(())) => crate::assistant::capture::modified(before),
         r => return Err(format!("update niet bevestigd: {r:?}")),
     }
     let _ = request(PluginRequest::BumpGeometry);
