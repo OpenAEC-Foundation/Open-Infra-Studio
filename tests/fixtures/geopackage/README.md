@@ -45,7 +45,16 @@ wordt van een geldige maar niet ondersteunde curve onderscheiden.
 
 SQL-NULL, lege geometrie en lege CircularString blijven als records met hun
 attributen beschikbaar. Intern tellen `warnings` en `skipped` de overgeslagen
-rijen. De UI en plaatsingsroute zijn ongewijzigd: geen nieuwe zichtbare tekst.
+rijen. De importpagina en plaatsingsroute tonen volgens het besluit van
+7 november de laag, rij en oorzaak bij het resultaat. Goede rijen en
+andere lagen blijven beschikbaar; goede invoer houdt de bestaande melding.
 De tijdelijke SQLite-tabellen dienen uitsluitend voor deze leesroutes en zijn
 geen volledige GeoPackage-conformiteitsbestanden. Tests downloaden geen
 schema's en gebruiken geen live diensten.
+
+`partial.sql` is zelfgemaakt onder dezelfde GPL-3.0-only-licentie. De
+vaste SQLite-inhoud gebruikt de bestaande lijn en punt, een afgebroken
+geometrie op rij 2 van `a_mix` en een gezonde laag `b_good`. De importpagina
+moet de goede objecten en beide laagnamen behouden en de kapotte rij met
+oorzaak melden. Ook de echte opdrachtimport wordt zonder CAD-installatie
+getest; de testhost bewaart de werkelijk aangemaakte tekenobjecten.

@@ -320,7 +320,8 @@ pub fn parse(text: &str) -> Result<Data, String> {
             })
             .unwrap_or_default();
         if gs.is_empty() {
-            warnings.push(format!("{id}: geen tekenbare geometrie"));
+            let object = if id.trim().is_empty() { feature.tag_name().name() } else { &id };
+            warnings.push(format!("{object}: {}", crate::lang::tr("geen tekenbare geometrie", "no drawable geometry")));
             continue;
         }
         let geometry = if gs.len() == 1 {
@@ -346,7 +347,7 @@ pub fn parse(text: &str) -> Result<Data, String> {
         });
     }
     if objects.is_empty() {
-        return Err("Geen IMRO-planobjecten met geometrie gevonden".into());
+        return Err(crate::gis::files::report("Geen IMRO-planobjecten met geometrie gevonden".into(), &warnings));
     }
     let plans: Vec<_> = objects
         .iter()

@@ -22,10 +22,11 @@ volgen uit de [GML 3.2.1 schema's](https://schemas.opengis.net/gml/3.2.1/):
 `CurveSegmentArrayPropertyType` heeft `minOccurs="0"`; `srsDimension` is een
 `positiveInteger`. De lezer projecteert dimensies vanaf twee naar XY.
 Niet ondersteunde curveonderdelen worden overgeslagen, zodat geen
-gedeeltelijke ring wordt getekend. Tot Ethans besluit verschijnen geen
-nieuwe meldingen. `FileData.skipped` telt de overgeslagen objecten en de
-interne lijst bewaart hun leesdetails. De importpagina en de opdracht
-gebruiken de bestaande teksten van main.
+gedeeltelijke ring wordt getekend. `FileData.skipped` telt de overgeslagen
+objecten en de lijst bewaart hun leesdetails. Volgens het besluit van
+7 november tonen de importpagina en opdracht deze details bij hun
+resultaat: object-id of volgnummer en de oorzaak, in het Nederlands of
+Engels via de bestaande taalroute. Goede objecten blijven beschikbaar.
 
 Aanvullende varianten controleren hogere dimensies in losse `pos`-elementen,
 witruimte rond de dimensie en alle tekstdelen rond XML-commentaar. Een

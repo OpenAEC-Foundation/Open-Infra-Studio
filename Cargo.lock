@@ -44,7 +44,7 @@ dependencies = [
 [[package]]
 name = "acadrust"
 version = "0.6.8"
-source = "git+https://github.com/hakanaktt/acadrust.git?rev=53e6420c4df4d207409798c2719d32fc6cf2811d#53e6420c4df4d207409798c2719d32fc6cf2811d"
+source = "git+https://github.com/hakanaktt/acadrust.git?rev=f946e8d#f946e8d0c15508c4581b228a1efe44c18dc96234"
 dependencies = [
  "anyhow",
  "bitflags 2.13.2",
@@ -2721,12 +2721,13 @@ dependencies = [
 [[package]]
 name = "ocs_plugin_api"
 version = "0.2.1"
-source = "git+https://github.com/HakanSeven12/OpenCADStudio?rev=537ab37095b681cab899c1cf48b2927d06e194b9#0e77cae652271d08c7619238e619f9b6668ae17c"
+source = "git+https://github.com/HakanSeven12/OpenCADStudio?rev=8b4d27046040b27eb07d3faed7b7472bd7bdaea9#8b4d27046040b27eb07d3faed7b7472bd7bdaea9"
 dependencies = [
  "bincode",
  "cargo-lock",
  "getrandom 0.2.17",
  "interprocess",
+ "libc",
  "libloading",
  "memmap2",
  "opencaddocument",
@@ -2736,6 +2737,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "thiserror 1.0.69",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2755,7 +2757,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "open-infra"
-version = "2026.45.4"
+version = "2026.46.1"
 dependencies = [
  "bincode",
  "chrono",
@@ -2781,13 +2783,14 @@ dependencies = [
  "shapefile",
  "tiff",
  "ureq",
+ "windows-sys 0.61.2",
  "winit",
  "zip",
 ]
 
 [[package]]
 name = "open-infra-civiel"
-version = "2026.45.4"
+version = "2026.46.1"
 dependencies = [
  "ocs_plugin_api",
  "open-infra",
@@ -2797,7 +2800,7 @@ dependencies = [
 [[package]]
 name = "opencaddocument"
 version = "0.1.0"
-source = "git+https://github.com/HakanSeven12/opencaddocument.git?rev=d657f94#d657f945f9d39e00548c76a8f52424881feeed1d"
+source = "git+https://github.com/HakanSeven12/opencaddocument.git?rev=ae40a59#ae40a5921f678aa94bf143aaf39d01e739db58bb"
 dependencies = [
  "acadrust 0.6.8",
  "serde",

@@ -1,3 +1,20 @@
+**New in 2026.46.0 — geotechnics and import/export fixes**
+
+- **Geotechnics** (#100): soil profiles from BRO CPTs and boreholes, circular slope-stability calculations with Bishop or Fellenius, and settlement with Koppejan or Terzaghi. Soil parameters can be changed per unit. The Civiel ribbon and MCP server expose the commands. These are calculation aids, not a stamped design.
+- **Profile updates** (#102): replacements are calculated before old profiles are removed. Calculation failures preserve the old geometry; host write failures are reported, with one undo group for recovery.
+- **Cross sections** (#107, #116): BGT surfaces, KLIC cables and survey points are also read on large drawings. Their geometry, depth, height and labels are tracked as dependencies, so source changes mark affected sections as stale. A failed source query stops the operation before drawing.
+- **NLCS++** (#106, #114): imports retain relation objects without geometry. Export rewrites references within each delivery, including when separate imports share IDs. Fixed symbol layers now map to their own object kinds without deriving fields from the symbol name.
+- **HydX export** (#108): manhole and pipe IDs are unique across networks, including duplicate names and names changed by CSV escaping.
+- **GeoJSON export** (#119): coordinates contain longitude and latitude only. Project heights remain in a separate property, without presenting NAP as ellipsoidal height. The exporter chooses an unused height-property name so existing attributes and earlier own exports remain exportable.
+- **Parcel division** (#105): arcs in plot boundaries and street lines count towards the area and shape. An arc as the longest side also gives a usable division direction when no street is supplied.
+- **XML readers** (#109, #111): deeply nested NLCS++, LandXML, KML, GPX, GML, IMRO, BRO, WMS/WFS, QGIS and KLIC-extra XML is handled without overflowing the normal command-thread stack. Excessively deep WMS layer trees are refused.
+- **LandXML spirals** (#112): a turn limit and a subdivision budget prevent the reported import hangs. Ordinary S-curves within a full turn remain accepted. Extreme-input limitations remain listed in `knownbugs.md`.
+- **Drawing context** (#120): GIS workers and interactive commands retain their originating drawing, project location and script reply across tab changes.
+- **MCP over HTTP** (#101): binding outside loopback requires a token. Requests check Host, Origin and JSON content type; loopback detection no longer resolves hostnames twice. External deployments must set `OI_MCP_TOKEN` and any required `OI_MCP_HOSTS` or `OI_MCP_ORIGINS` entries.
+- **Known limitations** (#115 and the fixes above): review follow-ups are recorded in `knownbugs.md`.
+
+Files outside the work folder through the MCP server in managed mode (#103) follow in a later version.
+
 Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.44** (plugin API 14), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab. New in this release: the whole drawing as **IFC 4.3**.
 
 **Note:** this release is built for Open CAD Studio **v2026.44** (plugin API 14). Open Infra 2026.45.0 and earlier do not load in v2026.44, and this release does not load in v2026.43. So update Open Infra together with Open CAD Studio. From API 14 on, the host no longer ties a plugin to its own compiler and codec commit, so later host updates should break the plugin far less often.

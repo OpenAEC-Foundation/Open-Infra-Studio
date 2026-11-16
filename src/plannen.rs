@@ -22,6 +22,7 @@ use ocs_plugin_api::{
     },
     ipc::protocol::{PluginRequest, PluginResponse},
 };
+use crate::lang::tr;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, path::Path};
 
@@ -528,5 +529,11 @@ pub(crate) fn place_with_text(
     for warning in &data.warnings {
         progress(warning.clone());
     }
-    Ok(format!("IMRO: {} objecten, {count} elementen op {} lagen. Kaartgegevens; controleer actuele regels en rechtsgeldigheid.{}",rendered.objects,rendered.layers.len(),if data.warnings.is_empty(){String::new()}else{format!(" {}",data.warnings.join(" "))}))
+    Ok(files::report(
+        format!("IMRO: {} {}, {count} {} {} {} {}. {}",
+            rendered.objects, tr("objecten", "features"), tr("elementen", "entities"),
+            tr("op", "on"), rendered.layers.len(), tr("lagen", "layers"),
+            tr("Kaartgegevens; controleer actuele regels en rechtsgeldigheid.", "Map data; check current rules and legal validity.")),
+        &data.warnings,
+    ))
 }
