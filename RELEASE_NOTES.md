@@ -1,3 +1,9 @@
+**New in 2026.47.0 — Open CAD Studio v2026.46 and safer managed MCP files**
+
+- **Open CAD Studio v2026.46** (#125): both plugins are built against the v2026.46 plugin API (API 23). They do not load in older Open CAD Studio versions. 2026.46.1 was the corresponding build for v2026.45 (#122).
+- **MCP server in managed mode** (#103, `OPENAEC_BEHEERD=1`): every file path stays inside the work folder `OPENAEC_MAP`, including through symbolic links, hard links, injected command arguments and files the plugins write beside the drawing. Only the commands of the exposed tools run, and each command stays with the drawing it started on. Plain save sends the checked path to Open CAD Studio. Saving requires Open CAD Studio v2026.46 or newer: from that version the host keeps its check for a file changed on disk and its edit lock when a save names its path. Saving over another existing file is refused.
+- **Known limitations**: review follow-ups are recorded in `knownbugs.md` (items 30 to 34).
+
 **New in 2026.46.0 — geotechnics and import/export fixes**
 
 - **Geotechnics** (#100): soil profiles from BRO CPTs and boreholes, circular slope-stability calculations with Bishop or Fellenius, and settlement with Koppejan or Terzaghi. Soil parameters can be changed per unit. The Civiel ribbon and MCP server expose the commands. These are calculation aids, not a stamped design.
@@ -13,15 +19,13 @@
 - **MCP over HTTP** (#101): binding outside loopback requires a token. Requests check Host, Origin and JSON content type; loopback detection no longer resolves hostnames twice. External deployments must set `OI_MCP_TOKEN` and any required `OI_MCP_HOSTS` or `OI_MCP_ORIGINS` entries.
 - **Known limitations** (#115 and the fixes above): review follow-ups are recorded in `knownbugs.md`.
 
-Files outside the work folder through the MCP server in managed mode (#103) follow in a later version.
+Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.46** (plugin API 23), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab.
 
-Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.44** (plugin API 14), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab. New in this release: the whole drawing as **IFC 4.3**.
-
-**Note:** this release is built for Open CAD Studio **v2026.44** (plugin API 14). Open Infra 2026.45.0 and earlier do not load in v2026.44, and this release does not load in v2026.43. So update Open Infra together with Open CAD Studio. From API 14 on, the host no longer ties a plugin to its own compiler and codec commit, so later host updates should break the plugin far less often.
+**Note:** this release is built for Open CAD Studio **v2026.46** (plugin API 23) and does not load in older versions. Open CAD Studio refuses a plugin whose API is newer than its own, or whose exchanged data has a different shape, so update Open Infra together with Open CAD Studio.
 
 **Installing**
 
-1. Update Open CAD Studio to [v2026.44](https://github.com/HakanSeven12/OpenCADStudio/releases/tag/v2026.44).
+1. Update Open CAD Studio to [v2026.46](https://github.com/HakanSeven12/OpenCADStudio/releases/tag/v2026.46).
 2. **GIS plugin:** in Open CAD Studio, run `PLUGINS` (Plugin Manager), pick **Open Infra Studio** from the list (or choose *Add a repository* and enter `OpenAEC-Foundation/Open-Infra-Studio`), pick this release and click *Install*. By hand: put `openaec.open-infra-<platform>` and `plugin.toml` from this release in `<config>/OpenCADStudio/plugins/openaec.open-infra/`.
 3. **Civiel plugin:** unzip `open-infra-civiel-<platform>.zip` into `<config>/OpenCADStudio/plugins/`. That gives the folder `openaec.open-infra-civiel` with its library and `plugin.toml`.
 4. Restart Open CAD Studio. The ribbon shows the tabs **GIS** and **Civiel**.
