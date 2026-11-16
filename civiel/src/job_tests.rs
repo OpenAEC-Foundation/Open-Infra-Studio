@@ -1,0 +1,184 @@
+//! Een puntenexport blijft bij zijn tekening wanneer het actieve tabblad wisselt.
+use super::*;
+use std::any::Any;
+use std::path::PathBuf;
+use std::sync::{mpsc, Arc};
+use std::time::Duration;
+use ocs_plugin_api::host::{
+    codec::{entities::Point, Document, EntityType, Handle},
+    DocumentReader, ExtendedDataRecord, PluginRequestError, PluginRequestSender,
+    XRecordEntry,
+};
+use ocs_plugin_api::ipc::protocol::{PluginRequest as Q, PluginResponse as A};
+
+#[derive(Clone)]
+struct Drawing {
+    entity: EntityType,
+    pause: Arc<Mutex<Option<(mpsc::SyncSender<()>, mpsc::Receiver<()>)>>>,
+    done: mpsc::Sender<Result<String, String>>,
+    messages: Arc<Mutex<Vec<String>>>,
+}
+
+impl PluginRequestSender for Drawing {
+    fn request(&self, req: Q) -> Result<A, PluginRequestError> {
+        Ok(match req {
+            Q::OpenDocumentViewV4 { .. } => return Err(PluginRequestError("geen gedeelde weergave".into())),
+            Q::CloseDocumentViewV4 { .. } => A::Ok,
+            Q::GetSelection => A::Selection(vec![Handle::from(1u64)]),
+            Q::ReadXRecord { .. } => A::XRecordEntries(Ok(Vec::new())),
+            Q::GetEntitiesBatch { handles } => {
+                let pause = self.pause.lock().unwrap().take();
+                if let Some((entered, resume)) = pause {
+                    entered.send(()).unwrap();
+                    resume.recv_timeout(Duration::from_secs(5)).unwrap();
+                }
+                A::GetEntitiesBatchResult(Ok(handles.iter().map(|h| {
+                    (*h == Handle::from(1u64)).then(|| self.entity.clone())
+                }).collect()))
+            }
+            Q::PushInfo(msg) => {
+                self.messages.lock().unwrap().push(msg.clone());
+                self.done.send(Ok(msg)).unwrap();
+                A::Ok
+            }
+            Q::PushError(msg) => { self.done.send(Err(msg)).unwrap(); A::Ok }
+            other => return Err(PluginRequestError(format!("onverwacht verzoek: {other:?}"))),
+        })
+    }
+}
+
+struct Host { tab: u64, path: PathBuf, drawing: Drawing, interactive: Option<Box<dyn InteractiveCommand>>, errors: Vec<String> }
+
+impl HostApi for Host {
+    fn tab_index(&self) -> usize { self.tab as usize }
+    fn document(&self) -> &Document { panic!("geen directe documenttoegang") }
+    fn document_mut(&mut self) -> &mut Document { panic!("geen directe documenttoegang") }
+    fn document_reader(&self) -> Box<dyn DocumentReader + '_> { panic!("geen directe documenttoegang") }
+    fn add_entity(&mut self, _: EntityType) -> Handle { panic!("export schrijft geen geometrie") }
+    fn bump_geometry(&mut self) { panic!("export schrijft geen geometrie") }
+    fn read_record(&self, _: Handle, _: &str) -> Option<&ExtendedDataRecord> { None }
+    fn write_record(&mut self, _: Handle, _: ExtendedDataRecord) -> bool { false }
+    fn remove_record(&mut self, _: Handle, _: &str) -> bool { false }
+    fn push_undo(&mut self, _: &str) { panic!("export schrijft geen geometrie") }
+    fn set_dirty(&mut self) { panic!("export schrijft geen geometrie") }
+    fn push_info(&mut self, _: &str) {}
+    fn push_output(&mut self, _: &str) {}
+    fn push_error(&mut self, msg: &str) { self.errors.push(msg.to_string()); }
+    fn start_interactive(&mut self, command: Box<dyn InteractiveCommand>) { self.interactive = Some(command); }
+    fn plugin_state_any(&self, _: &str) -> Option<&(dyn Any + Send + Sync)> { None }
+    fn plugin_state_any_mut(&mut self, _: &str) -> Option<&mut (dyn Any + Send + Sync)> { None }
+    fn ensure_plugin_state_any(&mut self, _: &'static str, _: &mut dyn FnMut() -> Box<dyn Any + Send + Sync>) -> Option<&mut (dyn Any + Send + Sync)> { None }
+    fn plugin_request_sender(&self) -> Option<Box<dyn PluginRequestSender>> { Some(Box::new(self.drawing.clone())) }
+    fn document_path(&self, _: u64) -> Option<PathBuf> { Some(self.path.clone()) }
+    fn selection(&self) -> Vec<Handle> { vec![Handle::from(1u64)] }
+    fn read_xrecord(&self, _: &[&str], name: &str) -> Result<Vec<XRecordEntry>, String> {
+        let value = if name == "SITE" {
+            serde_json::to_string(&open_infra::gis::site::Site::default()).unwrap()
+        } else { "1".into() };
+        Ok(vec![XRecordEntry::string(1, value)])
+    }
+}
+
+static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+#[test]
+fn points_export_keeps_its_folder_after_the_active_drawing_changes() {
+    let _one = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+    let root = std::env::temp_dir().join(format!("oi-job-{}-{nonce}", std::process::id()));
+    let work = root.join("werkmap");
+    let outside = root.join("buiten");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    let (entered, started) = mpsc::sync_channel(0);
+    let (resume, paused) = mpsc::channel();
+    let (done, finished) = mpsc::channel();
+    let mut point = Point::from_coords(1.0, 2.0, 3.5);
+    point.common.handle = Handle::from(1u64);
+    let a = Drawing { entity: EntityType::Point(point.clone()), pause: Arc::new(Mutex::new(Some((entered, paused)))), done: done.clone(), messages: Arc::new(Mutex::new(Vec::new())) };
+    let b = Drawing { entity: EntityType::Point(point), pause: Arc::new(Mutex::new(None)), done, messages: Arc::new(Mutex::new(Vec::new())) };
+    let mut first = Host { tab: 103001, path: work.join("a.dwg"), drawing: a, interactive: None, errors: Vec::new() };
+    let mut second = Host { tab: 103002, path: outside.join("b.dwg"), drawing: b, interactive: None, errors: Vec::new() };
+    bridge::attach(&mut first);
+    let opt = civiel::CivielOptions::default();
+    job(&mut first, "Punten exporteren", None, move |_| landmeten::export(&opt, None));
+    started.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|e| panic!("export leest punten van A: {e}; uitkomst: {:?}", finished.try_recv()));
+    bridge::attach(&mut second);
+    resume.send(()).unwrap();
+    let result = finished.recv_timeout(Duration::from_secs(5)).expect("export afgerond");
+    assert!(result.is_ok(), "{result:?}");
+    assert!(work.join("a_punten.csv").exists(), "export hoort bij A: {result:?}");
+    assert!(!outside.join("b_punten.csv").exists(), "export mag niet naar B verhuizen");
+    assert!(std::fs::read_to_string(work.join("a_punten.csv")).unwrap().contains("3.5"));
+    assert_eq!(bridge::target().unwrap().tab_id, second.tab);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_civil_click_command_resumes_on_its_original_drawing() {
+    let _one = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    use ocs_plugin_api::host::codec::{Line, Vector3};
+    let (done, finished) = mpsc::channel();
+    let entity = EntityType::Line(Line::from_points(Vector3::new(0.0, 0.0, 0.0), Vector3::new(100.0, 0.0, 0.0)));
+    let drawing = || Drawing { entity: entity.clone(), pause: Arc::new(Mutex::new(None)), done: done.clone(), messages: Arc::new(Mutex::new(Vec::new())) };
+    let mut first = Host { tab: 103003, path: PathBuf::from("/werkmap/a.dwg"), drawing: drawing(), interactive: None, errors: Vec::new() };
+    let mut second = Host { tab: 103004, path: PathBuf::from("/buiten/b.dwg"), drawing: drawing(), interactive: None, errors: Vec::new() };
+    assert!(OpenInfraCiviel.dispatch(&mut first, "CIV_STATION"));
+    let mut command = first.interactive.take().expect("stationopdracht gestart in A");
+    assert!(OpenInfraCiviel.dispatch(&mut second, "CIV_HELP"));
+    assert!(matches!(command.on_point([40.0, 5.0, 0.0]), CommandStep::NeedPoint));
+    let result = finished.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(result.is_ok(), "{result:?}");
+    assert_eq!(first.drawing.messages.lock().unwrap().len(), 1, "A's klikantwoord moet naar A");
+    assert!(second.drawing.messages.lock().unwrap().is_empty(), "A's klikantwoord kwam in B");
+    assert_eq!(bridge::target().unwrap().tab_id, second.tab);
+}
+
+#[test]
+fn native_save_as_cannot_move_a_managed_points_export_outside() {
+    // Environment changes must not affect the other library tests.
+    if std::env::var("OI_NATIVE_PATH_TEST_CHILD").as_deref() != Ok("1") {
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "job_tests::native_save_as_cannot_move_a_managed_points_export_outside", "--nocapture"])
+            .env("OI_NATIVE_PATH_TEST_CHILD", "1")
+            .status().unwrap();
+        assert!(status.success(), "proef in afzonderlijk proces faalde: {status}");
+        return;
+    }
+    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+    let root = std::env::temp_dir().join(format!("oi-native-path-{}-{nonce}", std::process::id()));
+    let work = root.join("werkmap");
+    let outside = root.join("buiten");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(work.join("a.dwg"), b"synthetische tekening A").unwrap();
+    std::fs::write(outside.join("b.dwg"), b"synthetische tekening B").unwrap();
+    std::env::set_var("OPENAEC_BEHEERD", "1");
+    std::env::set_var("OPENAEC_MAP", &work);
+    std::env::set_var("APPDATA", &root);
+    let (done, _finished) = mpsc::channel();
+    let mut point = Point::from_coords(1.0, 2.0, 3.5);
+    point.common.handle = Handle::from(1u64);
+    let drawing = Drawing { entity: EntityType::Point(point), pause: Arc::new(Mutex::new(None)), done, messages: Arc::new(Mutex::new(Vec::new())) };
+    let mut host = Host { tab: 103005, path: work.join("a.dwg"), drawing, interactive: None, errors: Vec::new() };
+    bridge::attach(&mut host); // The earlier MCP check observed allowed A.
+    host.path = outside.join("b.dwg"); // Native Save As keeps the same tab.
+    let reply = |id: &str| {
+        let path = api::result_dir().join(format!("{id}.json"));
+        for _ in 0..500 {
+            if path.exists() { break; }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        serde_json::from_slice::<serde_json::Value>(&std::fs::read(path).expect("opdracht krijgt een antwoord")).unwrap()
+    };
+    assert!(OpenInfraCiviel.dispatch(&mut host, "CIV_PUNTEN_EXPORT ID=native-path-refused"));
+    let refused = reply("native-path-refused");
+    assert!(!outside.join("b_punten.csv").exists(), "export volgde het native buitenpad");
+    assert_eq!(refused["ok"], false, "{refused}");
+    host.path = work.join("a.dwg");
+    assert!(OpenInfraCiviel.dispatch(&mut host, "CIV_PUNTEN_EXPORT ID=native-path-ok"));
+    let accepted = reply("native-path-ok");
+    assert_eq!(accepted["ok"], true, "{accepted}");
+    assert!(work.join("a_punten.csv").exists(), "toegestane export blijft werken");
+    std::fs::remove_dir_all(root).unwrap();
+}
