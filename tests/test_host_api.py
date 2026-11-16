@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('host_api', ROOT / 'scripts/check_host_api.py')
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
-REV = 'fb0a667e269b6c924233ecd450a11dd7cba40eea'
+REV = '8b4d27046040b27eb07d3faed7b7472bd7bdaea9'
+API = 23
 
 
 class HostApiTest(unittest.TestCase):
@@ -28,11 +29,11 @@ class HostApiTest(unittest.TestCase):
                      (p['name'] == 'acadrust' and p['version'] == '0.6.8')]}
 
     def test_matching(self):
-        gate.check(self.root, REV, self.host, 16)
+        gate.check(self.root, REV, self.host, API)
 
     def test_new_host_release(self):
         with self.assertRaisesRegex(ValueError, 'Cargo.toml'):
-            gate.check(self.root, 'a' * 40, self.host, 16)
+            gate.check(self.root, 'a' * 40, self.host, API)
 
     def test_either_plugin_pin(self):
         for name in ('Cargo.toml', 'civiel/Cargo.toml'):
@@ -41,14 +42,14 @@ class HostApiTest(unittest.TestCase):
                 original = p.read_text()
                 p.write_text(original.replace(REV, 'b' * 40))
                 with self.assertRaisesRegex(ValueError, name):
-                    gate.check(self.root, REV, self.host, 16)
+                    gate.check(self.root, REV, self.host, API)
                 p.write_text(original)
 
     def test_stale_lock(self):
         p = self.root / 'Cargo.lock'
         p.write_text(p.read_text().replace(REV, 'b' * 40))
         with self.assertRaisesRegex(ValueError, 'resolved ocs_plugin_api'):
-            gate.check(self.root, REV, self.host, 16)
+            gate.check(self.root, REV, self.host, API)
 
     def test_transitive_drift(self):
         for package in self.host['package']:
@@ -56,7 +57,7 @@ class HostApiTest(unittest.TestCase):
                 original = package['source']
                 package['source'] = original + '-changed'
                 with self.assertRaisesRegex(ValueError, package['name']):
-                    gate.check(self.root, REV, self.host, 16)
+                    gate.check(self.root, REV, self.host, API)
                 package['source'] = original
 
     def test_either_manifest_api(self):
@@ -64,7 +65,7 @@ class HostApiTest(unittest.TestCase):
             with self.subTest(name=name):
                 p = self.root / name
                 original = p.read_text()
-                p.write_text(original.replace('api_version = 16', 'api_version = 14'))
+                p.write_text(original.replace(f'api_version = {API}', 'api_version = 14'))
                 with self.assertRaisesRegex(ValueError, name):
-                    gate.check(self.root, REV, self.host, 16)
+                    gate.check(self.root, REV, self.host, API)
                 p.write_text(original)
