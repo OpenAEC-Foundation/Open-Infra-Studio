@@ -158,12 +158,27 @@ def _assembly(v):
 VIEW_COMMANDS = {"ZOOM", "-VIEW", "VSCURRENT"}
 
 
+# Open CAD Studio #2768 (released in v2026.46) keeps the open file's disk
+# check and edit lock when a save names its path. Older hosts treat that save
+# as Save As and can overwrite a file changed outside Open CAD Studio.
+SAFE_SAVE_HOST = (2026, 46)
+
+
+def _host_saves_safely(version):
+    m = re.fullmatch(r"(\d{4})\.(\d{2})(?:\.\d+)?", str(version or ""))
+    return bool(m) and (int(m[1]), int(m[2])) >= SAFE_SAVE_HOST
+
+
 def _guard(ocs, op, body):
     """An automation request in managed mode (see above); OcsError when it may reach a file outside the work folder."""
     if not managed() or op == "state":
         return body
     root = work_folder()
     _no_links(root)
+    if op == "save":
+        version = ocs.request("state").get("version")
+        if not _host_saves_safely(version):
+            raise OcsError(f"opslaan vraagt Open CAD Studio v2026.46 of nieuwer (dit venster: {version or 'onbekend'})")
     if op == "run":
         cmd = str(body.get("cmd") or "")
         words = cmd.split()

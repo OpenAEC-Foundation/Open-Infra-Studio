@@ -25,12 +25,13 @@ class Window:
         self.sent = []
         self.results = results
         self.drawing = drawing
+        self.version = '2026.46'
 
     def __call__(self, desc, request, timeout=120):
         self.sent.append(request)
         op = request.get('op')
         if op == 'state':
-            return {'document_id': 1, 'documents': [{'id': 1, 'path': self.drawing, 'name': 'tekening'}]}
+            return {'version': self.version, 'document_id': 1, 'documents': [{'id': 1, 'path': self.drawing, 'name': 'tekening'}]}
         if op == 'run':
             m = re.search(r'\bID=(\w+)', request['cmd'])
             if m:
@@ -96,7 +97,7 @@ class WorkFolderTest(unittest.TestCase):
                 def exchange(desc, request, timeout=120):
                     if request['op'] == 'state':
                         path = self.window.drawing if desc['session_id'] == first['session_id'] else str(self.outside / 'private.dwg')
-                        return {'document_id': 1, 'documents': [{'id': 1, 'path': path}]}
+                        return {'version': '2026.46', 'document_id': 1, 'documents': [{'id': 1, 'path': path}]}
                     sent.append((desc['session_id'], request))
                     if desc['session_id'] == first['session_id']:
                         raise OSError('answer lost after request')
@@ -113,7 +114,7 @@ class WorkFolderTest(unittest.TestCase):
         written = []
         def exchange(desc, request, timeout=120):
             if request['op'] == 'state':
-                return {'document_id': 1, 'documents': [{'id': 1, 'path': original}]}
+                return {'version': '2026.46', 'document_id': 1, 'documents': [{'id': 1, 'path': original}]}
             # Native Save As completed after both checks; the tab ID stays 1.
             current = str(self.outside / 'native-save-as.dwg')
             written.append(request.get('path') if request['op'] == 'save' else current)
@@ -122,6 +123,21 @@ class WorkFolderTest(unittest.TestCase):
             result = mcp.call_tool('infra_opslaan', {})
         self.assertFalse(result['isError'], result)
         self.assertEqual(written, [original], 'save must carry the checked path to the host')
+
+    def test_save_needs_a_host_that_keeps_its_file_checks(self):
+        # Before OCS #2768 (v2026.46) a save with a path dropped the host's
+        # check for a changed file on disk and its edit lock.
+        for version in (None, '', '2026.45', '2026.45.3', '2025.52', 'dev', '2026'):
+            with self.subTest(version=version):
+                self.window.version = version
+                self.refused('infra_opslaan', {})
+                self.refused('infra_opslaan', {'path': 'nieuw.dwg'})
+                self.refused('oi_save', {})
+        for version in ('2026.46', '2026.46.1', '2026.47', '2027.01'):
+            with self.subTest(version=version):
+                self.window.version = version
+                self.assertEqual(self.allowed('infra_opslaan', {})[0]['op'], 'save')
+                self.assertEqual(self.allowed('infra_opslaan', {'path': 'nieuw.dwg'})[0]['op'], 'save')
 
     def test_state_can_reconnect_after_a_window_goes_away(self):
         first = dict(mcp.OCS.session)
@@ -157,7 +173,7 @@ class WorkFolderTest(unittest.TestCase):
                     if not release.wait(3):
                         raise AssertionError('test did not release guard')
                 path = self.window.drawing if desc['session_id'] == first['session_id'] else str(self.outside / 'private.dwg')
-                return {'document_id': 1, 'documents': [{'id': 1, 'path': path}]}
+                return {'version': '2026.46', 'document_id': 1, 'documents': [{'id': 1, 'path': path}]}
             return {'ok': True}
         def save():
             replies.append(mcp.call_tool('infra_opslaan', {}))
@@ -209,7 +225,7 @@ class WorkFolderTest(unittest.TestCase):
             if request['op'] == 'state':
                 # Both windows are allowed and both use document number 1.
                 path = self.work / ('tekening.dwg' if desc['session_id'] == first['session_id'] else 'ander.dwg')
-                return {'document_id': 1, 'documents': [{'id': 1, 'path': str(path)}]}
+                return {'version': '2026.46', 'document_id': 1, 'documents': [{'id': 1, 'path': str(path)}]}
             return {'ok': True}
         def choose():
             if not looked_up.wait(3):
@@ -247,7 +263,7 @@ class WorkFolderTest(unittest.TestCase):
                         if states == lost_state:
                             raise OSError('window vanished before the operation')
                         path = self.work / ('tekening.dwg' if desc['session_id'] == first['session_id'] else 'ander.dwg')
-                        return {'document_id': 1, 'documents': [{'id': 1, 'path': str(path)}]}
+                        return {'version': '2026.46', 'document_id': 1, 'documents': [{'id': 1, 'path': str(path)}]}
                     sent.append(desc['session_id'])
                     return {'ok': True}
                 with patch.object(mcp, '_exchange', exchange), patch.object(mcp, 'sessions', return_value=[second]):
