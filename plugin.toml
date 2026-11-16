@@ -8,10 +8,10 @@ license = "GPL-3.0-only"
 repository = "OpenAEC-Foundation/Open-Infra-Studio"
 
 [opencad]
-api_version = 16
+api_version = 23
 # Filled at build time (scripts/install.sh, release workflow) from the
 # compiler that built the library and the acadrust (codec) git source in Cargo.lock.
-# API 16 checks the exported API version and codec wire schema at runtime.
+# API 23 checks the exported API version and codec wire schema at runtime.
 rustc_version = "__RUSTC_VERSION__"
 acadrust_source = "__ACADRUST_SOURCE__"
 ribbon_order = 60

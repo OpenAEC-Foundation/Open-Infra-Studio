@@ -1454,7 +1454,7 @@ ocs_plugin_api::export_plugin!(OpenInfra);
 #[cfg(test)]
 mod gis_worker_tests;
 
-// OCS v2026.45, revision fb0a667e269b; issue #122 reports this host schema.
+// OCS v2026.46, revision 8b4d27046040; the released host schema (see #122).
 // Runs in the offline lane and in every release platform before publication.
 #[cfg(test)]
 #[test]
