@@ -1,4 +1,4 @@
-//! `CIV_ZETTING`: the settlement of a fill (the design surface above the
+//! `CIV_SETTLEMENT`: the settlement of a fill (the design surface above the
 //! existing ground, or a given height over an area) on the soil model, at
 //! the points of a grid: a map in colour bands, contours, the values per
 //! point and the settlement against time for one point (drawn and in JSON).

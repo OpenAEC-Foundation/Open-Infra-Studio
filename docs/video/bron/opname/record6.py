@@ -71,7 +71,7 @@ def gis():
     rec.host("VSCURRENT 2DWIREFRAME")
     run = lambda c: print(c, rec.OCS.run(c, timeout=600)["message"][:120], flush=True)
     run("GIS_SITE RD 104885 425330 320 260 Grote Kerk")
-    run("GIS_Q_LUCHTFOTO")
+    run("GIS_Q_AERIAL")
     stage("g-luchtfoto")
     run("GIS_Q_BGT")
     stage("g-bgt")
@@ -85,7 +85,7 @@ def gis():
     rec.OCS.request("entities_delete", {"document_id": d, "handles": rasters})
     layers(off=["OSM-*", "GIS-OSM*"])
     run("GIS_Q_AHN")
-    run("GIS_HOOGTELIJNEN")
+    run("GIS_CONTOURS")
     stage("g-ahn")
 
 

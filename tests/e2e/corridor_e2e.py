@@ -16,13 +16,13 @@ The site is open farmland in the Dordrecht polders (AHN, about +0,3 m NAP):
                 hand-computed values, and the CSV files.
   assembly      a user JSON assembly with a cut/fill condition (in cut a
                 ditch, in fill a wider shoulder) in the isolated config
-                folder: ``CIV_PROFIELTYPEN`` lists it, ``CIV_PROFIELTYPE``
+                folder: ``CIV_ASSEMBLIES`` lists it, ``CIV_ASSEMBLY``
                 draws it, and a corridor whose profile runs from cut into
                 fill must switch parts.
-  T junction    ``CIV_KRUISPUNT`` of the town street and the side road: kerb
+  T junction    ``CIV_JUNCTION`` of the town street and the side road: kerb
                 returns, the TIN patch, then the side road's corridor from
                 the mouth on (``TOT=``).
-  roundabout    ``CIV_ROTONDE`` (CROW, built-up area) on two crossing axes:
+  roundabout    ``CIV_ROUNDABOUT`` (CROW, built-up area) on two crossing axes:
                 four arms, and the arms' corridors from their mouths.
   captures      plan and 3D views in target/e2e-corridor/*.png.
 
@@ -151,16 +151,16 @@ def main():
             "d": ("PI=108470,420310;108470,420490 NAAM=Rotonde-ZN", [(0, 0.70), (None, 0.70)]),
         }
         for key, (pi, pvis) in specs.items():
-            r = cmd(f"CIV_AS {pi}", f"as_{key}")
+            r = cmd(f"CIV_ALIGNMENT {pi}", f"as_{key}")
             if not r["ok"]:
                 return False, f"axis {key}: {r['message']}"
             h, length = r["data"]["as"], r["data"]["lengte_m"]
             made[key] = (h, length)
-            r = cmd(f"CIV_LENGTEPROFIEL AS={h}", f"lp_{key}", 300)
+            r = cmd(f"CIV_LONG_PROFILE AS={h}", f"lp_{key}", 300)
             if not r["ok"]:
                 return False, f"length profile {key}: {r['message']}"
             pv = ";".join(f"{length if s is None else s:.2f}:{z}" for s, z in pvis)
-            r = cmd(f"CIV_ONTWERPPROFIEL AS={h} PVI={pv} BOOG=60", f"op_{key}")
+            r = cmd(f"CIV_DESIGN_PROFILE AS={h} PVI={pv} BOOG=60", f"op_{key}")
             if not r["ok"]:
                 return False, f"design profile {key}: {r['message']}"
         state["axes"] = made
@@ -203,7 +203,7 @@ def main():
         return not bad, "; ".join(bad) if bad else "; ".join(f"{n} {v}" for n, _, v in checks[:4]) + f"; afgraven tot onderkant {d['afgraven_onderkant_m3']:.0f} m³"
 
     def assemblies():
-        r = cmd("CIV_PROFIELTYPEN", "pt")
+        r = cmd("CIV_ASSEMBLIES", "pt")
         if not r["ok"]:
             return False, r["message"]
         names = {p["naam"]: p for p in r["data"]["profieltypen"]}
@@ -211,12 +211,12 @@ def main():
         presets = [n for n in ["weg", "fietspad", "snelweg", "dijk", "stadsstraat", "woonstraat", "polderweg", "2x2-middenberm"] if n in names]
         if not mine or not mine.get("voorwaarden") or "fout" in mine:
             return False, f"polder-e2e: {mine}"
-        r2 = cmd("CIV_PROFIELTYPE NAAM=polder-e2e PLAATS=108100,420600", "pt_draw")
+        r2 = cmd("CIV_ASSEMBLY NAAM=polder-e2e PLAATS=108100,420600", "pt_draw")
         return r2["ok"] and len(presets) == 8, f"{len(names)} profieltypen ({len(presets)} standaard), polder-e2e met voorwaarden; getekend: {r2['message'][-40:]}"
 
     def junction():
         a, b = state["axes"]["a"][0], state["axes"]["b"][0]
-        r = cmd(f"CIV_KRUISPUNT HOOFD={a} ZIJ={b} R=8 PROFIELTYPE_HOOFD=stadsstraat PROFIELTYPE_ZIJ=polder-e2e", "kp", 300)
+        r = cmd(f"CIV_JUNCTION HOOFD={a} ZIJ={b} R=8 PROFIELTYPE_HOOFD=stadsstraat PROFIELTYPE_ZIJ=polder-e2e", "kp", 300)
         if not r["ok"]:
             return False, r["message"]
         d = r["data"]
@@ -245,7 +245,7 @@ def main():
 
     def roundabout():
         c, dd = state["axes"]["c"][0], state["axes"]["d"][0]
-        r = cmd(f"CIV_ROTONDE ASSEN={c};{dd} TYPE=binnen PROFIELTYPE=weg", "rot", 300)
+        r = cmd(f"CIV_ROUNDABOUT ASSEN={c};{dd} TYPE=binnen PROFIELTYPE=weg", "rot", 300)
         if not r["ok"]:
             return False, r["message"]
         d = r["data"]

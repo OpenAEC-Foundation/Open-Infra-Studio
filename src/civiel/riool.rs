@@ -5,7 +5,7 @@
 //! AHN. Everything goes on the NLCS RI layers the GWSW import uses, with
 //! labels, and the whole network is object data on its entities
 //! (`riool=<name>`), so it is read back, edited and recomputed
-//! (`CIV_RIOOL_BIJWERKEN`). Further: its length profile, checks (cover,
+//! (`CIV_SEWER_UPDATE`). Further: its length profile, checks (cover,
 //! slope, manhole spacing, Prandtl-Colebrook capacity, KLIC and sewer
 //! crossings), export to GWSW-OroX and CSV, and an existing GWSW network
 //! taken over as an editable network.
@@ -929,7 +929,7 @@ pub struct Gelezen {
     pub verhang_auto: Vec<bool>,
 }
 
-/// Every CIV_RIOOL network in the drawing, by its object data.
+/// Every CIV_SEWER network in the drawing, by its object data.
 pub fn lees(doc: &CadDocument, ctx: &Ctx) -> Vec<Gelezen> {
     let mut groups: std::collections::BTreeMap<String, Vec<&EntityType>> = Default::default();
     for e in doc.model_space_entities() {
@@ -1386,7 +1386,7 @@ fn next_name(nets: &[Gelezen]) -> String {
     format!("{} {}", tr("Riool", "Sewer"), n + 1)
 }
 
-// ── CIV_RIOOL: design a run ─────────────────────────────────────────────────
+// ── CIV_SEWER: design a run ─────────────────────────────────────────────────
 
 /// Where the run comes from.
 pub enum Invoer {
@@ -1398,7 +1398,7 @@ pub enum Invoer {
     Project(Vec<XY>),
 }
 
-/// The design choices of `CIV_RIOOL` (arguments; defaults where `None`).
+/// The design choices of `CIV_SEWER` (arguments; defaults where `None`).
 #[derive(Clone, Debug)]
 pub struct Ontwerp {
     pub stelsel: Stelsel,
@@ -1524,7 +1524,7 @@ fn next_putnr(net: &Net, netnr: usize) -> String {
     }
 }
 
-/// `CIV_RIOOL`: a run of manholes and pipes along a polyline or points, its
+/// `CIV_SEWER`: a run of manholes and pipes along a polyline or points, its
 /// BOB computed downstream, drawn on NLCS RI layers with labels. A run that
 /// ends (or starts) in a manhole of another network joins that network.
 pub fn ontwerp(opt: &super::CivielOptions, input: Invoer, o: Ontwerp, progress: &dyn Fn(String)) -> Result<String, String> {
@@ -1552,7 +1552,7 @@ pub fn ontwerp(opt: &super::CivielOptions, input: Invoer, o: Ontwerp, progress: 
         None => {
             let naam = o.naam.clone().unwrap_or_else(|| next_name(&nets));
             if nets.iter().any(|g| g.net.naam == naam) {
-                return Err(t!("er is al een riool {}: kies een andere NAAM= of werk het bij met CIV_RIOOL_BIJWERKEN", "there is already a sewer {}: choose another NAAM= or update it with CIV_RIOOL_BIJWERKEN", naam));
+                return Err(t!("er is al een riool {}: kies een andere NAAM= of werk het bij met CIV_SEWER_UPDATE", "there is already a sewer {}: choose another NAAM= or update it with CIV_SEWER_UPDATE", naam));
             }
             let g = Gelezen { net: Net { naam, putten: Vec::new(), leidingen: Vec::new() }, handles: Vec::new(), put_handles: Vec::new(), leiding_handles: Vec::new(), changes: Vec::new(), referentie: o.referentie, verhang_auto: Vec::new() };
             (g, Vec::new())
@@ -1635,7 +1635,7 @@ pub fn ontwerp(opt: &super::CivielOptions, input: Invoer, o: Ontwerp, progress: 
     Ok(msg)
 }
 
-// ── CIV_RIOOL_BIJWERKEN: edit and recompute ─────────────────────────────────
+// ── CIV_SEWER_UPDATE: edit and recompute ─────────────────────────────────
 
 /// Edits by argument: one manhole (`PUTNR=`), one pipe (`LEIDING=`) or, for
 /// the pipe properties, the whole network.
@@ -1838,7 +1838,7 @@ fn apply(g: &mut Gelezen, w: &Wijziging) -> Result<Vec<String>, String> {
 /// entity, else the only one (or all, when `all` is true).
 fn choose(nets: Vec<Gelezen>, naam: Option<&str>, all: bool) -> Result<Vec<Gelezen>, String> {
     if nets.is_empty() {
-        return Err(tr("geen riool in de tekening: ontwerp er een met CIV_RIOOL", "no sewer in the drawing: design one with CIV_RIOOL").into());
+        return Err(tr("geen riool in de tekening: ontwerp er een met CIV_SEWER", "no sewer in the drawing: design one with CIV_SEWER").into());
     }
     if let Some(n) = naam {
         let found: Vec<Gelezen> = nets.into_iter().filter(|g| g.net.naam.eq_ignore_ascii_case(n)).collect();
@@ -1861,7 +1861,7 @@ fn choose(nets: Vec<Gelezen>, naam: Option<&str>, all: bool) -> Result<Vec<Gelez
     Err(t!("er zijn {} riolen ({}): selecteer er een of geef RIOOL=<naam>", "there are {} sewers ({}): select one or give RIOOL=<name>", names.len(), names.join(", ")))
 }
 
-/// `CIV_RIOOL_BIJWERKEN`: read the network back from the drawing (moved
+/// `CIV_SEWER_UPDATE`: read the network back from the drawing (moved
 /// manholes, dragged pipe ends, deleted manholes, edited object data),
 /// apply argument edits, recompute the BOB and draw it again; its length
 /// profile follows.
@@ -1912,7 +1912,7 @@ pub fn bijwerken(opt: &super::CivielOptions, naam: Option<String>, w: Wijziging,
     Ok(msg)
 }
 
-// ── CIV_RIOOL_PROFIEL: the length profile of a run ──────────────────────────
+// ── CIV_SEWER_PROFILE: the length profile of a run ──────────────────────────
 
 /// The length profile of `path` (pipes in flow order), in the style of the
 /// alignment's length profile: ground line, pipes as double lines (invert
@@ -2154,7 +2154,7 @@ fn redraw_profile(ctx: &Ctx, doc: &CadDocument, g: &Gelezen, opt: &super::Civiel
     Ok(Some(t!("{} elementen", "{} entities", hs.len())))
 }
 
-/// `CIV_RIOOL_PROFIEL`: the length profile of a network, from manhole `van`
+/// `CIV_SEWER_PROFILE`: the length profile of a network, from manhole `van`
 /// downstream to `naar` (default: its longest run). A profile drawn before
 /// is replaced, in its place unless `at` is given.
 pub fn profiel(opt: &super::CivielOptions, naam: Option<String>, van: Option<String>, naar: Option<String>, at: Option<XY>, progress: &dyn Fn(String)) -> Result<String, String> {
@@ -2163,7 +2163,7 @@ pub fn profiel(opt: &super::CivielOptions, naam: Option<String>, van: Option<Str
     let mut chosen = choose(lees(&doc, &ctx), naam.as_deref(), false)?;
     let g = chosen.remove(0);
     if !g.changes.is_empty() {
-        return Err(t!("{} is in de tekening gewijzigd ({}): voer eerst CIV_RIOOL_BIJWERKEN uit", "{} was changed in the drawing ({}): run CIV_RIOOL_BIJWERKEN first", g.net.naam, g.changes.join(", ")));
+        return Err(t!("{} is in de tekening gewijzigd ({}): voer eerst CIV_SEWER_UPDATE uit", "{} was changed in the drawing ({}): run CIV_SEWER_UPDATE first", g.net.naam, g.changes.join(", ")));
     }
     let from = put_index(&g.net, van.as_deref())?;
     let to = put_index(&g.net, naar.as_deref())?;
@@ -2199,9 +2199,9 @@ pub fn profiel(opt: &super::CivielOptions, naam: Option<String>, van: Option<Str
     ))
 }
 
-// ── CIV_RIOOL_TOETS: checks ─────────────────────────────────────────────────
+// ── CIV_SEWER_CHECK: checks ─────────────────────────────────────────────────
 
-/// What `CIV_RIOOL_TOETS` checks against (arguments; defaults where `None`).
+/// What `CIV_SEWER_CHECK` checks against (arguments; defaults where `None`).
 #[derive(Clone, Debug, Default)]
 pub struct Toets {
     /// Design flow at the outlet (l/s).
@@ -2332,7 +2332,7 @@ fn cross(a: XY, b: XY, c: XY, d: XY) -> Option<(f64, f64)> {
     ((0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u)).then_some((t, u))
 }
 
-/// Another sewer pipe: a CIV_RIOOL pipe of another network, or an imported
+/// Another sewer pipe: a CIV_SEWER pipe of another network, or an imported
 /// GWSW pipe with its BOB.
 struct AnderRiool {
     label: String,
@@ -2352,7 +2352,7 @@ fn other_sewers(doc: &CadDocument, ctx: &Ctx, nets: &[Gelezen], skip: &str) -> V
             out.push(AnderRiool { label: format!("{} {}", g.net.naam, g.net.naam_leiding(i)), a: g.net.putten[l.van].xy, b: g.net.putten[l.naar].xy, bob_a: l.bob_van, bob_b: l.bob_naar, d: l.d(), t: l.t() });
         }
     }
-    // GWSW pipes (GIS_Q_GWSW, CIV_RIOOL_IMPORT) not taken over.
+    // GWSW pipes (GIS_Q_GWSW, CIV_SEWER_IMPORT) not taken over.
     for e in doc.model_space_entities() {
         if data_value(e, "riool").is_some() {
             continue;
@@ -2377,7 +2377,7 @@ fn other_sewers(doc: &CadDocument, ctx: &Ctx, nets: &[Gelezen], skip: &str) -> V
     out
 }
 
-/// `CIV_RIOOL_TOETS`: cover, slope, manhole spacing, full-pipe capacity and
+/// `CIV_SEWER_CHECK`: cover, slope, manhole spacing, full-pipe capacity and
 /// velocity (Prandtl-Colebrook), crossings with KLIC cables and pipes and
 /// with other sewers. Markers in the drawing (OI-RIOOLTOETS), a CSV beside
 /// it, the findings as JSON (ID=).
@@ -2401,7 +2401,7 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
         let mut add = |b: Bevinding| findings.push((net.naam.clone(), b));
         if !g.changes.is_empty() {
             let xy = net.putten.first().map(|p| p.xy).unwrap_or([0.0, 0.0]);
-            add(Bevinding { soort: "gewijzigd", ernst: "fout", object: net.naam.clone(), xy, tekst: t!("gewijzigd in de tekening ({}): voer CIV_RIOOL_BIJWERKEN uit", "changed in the drawing ({}): run CIV_RIOOL_BIJWERKEN", g.changes.join(", ")), kort: tr("gewijzigd: bijwerken", "changed: update").into() });
+            add(Bevinding { soort: "gewijzigd", ernst: "fout", object: net.naam.clone(), xy, tekst: t!("gewijzigd in de tekening ({}): voer CIV_SEWER_UPDATE uit", "changed in the drawing ({}): run CIV_SEWER_UPDATE", g.changes.join(", ")), kort: tr("gewijzigd: bijwerken", "changed: update").into() });
         }
         let up = net.bovenstrooms();
         let total: f64 = (0..net.leidingen.len()).filter(|i| net.outgoing(net.leidingen[*i].naar).next().is_none()).map(|i| up[i]).sum::<f64>().max(1e-9);
@@ -2570,7 +2570,7 @@ pub fn toets(opt: &super::CivielOptions, naam: Option<String>, t: Toets, progres
     ))
 }
 
-// ── CIV_RIOOL_EXPORT: GWSW-OroX and CSV ─────────────────────────────────────
+// ── CIV_SEWER_EXPORT: GWSW-OroX and CSV ─────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Formaat {
@@ -2714,7 +2714,7 @@ pub fn csv_of(nets: &[&Net], rd: &dyn Fn(XY) -> Result<XY, String>) -> Result<(S
     Ok((puts, pipes))
 }
 
-/// `CIV_RIOOL_EXPORT`: networks to GWSW-OroX (`FORMAAT=GWSW`, the default),
+/// `CIV_SEWER_EXPORT`: networks to GWSW-OroX (`FORMAAT=GWSW`, the default),
 /// to two CSV tables (`FORMAAT=CSV`) or to a GWSW-HydX folder for hydraulic
 /// models (`FORMAAT=HYDX`), beside the drawing or at `PAD=`.
 pub fn export(opt: &super::CivielOptions, naam: Option<String>, formaat: Formaat, pad: Option<std::path::PathBuf>) -> Result<String, String> {
@@ -2722,7 +2722,7 @@ pub fn export(opt: &super::CivielOptions, naam: Option<String>, formaat: Formaat
     let doc = super::document(&["riool"], &[])?;
     let chosen = choose(lees(&doc, &ctx), naam.as_deref(), true)?;
     if let Some(g) = chosen.iter().find(|g| !g.changes.is_empty()) {
-        return Err(t!("{} is in de tekening gewijzigd ({}): voer eerst CIV_RIOOL_BIJWERKEN uit", "{} was changed in the drawing ({}): run CIV_RIOOL_BIJWERKEN first", g.net.naam, g.changes.join(", ")));
+        return Err(t!("{} is in de tekening gewijzigd ({}): voer eerst CIV_SEWER_UPDATE uit", "{} was changed in the drawing ({}): run CIV_SEWER_UPDATE first", g.net.naam, g.changes.join(", ")));
     }
     let nets: Vec<&Net> = chosen.iter().map(|g| &g.net).collect();
     let rd = to_rd(&ctx)?;
@@ -2768,7 +2768,7 @@ fn orox_slug(name: &str) -> String {
     gwsw::orox_local(&name.to_lowercase())
 }
 
-/// `CIV_RIOOL_IMPORT <file.orox.ttl>`: a GWSW-OroX file drawn by the GWSW
+/// `CIV_SEWER_IMPORT <file.orox.ttl>`: a GWSW-OroX file drawn by the GWSW
 /// import's route (NLCS RI layers, GWSW attributes as object data), like
 /// `GIS_Q_GWSW` draws the PDOK service.
 pub fn import(opt: &super::CivielOptions, path: &std::path::Path) -> Result<String, String> {
@@ -2782,11 +2782,11 @@ pub fn import(opt: &super::CivielOptions, path: &std::path::Path) -> Result<Stri
     Ok(format!("{} ({})", msg, path.file_name().and_then(|n| n.to_str()).unwrap_or("")))
 }
 
-// ── CIV_RIOOL_GWSW: an existing GWSW network made editable ──────────────────
+// ── CIV_SEWER_GWSW: an existing GWSW network made editable ──────────────────
 
-/// `CIV_RIOOL_GWSW`: the GWSW pipes and manholes in the drawing (from
-/// `GIS_Q_GWSW` or `CIV_RIOOL_IMPORT`; the selected ones, else all) become
-/// CIV_RIOOL networks, one per system, with their measured BOB and ground
+/// `CIV_SEWER_GWSW`: the GWSW pipes and manholes in the drawing (from
+/// `GIS_Q_GWSW` or `CIV_SEWER_IMPORT`; the selected ones, else all) become
+/// CIV_SEWER networks, one per system, with their measured BOB and ground
 /// levels kept as existing ("bestaand"). New runs that end in one of their
 /// manholes join them; only the new pipes are computed.
 pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn Fn(String)) -> Result<String, String> {
@@ -2800,7 +2800,7 @@ pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn
         .filter(|e| sel.is_empty() || sel.contains(&e.common().handle))
         .collect();
     if pipe_ents.is_empty() {
-        return Err(tr("geen GWSW-leidingen in de tekening (of de selectie): haal ze op met GIS_Q_GWSW of CIV_RIOOL_IMPORT", "no GWSW pipes in the drawing (or the selection): fetch them with GIS_Q_GWSW or CIV_RIOOL_IMPORT").into());
+        return Err(tr("geen GWSW-leidingen in de tekening (of de selectie): haal ze op met GIS_Q_GWSW of CIV_SEWER_IMPORT", "no GWSW pipes in the drawing (or the selection): fetch them with GIS_Q_GWSW or CIV_SEWER_IMPORT").into());
     }
     progress(t!("{} GWSW-leidingen overnemen …", "Taking over {} GWSW pipes …", pipe_ents.len()));
     let put_ents: Vec<&EntityType> = doc.model_space_entities().filter(|e| gwsw_entity(e) && matches!(e, EntityType::Circle(_)) && e.common().layer.contains("RIOOLPUT")).collect();
@@ -2932,8 +2932,8 @@ pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn
     api::note("vervangen", removed);
     api::note("zonder_bob", no_bob);
     Ok(t!(
-        "GWSW overgenomen als bewerkbaar riool: {}. {} GWSW-elementen vervangen{}. Sluit een nieuw riool aan door CIV_RIOOL in een van deze putten te laten eindigen.",
-        "GWSW taken over as an editable sewer: {}. {} GWSW entities replaced{}. Join a new sewer by ending CIV_RIOOL in one of these manholes.",
+        "GWSW overgenomen als bewerkbaar riool: {}. {} GWSW-elementen vervangen{}. Sluit een nieuw riool aan door CIV_SEWER in een van deze putten te laten eindigen.",
+        "GWSW taken over as an editable sewer: {}. {} GWSW entities replaced{}. Join a new sewer by ending CIV_SEWER in one of these manholes.",
         msgs.join(" | "),
         removed,
         if no_bob > 0 { t!("; {} leiding(en) zonder BOB kregen er een volgens de ontwerpregels", "; {} pipe(s) without an invert got one by the design rules", no_bob) } else { String::new() }

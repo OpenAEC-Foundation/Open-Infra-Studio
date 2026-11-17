@@ -136,16 +136,16 @@ def build(s, klic, dwg):
     s.run("CIV_BGT3D PANDEN=nee")
     s.run("CIV_BAG3D RAMEN=nee")
     s.run(f'CIV_KLIC3D "{klic}" VERGROOT=2')
-    s.run("CIV_SONDERINGEN3D MAX=40")
+    s.run("CIV_CPT3D MAX=40")
     # Street design: axis on an NWB road section, terrain, profiles, corridor.
     s.run("GIS_Q_NWB")
     street = s.street()
     s.run("CIV_TIN BRON=AHN AFSTAND=5")
-    axis = s.run(f"CIV_AS AS={street} NAAM=Ontwerpstraat")["data"]
+    axis = s.run(f"CIV_ALIGNMENT AS={street} NAAM=Ontwerpstraat")["data"]
     ax, length = axis["as"], float(axis["lengte_m"])
-    frame = s.run(f"CIV_LENGTEPROFIEL AS={ax}")["data"]
+    frame = s.run(f"CIV_LONG_PROFILE AS={ax}")["data"]
     z = (float(frame["maaiveld_min"]) + float(frame["maaiveld_max"])) / 2.0
-    s.run(f"CIV_ONTWERPPROFIEL AS={ax} PVI=0:{z + 0.3:.2f};{length / 2:.1f}:{z + 0.6:.2f};{length:.1f}:{z + 0.3:.2f} BOOG=40")
+    s.run(f"CIV_DESIGN_PROFILE AS={ax} PVI=0:{z + 0.3:.2f};{length / 2:.1f}:{z + 0.6:.2f};{length:.1f}:{z + 0.3:.2f} BOOG=40")
     s.run(f"CIV_CORRIDOR AS={ax} SJABLOON=weg FREQUENTIE=10 DWARSPROFIELEN=ja")
     s.view("TOP", "WIREFRAME2D")
     s.save(dwg)
@@ -185,7 +185,7 @@ def views(s):
         pass
     s.capture(f"{NAME}-plattegrond.png", "TOP", "GOURAUDSHADED")
     s.capture(f"{NAME}-3d.png", "NEISO", "GOURAUDSHADED")
-    s.run("CIV_DOORZICHT PCT=78")
+    s.run("CIV_SEE_THROUGH PCT=78")
     s.capture(f"{NAME}-3d-ondergrond.png", "NEISO", "GOURAUDSHADED")
     s.capture(f"{NAME}-ondergrond-grote-kerk.png", "NEISO", "GOURAUDSHADED", bounds=KERK)
 

@@ -18,16 +18,16 @@ and against the series x = l·Σ(−1)ⁿ l⁴ⁿ/((4n+1)(2n)! 2²ⁿ), y = l·�
 **Everything that uses an alignment handles them:**
 - stationing, and point, direction and curvature at a station;
 - station and offset of a point (nearest sample, then Newton on (p − P(s))·T(s) = 0);
-- offset lines (`CIV_AS_OFFSET`): the parallel of a clothoid is no clothoid, so it is drawn as arcs through points at the offset;
+- offset lines (`CIV_ALIGNMENT_OFFSET`): the parallel of a clothoid is no clothoid, so it is drawn as arcs through points at the offset;
 - length profiles (the alignment band slopes along a clothoid and is labelled with A), cross sections, corridors (the superelevation follows the curvature along the clothoid), LandXML import.
 
 **In the drawing.** Open CAD Studio has no spiral entity. An axis stays one polyline: each clothoid becomes circular arcs through points on it, split until no arc strays more than 1 mm from it (in a metre drawing). The polyline's object data (XDATA `OPENINFRA`) carries one record per clothoid: `spiraal<n>=<first vertex>;<last vertex>;<L>;<k0>;<k1>`. Reading the axis back replaces those arcs by the exact clothoid. The record is relative to the vertices, so moving or rotating the axis keeps it valid. When the polyline was scaled or edited so that the clothoid no longer fits its vertices, the record is ignored and the arcs stay (within 1 mm).
 
-### `CIV_AS` with clothoids
+### `CIV_ALIGNMENT` with clothoids
 
 ```
-CIV_AS PI=x,y;x,y;… R=r;… LS=l;…   (clothoid length per PI)
-CIV_AS PI=x,y;x,y;… R=r;… A=a;…    (clothoid parameter per PI)
+CIV_ALIGNMENT PI=x,y;x,y;… R=r;… LS=l;…   (clothoid length per PI)
+CIV_ALIGNMENT PI=x,y;x,y;… R=r;… A=a;…    (clothoid parameter per PI)
 ```
 
 At each inner PI with a radius, a symmetric clothoid–arc–clothoid: τ = L/(2R), shift p = Y − R(1 − cos τ), abscissa k = X − R·sin τ, tangent length T = (R + p)·tan(Δ/2) + k, with (X, Y) the clothoid's end point. When 2τ equals the deflection, the arc drops out (two clothoids meeting at the top). Too long clothoids, or curves that do not fit between the PIs, are refused. The last value of `R=`, `LS=` or `A=` repeats.
@@ -59,21 +59,21 @@ The IFC export (`CIV_IFC`, `GIS_IFC`) writes clothoids into the `IfcAlignment`:
 - the layout: an `IfcAlignmentHorizontalSegment` with PredefinedType `CLOTHOID`, the start and end radius (0 for straight, negative for clockwise) and the segment length;
 - the geometry: an `IfcCurveSegment` of the composite curve whose parent curve is an `IfcClothoid` with constant A = 1/√|dκ/ds| (negative for a clockwise clothoid). A clothoid whose curvature does not start at zero (out of a curve, or between two radii) uses the part of the parent curve from parameter t₀ = κ₀/(dκ/ds), so the curvature along the segment is exactly the clothoid's.
 
-**Cant** of a rail track (`CIV_SPOOR`) is written as `IfcAlignmentCant` (rail head distance 1.5 m) with one `IfcAlignmentCantSegment` per piece: `CONSTANTCANT` on straights (0) and circular curves (the applied cant), `LINEARTRANSITION` along the clothoids. The outer rail is raised: in a left curve the right rail, in a right curve the left rail. The cant has no geometric representation yet (no `IfcSegmentedReferenceCurve`): it is part of the alignment's layout only.
+**Cant** of a rail track (`CIV_TRACK`) is written as `IfcAlignmentCant` (rail head distance 1.5 m) with one `IfcAlignmentCantSegment` per piece: `CONSTANTCANT` on straights (0) and circular curves (the applied cant), `LINEARTRANSITION` along the clothoids. The outer rail is raised: in a left curve the right rail, in a right curve the left rail. The cant has no geometric representation yet (no `IfcSegmentedReferenceCurve`): it is part of the alignment's layout only.
 
 Checked with IfcOpenShell 0.8.4 (`tests/ifc_validate.py`): no schema or EXPRESS rule errors, and the composite curve evaluated by IfcOpenShell's geometry kernel passes through the start of every layout segment (to 1 mm), so each clothoid ends where the next segment starts. The sample drawing of the unit tests (`target/ifc-test/voorbeeld.ifc`) has a road with clothoids and a rail track with cant.
 
-## Design criteria (`CIV_ONTWERPCRITERIA`, `CIV_AS_TOETS`)
+## Design criteria (`CIV_DESIGN_CRITERIA`, `CIV_ALIGNMENT_CHECK`)
 
 ```
-CIV_ONTWERPCRITERIA                                   lists the tables
-CIV_ONTWERPCRITERIA RICHTLIJN=roa CATEGORIE=niethoofdbaan V=70 [AS=<handle>]
-CIV_AS_TOETS AS=<handle> [RICHTLIJN= CATEGORIE= V=] [VERKANTING=<%>]
+CIV_DESIGN_CRITERIA                                   lists the tables
+CIV_DESIGN_CRITERIA RICHTLIJN=roa CATEGORIE=niethoofdbaan V=70 [AS=<handle>]
+CIV_ALIGNMENT_CHECK AS=<handle> [RICHTLIJN= CATEGORIE= V=] [VERKANTING=<%>]
 ```
 
-`CIV_ONTWERPCRITERIA` shows the values of a guideline, road category and design speed, each with its source. It keeps the choice for the session and, with `AS=`, on the axis (object data `ontwerpcriteria=roa;niethoofdbaan;70`).
+`CIV_DESIGN_CRITERIA` shows the values of a guideline, road category and design speed, each with its source. It keeps the choice for the session and, with `AS=`, on the axis (object data `ontwerpcriteria=roa;niethoofdbaan;70`).
 
-`CIV_AS_TOETS` checks the axis and its design profile against the choice (from the arguments, else the axis, else the session):
+`CIV_ALIGNMENT_CHECK` checks the axis and its design profile against the choice (from the arguments, else the axis, else the session):
 - every circular curve against the minimum radius;
 - every clothoid against the minimum A and the rule A ≥ R/3;
 - curves below the radius that needs transitions, when they meet a straight without a clothoid;
@@ -132,10 +132,10 @@ Minimum radii, clothoid parameters and superelevation for these roads, and every
 - minimum radius Rmin = V²/(127·(0.01·emax + fmax)) (§3.3) for emax 4, 6 and 8 %, with fmax 0.19 … 0.08 (the fmax values are not checked against the table);
 - minimum grade 0.5 % on curbed roads (0.30 % in some cases), eye 1.08 m and object 0.60 m: Green Book 2018 pp. 3-164 and 3-167, as quoted in Michigan DOT, *Sight Distance Guidelines According to the 2018 AASHTO*.
 
-## Sight distance (`CIV_ZICHT`)
+## Sight distance (`CIV_SIGHT_DISTANCE`)
 
 ```
-CIV_ZICHT AS=<handle> [RICHTLIJN= CATEGORIE= V=] [NODIG=<m>] [OOG=<m>] [OBJECT=<m>]
+CIV_SIGHT_DISTANCE AS=<handle> [RICHTLIJN= CATEGORIE= V=] [NODIG=<m>] [OOG=<m>] [OBJECT=<m>]
           [OM=10] [RIJLIJN=1.75] [VRIJ=5] [MAX=<m>] [RICHTING=heen|terug|beide]
           [LAGEN=-OG-BEBOUWING;…] [PLAATS=x,y]
 ```
@@ -150,16 +150,16 @@ CIV_ZICHT AS=<handle> [RICHTLIJN= CATEGORIE= V=] [NODIG=<m>] [OOG=<m>] [OBJECT=<
 
 Obstacles are read from Open CAD Studio's shared view of the drawing. For drawings larger than that view (16 MB unless `OCS_V4_SNAPSHOT_SEGMENT_SIZE` is set), select the obstacles before running the command.
 
-## Rail (`CIV_SPOOR`, `CIV_WISSEL`)
+## Rail (`CIV_TRACK`, `CIV_TURNOUT`)
 
-### `CIV_SPOOR`
+### `CIV_TRACK`
 
 ```
-CIV_SPOOR AS=<handle> | PI=x,y;… R=r;… [LS=l;…|A=a;…]  V=<km/h> [VMIN=<km/h>]
+CIV_TRACK AS=<handle> | PI=x,y;… R=r;… [LS=l;…|A=a;…]  V=<km/h> [VMIN=<km/h>]
           [VERKANTING=mm;…] [SPOREN=2] [SPOORAFSTAND=<m>] [NAAM=] [BEGIN=] [PLAATS=x,y]
 ```
 
-A track axis on `AM-AS_SPOOR_TREIN`, with stationing, main points, radii and clothoids as for `CIV_AS`, and per circular curve:
+A track axis on `AM-AS_SPOOR_TREIN`, with stationing, main points, radii and clothoids as for `CIV_ALIGNMENT`, and per circular curve:
 
 - **Equilibrium cant** D_eq = 11.8 · V² / R (mm; V in km/h, R in m). It follows from D = s·v²/(g·R) with s ≈ 1500 mm between the rail heads of standard gauge, g = 9.81 m/s² and v = V/3.6: 1500/(9.81 · 3.6²) = 11.8 (Powell & Gräbe 2017, eq. 1, after Esveld, *Modern Railway Track*, 2001).
 - **Applied cant** D: given per curve with `VERKANTING=`, or chosen: D_eq, at most the maximum cant, and with `VMIN=` at most the slow train's equilibrium cant plus the allowed excess; rounded to 5 mm.
@@ -183,10 +183,10 @@ The JSON result lists `bogen` (`r_m`, `deq_mm`, `d_mm`, `tekort_mm`, `overschot_
 
 ProRail's own design rules (OVS/RLN) are not public and EN 13803 is not freely available; check the values above against them.
 
-### `CIV_WISSEL`
+### `CIV_TURNOUT`
 
 ```
-CIV_WISSEL AS=<track> STATION=<m> [TYPE=1:9] [ZIJDE=links|rechts] [RICHTING=op|af] [LENGTE=50] [NAAM=W1]
+CIV_TURNOUT AS=<track> STATION=<m> [TYPE=1:9] [ZIJDE=links|rechts] [RICHTING=op|af] [LENGTE=50] [NAAM=W1]
 ```
 
 From the ribbon: select the track, click **Wissel** and click the turnout start on the side the diverging track goes (type 1:9).

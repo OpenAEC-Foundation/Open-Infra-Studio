@@ -8,12 +8,12 @@ KLIC + survey + AHN → cross sections that show what you will meet.
      low-voltage cable of that delivery (found in the GI-xml, so the cross
      sections cross it);
   4. "measured" points: the cable found in the trench at each section,
-     imported as a PENZD file (CIV_PUNTEN_IMPORT);
-  5. CIV_DWARSPROFIELEN over AHN every 5 m, 6 m either side: each section
+     imported as a PENZD file (CIV_POINTS_IMPORT);
+  5. CIV_CROSS_SECTIONS over AHN every 5 m, 6 m either side: each section
      must show the BGT surfaces it cuts, the KLIC crossings at their assumed
      depth and the measured points;
   6. the dependency graph: a length profile too, then a TIN changes the
-     ground of both; CIV_BIJWERKEN must find and remake exactly those two;
+     ground of both; CIV_PROFILES_UPDATE must find and remake exactly those two;
   7. the objects with their data as GeoPackage (GIS_EXPORT).
 
 Runs its own Open CAD Studio with an isolated configuration folder, like the
@@ -145,7 +145,7 @@ def main():
             return False, "no straight low-voltage cable of 15 m or more in the area"
         a, b = found
         state["axis_pts"] = (a, b)
-        r = cmd(f"CIV_AS PI={a[0]:.2f},{a[1]:.2f};{b[0]:.2f},{b[1]:.2f} NAAM=Proefsleuf", "as")
+        r = cmd(f"CIV_ALIGNMENT PI={a[0]:.2f},{a[1]:.2f};{b[0]:.2f},{b[1]:.2f} NAAM=Proefsleuf", "as")
         if not r["ok"]:
             return False, r["message"]
         state["as"] = r["data"]["as"]
@@ -160,11 +160,11 @@ def main():
         rows = [f"{i + 1},{a[0] + ux * s:.3f},{a[1] + uy * s:.3f},{2.0:.3f},KABEL_LS" for i, s in enumerate(stations)]
         path = OUT / "proefsleuf-meting.csv"
         path.write_text("\n".join(rows) + "\n")
-        r = cmd(f"CIV_PUNTEN_IMPORT {path}", "meting")
+        r = cmd(f"CIV_POINTS_IMPORT {path}", "meting")
         return r["ok"], r["message"][:120]
 
     def sections():
-        r = cmd(f"CIV_DWARSPROFIELEN AS={state['as']} OM=5 LINKS=6 RECHTS=6", "dp", 900)
+        r = cmd(f"CIV_CROSS_SECTIONS AS={state['as']} OM=5 LINKS=6 RECHTS=6", "dp", 900)
         if not r["ok"]:
             return False, r["message"]
         d = r["data"]
@@ -175,16 +175,16 @@ def main():
 
     def graph():
         """The dependency graph: a new TIN changes the ground of both profiles."""
-        r = cmd(f"CIV_LENGTEPROFIEL AS={state['as']}", "lp", 600)
+        r = cmd(f"CIV_LONG_PROFILE AS={state['as']}", "lp", 600)
         if not r["ok"]:
             return False, r["message"]
-        before = cmd("CIV_BIJWERKEN CONTROLE", "graph0", 120)
+        before = cmd("CIV_PROFILES_UPDATE CONTROLE", "graph0", 120)
         r = cmd("CIV_TIN BRON=AHN AFSTAND=5", "tin", 600)
         if not r["ok"]:
             return False, r["message"]
-        stale = cmd("CIV_BIJWERKEN CONTROLE", "graph1", 120)
-        update = cmd("CIV_BIJWERKEN", "graph2", 900)
-        after = cmd("CIV_BIJWERKEN CONTROLE", "graph3", 120)
+        stale = cmd("CIV_PROFILES_UPDATE CONTROLE", "graph1", 120)
+        update = cmd("CIV_PROFILES_UPDATE", "graph2", 900)
+        after = cmd("CIV_PROFILES_UPDATE CONTROLE", "graph3", 120)
         n = lambda r: (r.get("data") or {}).get("verouderd")
         ok = n(before) == 0 and n(stale) == 2 and update["ok"] and n(after) == 0
         return ok, f"stale before {n(before)}, after a TIN {n(stale)}, updated: {update['message'][:90]}, after {n(after)}"
@@ -222,7 +222,7 @@ def main():
     if step("site", site) and step("BGT", bgt) and step("KLIC delivery", klic) and step("trench axis along a cable", trench):
         step("survey points", survey)
         step("cross sections with cut objects", sections)
-        step("dependency graph (CIV_BIJWERKEN)", graph)
+        step("dependency graph (CIV_PROFILES_UPDATE)", graph)
         step("GeoPackage export", export)
         step("capture", captures)
     try:

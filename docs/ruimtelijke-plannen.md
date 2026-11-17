@@ -12,7 +12,7 @@ Zoeken gebeurt op een RD-punt; de client vraagt geometrie in EPSG:28992 op. Een 
 
 Een zelfstandig lokaal IMRO-GML-bestand kan zonder API-sleutel worden ingelezen. Interne geometrieverwijzingen worden binnen het bestand opgelost; externe verwijzingen worden niet automatisch gedownload. Lever bij ontbrekende verwijzingen een zelfstandig bestand aan. Controleer het opgegeven coördinatenstelsel en de plaatsing ten opzichte van bekende RD-punten.
 
-Open **Ruimtelijke plannen** via de GIS-werkbank of `GIS_PLANNEN`. Stel een projectlocatie in, voer eventueel de sessiesleutel in en kies **Plannen zoeken**. Selecteer een resultaat, haal het op en plaats het daarna in de tekening. Voor lokale import: download de GML bij het plan onder **Overig** in Regels op de kaart, vul het volledige lokale pad in en kies **GML in tekening plaatsen**. De algemene bestandsimport herkent IMRO eveneens.
+Open **Ruimtelijke plannen** via de GIS-werkbank of `GIS_PLANS`. Stel een projectlocatie in, voer eventueel de sessiesleutel in en kies **Plannen zoeken**. Selecteer een resultaat, haal het op en plaats het daarna in de tekening. Voor lokale import: download de GML bij het plan onder **Overig** in Regels op de kaart, vul het volledige lokale pad in en kies **GML in tekening plaatsen**. De algemene bestandsimport herkent IMRO eveneens.
 
 De import ondersteunt polygonen met binnenringen, meerdere geometrieën, punten en gesegmenteerde lijnen. Gebogen GML-segmenten en omgekeerd georiënteerde segmenten geven een expliciete fout: segmenteer die eerst in de bron. Ze worden niet stilzwijgend als rechte lijnen getekend. IMRO wordt als volledige planobjecten ingevoerd; afknippen via de algemene bestandsoptie is niet ondersteund.
 

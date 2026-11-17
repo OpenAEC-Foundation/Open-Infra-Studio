@@ -474,7 +474,7 @@ fn describe(a: &Assembly) -> Value {
     })
 }
 
-/// `CIV_PROFIELTYPEN`: the library, for the command line and scripts.
+/// `CIV_ASSEMBLIES`: the library, for the command line and scripts.
 pub fn list_command() -> Result<String, String> {
     let all = list();
     let mut lines = Vec::new();
@@ -503,7 +503,7 @@ pub fn list_command() -> Result<String, String> {
     Ok(trf!("{} profieltypen ({} eigen in {}): {}", "{} assemblies ({} own in {}): {}", all.len(), all.iter().filter(|e| e.file.is_some()).count(), user_dir().display(), lines.join(" ¶ ")))
 }
 
-/// `CIV_PROFIELTYPE NAAM=… [KOPIE=…] [PLAATS=x,y]`: one assembly in detail;
+/// `CIV_ASSEMBLY NAAM=… [KOPIE=…] [PLAATS=x,y]`: one assembly in detail;
 /// copied as a start for the user's own; drawn as a template section.
 pub fn show(opt: &super::CivielOptions, name: &str, copy: Option<&str>, at: Option<XY>) -> Result<String, String> {
     let entry = list().into_iter().find(|e| e.name == name.trim().to_lowercase()).ok_or_else(|| trf!("profieltype '{}' bestaat niet; kies {}", "assembly '{}' does not exist; choose {}", name, names().join(", ")))?;

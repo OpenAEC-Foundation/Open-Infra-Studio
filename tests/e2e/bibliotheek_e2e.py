@@ -114,10 +114,10 @@ def main():
         ocs.run("GIS_SITE 8.5417 47.3769 300 300 Zurich")
         time.sleep(2)
         before = ocs.entities()
-        ocs.run("GIS_HOOGTELIJNEN")
+        ocs.run("GIS_CONTOURS")
         ocs.settle(minimum_seconds=3.0, timeout=300, first_change=120)
         mid = ocs.entities()
-        ocs.run("GIS_HOOGTEPUNTEN")
+        ocs.run("GIS_SPOT_HEIGHTS")
         ocs.settle(minimum_seconds=3.0, timeout=300, first_change=120)
         after = ocs.entities()
         return (mid > before and after > mid), f"contours +{mid - before}, spot heights +{after - mid}"

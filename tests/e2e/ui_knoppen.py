@@ -43,8 +43,8 @@ SITE = "GIS_SITE RD 104900 425350 250 200 UI-test"
 # Window title, the heading that identifies it on the accessibility bus
 # (egui does not pass the title on), and the command that opens it.
 WINDOWS = {
-    "gis": ("Open Infra — GIS-workbench", "Open Infra · GIS", "GIS_LOCATIE"),
-    "civiel": ("Open Infra — Civiel", "Open Infra · Civiel", "CIV_INSTELLINGEN"),
+    "gis": ("Open Infra — GIS-workbench", "Open Infra · GIS", "GIS_LOCATION"),
+    "civiel": ("Open Infra — Civiel", "Open Infra · Civiel", "CIV_SETTINGS"),
 }
 # A running job: a verb with an ellipsis ("Importeren…", "OpenStreetMap ophalen via …").
 BUSY = re.compile(r"(bezig|laden|ophalen|importeren|berekenen|controleren|zoeken|maken|herstellen)\b.{0,80}…", re.I)

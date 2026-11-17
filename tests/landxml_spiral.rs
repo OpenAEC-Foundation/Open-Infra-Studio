@@ -15,7 +15,7 @@ const SPIRAL: &str = r#"<?xml version="1.0"?>
   </CoordGeom></Alignment></Alignments>
 </LandXML>"#;
 
-/// What `GIS_LANDXML` does after reading (drawing factor 1): every axis as
+/// What `CIV_LANDXML` does after reading (drawing factor 1): every axis as
 /// a polyline of arcs. The vertex count, or `None` after 10 s.
 fn draw_within_10_s(text: String) -> Option<usize> {
     let (send, receive) = std::sync::mpsc::channel();

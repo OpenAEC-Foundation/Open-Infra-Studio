@@ -39,8 +39,8 @@ if __name__ == "__main__":
             best = e["handle"]
     print("straat:", best, flush=True)
     run("CIV_TIN BRON=AHN AFSTAND=5")
-    r = run(f"CIV_AS AS={best} NAAM=Street")
+    r = run(f"CIV_ALIGNMENT AS={best} NAAM=Street")
     ax = r["data"].get("as")
-    run(f"CIV_LENGTEPROFIEL AS={ax}")
+    run(f"CIV_LONG_PROFILE AS={ax}")
     run(f"CIV_CORRIDOR AS={ax} SJABLOON=weg BOVEN=0.05 FREQUENTIE=10 DWARSPROFIELEN=ja")
     run("QSAVE") if False else rec.host("QSAVE")

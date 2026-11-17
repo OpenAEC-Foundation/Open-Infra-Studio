@@ -55,7 +55,7 @@ Options:
 - text height and colour;
 - clipping to the import area.
 
-Commands: `GIS_BESTAND | GIS_FILE [path]` (window) and `GIS_BESTAND_IMPORT | GIS_FILE_IMPORT <path> [EPSG:code]` (straight in).
+Commands: `GIS_FILE [path]` (window) and `GIS_FILE_IMPORT <path> [EPSG:code]` (straight in).
 
 ## GWSW sewers (issue #6)
 
@@ -72,7 +72,7 @@ Manholes carry their name on the PUTNUMMER object, and every object carries its 
 
 ## Updating the BGT (issue #11)
 
-`GIS_BGT_BIJWERKEN | GIS_BGT_UPDATE`, also in the "BGT · BRK · KLIC" menu, brings the BGT in the drawing up to date instead of importing it again. It fetches the current BGT for the collections that are in the drawing and compares object by object on `lokaal_id` from the object data:
+`GIS_BGT_UPDATE`, also in the "BGT · BRK · KLIC" menu, brings the BGT in the drawing up to date instead of importing it again. It fetches the current BGT for the collections that are in the drawing and compares object by object on `lokaal_id` from the object data:
 
 | Case | What happens |
 |---|---|
@@ -127,9 +127,9 @@ Each vehicle becomes a block, `OI_<ID>_TOP` or `OI_<ID>_SIDE`:
 
 | Command | What |
 |---|---|
-| `GIS_VOERTUIG \| GIS_VEHICLE <id> [ZIJ\|SIDE]` | pick the front, then the driving direction (Enter: east). A side view picked to the left is mirrored. |
-| `GIS_VOERTUIGOVERZICHT \| GIS_VEHICLE_CATALOG [category] [ZIJ\|SIDE]` | a catalogue sheet: rows per category, with names and dimensions |
-| `GIS_VOERTUIGEN \| GIS_VEHICLES` | the window |
+| `GIS_VEHICLE \| GIS_VEHICLE <id> [ZIJ\|SIDE]` | pick the front, then the driving direction (Enter: east). A side view picked to the left is mirrored. |
+| `GIS_VEHICLE_CATALOG \| GIS_VEHICLE_CATALOG [category] [ZIJ\|SIDE]` | a catalogue sheet: rows per category, with names and dimensions |
+| `GIS_VEHICLES \| GIS_VEHICLES` | the window |
 
 The data is `assets/library/vehicles.json`. Each vehicle has:
 - its units (tractor and semitrailer, bus and rear section, ...), each with its length and width;
@@ -140,7 +140,7 @@ The data is `assets/library/vehicles.json`. Each vehicle has:
 
 ## Swept paths
 
-`GIS_VEEGPAD | GIS_SWEPT_PATH <id> [interval]` drives a vehicle along a selected polyline, or along picked points ended with Enter:
+`GIS_SWEPT_PATH <id> [interval]` drives a vehicle along a selected polyline, or along picked points ended with Enter:
 - the steer axle follows the line;
 - each rear axle and each trailer follows as a tractrix (the low-speed model of swept-path software).
 

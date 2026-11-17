@@ -32,7 +32,7 @@ GIS_SITE RD 104885 425320 300 250 Dordrecht, Grote Kerk
 GIS_Q_BGT
 GIS_Q_BRK
 GIS_KLIC_IMPORT <path>/Levering_21O072584_1.zip
-GIS_TEKENBLAD Situatie bestaand - BGT, kadaster en kabels en leidingen
+GIS_SHEET Situatie bestaand - BGT, kadaster en kabels en leidingen
 ```
 
 The KLIC sample comes from [GIS2BIM](https://github.com/DutchSailor/GIS2BIM), at `supportfiles/Sandbox/KLIC/`.

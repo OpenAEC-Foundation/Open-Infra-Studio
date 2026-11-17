@@ -2012,7 +2012,7 @@ impl App {
                     ui.add(egui::DragValue::new(&mut o.exaggeration).range(1.0..=50.0).speed(0.5).suffix("×"));
                 });
                 ui.checkbox(&mut o.surface, "Ook het oppervlak (DSM: gebouwen, bomen)");
-                ui.label(RichText::new("Kies in Open CAD Studio Profiel in het lint (of GIS_PROFIEL): selecteer eerst een polyline of wijs de punten aan, Enter, en wijs dan de linkeronderhoek van het profiel aan.").small().weak());
+                ui.label(RichText::new("Kies in Open CAD Studio Profiel in het lint (of GIS_PROFILE): selecteer eerst een polyline of wijs de punten aan, Enter, en wijs dan de linkeronderhoek van het profiel aan.").small().weak());
             });
             group(&mut cols[1], "Puntenwolk (COPC)", |ui| {
                 ui.checkbox(&mut self.ahn.cloud, "AHN-puntenwolk koppelen (.rcs naast de tekening)");
@@ -2379,7 +2379,7 @@ impl App {
                     }
                 });
             }
-            ui.label(RichText::new("Oppervlakte: gesloten polylijnen (met bogen), cirkels, ellipsen en arceringen (met eilanden). Lengte: lijnen, bogen, polylijnen, splines. Een element dat op dezelfde laag dubbel getekend is (zelfde vorm op de millimeter, ook omgekeerd), telt één keer. Een hoeveelhedenstaat in de tekening: lintknop Hoeveelhedenstaat of GIS_HOEVEELHEDEN_TABEL.").small().weak());
+            ui.label(RichText::new("Oppervlakte: gesloten polylijnen (met bogen), cirkels, ellipsen en arceringen (met eilanden). Lengte: lijnen, bogen, polylijnen, splines. Een element dat op dezelfde laag dubbel getekend is (zelfde vorm op de millimeter, ook omgekeerd), telt één keer. Een hoeveelhedenstaat in de tekening: lintknop Hoeveelhedenstaat of GIS_QUANTITIES_TABLE.").small().weak());
         });
     }
 

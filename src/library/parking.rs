@@ -605,7 +605,7 @@ pub fn draw(line: &[P], req: &Request) -> Result<String, String> {
     Ok(msg + ".")
 }
 
-/// `GIS_PARKEERVAKKEN`: pick the aisle's centre line, Enter lays out the bays.
+/// `GIS_PARKING`: pick the aisle's centre line, Enter lays out the bays.
 pub struct ParkingCmd {
     pub req: Request,
     pub path: Vec<P>,
@@ -656,7 +656,7 @@ fn default_car() -> Option<&'static Vehicle> {
     super::vehicles().iter().filter(|v| v.category == "car" && v.units.len() == 1).min_by(|a, b| (a.length() - 4.5).abs().total_cmp(&(b.length() - 4.5).abs()))
 }
 
-/// `GIS_PARKEERVAKKEN | GIS_PARKING [HOEK=90|80|70|65|60|45|30|LANGS]
+/// `GIS_PARKING [HOEK=90|80|70|65|60|45|30|LANGS]
 /// [KLASSE=openbaar|intensief|nietopenbaar|stalling] [BREEDTE=2.50]
 /// [ZIJDE=beide|links|rechts] [LIJN=x,y;x,y] [MET_VEEGPAD=<voertuig>] [VAK=n]
 /// [START=1]`: along `LIJN=` (project coordinates), the selected line, or
@@ -703,7 +703,7 @@ pub fn command(host: &mut dyn HostApi, cmd: &str) {
             "VAK" | "BAY" => req.bay = num(v).map(|x| x.max(0.0) as usize),
             "MET_VEEGPAD" | "WITH_SWEPT_PATH" | "VEEGPAD" => match super::find(v).or_else(|| matches!(v.to_ascii_lowercase().as_str(), "ja" | "yes").then(default_car).flatten()) {
                 Some(veh) => req.vehicle = Some(veh),
-                None => bad = Some(t!("onbekend voertuig {v} (zie GIS_VOERTUIGEN)", "unknown vehicle {v} (see GIS_VEHICLES)")),
+                None => bad = Some(t!("onbekend voertuig {v} (zie GIS_VEHICLES)", "unknown vehicle {v} (see GIS_VEHICLES)")),
             },
             other => bad = Some(t!("onbekend argument {other}=", "unknown argument {other}=")),
         }

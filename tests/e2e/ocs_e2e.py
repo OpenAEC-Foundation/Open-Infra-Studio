@@ -249,11 +249,11 @@ def scenario_importeren(ocs, rap, l, nl):
     if nl:
         importeer(ocs, rap, l, "GIS_Q_BGT", "BGT (NLCS)", 20)
         importeer(ocs, rap, l, "GIS_Q_BRK", "kadaster (NLCS)", 10)
-        importeer(ocs, rap, l, "GIS_HOOGTELIJNEN", "AHN-hoogtelijnen", 1)
-        importeer(ocs, rap, l, "GIS_HOOGTEPUNTEN", "AHN-hoogtepunten", 10)
+        importeer(ocs, rap, l, "GIS_CONTOURS", "AHN-hoogtelijnen", 1)
+        importeer(ocs, rap, l, "GIS_SPOT_HEIGHTS", "AHN-hoogtepunten", 10)
     else:
         importeer(ocs, rap, l, "GIS_Q_OSM", "OpenStreetMap", 20)
-    importeer(ocs, rap, l, "GIS_TEKENBLAD Locatietest", "tekenblad", 20)
+    importeer(ocs, rap, l, "GIS_SHEET Locatietest", "tekenblad", 20)
 
     def controle():
         lagen = ocs.layers()
@@ -319,7 +319,7 @@ def scenario_bewerken(ocs, rap, l):
 
     def import_ongedaan():
         voor = ocs.entities()
-        ocs.run("GIS_TEKENBLAD Tweede blad")
+        ocs.run("GIS_SHEET Tweede blad")
         na = ocs.settle()["entities"]
         ocs.run("U")
         time.sleep(0.5)

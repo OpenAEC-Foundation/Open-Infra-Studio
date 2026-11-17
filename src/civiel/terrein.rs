@@ -491,7 +491,7 @@ pub fn create(opt: &super::CivielOptions, source: TinSource, progress: &dyn Fn(S
     ))
 }
 
-/// `GIS_TIN_HOOGTELIJNEN`: contours of the selected faces, or of the TIN on
+/// `CIV_CONTOURS`: contours of the selected faces, or of the TIN on
 /// the triangulation layers.
 /// Which surface a command works on: the selected faces (else the existing
 /// ground), or the faces of one drawing status (B bestaand, N nieuw).
@@ -622,7 +622,7 @@ fn solid(pts: [XY; 4], layer: &str) -> EntityType {
     e
 }
 
-/// `CIV_ANALYSE`: the terrain coloured in height bands (elevation
+/// `CIV_ELEVATION_ANALYSIS`: the terrain coloured in height bands (elevation
 /// analysis), with a legend beside it. Tool layers OI-ANALYSE-HOOGTE-nn.
 pub fn analysis(opt: &super::CivielOptions, which: Surface) -> Result<String, String> {
     let opt = opt.clone();

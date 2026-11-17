@@ -10,9 +10,9 @@ Builds a small civil model in Dordrecht (``GIS_SITE RD 104885 425320 200
 150 Dordrecht``):
 
   tin          CIV_TIN BRON=AHN: the existing ground (status B)
-  points       CIV_PUNT: two survey points with code
-  axis         CIV_AS PI=… R=…: an alignment from PIs with a curve
-  profiles     CIV_LENGTEPROFIEL and CIV_ONTWERPPROFIEL (PVIs, curves)
+  points       CIV_POINT: two survey points with code
+  axis         CIV_ALIGNMENT PI=… R=…: an alignment from PIs with a curve
+  profiles     CIV_LONG_PROFILE and CIV_DESIGN_PROFILE (PVIs, curves)
   corridor     CIV_CORRIDOR SJABLOON=weg: design TIN (N), feature lines
   landxml      CIV_LANDXML_EXPORT … ALLES, validated against the LandXML
                1.2 XSD
@@ -155,11 +155,11 @@ def main():
         return d["driehoeken"] > 500 and d["laag"].startswith("B-"), f"{d['driehoeken']} triangles on {d['laag']}, {d['hoogte_min']:.2f}–{d['hoogte_max']:.2f} m"
 
     def points():
-        r = run_id("CIV_PUNT 104850,425300 104920,425340 NR=501 CODE=PUT", "ux-pt")
+        r = run_id("CIV_POINT 104850,425300 104920,425340 NR=501 CODE=PUT", "ux-pt")
         return r["data"].get("punten") == 2, r["message"][:160]
 
     def axis():
-        r = run_id("CIV_AS PI=104800,425270;104880,425290;104960,425360 R=60", "ux-as")
+        r = run_id("CIV_ALIGNMENT PI=104800,425270;104880,425290;104960,425360 R=60", "ux-as")
         d = r["data"]
         state["axis"] = d["as"]
         state["axis_len"] = d["lengte_m"]
@@ -167,12 +167,12 @@ def main():
         return d["bogen"] == 1 and d["lengte_m"] > 150, f"{d['naam']} handle {d['as']}: {d['lengte_m']:.3f} m, {d['bogen']} curve"
 
     def profiles():
-        r = run_id(f"CIV_LENGTEPROFIEL AS={state['axis']}", "ux-lp")
+        r = run_id(f"CIV_LONG_PROFILE AS={state['axis']}", "ux-lp")
         lo, hi = r["data"]["maaiveld_min"], r["data"]["maaiveld_max"]
         mid = round((lo + hi) / 2, 2)
         state["pvi"] = [(0.0, mid), (80.0, mid + 0.6), (state["axis_len"], mid - 0.2)]
         pvi = ";".join(f"{s:.3f}:{z:.2f}" for s, z in state["pvi"])
-        r2 = run_id(f"CIV_ONTWERPPROFIEL AS={state['axis']} PVI={pvi} BOOG=40", "ux-op")
+        r2 = run_id(f"CIV_DESIGN_PROFILE AS={state['axis']} PVI={pvi} BOOG=40", "ux-op")
         n = len(r2["data"]["pvi"])
         return n == 3, f"ground {lo:.2f}–{hi:.2f} m; design {pvi}, {n} PVIs"
 
@@ -287,7 +287,7 @@ def main():
         ocs_e2e.nieuwe_tekening(ocs, "mm", "leeg-mm.dwg")
         ocs.run("GIS_SITE RD 104885 425320 200 150 RELATIEF Dordrecht")
         time.sleep(2)
-        r = run_id("CIV_AS PI=104800,425270;104880,425290;104960,425360 R=60", "ux-mm-as")
+        r = run_id("CIV_ALIGNMENT PI=104800,425270;104880,425290;104960,425360 R=60", "ux-mm-as")
         length = r["data"]["lengte_m"]
         path = OUT / "mm.ifc"
         run_id(f"CIV_IFC BESTAND={path}", "ux-mm-ifc")

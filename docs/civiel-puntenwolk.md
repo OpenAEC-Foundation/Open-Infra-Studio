@@ -1,6 +1,6 @@
 # Point clouds: TIN, profiles, ground filter and 3D meshes
 
-Point clouds used to be shown only (`GIS_PUNTENWOLK`, an attached scan). The Civiel tab now builds with them:
+Point clouds used to be shown only (`GIS_POINT_CLOUD`, an attached scan). The Civiel tab now builds with them:
 
 - a **TIN from a point cloud**: the AHN point cloud of the project area (or a selected area), or a file;
 - **length profiles and cross sections** whose ground line comes from a strip of points along the axis;
@@ -16,8 +16,8 @@ Civiel → **Puntenwolk** (Point cloud):
 
 | Button | Command | What it does |
 |---|---|---|
-| **TIN uit AHN-punten** (only with the Dutch modules on) | `CIV_PUNTENWOLK_TIN` | A TIN from the AHN5 ground points of the project area, or of the selected closed polyline. |
-| **TIN uit puntenwolk** | `CIV_PUNTENWOLK_BESTAND <file>` | A file dialog; a TIN from the ground of the file. |
+| **TIN uit AHN-punten** (only with the Dutch modules on) | `CIV_POINT_CLOUD_TIN` | A TIN from the AHN5 ground points of the project area, or of the selected closed polyline. |
+| **TIN uit puntenwolk** | `CIV_POINT_CLOUD_FILE <file>` | A file dialog; a TIN from the ground of the file. |
 | **3D-mesh** | `CIV_MESH` | A closed 3D mesh of the points inside the selected closed polyline. |
 
 ## TIN from a point cloud
@@ -49,7 +49,7 @@ CIV_TIN BRON=PUNTENWOLK [BESTAND=<las/laz/e57/ply/pts/xyz>] [EDITIE=AHN5|AHN4]
 3. **Thinning per cell.** Each cell keeps the measured point nearest its centre. It also keeps the lowest point of any class, for the ground filter. When the grid would hold more than 2 million cells, its cell doubles (four cells become one). The area also sets the start cell, so a city fits in memory: for 25 km² the cell becomes about 3.5 m.
 4. **Ground filter when needed.** A cloud without class 2 points (or `KLASSEN=AUTO`) goes through SMRF (below) on the lowest points.
 5. **Thinning by error.** Greedy insertion after Garland & Heckbert (1995): start from the convex hull and an 8 × 8 sample, triangulate (Delaunay), and insert in every triangle the point that lies farthest from it vertically. This repeats until every point lies within `TOL`, or `MAX` is reached (the largest remaining error is then reported). Flat ground keeps few points; curbs, ditches and embankments keep many.
-6. **Output.** The TIN is drawn like any terrain: one or more MESH entities on `B-…-OG-TRIANGULATIE-G` (or `N-` with `STATUS=N`), the outline on `OG-GRENS`, object data and the object index. Contours (`CIV_HOOGTELIJNEN`), elevation analysis (`CIV_ANALYSE`), earthwork (`CIV_VOLUME`) and profiles read it like any other TIN.
+6. **Output.** The TIN is drawn like any terrain: one or more MESH entities on `B-…-OG-TRIANGULATIE-G` (or `N-` with `STATUS=N`), the outline on `OG-GRENS`, object data and the object index. Contours (`CIV_CONTOURS`), elevation analysis (`CIV_ELEVATION_ANALYSIS`), earthwork (`CIV_VOLUME`) and profiles read it like any other TIN.
 
 The answer (`ID=`) holds `driehoeken`, `punten`, `laag`, `hoogte_min`, `hoogte_max`, `bron`, `crs`, `punten_gelezen`, `punten_grond`, `grondfilter`, `klassen`, `cel_m`, `tol_m`, `max_fout_m`, `begrensd`, and for AHN `tegels` and `opgehaald_mb`.
 
@@ -88,8 +88,8 @@ Unit tests:
 ## Profiles from points
 
 ```
-CIV_LENGTEPROFIEL AS=<handle> BRON=PUNTENWOLK [STROOK=1] [BESTAND=…] [KLASSEN=2;9|AUTO] [EDITIE=…]
-CIV_DWARSPROFIELEN AS=<handle> BRON=PUNTENWOLK [STROOK=1] …
+CIV_LONG_PROFILE AS=<handle> BRON=PUNTENWOLK [STROOK=1] [BESTAND=…] [KLASSEN=2;9|AUTO] [EDITIE=…]
+CIV_CROSS_SECTIONS AS=<handle> BRON=PUNTENWOLK [STROOK=1] …
 ```
 
 The ground line comes from the ground points themselves, not from a TIN or the AHN grid. Each station takes the **median height of the ground points within a strip of `STROOK` m** (a disc of that diameter around the station). Where the strip holds no ground points (buildings, water without points) the line breaks, as it does with AHN.
@@ -98,7 +98,7 @@ It is a height source next to the TIN and AHN (`Maaiveld::Puntenwolk` in `src/ci
 
 ## Formats
 
-`GIS_BESTAND` (the file button of the GIS tab) and `GIS_RASTER_IMPORT` now read:
+`GIS_FILE` (the file button of the GIS tab) and `GIS_RASTER_IMPORT` now read:
 
 | Format | Reader | CRS |
 |---|---|---|

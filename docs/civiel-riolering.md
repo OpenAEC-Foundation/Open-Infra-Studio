@@ -8,19 +8,19 @@ The design works anywhere a TIN or a height source is available. Three parts lea
 
 ## Commands
 
-All commands take `KEY=value` arguments and `ID=<name>` for a JSON result in `<config>/OpenCADStudio/open-infra/api/<name>.json`. Coordinates are project coordinates (RD in the Netherlands). `CIV_RIOOL_HELP` lists the arguments.
+All commands take `KEY=value` arguments and `ID=<name>` for a JSON result in `<config>/OpenCADStudio/open-infra/api/<name>.json`. Coordinates are project coordinates (RD in the Netherlands). `CIV_SEWER_HELP` lists the arguments.
 
 | Command | Ribbon | What it does |
 |---|---|---|
-| `CIV_RIOOL` | Riool ontwerpen (Design sewer) | A run of manholes and pipes, from a polyline (`LIJN=<handle>` or the selection), points (`PUNTEN=x,y;x,y;…`) or picked points (the ribbon button without a selection: upstream first, Enter ends). |
-| `CIV_RIOOL_BIJWERKEN` | Bijwerken (Update) | Reads the network back from the drawing, applies edits and recomputes it. |
-| `CIV_RIOOL_PROFIEL` | Lengteprofiel (Length profile) | The length profile of a run. |
-| `CIV_RIOOL_TOETS` | Toetsen (Check) | Cover, slope, manhole spacing, capacity and velocity, crossings with KLIC and with other sewers. |
-| `CIV_RIOOL_EXPORT` | Exporteren (Export) | GWSW-OroX (`FORMAAT=GWSW`, the default) or two CSV tables (`FORMAAT=CSV`). |
-| `CIV_RIOOL_IMPORT <file.orox.ttl>` | GWSW-bestand (GWSW file), Dutch modules only | Reads a GWSW-OroX file and draws it the way `GIS_Q_GWSW` draws the PDOK service. |
-| `CIV_RIOOL_GWSW` | GWSW overnemen (Take over GWSW), Dutch modules only | Turns GWSW pipes and manholes in the drawing into an editable network. |
+| `CIV_SEWER` | Riool ontwerpen (Design sewer) | A run of manholes and pipes, from a polyline (`LIJN=<handle>` or the selection), points (`PUNTEN=x,y;x,y;…`) or picked points (the ribbon button without a selection: upstream first, Enter ends). |
+| `CIV_SEWER_UPDATE` | Bijwerken (Update) | Reads the network back from the drawing, applies edits and recomputes it. |
+| `CIV_SEWER_PROFILE` | Lengteprofiel (Length profile) | The length profile of a run. |
+| `CIV_SEWER_CHECK` | Toetsen (Check) | Cover, slope, manhole spacing, capacity and velocity, crossings with KLIC and with other sewers. |
+| `CIV_SEWER_EXPORT` | Exporteren (Export) | GWSW-OroX (`FORMAAT=GWSW`, the default) or two CSV tables (`FORMAAT=CSV`). |
+| `CIV_SEWER_IMPORT <file.orox.ttl>` | GWSW-bestand (GWSW file), Dutch modules only | Reads a GWSW-OroX file and draws it the way `GIS_Q_GWSW` draws the PDOK service. |
+| `CIV_SEWER_GWSW` | GWSW overnemen (Take over GWSW), Dutch modules only | Turns GWSW pipes and manholes in the drawing into an editable network. |
 
-### `CIV_RIOOL` arguments
+### `CIV_SEWER` arguments
 
 | Argument | Meaning | Default |
 |---|---|---|
@@ -40,7 +40,7 @@ All commands take `KEY=value` arguments and `ID=<name>` for a JSON result in `<c
 
 A run whose last (or first) point lies in a manhole of another network joins that network: the manhole is reused and only the new pipes are computed. This is how an existing network, taken over from GWSW, is extended.
 
-### `CIV_RIOOL_BIJWERKEN`
+### `CIV_SEWER_UPDATE`
 
 Without arguments it picks up what was changed in the drawing:
 - a manhole moved (its circle), or a pipe end dragged: the manhole follows;
@@ -57,7 +57,7 @@ Edits by argument (`RIOOL=<name>` when the drawing holds several networks):
 
 The levels are computed again, the network is redrawn, its length profile is redrawn in its place, and old check markers are removed (run the check again). The removal and the new drawing are two undo steps.
 
-### `CIV_RIOOL_PROFIEL`
+### `CIV_SEWER_PROFILE`
 
 `RIOOL=`, `VAN=` and `NAAR=` (manhole numbers; default: the longest run through the network), `PLAATS=x,y` (lower-left corner of the graph). Without `PLAATS=` the profile goes in the row of views below the project, or where the network's previous profile was. `STAP=` (ground sample distance) and `OVERHOGING=` (vertical exaggeration, default 10) are the general settings.
 
@@ -70,7 +70,7 @@ The profile draws, after the alignment's length profile:
 - a height grid with NAP labels;
 - a band (`AL-PROFIELBALK`) with the manhole numbers, ground levels, BOB in and out (two values where they differ), distance, length and slope, size and material.
 
-### `CIV_RIOOL_TOETS`
+### `CIV_SEWER_CHECK`
 
 `RIOOL=` (default: all networks), and the design flow:
 - `Q=` in l/s at the outlet; or
@@ -98,7 +98,7 @@ Results:
 - a CSV report beside the drawing, `riooltoets_<name>.csv`;
 - with `ID=`, the JSON: findings, the hydraulics per pipe (inner diameter, roughness, slope, full-pipe velocity and capacity, design flow, filling ratio, smallest cover) and every crossing with its clearance.
 
-### `CIV_RIOOL_EXPORT`
+### `CIV_SEWER_EXPORT`
 
 `RIOOL=` (default: all networks), `FORMAAT=GWSW|CSV`, `PAD=` (default beside the drawing).
 
@@ -111,13 +111,13 @@ Results:
   The coordinates are RD (EPSG:28992), with NAP heights; a project in another CRS is transformed to RD.
 - **CSV**: `<name>_putten.csv` (manhole, system, X, Y, ground level, size, lowest BOB, depth) and `<name>_leidingen.csv` (pipe, from, to, system, material, nominal, inner diameter, wall, length, BOB from and to, slope, smallest cover, the design rules), with `;` and a decimal comma.
 
-**Reading back.** `CIV_RIOOL_IMPORT` reads an OroX file of any GWSW version (1.5, 1.6, 1.7) into the properties of the PDOK GWSW service (`beheerleiding`, `beheerput`: `naam`, `type`, `stelseltype`, `beginpunt`, `eindpunt`, `bob_beginpunt_leiding`, `bob_eindpunt_leiding`, `breedte_leiding`, `materiaal_leiding`, `maaiveldhoogte`, `breedte_put` …), and draws them through the same function as `GIS_Q_GWSW`. A file exported by `CIV_RIOOL_EXPORT` comes back on the same NLCS objects, with its levels.
+**Reading back.** `CIV_SEWER_IMPORT` reads an OroX file of any GWSW version (1.5, 1.6, 1.7) into the properties of the PDOK GWSW service (`beheerleiding`, `beheerput`: `naam`, `type`, `stelseltype`, `beginpunt`, `eindpunt`, `bob_beginpunt_leiding`, `bob_eindpunt_leiding`, `breedte_leiding`, `materiaal_leiding`, `maaiveldhoogte`, `breedte_put` …), and draws them through the same function as `GIS_Q_GWSW`. A file exported by `CIV_SEWER_EXPORT` comes back on the same NLCS objects, with its levels.
 
 **IFC.** The IFC 4.3 export (`CIV_IFC`) writes each pipe as an `IfcPipeSegment` with a hollow tube (`IfcSweptDiskSolid`) at its real height (the axis at BOB + half the inner diameter) and each round manhole as an `IfcDistributionChamberElement` (MANHOLE) with a shaft from its bottom to the ground. The property set `OpenInfra_Sewer` carries `InvertLevelStart`, `InvertLevelEnd`, `NominalDiameter`, `InnerDiameter`, `WallThickness`, `Material`, `Length`, `Slope`, `System`, `FromManhole`, `ToManhole`, and for manholes `ManholeNumber`, `GroundLevel`, `BottomLevel`, `Depth`, `ManholeSize`; all object data also goes along in `OpenInfra_ObjectData`. Imported GWSW pipes and manholes with their levels get the same bodies. Labels are annotations; the flow arrows are symbols.
 
-### `CIV_RIOOL_GWSW` (Dutch data)
+### `CIV_SEWER_GWSW` (Dutch data)
 
-Takes the GWSW pipes and manholes in the drawing (the selected ones, else all), drawn by `GIS_Q_GWSW` or `CIV_RIOOL_IMPORT`, over as CIV_RIOOL networks, one per system (`NAAM=` names them):
+Takes the GWSW pipes and manholes in the drawing (the selected ones, else all), drawn by `GIS_Q_GWSW` or `CIV_SEWER_IMPORT`, over as CIV_SEWER networks, one per system (`NAAM=` names them):
 - pipes are linked to their manholes by `beginpunt` / `eindpunt`, else by the nearest manhole within a metre, else by a new node;
 - a pipe that rises from begin to end is turned, so pipes point downstream;
 - measured BOB and ground levels are kept as **existing** (`bestaand=ja`, status B): they are never recomputed;
