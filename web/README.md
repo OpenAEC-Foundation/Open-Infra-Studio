@@ -41,3 +41,12 @@ Opties van `bgtTekenen`: `bbox` (verplicht), `status` (`B`/`N`/`T`/`V`),
 (straatnamen en huisnummers), `knippen` (op het gebied).
 
 Licentie: GPL-3.0-only, zoals de rest van Open Infra.
+
+## Gebouwde versie
+
+`dist/` bevat de gebouwde module (`open_infra_web.js` + `open_infra_web_bg.wasm`)
+van deze versie. Een release-tag `web-v<versie>` maakt hem via een CDN te
+laden, bijvoorbeeld:
+`https://cdn.jsdelivr.net/gh/OpenAEC-Foundation/Open-Infra-Studio@web-v2026.44.5/web/dist/open_infra_web.js`.
+Na een wijziging: opnieuw bouwen, `pkg/` naar `dist/` kopiëren en een nieuwe
+tag zetten.
