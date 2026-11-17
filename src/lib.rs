@@ -885,10 +885,6 @@ fn quick(host: &mut dyn HostApi, q: &'static Quick, label: &'static str) {
 /// `GIS_SITE RD <x> <y> [breedte] [hoogte] [RELATIEF] [naam]`: set the project
 /// location from a script, without the window.
 fn site_command(host: &mut dyn HostApi, cmd: &str) {
-    // The units may have changed since the drawing was first used.
-    let tab = host.tab_id();
-    bridge::units(host, tab, true);
-    bridge::attach(host);
     let args: Vec<&str> = cmd.split_whitespace().skip(1).collect();
     let num = |i: usize| args.get(i).and_then(|a| a.replace(',', ".").parse::<f64>().ok());
     let mut site = bridge::site().unwrap_or_else(||Site::for_region(localisation::current()));

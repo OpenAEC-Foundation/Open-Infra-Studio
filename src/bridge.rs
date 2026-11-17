@@ -157,16 +157,15 @@ pub fn attach(host: &mut dyn HostApi) {
     }
 }
 
-/// Drawing units → metres factor for the tab. Open CAD Studio's plugin API
-/// does not hand out INSUNITS (v2026.43 knows CLAYER, SNAPANG and CTAB) and
-/// the drawing header only comes with the whole drawing, which a large
-/// drawing cannot send. So: a cache per tab; Open Infra's own record in the
-/// drawing (OPENINFRA/UNITS); the header only when the drawing is known to be
-/// small; metres otherwise. `fresh` reads again (a new project location).
+/// Drawing units per metre for the tab. The current host exposes INSUNITS
+/// without a drawing snapshot. Only when it is unavailable do we fall back
+/// to the tab cache, OPENINFRA/UNITS, or a small drawing's header.
+/// `fresh` bypasses the cached/recorded value before trying the header.
 pub fn units(host: &mut dyn HostApi, tab_id: u64, fresh: bool) -> f64 {
     static CACHE: OnceLock<Mutex<std::collections::HashMap<u64, f64>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
-    if !fresh {
+    let f = host.system_variable("INSUNITS").and_then(unit_factor_from_variable);
+    if f.is_none() && !fresh {
         if let Some(f) = cache.lock().unwrap().get(&tab_id) {
             return *f;
         }
@@ -176,11 +175,6 @@ pub fn units(host: &mut dyn HostApi, tab_id: u64, fresh: bool) -> f64 {
             XRecordValue::String(s) => s.trim().parse::<f64>().ok().filter(|f| *f > 0.0),
             _ => None,
         })
-    };
-    let f = match host.system_variable("INSUNITS") {
-        Some(ocs_plugin_api::host::HostSettingValue::Number(n)) => Some(unit_factor_for_insunits(n as i64)),
-        Some(ocs_plugin_api::host::HostSettingValue::Text(t)) => Some(unit_factor_for_insunits(t.trim().parse().unwrap_or(0))),
-        None => None,
     };
     let f = match f.or_else(|| if fresh { None } else { recorded() }) {
         Some(f) => f,
@@ -195,6 +189,15 @@ pub fn units(host: &mut dyn HostApi, tab_id: u64, fresh: bool) -> f64 {
         record_units(f);
     }
     f
+}
+
+fn unit_factor_from_variable(value: ocs_plugin_api::host::HostSettingValue) -> Option<f64> {
+    use ocs_plugin_api::host::HostSettingValue;
+    match value {
+        HostSettingValue::Number(n) if n.is_finite() => Some(unit_factor_for_insunits(n as i64)),
+        HostSettingValue::Text(t) => t.trim().parse().ok().map(unit_factor_for_insunits),
+        _ => None,
+    }
 }
 
 const UNITS_RECORD: &str = "UNITS";
@@ -252,12 +255,23 @@ pub fn save_site(site: &Site) -> Result<(), String> {
     let stored = store_site(site, t.clone());
     let geodata = stored.is_ok().then(|| {
         let ask = |req: PluginRequest| traced(trace_on().then(|| kind(&req)), || sender.request(req)).map_err(|e| e.to_string());
+        // Window and retained command targets can predate an INSUNITS change.
+        // Ask this drawing's sender rather than reusing their cached factor.
+        let f = match ask(PluginRequest::GetSystemVariable { name: "INSUNITS".into() })? {
+            PluginResponse::SystemVariable(value) => value.and_then(unit_factor_from_variable).ok_or("INSUNITS niet beschikbaar")?,
+            PluginResponse::Error(e) => return Err(e),
+            other => return Err(format!("onverwacht antwoord: {other:?}")),
+        };
+        COMMAND_CONTEXT.with(|c| {
+            if let Some(c) = c.borrow_mut().as_mut().filter(|c| c.target.tab_id == tab) { c.target.unit_factor = f; }
+        });
+        if let Some(current) = shared().lock().unwrap().target.as_mut().filter(|t| t.tab_id == tab) { current.unit_factor = f; }
         match ask(PluginRequest::RemoveGeoLocation)? {
             PluginResponse::GeoLocationRemoved(r) => r.map(|_| ()),
             PluginResponse::Error(e) => Err(e),
             other => Err(format!("onverwacht antwoord: {other:?}")),
         }?;
-        match ask(PluginRequest::SetGeoLocation { location: crate::gis::geodata::location_for(site, t.unit_factor) })? {
+        match ask(PluginRequest::SetGeoLocation { location: crate::gis::geodata::location_for(site, f) })? {
             PluginResponse::GeoLocationSet(r) => r.map(|_| ()),
             PluginResponse::Error(e) => Err(e),
             other => Err(format!("onverwacht antwoord: {other:?}")),
@@ -1124,6 +1138,7 @@ mod command_worker_tests {
                     PluginRequest::BeginUndoGroup { .. } | PluginRequest::EndUndoGroup => Ok(PluginResponse::Ok),
                     PluginRequest::SetGeoLocation { .. } => Ok(PluginResponse::GeoLocationSet(Ok(Handle::from(2u64)))),
                     PluginRequest::RemoveGeoLocation => Ok(PluginResponse::GeoLocationRemoved(Ok(false))),
+                    PluginRequest::GetSystemVariable { name } if name == "INSUNITS" => Ok(PluginResponse::SystemVariable(Some(ocs_plugin_api::host::HostSettingValue::Number(6.0)))),
                     other => panic!("onverwacht verzoek: {other:?}"),
                 }
             }
@@ -1180,6 +1195,7 @@ mod command_worker_tests {
                     PluginRequest::BeginUndoGroup { .. } | PluginRequest::EndUndoGroup => Ok(PluginResponse::Ok),
                     PluginRequest::SetGeoLocation { .. } => Ok(PluginResponse::GeoLocationSet(Ok(Handle::from(2u64)))),
                     PluginRequest::RemoveGeoLocation => Ok(PluginResponse::GeoLocationRemoved(Ok(false))),
+                    PluginRequest::GetSystemVariable { name } if name == "INSUNITS" => Ok(PluginResponse::SystemVariable(Some(ocs_plugin_api::host::HostSettingValue::Number(6.0)))),
                     other => panic!("onverwacht verzoek: {other:?}"),
                 }
             }
@@ -1252,6 +1268,10 @@ mod command_worker_tests {
                     PluginResponse::GeoLocationSet(Ok(Handle::from(7u64)))
                 }
                 PluginRequest::RemoveGeoLocation => PluginResponse::GeoLocationRemoved(Ok(d.geodata.take().is_some())),
+                PluginRequest::GetSystemVariable { name } if name == "INSUNITS" => {
+                    let insunits = if d.unit_scale == 0.001 { 4.0 } else { 6.0 };
+                    PluginResponse::SystemVariable(Some(ocs_plugin_api::host::HostSettingValue::Number(insunits)))
+                }
                 PluginRequest::BeginUndoGroup { .. } | PluginRequest::EndUndoGroup | PluginRequest::PushError(_) => PluginResponse::Ok,
                 other => panic!("onverwacht verzoek: {other:?}"),
             };
@@ -1275,6 +1295,7 @@ mod command_worker_tests {
         with_command_context(Target { sender, tab_id, unit_factor, doc_path: None }, None, None, || {
             save_site(site).expect("de projectlocatie blijft opgeslagen");
             assert_eq!(super::site().as_ref(), Some(site));
+            assert_eq!(target().unwrap().unit_factor, 1.0 / drawing.lock().unwrap().unit_scale, "vervolgwerk gebruikt de actuele eenheden");
         });
         let requests = std::mem::take(&mut *seen.lock().unwrap());
         requests
@@ -1287,7 +1308,7 @@ mod command_worker_tests {
             let drawing = Arc::new(Mutex::new(Drawing { unit_scale: 1.0 / unit_factor, geodata: None, site: None }));
             let seen = save_in(&drawing, tab_id, unit_factor, &rd_site(absolute));
             let kinds: Vec<String> = seen.iter().map(kind).collect();
-            assert_eq!(kinds, ["BeginUndoGroup", "UpdateXRecord", "RemoveGeoLocation", "SetGeoLocation", "EndUndoGroup"], "één ongedaanmaakstap voor record en GEODATA");
+            assert_eq!(kinds, ["BeginUndoGroup", "UpdateXRecord", "GetSystemVariable", "RemoveGeoLocation", "SetGeoLocation", "EndUndoGroup"], "één ongedaanmaakstap voor record en GEODATA");
             let design = if absolute { [104885.0 * unit_factor, 425330.0 * unit_factor, 0.0] } else { [0.0; 3] };
             let expected = ocs_plugin_api::host::GeoLocation { coordinate_system: "EPSG:28992".into(), design_point: design, reference_point: [104885.0, 425330.0, 0.0], north_direction: [0.0, 1.0] };
             assert_eq!(drawing.lock().unwrap().geodata, Some((expected, 1.0 / unit_factor)));
@@ -1307,6 +1328,23 @@ mod command_worker_tests {
     }
 
     #[test]
+    fn an_absolute_site_uses_current_units_even_with_a_stale_target() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let drawing = Arc::new(Mutex::new(Drawing { unit_scale: 0.001, geodata: None, site: None }));
+        let site = rd_site(true);
+        save_in(&drawing, 120024, 1000.0, &site);
+        // The location window keeps the target cached at attach. Only the
+        // host's INSUNITS changes from mm to m before its next OK click.
+        drawing.lock().unwrap().unit_scale = 1.0;
+        save_in(&drawing, 120024, 1000.0, &site);
+        let d = drawing.lock().unwrap();
+        let (location, scale) = d.geodata.as_ref().unwrap();
+        assert_eq!(location.design_point, [104885.0, 425330.0, 0.0], "het basispunt gebruikt de verouderde cache");
+        assert_eq!(*scale, 1.0);
+        assert_eq!(d.site.as_ref(), Some(&site));
+    }
+
+    #[test]
     fn a_refused_geodata_keeps_the_site_and_leaves_no_old_location() {
         let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let drawing = Arc::new(Mutex::new(Drawing { unit_scale: 1.0, geodata: None, site: None }));
@@ -1319,7 +1357,7 @@ mod command_worker_tests {
         assert!(drawing.lock().unwrap().geodata.is_none(), "GEODATA van locatie A bleef staan naast SITE B");
         assert_eq!(drawing.lock().unwrap().site.as_ref(), Some(&b), "SITE B blijft volledig bewaard");
         let kinds: Vec<String> = seen.iter().map(kind).collect();
-        assert_eq!(kinds, ["BeginUndoGroup", "UpdateXRecord", "RemoveGeoLocation", "SetGeoLocation", "EndUndoGroup", "PushError"]);
+        assert_eq!(kinds, ["BeginUndoGroup", "UpdateXRecord", "GetSystemVariable", "RemoveGeoLocation", "SetGeoLocation", "EndUndoGroup", "PushError"]);
         let Some(PluginRequest::UpdateXRecord { entries, .. }) = seen.get(1) else { unreachable!() };
         assert!(matches!(&entries[0].value, XRecordValue::String(v) if v.contains("Weigering")), "SITE B is geschreven");
         let Some(PluginRequest::PushError(warning)) = seen.last() else { unreachable!() };
