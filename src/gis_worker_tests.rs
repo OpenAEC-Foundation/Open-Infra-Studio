@@ -76,6 +76,7 @@ fn an_area_started_in_a_keeps_its_site_after_callbacks_resume_with_b_active() {
                 Q::PushInfo(_) => { self.done.send(()).unwrap(); A::Ok }
                 Q::BeginUndoGroup { .. } | Q::EndUndoGroup => A::Ok,
                 Q::SetGeoLocation { .. } => A::GeoLocationSet(Ok(Handle::from(2u64))),
+                Q::RemoveGeoLocation => A::GeoLocationRemoved(Ok(false)),
                 other => panic!("onverwacht verzoek: {other:?}"),
             })
         }
