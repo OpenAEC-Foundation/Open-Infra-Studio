@@ -74,7 +74,7 @@ pub fn cuttables(doc: &CadDocument) -> Vec<Cuttable> {
         let data = crate::library::infra::host::data(e);
         let source = data.get("bron").map(String::as_str).unwrap_or("");
         if let EntityType::Point(p) = e {
-            // A measured point (CIV_PUNTEN_IMPORT): number, code and height.
+            // A measured point (CIV_POINTS_IMPORT): number, code and height.
             if let (Some(n), Some(z)) = (data.get("puntnummer"), data.get("z").and_then(|z| z.parse::<f64>().ok())) {
                 let label = match data.get("code") {
                     Some(c) if !c.is_empty() => format!("{n} {c}"),

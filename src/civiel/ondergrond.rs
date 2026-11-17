@@ -1,8 +1,8 @@
 //! The subsurface from the BRO: cone penetration tests and boreholes of the
-//! project area. In plan a symbol with its BRO id (`GIS_Q_SONDERINGEN`); in
+//! project area. In plan a symbol with its BRO id (`GIS_Q_CPT`); in
 //! 3D a column per test from the surface level (m NAP) down, one mesh per
 //! soil layer in its conventional colour, with the cone resistance and
-//! friction ratio as graphs beside it (`CIV_SONDERINGEN3D`).
+//! friction ratio as graphs beside it (`CIV_CPT3D`).
 //!
 //! Layers: NLCS MO-ONDERZOEK_SONDERING and MO-ONDERZOEK_BORING (main group
 //! "Milieu en Onderzoek", the NLCS objects for site investigation), G for
@@ -18,7 +18,7 @@ use crate::gis::crs::XY;
 use crate::hoogte::nap;
 use crate::nlcs::{Element, LayerSpec};
 
-/// What `CIV_SONDERINGEN3D` draws.
+/// What `CIV_CPT3D` draws.
 #[derive(Clone, Debug)]
 pub struct Request {
     pub kinds: Vec<Kind>,
@@ -129,7 +129,7 @@ fn plan_symbol(ctx: &Ctx, p: &Point, at: XY, out: &mut Out) -> Result<(), String
     Ok(())
 }
 
-/// `GIS_Q_SONDERINGEN`: the CPTs and boreholes of the project area in plan
+/// `GIS_Q_CPT`: the CPTs and boreholes of the project area in plan
 /// (from the search only, no measurements fetched).
 pub fn overview(opt: &CivielOptions, kinds: &[Kind], progress: &dyn Fn(String)) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
@@ -248,7 +248,7 @@ fn graphs(ctx: &Ctx, p: &Point, at: XY, z0: f64, samples: &[bro::Sample], radius
 /// (head, layers, CPT samples) of one fetched object.
 type Fetched = Result<(Point, Vec<Interval>, Vec<bro::Sample>), String>;
 
-/// `CIV_SONDERINGEN3D`: CPTs and boreholes of the project area as 3D
+/// `CIV_CPT3D`: CPTs and boreholes of the project area as 3D
 /// columns of soil layers, from the surface level (m NAP) down.
 pub fn columns(opt: &CivielOptions, req: &Request, progress: &dyn Fn(String)) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;

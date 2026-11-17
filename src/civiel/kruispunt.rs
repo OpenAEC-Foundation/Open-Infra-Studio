@@ -1,6 +1,6 @@
 //! Junctions and roundabouts between corridors.
 //!
-//! A junction (`CIV_KRUISPUNT`) joins a main road and a side road, each an
+//! A junction (`CIV_JUNCTION`) joins a main road and a side road, each an
 //! axis with a design profile and an assembly. It finds where the axes
 //! cross, makes a T or X junction, rounds each corner with a radius between
 //! the carriageway edges (kerb returns), and builds the junction surface:
@@ -11,7 +11,7 @@
 //! edges at the arm mouths are the corridors' own sections, so corridors
 //! built from the mouth stations on (`CIV_CORRIDOR VAN=` / `TOT=`) fit.
 //!
-//! A roundabout (`CIV_ROTONDE`) is a single-lane roundabout with the
+//! A roundabout (`CIV_ROUNDABOUT`) is a single-lane roundabout with the
 //! dimensions of CROW publication 126 ("Eenheid in rotondes"): outer and
 //! inner radius, an overrunnable strip around the central island, and three
 //! or more arms on given axes, each with an entry and an exit lane, entry
@@ -513,7 +513,7 @@ pub struct JunctionRequest {
 /// distributor roads in a built-up area; see docs/civiel-corridor.md.
 pub const CORNER_RADIUS: f64 = 8.0;
 
-/// `CIV_KRUISPUNT`.
+/// `CIV_JUNCTION`.
 pub fn junction(opt: &super::CivielOptions, req: JunctionRequest, progress: &dyn Fn(String)) -> Result<String, String> {
     let mut opt = opt.clone();
     opt.nlcs.status = Status::N;
@@ -534,8 +534,8 @@ pub fn junction(opt: &super::CivielOptions, req: JunctionRequest, progress: &dyn
     }
     if roads[0].pvis.is_none() && req.level.is_none() {
         return Err(trf!(
-            "{} heeft geen ontwerpprofiel: maak er een (CIV_ONTWERPPROFIEL) of geef NIVEAU=…",
-            "{} has no design profile: make one (CIV_ONTWERPPROFIEL) or give NIVEAU=…",
+            "{} heeft geen ontwerpprofiel: maak er een (CIV_DESIGN_PROFILE) of geef NIVEAU=…",
+            "{} has no design profile: make one (CIV_DESIGN_PROFILE) or give NIVEAU=…",
             axis_label(&roads[0].al)
         ));
     }
@@ -1012,7 +1012,7 @@ pub struct RoundaboutRequest {
     pub natural: bool,
 }
 
-/// `CIV_ROTONDE`.
+/// `CIV_ROUNDABOUT`.
 pub fn roundabout(opt: &super::CivielOptions, req: RoundaboutRequest, progress: &dyn Fn(String)) -> Result<String, String> {
     let mut opt = opt.clone();
     opt.nlcs.status = Status::N;

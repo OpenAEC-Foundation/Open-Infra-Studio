@@ -112,7 +112,7 @@ pub fn dispatch(host_api: &mut dyn HostApi, cmd: &str) {
     let (verb, text) = cmd.split_once(char::is_whitespace).unwrap_or((cmd, ""));
     let a = Args::parse(text);
     match verb.to_ascii_uppercase().as_str() {
-        "GIS_INFRA_CATALOG" | "GIS_INFRA_CATALOGUS" => {
+        "GIS_INFRA_CATALOG" => {
             match super::search(
                 a.str("QUERY").unwrap_or(""),
                 a.str("CATEGORY").unwrap_or(""),

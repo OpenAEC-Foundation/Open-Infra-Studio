@@ -1,12 +1,12 @@
 //! Hydrology: where water runs and where it gathers.
 //!
-//! - **Water drop** (`CIV_WATERDRUPPEL`): the path of a drop over the TIN by
+//! - **Water drop** (`CIV_WATER_DROP`): the path of a drop over the TIN by
 //!   steepest descent across the triangles. In a triangle the drop runs down
 //!   the plane's gradient to an edge; where both triangles at an edge slope
 //!   towards it (a channel) it follows the edge down; at a vertex it takes the
 //!   steepest way out (a triangle's gradient or a descending edge). It stops
 //!   in a pit, at the edge of the TIN or on a flat triangle.
-//! - **Catchments** (`CIV_STROOMGEBIED`): D8 flow directions on a grid sampled
+//! - **Catchments** (`CIV_CATCHMENT`): D8 flow directions on a grid sampled
 //!   from the TIN or fetched from the height source (AHN in the Netherlands).
 //!   Depressions are filled with Priority-Flood (Barnes, Lehman & Mulla 2014,
 //!   "Priority-Flood: An optimal depression-filling and watershed-labeling
@@ -14,7 +14,7 @@
 //!   flats drain along the flooding order. Each cell belongs to the first
 //!   outlet downstream of it. Cells without a height (water, buildings in the
 //!   AHN ground model) and the grid border are where water leaves the model.
-//! - **Ponds** (`CIV_PLASSEN`, also part of `CIV_STROOMGEBIED`): the filled
+//! - **Ponds** (`CIV_PONDS`, also part of `CIV_CATCHMENT`): the filled
 //!   depressions, with their depth and volume — water on the street.
 //!
 //! Neither NLCS 5.02 nor the BGT has objects for flow paths or catchments, so
@@ -932,7 +932,7 @@ impl DropSession {
     }
 }
 
-/// Where the outlets of `CIV_STROOMGEBIED` come from.
+/// Where the outlets of `CIV_CATCHMENT` come from.
 #[derive(Clone, Debug, Default)]
 pub struct Outlets {
     /// Drawing points.
@@ -1059,7 +1059,7 @@ fn outlet_points(o: &Outlets) -> Result<Vec<(String, XY)>, String> {
     Ok(out)
 }
 
-/// `CIV_STROOMGEBIED` (and `CIV_PLASSEN` without outlets): catchments per
+/// `CIV_CATCHMENT` (and `CIV_PONDS` without outlets): catchments per
 /// outlet and the ponds of the filled depressions.
 pub fn catchment(opt: &super::CivielOptions, req: CatchmentRequest, progress: &dyn Fn(String)) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;

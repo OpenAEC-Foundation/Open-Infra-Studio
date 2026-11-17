@@ -548,7 +548,7 @@ fn aerial(bbox: [f64; 4], w: u32, h: u32) -> Result<image::RgbaImage, String> {
     image::load_from_memory(&bytes).map(|i| i.to_rgba8()).map_err(|e| format!("luchtfoto onleesbaar: {e}"))
 }
 
-/// `CIV_FOTOTERREIN`: the ground of the project area as a 3D surface in
+/// `CIV_AERIAL_TERRAIN`: the ground of the project area as a 3D surface in
 /// `cell` m cells (default 2 m on AHN, 10 m elsewhere), each coloured by an
 /// aerial or satellite photo (OG-DTM).
 /// Anywhere in the world: AHN with the PDOK photo in the Netherlands, Terrain
@@ -673,7 +673,7 @@ fn share_below(ctx: &Ctx, b: [f64; 4], level: f64, progress: &dyn Fn(String)) ->
     Ok(wet as f64 / grid.z.len().max(1) as f64)
 }
 
-/// `CIV_WATERPEIL PEIL=<m NAP>`: a water surface at that level over the
+/// `CIV_WATER_LEVEL PEIL=<m NAP>`: a water surface at that level over the
 /// project area, to see what floods (a mesh: the terrain and the buildings
 /// above it stay visible). Again with another level moves the same surface.
 /// Says which share of the area lies lower (AHN ground).
@@ -1403,7 +1403,7 @@ pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagSty
     ))
 }
 
-/// `CIV_DOORZICHT [PCT=70] [ALLES] [UIT]`: make the ground see-through, so
+/// `CIV_SEE_THROUGH [PCT=70] [ALLES] [UIT]`: make the ground see-through, so
 /// cables, pipes and soil columns show beneath it: every mesh except
 /// buildings, KLIC and subsurface layers gets that transparency (`ALLES`:
 /// buildings too); `UIT` (or PCT=0) makes them opaque again.

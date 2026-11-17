@@ -1,8 +1,8 @@
-//! `CIV_GRONDPROFIEL`: the soil along a line from the BRO CPTs and
+//! `CIV_SOIL_PROFILE`: the soil along a line from the BRO CPTs and
 //! boreholes near it, as a profile view (soil units in colour, the columns
 //! themselves, the ground line from the TIN or AHN, a legend), kept in the
-//! drawing as a soil model along the line's stations for `CIV_STABILITEIT`
-//! and `CIV_ZETTING`.
+//! drawing as a soil model along the line's stations for `CIV_SLOPE_STABILITY`
+//! and `CIV_SETTLEMENT`.
 
 use ocs_plugin_api::host::codec::Handle;
 

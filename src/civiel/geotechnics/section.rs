@@ -1,4 +1,4 @@
-//! `CIV_STABILITEIT`: the stability of a slope in a cross section (along a
+//! `CIV_SLOPE_STABILITY`: the stability of a slope in a cross section (along a
 //! drawn line, or square to an axis at a station) on the ground or design
 //! surface and the soil model, with the critical circle, its slices and a
 //! JSON report.

@@ -319,7 +319,7 @@ fn m3km(v: f64) -> String {
     whole(v / 1000.0)
 }
 
-/// `CIV_GRONDBALANS`: the mass haul diagram of an axis.
+/// `CIV_MASS_HAUL`: the mass haul diagram of an axis.
 pub fn mass_haul_diagram(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(String)) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let (f, k) = (ctx.f, ctx.k);

@@ -171,14 +171,57 @@ fn native_save_as_cannot_move_a_managed_points_export_outside() {
         }
         serde_json::from_slice::<serde_json::Value>(&std::fs::read(path).expect("opdracht krijgt een antwoord")).unwrap()
     };
-    assert!(OpenInfraCiviel.dispatch(&mut host, "CIV_PUNTEN_EXPORT ID=native-path-refused"));
+    assert!(OpenInfraCiviel.dispatch(&mut host, "CIV_POINTS_EXPORT ID=native-path-refused"));
     let refused = reply("native-path-refused");
     assert!(!outside.join("b_punten.csv").exists(), "export volgde het native buitenpad");
     assert_eq!(refused["ok"], false, "{refused}");
     host.path = work.join("a.dwg");
-    assert!(OpenInfraCiviel.dispatch(&mut host, "CIV_PUNTEN_EXPORT ID=native-path-ok"));
+    assert!(OpenInfraCiviel.dispatch(&mut host, "CIV_POINTS_EXPORT ID=native-path-ok"));
     let accepted = reply("native-path-ok");
     assert_eq!(accepted["ok"], true, "{accepted}");
     assert!(work.join("a_punten.csv").exists(), "toegestane export blijft werken");
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn an_old_command_name_starts_the_same_command_as_the_english_name() {
+    let _one = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    use ocs_plugin_api::host::codec::{Line, Vector3};
+    let (done, _finished) = mpsc::channel();
+    let entity = EntityType::Line(Line::from_points(Vector3::new(0.0, 0.0, 0.0), Vector3::new(100.0, 0.0, 0.0)));
+    let start = |line: &str| {
+        let drawing = Drawing { entity: entity.clone(), pause: Arc::new(Mutex::new(None)), done: done.clone(), messages: Arc::new(Mutex::new(Vec::new())) };
+        let mut host = Host { tab: 103006, path: PathBuf::from("/werkmap/a.dwg"), drawing, interactive: None, errors: Vec::new() };
+        assert!(OpenInfraCiviel.dispatch(&mut host, line));
+        assert!(host.errors.is_empty(), "{line}: {:?}", host.errors);
+        host.interactive.take().unwrap_or_else(|| panic!("{line} startte geen opdracht")).prompt()
+    };
+    for name in ["CIV_LONG_PROFILE", "CIV_CROSS_SECTIONS"] {
+        let english = start(name);
+        let aliases: Vec<&str> = open_infra::commands::ALIASES.iter().filter(|(_, n)| *n == name).map(|(a, _)| *a).collect();
+        assert!(!aliases.is_empty(), "{name} heeft geen oude naam");
+        for alias in aliases {
+            assert_eq!(start(alias), english, "{alias} ≠ {name}");
+            assert_eq!(start(&alias.to_ascii_lowercase()), english, "{alias} in kleine letters");
+        }
+    }
+}
+
+#[test]
+fn saved_ribbon_buttons_keep_their_ids_and_run_english_commands() {
+    let tools: Vec<_> = CivielModule.ribbon_groups().iter().flat_map(|g| &g.tools).filter_map(|item| match item {
+        RibbonItem::Tool(t) | RibbonItem::LargeTool(t) | RibbonItem::LabeledTool(t) => Some(t),
+        _ => None,
+    }).collect();
+    let ids: std::collections::HashSet<_> = tools.iter().map(|t| t.id).collect();
+    assert_eq!(ids.len(), tools.len(), "duplicate ribbon button id");
+    for id in include_str!("../../tests/fixtures/ribbon-command-ids.txt").lines().filter(|id| id.starts_with("CIV_")) {
+        if open_infra::commands::canonical(id) == "CIV_SEWER_IMPORT" && !open_infra::lang::dutch() { continue; }
+        let tool = tools.iter().find(|t| t.id == id).unwrap_or_else(|| panic!("saved button {id} is missing"));
+        let cmd = match &tool.event {
+            ModuleEvent::Command(cmd) | ModuleEvent::PluginFileDialog { command: cmd, .. } => cmd,
+            _ => panic!("{id}: expected a command or file dialog"),
+        };
+        assert_eq!(cmd, open_infra::commands::canonical(id), "{id}: ribbon must run its English command");
+    }
 }

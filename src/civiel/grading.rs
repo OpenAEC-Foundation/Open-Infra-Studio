@@ -1124,7 +1124,7 @@ pub struct FeatureRequest {
     pub closed: Option<bool>,
 }
 
-/// `CIV_KANTLIJN`: a 3D feature line on OG-BREUKLIJN with object data.
+/// `CIV_FEATURE_LINE`: a 3D feature line on OG-BREUKLIJN with object data.
 pub fn feature_line(opt: &super::CivielOptions, req: FeatureRequest, progress: &dyn Fn(String)) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let f = ctx.f;
@@ -1233,7 +1233,7 @@ fn data_pairs(e: &EntityType) -> Vec<(String, String)> {
         .collect()
 }
 
-/// `CIV_KANTLIJN_PEIL`, `_VERHOOG`, `_PUNT`, `_HELLING`: change a feature
+/// `CIV_FEATURE_LINE_LEVEL`, `_VERHOOG`, `_PUNT`, `_HELLING`: change a feature
 /// line in place (same handle), with its labels.
 pub fn edit_feature(opt: &super::CivielOptions, handle: Option<Handle>, edit: EditArgs) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
@@ -1244,7 +1244,7 @@ pub fn edit_feature(opt: &super::CivielOptions, handle: Option<Handle>, edit: Ed
     };
     let (line, e) = read_source(&ctx, &src, None)?;
     let Some(EntityType::Polyline3D(old)) = e else {
-        return Err(tr("geen kantlijn: kies een 3D-polylijn (CIV_KANTLIJN maakt er een)", "not a feature line: choose a 3D polyline (CIV_KANTLIJN makes one)").into());
+        return Err(tr("geen kantlijn: kies een 3D-polylijn (CIV_FEATURE_LINE maakt er een)", "not a feature line: choose a 3D polyline (CIV_FEATURE_LINE makes one)").into());
     };
     let h = old.common.handle;
     let mut pts = line.pts.clone();
@@ -1743,7 +1743,7 @@ pub struct SlopeRequest {
     pub join: bool,
 }
 
-/// `CIV_TALUD`: a slope from a (feature) line to the ground, over a width or
+/// `CIV_SLOPE`: a slope from a (feature) line to the ground, over a width or
 /// to a level.
 pub fn slope(opt: &super::CivielOptions, req: SlopeRequest, progress: &dyn Fn(String)) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;

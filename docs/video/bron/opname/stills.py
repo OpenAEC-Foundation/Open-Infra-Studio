@@ -84,7 +84,7 @@ def nl():
     stitch("nl-natura2000", 109000, 423300, 30000)
     clear()
     run("GIS_Q_SERVER pdok-luchtfoto RES=6", 1800)
-    run("GIS_Q_GEOMORFOLOGIE", 1800)
+    run("GIS_Q_GEOMORPHOLOGY", 1800)
     stitch("nl-geomorfologie", 109000, 423300, 30000)
     clear()
     run("GIS_SITE RD 104900 425300 7000 4500 Dordrecht")

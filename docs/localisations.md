@@ -11,7 +11,7 @@ Onderzocht op 31 oktober 2026. Eerste regionale profielen: Nederland (`NL`), Ver
 | Projectregio | Regionale navigatie en hulp bij databronnen; verandert geen geometrie | `region` in het Site-record van de tekening |
 | Technische referentie | Werkelijk project-CRS, tekeneenheden en overeengekomen hoogtereferentie | Bestaande project-/tekeninggegevens; expliciet instellen |
 
-Via **Localisatie** of `GIS_LOCALISATION` / `GIS_LOCALISATIE` kiest u de standaardregio en, na het opslaan van een projectlocatie, de regio van de tekening. Wijzigingen aan het lint gelden na herstart. De projectregio past de werkbanknavigatie direct aan. Een Nederlandstalige gebruiker kan dus een Amerikaans project hebben zonder de interfacetaal te veranderen.
+Via **Localisatie** of `GIS_LOCALISATION` / `GIS_LOCALISATION` kiest u de standaardregio en, na het opslaan van een projectlocatie, de regio van de tekening. Wijzigingen aan het lint gelden na herstart. De projectregio past de werkbanknavigatie direct aan. Een Nederlandstalige gebruiker kan dus een Amerikaans project hebben zonder de interfacetaal te veranderen.
 
 Oude instellingen met `netherlands: false` worden Internationaal; anders blijft het oude Nederland-profiel behouden. Een expliciete `region` heeft voorrang. Oude projectrecords zonder regio blijven Nederland. Onbekende toekomstige regio's vallen terug op Internationaal en verliezen hun coördinaten niet. Geografie wordt nooit gebruikt als stilzwijgende vervanging van de projectkeuze.
 

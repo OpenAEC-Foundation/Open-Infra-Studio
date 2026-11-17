@@ -87,7 +87,7 @@ class WorkFolderTest(unittest.TestCase):
     def test_managed_writes_are_not_replayed_on_another_window(self):
         first = dict(mcp.OCS.session)
         second = dict(first, session_id='other', port=2)
-        attempts = [('run', {'cmd': 'CIV_PUNTEN_EXPORT', 'document_id': 1}),
+        attempts = [('run', {'cmd': 'CIV_POINTS_EXPORT', 'document_id': 1}),
                     ('save', {'path': str(self.work / 'nieuw.dwg')}),
                     ('open', {'path': str(self.work / 'tekening.dwg')})]
         for op, body in attempts:
@@ -301,7 +301,7 @@ class WorkFolderTest(unittest.TestCase):
         os.symlink(self.work, alias)
         self.window.drawing = str(alias / 'tekening.dwg')
         sent = self.allowed('infra_civ_points_export', {})
-        self.assertEqual(sent[0]['cmd'].split()[0], 'CIV_PUNTEN_EXPORT')
+        self.assertEqual(sent[0]['cmd'].split()[0], 'CIV_POINTS_EXPORT')
 
     def test_sol_cases_open_and_save_outside(self):
         cases = [
@@ -375,7 +375,7 @@ class WorkFolderTest(unittest.TestCase):
                 body = sent[0].get('cmd') or sent[0].get('path')
                 self.assertIn(os.path.join(self.real, 'in de map.xml'), body)
         sent = self.allowed('civ_points_import', {'path': 'PRIVATE'})
-        self.assertIn(f'CIV_PUNTEN_IMPORT {self.real}/PRIVATE ', sent[0]['cmd'])
+        self.assertIn(f'CIV_POINTS_IMPORT {self.real}/PRIVATE ', sent[0]['cmd'])
         self.refused('civ_klic3d', {})
         # A missing path with a comma made the plugin take the delivery imported last (review round 2).
         self.refused('civ_klic3d', {'path': 'bestaat,niet.zip'})
@@ -398,19 +398,19 @@ class WorkFolderTest(unittest.TestCase):
         # Saving it in the work folder makes the drawing usable again.
         self.allowed('infra_opslaan', {'path': 'nieuw.dwg'})
         sent = self.allowed('infra_civ_points_export', {})
-        self.assertEqual(sent[0]['cmd'].split()[0], 'CIV_PUNTEN_EXPORT')
+        self.assertEqual(sent[0]['cmd'].split()[0], 'CIV_POINTS_EXPORT')
         self.assertNotIn('PAD=', sent[0]['cmd'])
 
     def test_no_free_command_lines(self):
-        for cmd in ['CIV_INFO', f'"CIV_PUNTEN_IMPORT {self.outside}/private.csv"', 'CIV_"IFC BESTAND=../../outside/x.ifc"',
-                    'CIV_PUNTEN_IMPORT punten.csv CODETABEL=../../outside/codes.csv', 'GIS_GEODATA output.dwg',
-                    'GIS_KLIC_MAP', 'SAVEAS ../../outside/x.dwg', 'ZOOM EXTENTS']:
+        for cmd in ['CIV_INFO', f'"CIV_POINTS_IMPORT {self.outside}/private.csv"', 'CIV_"IFC BESTAND=../../outside/x.ifc"',
+                    'CIV_POINTS_IMPORT punten.csv CODETABEL=../../outside/codes.csv', 'GIS_GEODATA output.dwg',
+                    'GIS_KLIC_FOLDER', 'SAVEAS ../../outside/x.dwg', 'ZOOM EXTENTS']:
             with self.subTest(cmd=cmd):
                 self.refused('infra_oi_command', {'command': cmd})
                 self.refused('oi_command', {'command': cmd})
 
     def test_the_request_check_itself(self):
-        for cmd in [f'"CIV_PUNTEN_IMPORT {self.outside}/private.csv"', 'CIV_"IFC BESTAND=x"', 'SAVEAS x.dwg', 'OPEN x.dwg',
+        for cmd in [f'"CIV_POINTS_IMPORT {self.outside}/private.csv"', 'CIV_"IFC BESTAND=x"', 'SAVEAS x.dwg', 'OPEN x.dwg',
                     'ZOOM EXTENTS\nOPEN x.dwg', 'CIV_INFO\nSAVEAS x.dwg', '-VIEW TOP OPEN', 'QSAVE x.dwg']:
             with self.subTest(cmd=cmd):
                 with self.assertRaises(mcp.OcsError):
@@ -522,7 +522,7 @@ class WorkFolderTest(unittest.TestCase):
             self.assertEqual(sent[0]['cmd'], 'SAVEAS C:/elders/x.dwg')
             self.window.drawing = None
             sent = self.allowed('civ_points_export', {})
-            self.assertEqual(sent[0]['cmd'].split()[0], 'CIV_PUNTEN_EXPORT')
+            self.assertEqual(sent[0]['cmd'].split()[0], 'CIV_POINTS_EXPORT')
 
 
 if __name__ == '__main__':

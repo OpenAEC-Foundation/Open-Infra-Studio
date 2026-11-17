@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""BGT mutation (GIS_BGT_MUTATIE) end to end, in a real Open CAD Studio.
+"""BGT mutation (GIS_BGT_MUTATION) end to end, in a real Open CAD Studio.
 
 Starts Open CAD Studio with its own config folder (the plugins from
 target/release), imports the BGT around the Grote Kerk in Dordrecht and
@@ -10,7 +10,7 @@ makes a design the way a designer would:
   - a second road part is changed as built (layer R);
   - a planned cycle path (layer N) with its function in the object data.
 
-Then GIS_BGT_MUTATIE must give 2 new (one plan topography), 1 changed and
+Then GIS_BGT_MUTATION must give 2 new (one plan topography), 1 changed and
 1 ended object, the asphalt must take the function of the road beneath, and
 with --xsd the GML must be valid against IMGeo 2.1.1 (needs lxml; the
 CityGML and GML schemas are fetched once into target/e2e/mutatie/xsd).
@@ -131,10 +131,10 @@ def main():
         made = mcp.OCS.request("entities_create", {"document_id": d, "entities": [{"type": "LwPolyline", "vertices": [[cx - 10, cy], [cx + 10, cy], [cx + 10, cy + 2.5], [cx - 10, cy + 2.5]], "closed": True, "layer": "N-XX-VH-GESLOTENVERHARDING_ASFALT-G"}]})
         path_handle = made["result"]["handles"][0]
         mcp.OCS.request("xdata_set", {"document_id": d, "app": "OPENINFRA", "handles": [path_handle], "data": [{"code": 1000, "value": "objecttype=wegdeel"}, {"code": 1000, "value": "functie=fietspad"}]})
-        out = mcp.OCS.run("GIS_BGT_MUTATIE", timeout=300)
+        out = mcp.OCS.run("GIS_BGT_MUTATION", timeout=300)
         print(out["message"])
         data = out.get("data") or {}
-        check(out["ok"], "GIS_BGT_MUTATIE geeft een resultaat")
+        check(out["ok"], "GIS_BGT_MUTATION geeft een resultaat")
         check((data.get("nieuw"), data.get("gewijzigd"), data.get("beeindigd"), data.get("fouten")) == (2, 1, 1, 0), f"2 nieuw, 1 gewijzigd, 1 beëindigd, 0 fouten (kreeg {data.get('nieuw')}/{data.get('gewijzigd')}/{data.get('beeindigd')}/{data.get('fouten')})")
         gml = Path(data.get("gml", ""))
         text = gml.read_text() if gml.is_file() else ""

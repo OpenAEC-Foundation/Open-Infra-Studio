@@ -15,8 +15,8 @@ A surveyor gives every measured point a code: `LTRB1` for the first kerb line, `
 
 | Command | What it does |
 |---|---|
-| `CIV_PUNTEN_IMPORT <file> CODES=JA [CODETABEL=<file>]` | imports the points as before, then draws the linework and symbols of their codes (a second undo step) |
-| `CIV_CODES_TOEPASSEN [CODETABEL=<file>]` | does the same for the points already in the drawing (the selected ones, or all); with all points the earlier code output is replaced, not doubled |
+| `CIV_POINTS_IMPORT <file> CODES=JA [CODETABEL=<file>]` | imports the points as before, then draws the linework and symbols of their codes (a second undo step) |
+| `CIV_CODES_APPLY [CODETABEL=<file>]` | does the same for the points already in the drawing (the selected ones, or all); with all points the earlier code output is replaced, not doubled |
 
 ### How a code is read
 
@@ -89,7 +89,7 @@ Choices to check for your project: gullies go to the mixed system (GWA) and the 
 
 ## Parcels
 
-`CIV_PERCELEN` splits a plot, a closed polyline, into parcels. `CIV_PERCEEL_INFO` reports area, perimeter and frontage.
+`CIV_PARCELS` splits a plot, a closed polyline, into parcels. `CIV_PARCEL_INFO` reports area, perimeter and frontage.
 
 | Argument | Meaning |
 |---|---|
@@ -115,7 +115,7 @@ Without a street and a direction the dividing lines are perpendicular to the plo
 - object data on each parcel: *perceel, oppervlakte_m2, omtrek_m, front_m, kavel, methode, richting*;
 - a CSV table: `<config>/…/api/<ID>.csv` with `ID=`, otherwise beside the drawing. A Dutch interface writes semicolons and decimal commas, an English one commas and points.
 
-`CIV_PERCEEL_INFO [PERCEEL=<h>;<h>] [STRAAT=<h>]` reports the selected parcels. Their frontage comes from the street when given, otherwise from their object data.
+`CIV_PARCEL_INFO [PERCEEL=<h>;<h>] [STRAAT=<h>]` reports the selected parcels. Their frontage comes from the street when given, otherwise from their object data.
 
 **Limits:**
 
@@ -128,7 +128,7 @@ Neither NLCS 5.02 nor the BGT has objects for flow paths or catchments. These go
 
 ### Water drop
 
-`CIV_WATERDRUPPEL [PUNTEN=x,y;…]` (or click points) traces where a drop runs over the TIN:
+`CIV_WATER_DROP [PUNTEN=x,y;…]` (or click points) traces where a drop runs over the TIN:
 
 - **In a triangle** it runs down the plane's steepest slope to an edge.
 - **At an edge** it goes on into the next triangle. Where both triangles slope towards the edge (a gutter or a valley), it follows the edge down.
@@ -142,7 +142,7 @@ Without a TIN in the drawing, an AHN TIN every `CEL=` m (default 1) is made in m
 
 ### Catchments
 
-`CIV_STROOMGEBIED` computes the catchment of each outlet:
+`CIV_CATCHMENT` computes the catchment of each outlet:
 
 - **Outlets:** picked points (`PUNTEN=x,y;…`, or click them and press Enter), or the points, blocks and circles on the layers of `LAAG=` (`*` wildcards). For example `LAAG=*KOLK*` takes the gullies of a coded survey or of GWSW.
 - **Ground:** a grid of `CEL=` m (default 1), sampled from the TIN in the drawing, or fetched from the height source with `BRON=AHN`. The height source is AHN in the Netherlands, worldwide terrain tiles elsewhere.
@@ -157,7 +157,7 @@ Without a TIN in the drawing, an AHN TIN every `CEL=` m (default 1) is made in m
 
 ### Ponds
 
-With `PLASSEN=ja` (the default) `CIV_STROOMGEBIED` also draws the ponds; `CIV_PLASSEN` draws only them. The ponds are the filled depressions: where water stays on the street after rain until it seeps away or is pumped off. Each pond gets its outline, its deepest point, depth (m), volume (m³), area and water level, as object data, a label and JSON.
+With `PLASSEN=ja` (the default) `CIV_CATCHMENT` also draws the ponds; `CIV_PONDS` draws only them. The ponds are the filled depressions: where water stays on the street after rain until it seeps away or is pumped off. Each pond gets its outline, its deepest point, depth (m), volume (m³), area and water level, as object data, a label and JSON.
 
 `MINDIEPTE=` (default 0.05 m) and `MINOPP=` (default 2 m²) leave out the puddles. These two defaults are Open Infra's choice, not standard values.
 
@@ -169,7 +169,7 @@ With `PLASSEN=ja` (the default) `CIV_STROOMGEBIED` also draws the ponds; `CIV_PL
 
 ## Swept paths in reverse
 
-`GIS_VEEGPAD <vehicle> [interval] ACHTERUIT [KNIK=<degrees>] [PAD=x,y;x,y;…]` (also `GIS_SWEPT_PATH … REVERSE`) reverses a vehicle along the path. The path is a selected line, picked points, or `PAD=` in project coordinates.
+`GIS_SWEPT_PATH <vehicle> [interval] ACHTERUIT [KNIK=<degrees>] [PAD=x,y;x,y;…]` (also `GIS_SWEPT_PATH … REVERSE`) reverses a vehicle along the path. The path is a selected line, picked points, or `PAD=` in project coordinates.
 
 **Kinematics.** The rear axle of the last unit (the trailer's axle group, a tandem acting as one axle) runs along the path backwards; the unit points against the direction of travel. The units ahead follow from it:
 
@@ -198,7 +198,7 @@ Use a smooth path for reversing (arcs): a sharp corner turns the last unit over 
 
 ## Parking bays
 
-`GIS_PARKEERVAKKEN` (also `GIS_PARKING`) lays out rows of bays along a line, the centre line of the aisle:
+`GIS_PARKING` (also `GIS_PARKING`) lays out rows of bays along a line, the centre line of the aisle:
 
 | Argument | Meaning |
 |---|---|

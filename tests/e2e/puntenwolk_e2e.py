@@ -8,7 +8,7 @@ for daily use is left alone. A window appears, as with ``ocs_e2e.py``.
 Dordrecht (AHN is classified), ``GIS_SITE RD 104885 425320 200 150``:
   tin_ahn       ``CIV_TIN BRON=PUNTENWOLK``: a TIN from the AHN5 ground
                 points, thinned to 10 cm, on B-…-OG-TRIANGULATIE.
-  contours      ``CIV_HOOGTELIJNEN`` on it; analysis and earthwork too.
+  contours      ``CIV_CONTOURS`` on it; analysis and earthwork too.
   profiles      an axis across the site; the length profile over the TIN
                 and from a strip of points (``BRON=PUNTENWOLK``) agree;
                 cross sections from points.
@@ -16,7 +16,7 @@ Dordrecht (AHN is classified), ``GIS_SITE RD 104885 425320 200 150``:
 A synthetic site (tests/data/puntenwolk, made by maak_testwolk.py):
   tin_las       ``CIV_TIN BESTAND=onbewerkt.las``: an unclassified scan;
                 the ground filter finds the ground (no roof, no crowns).
-  ply           ``GIS_BESTAND brug.ply``: a PLY imported as a scan (RCS).
+  ply           ``GIS_FILE brug.ply``: a PLY imported as a scan (RCS).
   mesh_ply      ``CIV_MESH BESTAND=brug.ply``: a mesh of the bridge.
   ifc_export    ``CIV_IFC``: the TIN goes out as terrain, the mesh as a civil
                 element.
@@ -157,25 +157,25 @@ def main():
         return ok, f"{r['message']} | XDATA {xd[:3]}"
 
     def contours():
-        r = civ("CIV_HOOGTELIJNEN INTERVAL=0.5", "hoogtelijnen", 600)
+        r = civ("CIV_CONTOURS INTERVAL=0.5", "hoogtelijnen", 600)
         n = sum(len(ocs.handles(l)) for l in layer_with("OG-HOOGTELIJN"))
         return r["ok"] and n > 10, f"{r['message']} | {n} on OG-HOOGTELIJN"
 
     def analysis_and_volume():
-        a = civ("CIV_ANALYSE", "analyse", 600)
+        a = civ("CIV_ELEVATION_ANALYSIS", "analyse", 600)
         v = civ("CIV_VOLUME ONTWERP=PEIL PEIL=1.5", "volume", 600)
         d = v.get("data", {})
         ok = a["ok"] and v["ok"] and d.get("afgraven_m3", 0) + d.get("ophogen_m3", 0) > 100
         return ok, f"{a['message']} | {v['message']}"
 
     def profiles():
-        a = civ("CIV_AS PI=104795,425255;104975,425385 NAAM=Puntenwolkas", "as", 300)
+        a = civ("CIV_ALIGNMENT PI=104795,425255;104975,425385 NAAM=Puntenwolkas", "as", 300)
         h = a.get("data", {}).get("as")
         if not (a["ok"] and h):
             return False, a["message"]
-        tin = civ(f"CIV_LENGTEPROFIEL AS={h}", "lp_tin", 600)
-        cloud = civ(f"CIV_LENGTEPROFIEL AS={h} BRON=PUNTENWOLK STROOK=1", "lp_wolk", 900)
-        sec = civ(f"CIV_DWARSPROFIELEN AS={h} BRON=PUNTENWOLK OM=50 LINKS=10 RECHTS=10", "dp_wolk", 900)
+        tin = civ(f"CIV_LONG_PROFILE AS={h}", "lp_tin", 600)
+        cloud = civ(f"CIV_LONG_PROFILE AS={h} BRON=PUNTENWOLK STROOK=1", "lp_wolk", 900)
+        sec = civ(f"CIV_CROSS_SECTIONS AS={h} BRON=PUNTENWOLK OM=50 LINKS=10 RECHTS=10", "dp_wolk", 900)
         if not (tin["ok"] and cloud["ok"] and sec["ok"]):
             return False, f"{tin['message']} | {cloud['message']} | {sec['message']}"
         dt, dc = tin["data"], cloud["data"]
@@ -237,12 +237,12 @@ def main():
         return ok, r["message"]
 
     def contours_las():
-        r = civ("CIV_HOOGTELIJNEN INTERVAL=0.1", "hoogtelijnen_las", 600)
+        r = civ("CIV_CONTOURS INTERVAL=0.1", "hoogtelijnen_las", 600)
         return r["ok"], r["message"]
 
     def ply_import():
         before = ocs.entities()
-        r = civ(f"GIS_BESTAND {DATA / 'brug.ply'}", "ply", 300)
+        r = civ(f"GIS_FILE {DATA / 'brug.ply'}", "ply", 300)
         d = r.get("data", {})
         rcs = Path(d.get("rcs", "/nonexistent"))
         time.sleep(2)

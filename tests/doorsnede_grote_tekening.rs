@@ -159,7 +159,7 @@ fn drawing(queries: bool) -> Drawing {
     }
 }
 
-/// `CIV_BIJWERKEN CONTROLE`.
+/// `CIV_PROFILES_UPDATE CONTROLE`.
 fn check(d: Arc<Drawing>, tab: u64) -> Result<String, String> {
     let target = bridge::Target { sender: d, tab_id: tab, unit_factor: 1.0, doc_path: None };
     bridge::with_command_context(target, None, None, || civiel::graaf::update(&civiel::CivielOptions::default(), true, &|_| {}))

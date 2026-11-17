@@ -4,15 +4,15 @@ The Civiel tab's group **Bladen** turns a design into contract drawings (bestekt
 
 | Button | Command | What it does |
 |---|---|---|
-| **Bladen maken** | `CIV_BLADEN` | A sheet set along an alignment: one paper-space layout per sheet with the plan strip and the length profile of that stretch. |
-| Bladen naar PDF | `CIV_BLADEN_PDF` | Every sheet to its own PDF. |
+| **Bladen maken** | `CIV_SHEETS` | A sheet set along an alignment: one paper-space layout per sheet with the plan strip and the length profile of that stretch. |
+| Bladen naar PDF | `CIV_SHEETS_PDF` | Every sheet to its own PDF. |
 | Labels | `CIV_LABELS` | Stationing, curve data, PVIs, grades, spot heights, slope arrows and point labels that know their source. |
-| Labels bijwerken | `CIV_LABELS_BIJWERKEN` | Redraws the labels whose source changed or moved, and removes those of deleted sources. |
+| Labels bijwerken | `CIV_LABELS_UPDATE` | Redraws the labels whose source changed or moved, and removes those of deleted sources. |
 
-## Sheets along an alignment (`CIV_BLADEN`)
+## Sheets along an alignment (`CIV_SHEETS`)
 
 ```
-CIV_BLADEN [AS=<handle>] [FORMAAT=A0|A1|A2|A3] [SCHAAL=1:1000] [VSCHAAL=10|1:100]
+CIV_SHEETS [AS=<handle>] [FORMAAT=A0|A1|A2|A3] [SCHAAL=1:1000] [VSCHAAL=10|1:100]
            [OVERLAP=<m>] [PROJECT=<text>] [ONDERWERP=<text>] [NUMMER=<text>] [STATUS=B|N|T|V] [ID=<name>]
 ```
 
@@ -29,12 +29,12 @@ A sheet set is an alignment plus a paper size. Run the command again with the sa
 
 Each sheet is a real paper-space layout, named `<alignment>_<paper>_blad_01`, `…_02` (no spaces, so the plot prompts can take them). Its page setup is the paper size in millimetres at 1:1. It holds:
 
-- **Frame:** the trim line and the drawing frame with a 20 mm binding margin (as on `GIS_TEKENBLAD`).
+- **Frame:** the trim line and the drawing frame with a 20 mm binding margin (as on `GIS_SHEET`).
 - **Plan (SITUATIE):** a viewport over the full width of the drawing area, at the plan scale. It is turned (view twist) so that the stretch of the alignment runs from left to right.
 - **Length profile (LENGTEPROFIEL):** a second viewport below, as wide, at the same horizontal scale.
 - **Match-line references:** "ZIE BLAD n" inside the plan, beside each match line, on the side of the other sheet.
 - **Title column on the right:** 185 mm wide (125 mm on A3). It holds:
-  - the NLCS title block of `GIS_TEKENBLAD` (drawing number, status, coordinate system, format, scale, date, subject, project, sources);
+  - the NLCS title block of `GIS_SHEET` (drawing number, status, coordinate system, format, scale, date, subject, project, sources);
   - "BLAD n VAN N" and the stretch's stations;
   - the scale bar, and the profile's horizontal and vertical scales;
   - the north arrow, turned as the plan is;
@@ -50,7 +50,7 @@ In model space, the command draws:
   - the PVIs with their tangents (`ZZ-CONSTRUCTIELIJN`) and heights;
   - the tangent points (`AM-TANGENTPUNT`).
 
-  The band shows the grades between the vertical curves, and each curve as a box with crest or sag, R and L. The ground comes from the TIN in the drawing, or from AHN without one, as for `CIV_LENGTEPROFIEL`. The design comes from the newest `CIV_ONTWERPPROFIEL` of the alignment.
+  The band shows the grades between the vertical curves, and each curve as a box with crest or sag, R and L. The ground comes from the TIN in the drawing, or from AHN without one, as for `CIV_LONG_PROFILE`. The design comes from the newest `CIV_DESIGN_PROFILE` of the alignment.
 
 The parts carry object data (`bladen`, `blad`, `van`, `tot`, `aansluitlijn`), and the model-space parts are in the drawing's object index (kind `bladen`).
 
@@ -64,10 +64,10 @@ The parts carry object data (`bladen`, `blad`, `van`, `tot`, `aansluitlijn`), an
 
 The vertical exaggeration you ask for is lowered when a sheet's profile would not fit its viewport. It drops to the next of 50, 25, 20, 10, 5, 4, 2 or 1, so the vertical scale stays a round one. The message says so. When even 1× does not fit, the profile is cut off at the top, and the message warns about it.
 
-### PDF (`CIV_BLADEN_PDF`)
+### PDF (`CIV_SHEETS_PDF`)
 
 ```
-CIV_BLADEN_PDF [AS=<handle> | NAAM=<alignment name>] [MAP=<folder>] [ID=<name>]
+CIV_SHEETS_PDF [AS=<handle> | NAAM=<alignment name>] [MAP=<folder>] [ID=<name>]
 ```
 
 Plots every sheet of the alignment (or of all sheet sets) to `<layout>.pdf`, through Open CAD Studio's `-PLOT`. The settings are: the layout at 1:1, centred, with lineweights, on the set's paper size, landscape. The files go to `<drawing>_bladen/` beside the drawing, or to MAP.
@@ -117,7 +117,7 @@ The style is `<config>/OpenCADStudio/open-infra/labels.json`. The first `CIV_LAB
 - **Layers:** a layer is an NLCS main group and object (`"AM KILOMETRERING"`). The status and discipline come from the settings.
 - **Missing keys** keep their default.
 
-### Labels that follow their source (`CIV_LABELS_BIJWERKEN`)
+### Labels that follow their source (`CIV_LABELS_UPDATE`)
 
 Open CAD Studio has no reactors, so a label cannot follow its source by itself. Every label entity carries object data (`OPENINFRA`) instead:
 
@@ -126,7 +126,7 @@ Open CAD Studio has no reactors, so a label cannot follow its source by itself. 
 - `vingerafdruk`: a fingerprint of the source's geometry and object data;
 - `plek`: where a spot height sits.
 
-The labels are listed per source in the drawing's object index (`OPENINFRA/INDEX`, kind `labels`), so updating works at any drawing size. `CIV_LABELS_BIJWERKEN` compares each source with its fingerprint:
+The labels are listed per source in the drawing's object index (`OPENINFRA/INDEX`, kind `labels`), so updating works at any drawing size. `CIV_LABELS_UPDATE` compares each source with its fingerprint:
 
 - **Changed or moved:** the labels are drawn again, with the same spots or grid. PVI and grade labels follow the design line, wherever it has been moved to.
 - **Deleted:** the labels are removed.
@@ -144,10 +144,10 @@ Labels are exported as `IfcAnnotation`: texts as TEXT, ticks, crosses and slope 
 ## Limits
 
 - **Viewports cannot be clipped.** The plugin API has no clipped (polygonal) viewports, so a sheet's plan is the rectangular window, overlap included. The match lines and "ZIE BLAD" references mark where the next sheet takes over.
-- **Plot styles are not set.** `CIV_BLADEN_PDF` plots without them, with the layer lineweights. The plot runs in Open CAD Studio's window: it must be the active drawing.
-- **The title block is plain lines and texts,** as on `GIS_TEKENBLAD`, not a block with attributes: edit its texts directly, or run the command again with other `PROJECT`, `ONDERWERP` or `NUMMER`.
+- **Plot styles are not set.** `CIV_SHEETS_PDF` plots without them, with the layer lineweights. The plot runs in Open CAD Studio's window: it must be the active drawing.
+- **The title block is plain lines and texts,** as on `GIS_SHEET`, not a block with attributes: edit its texts directly, or run the command again with other `PROJECT`, `ONDERWERP` or `NUMMER`.
 - **Model-space texts do not turn with the plan.** In a turned plan view, texts drawn in model space with a fixed rotation (street names, spot heights) appear turned on the sheet. The stationing and curve labels run along the alignment, so they read well.
-- **Labels follow only through `CIV_LABELS_BIJWERKEN`.** They do not move while you edit. Labels made by the other Civiel commands (the fixed texts of `CIV_AS`, `CIV_ONTWERPPROFIEL`) do not follow at all.
+- **Labels follow only through `CIV_LABELS_UPDATE`.** They do not move while you edit. Labels made by the other Civiel commands (the fixed texts of `CIV_ALIGNMENT`, `CIV_DESIGN_PROFILE`) do not follow at all.
 
 ## Sources
 
@@ -160,7 +160,7 @@ Labels are exported as `IfcAnnotation`: texts as TEXT, ticks, crosses and slope 
 
   NLCS has no dedicated object for slope arrows; `ZZ AANPIJLING` (pointer arrow) is the closest.
 - **Sheet sizes:** ISO 216 A-series (A0 1189 × 841 mm to A3 420 × 297 mm).
-- **Title block and frame:** the same as `GIS_TEKENBLAD` (185 mm title column, 20 mm binding margin); NLCS text classes 1.8 / 2.5 / 3.5 / 5 mm.
+- **Title block and frame:** the same as `GIS_SHEET` (185 mm title column, 20 mm binding margin); NLCS text classes 1.8 / 2.5 / 3.5 / 5 mm.
 - **Open Infra's own choices (no standard behind them):**
   - stationing ticks every 20 m with labels every 100 m;
   - an overlap of 20 mm on paper;

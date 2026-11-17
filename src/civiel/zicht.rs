@@ -1,4 +1,4 @@
-//! Sight distance (`CIV_ZICHT`): per station the available sight distance
+//! Sight distance (`CIV_SIGHT_DISTANCE`): per station the available sight distance
 //! against the required stopping sight distance of the design criteria.
 //! The available distance is the shortest of three: over the design
 //! profile (eye and object height of the guideline above the road), over
@@ -326,7 +326,7 @@ fn obstacle_edges(doc: &CadDocument, patterns: &[String]) -> Vec<(XY, XY)> {
     out
 }
 
-/// Options of `CIV_ZICHT`.
+/// Options of `CIV_SIGHT_DISTANCE`.
 pub struct SightRequest {
     pub axis: Option<Handle>,
     pub choice: Option<Choice>,
@@ -376,7 +376,7 @@ fn cause_text(c: &str) -> &'static str {
     }
 }
 
-/// `CIV_ZICHT`.
+/// `CIV_SIGHT_DISTANCE`.
 pub fn sight(opt: &super::CivielOptions, req: SightRequest, progress: &dyn Fn(String)) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let doc = super::document(&["as", "ontwerpprofiel", "tin"], &req.axis.into_iter().collect::<Vec<_>>())?;
@@ -388,7 +388,7 @@ pub fn sight(opt: &super::CivielOptions, req: SightRequest, progress: &dyn Fn(St
     let need = req
         .need
         .or_else(|| crit.as_ref().and_then(|(_, _, l)| l.stopzicht.as_ref().map(|v| v.v)))
-        .ok_or_else(|| crate::lang::tr("geen stopzicht: kies ontwerpcriteria (CIV_ONTWERPCRITERIA of RICHTLIJN= CATEGORIE= V=) of geef NODIG=<m>", "no stopping sight distance: choose design criteria (CIV_ONTWERPCRITERIA or RICHTLIJN= CATEGORIE= V=) or give NODIG=<m>").to_string())?;
+        .ok_or_else(|| crate::lang::tr("geen stopzicht: kies ontwerpcriteria (CIV_DESIGN_CRITERIA of RICHTLIJN= CATEGORIE= V=) of geef NODIG=<m>", "no stopping sight distance: choose design criteria (CIV_DESIGN_CRITERIA or RICHTLIJN= CATEGORIE= V=) or give NODIG=<m>").to_string())?;
     let pick = |given: Option<f64>, from: fn(&ontwerpcriteria::Guideline) -> &Option<ontwerpcriteria::Value>, default: f64| -> (f64, String) {
         match (given, crit.as_ref().and_then(|(g, _, _)| from(g).as_ref().map(|v| (v.v, g.cite(v))))) {
             (Some(v), _) => (v, crate::lang::tr("opgegeven", "given").to_string()),

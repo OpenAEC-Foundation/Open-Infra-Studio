@@ -418,7 +418,7 @@ fn road_of(d: &Data) -> Option<&str> {
     get(d, "corridor").or_else(|| get(d, "kruispunt")).or_else(|| get(d, "rotonde"))
 }
 
-/// The sewer values of a pipe or manhole (CIV_RIOOL, GWSW), under English
+/// The sewer values of a pipe or manhole (CIV_SEWER, GWSW), under English
 /// names: invert levels (BOB) in m above the datum (NAP), sizes in mm.
 fn sewer_props(d: &Data) -> Data {
     let pick = |keys: &[&str]| keys.iter().find_map(|k| get(d, k)).map(str::to_string);
@@ -918,7 +918,7 @@ impl<'a, W: Write> Exporter<'a, W> {
         Ok(format!("{}", self.step.add("IFCPRODUCTDEFINITIONSHAPE", &format!("$,$,{}", refs(&ids)))?))
     }
 
-    /// A sewer pipe or manhole in 3D from its object data (CIV_RIOOL or a
+    /// A sewer pipe or manhole in 3D from its object data (CIV_SEWER or a
     /// GWSW import): the pipe as a hollow tube along its invert levels, the
     /// manhole as a shaft from its bottom to the ground. `None` without the
     /// levels.
@@ -1136,7 +1136,7 @@ impl<'a, W: Write> Exporter<'a, W> {
                         Role::Stratum => get(&data, "grondsoort").or_else(|| get(&data, "grondsoort_nen")).map(str::to_string).unwrap_or_else(|| cl.object_type.clone().unwrap_or_default()),
                         _ => get(&data, "naam")
                             .or_else(|| get(&data, "name"))
-                            // A designed sewer (CIV_RIOOL): manhole number, pipe "from-to".
+                            // A designed sewer (CIV_SEWER): manhole number, pipe "from-to".
                             .or_else(|| get(&data, "put"))
                             .or_else(|| get(&data, "leiding"))
                             .map(str::to_string)
@@ -2059,7 +2059,7 @@ pub mod tests {
         assert!(out.contains(".PAVEMENT.") && out.contains("'menggranulaat (fundering)'"), "courses: surfacing and a named foundation");
     }
 
-    /// A designed sewer (CIV_RIOOL): pipes as hollow tubes at their invert
+    /// A designed sewer (CIV_SEWER): pipes as hollow tubes at their invert
     /// levels, manholes as shafts, the BOB as properties, flow arrows as symbols.
     #[test]
     fn a_designed_sewer_becomes_pipes_and_manholes() {

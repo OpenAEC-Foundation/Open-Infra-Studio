@@ -556,11 +556,11 @@ def t_site(a):
 
 
 DATASETS = {
-    "bgt": "GIS_Q_BGT", "brk": "GIS_Q_BRK", "luchtfoto": "GIS_Q_LUCHTFOTO", "kadastrale_kaart": "GIS_Q_KADASTER",
-    "ahn_kaart": "GIS_Q_AHN", "bag": "GIS_Q_BAG", "percelen": "GIS_Q_PERCELEN", "nwb": "GIS_Q_NWB",
-    "hectometer": "GIS_Q_HECTO", "spoor": "GIS_Q_SPOOR", "osm": "GIS_Q_OSM", "osm_kaart": "GIS_Q_OSMKAART",
-    "satelliet": "GIS_Q_SATELLIET", "tekenblad": "GIS_TEKENBLAD", "ahn_hoogtelijnen": "GIS_HOOGTELIJNEN",
-    "ahn_hoogtepunten": "GIS_HOOGTEPUNTEN", "ahn_puntenwolk": "GIS_PUNTENWOLK",
+    "bgt": "GIS_Q_BGT", "brk": "GIS_Q_BRK", "luchtfoto": "GIS_Q_AERIAL", "kadastrale_kaart": "GIS_Q_CADASTRE",
+    "ahn_kaart": "GIS_Q_AHN", "bag": "GIS_Q_BAG", "percelen": "GIS_Q_PARCELS", "nwb": "GIS_Q_NWB",
+    "hectometer": "GIS_Q_HECTO", "spoor": "GIS_Q_RAIL", "osm": "GIS_Q_OSM", "osm_kaart": "GIS_Q_OSM_MAP",
+    "satelliet": "GIS_Q_SATELLITE", "tekenblad": "GIS_SHEET", "ahn_hoogtelijnen": "GIS_CONTOURS",
+    "ahn_hoogtepunten": "GIS_SPOT_HEIGHTS", "ahn_puntenwolk": "GIS_POINT_CLOUD",
 }
 
 
@@ -614,7 +614,7 @@ def t_planning_gml(a):
 @tool("nlcs_check", "NLCS 5.02 check of the drawing (report beside the drawing); repair=true sets layer styles and ByLayer.",
       {"repair": {"type": "boolean"}})
 def t_nlcs(a):
-    return OCS.run("GIS_NLCS_HERSTEL" if a.get("repair") else "GIS_NLCS_RAPPORT")
+    return OCS.run("GIS_NLCS_REPAIR" if a.get("repair") else "GIS_NLCS_REPORT")
 
 
 @tool("bgt_mutation", "The NLCS design as a BGT mutation (IMGeo-GML 2.1.1) with a report, beside the drawing. "
@@ -624,7 +624,7 @@ def t_nlcs(a):
       {"bronhouder": STR, "as_built": {"type": "boolean"}, "selection": {"type": "boolean"}})
 def t_mutation(a):
     words = (" GEREALISEERD" if a.get("as_built") else "") + (" SELECTIE" if a.get("selection") else "")
-    return OCS.run(f"GIS_BGT_MUTATIE {_kv(BRONHOUDER=a.get('bronhouder'))}{words}")
+    return OCS.run(f"GIS_BGT_MUTATION {_kv(BRONHOUDER=a.get('bronhouder'))}{words}")
 
 
 @tool("ifc_export", "Export the drawing as IFC 4.3 (IFC4X3_ADD2), beside it as <drawing>_IFC4X3.ifc or to `path`. "
@@ -640,24 +640,24 @@ def t_ifc(a):
 
 @tool("quantities", "Quantities per NLCS layer (count, length, area) as CSV beside the drawing.")
 def t_quantities(a):
-    return OCS.run("GIS_HOEVEELHEDEN_CSV")
+    return OCS.run("GIS_QUANTITIES_CSV")
 
 
 @tool("civ_points_import", "Import a survey point file (PNEZD/PENZD/CSV; separator and decimal comma detected).",
       {"path": STR, "format": {"type": "string", "enum": ["AUTO", "PNEZD", "PENZD", "NEZD", "ENZD"]}}, ["path"])
 def t_points_import(a):
-    return OCS.run(f"CIV_PUNTEN_IMPORT {_quote(_file(a))} {_kv(FORMAAT=a.get('format'))}")
+    return OCS.run(f"CIV_POINTS_IMPORT {_quote(_file(a))} {_kv(FORMAAT=a.get('format'))}")
 
 
 @tool("civ_points", "Place survey points; without z the ground height (TIN or AHN) is used.",
       {"points": PTS, "number": STR, "code": STR}, ["points"])
 def t_points(a):
-    return OCS.run(f"CIV_PUNT {' '.join(_pt(p) for p in a['points'])} {_kv(NR=a.get('number'), CODE=a.get('code'))}")
+    return OCS.run(f"CIV_POINT {' '.join(_pt(p) for p in a['points'])} {_kv(NR=a.get('number'), CODE=a.get('code'))}")
 
 
 @tool("civ_points_export", "Export the drawing's points (or the selection) to a point file.", {"path": STR, "format": STR})
 def t_points_export(a):
-    return OCS.run(f"CIV_PUNTEN_EXPORT {_kv(PAD=_file(a), FORMAAT=a.get('format'))}")
+    return OCS.run(f"CIV_POINTS_EXPORT {_kv(PAD=_file(a), FORMAAT=a.get('format'))}")
 
 
 @tool("civ_landxml", "Import LandXML: points, surfaces (TIN) and alignments (lines, curves, spirals).", {"path": STR}, ["path"])
@@ -673,12 +673,12 @@ def t_tin(a):
 
 @tool("civ_contours", "Contour lines of a terrain (default: existing ground).", {"interval": NUM, "major_every": NUM, "surface": SURF})
 def t_contours(a):
-    return OCS.run(f"CIV_HOOGTELIJNEN {_kv(INTERVAL=a.get('interval'), HOOFD=a.get('major_every'), OPPERVLAK=a.get('surface'))}")
+    return OCS.run(f"CIV_CONTOURS {_kv(INTERVAL=a.get('interval'), HOOFD=a.get('major_every'), OPPERVLAK=a.get('surface'))}")
 
 
 @tool("civ_analysis", "Height analysis: the terrain coloured in height bands with a legend.", {"bands": NUM, "surface": SURF})
 def t_analysis(a):
-    return OCS.run(f"CIV_ANALYSE {_kv(BANDEN=a.get('bands'), OPPERVLAK=a.get('surface'))}")
+    return OCS.run(f"CIV_ELEVATION_ANALYSIS {_kv(BANDEN=a.get('bands'), OPPERVLAK=a.get('surface'))}")
 
 
 @tool("civ_volume", "Earthwork (cut/fill m³): design surface (N, or selected faces) against the existing ground, or the ground against a level.",
@@ -693,13 +693,13 @@ def t_volume(a):
       {"pis": PTS, "radii": {"type": "array", "items": NUM}, "handle": STR, "name": STR, "start_station": NUM})
 def t_alignment(a):
     if a.get("pis"):
-        return OCS.run(f"CIV_AS PI={_pts(a['pis'])} {_kv(R=_list(a.get('radii') or []), NAAM=a.get('name'), BEGIN=a.get('start_station'))}")
-    return OCS.run(f"CIV_AS {_kv(AS=a.get('handle'), NAAM=a.get('name'), BEGIN=a.get('start_station'))}")
+        return OCS.run(f"CIV_ALIGNMENT PI={_pts(a['pis'])} {_kv(R=_list(a.get('radii') or []), NAAM=a.get('name'), BEGIN=a.get('start_station'))}")
+    return OCS.run(f"CIV_ALIGNMENT {_kv(AS=a.get('handle'), NAAM=a.get('name'), BEGIN=a.get('start_station'))}")
 
 
 @tool("civ_offsets", "Offset lines beside an axis (m; left < 0).", {"axis": AXIS, "offsets": {"type": "array", "items": NUM}}, ["offsets"])
 def t_offsets(a):
-    return OCS.run(f"CIV_AS_OFFSET {_kv(AS=a.get('axis'), VERSCHUIVING=_list(a['offsets']))}")
+    return OCS.run(f"CIV_ALIGNMENT_OFFSET {_kv(AS=a.get('axis'), VERSCHUIVING=_list(a['offsets']))}")
 
 
 @tool("civ_station", "Station and offset of points relative to an axis.", {"axis": AXIS, "points": PTS}, ["points"])
@@ -710,20 +710,20 @@ def t_station(a):
 @tool("civ_length_profile", "Length profile of an axis over the existing terrain (TIN, else AHN), with stationing, heights and alignment band.",
       {"axis": AXIS, "at": PT, "step": NUM, "exaggeration": NUM})
 def t_length_profile(a):
-    return OCS.run(f"CIV_LENGTEPROFIEL {_kv(AS=a.get('axis'), PLAATS=a.get('at') and _pt(a['at']), STAP=a.get('step'), OVERHOGING=a.get('exaggeration'))}")
+    return OCS.run(f"CIV_LONG_PROFILE {_kv(AS=a.get('axis'), PLAATS=a.get('at') and _pt(a['at']), STAP=a.get('step'), OVERHOGING=a.get('exaggeration'))}")
 
 
 @tool("civ_design_profile", "Design (vertical) profile of an axis from PVIs [station, height] with parabolic vertical curves; drawn in its length profile.",
       {"axis": AXIS, "pvis": {"type": "array", "items": {"type": "array", "items": NUM, "minItems": 2, "maxItems": 2}}, "curve_length": NUM}, ["pvis"])
 def t_design(a):
     pvi = ";".join(f"{_num(s)}:{_num(z)}" for s, z in a["pvis"])
-    return OCS.run(f"CIV_ONTWERPPROFIEL {_kv(AS=a.get('axis'), PVI=pvi, BOOG=a.get('curve_length'))}")
+    return OCS.run(f"CIV_DESIGN_PROFILE {_kv(AS=a.get('axis'), PVI=pvi, BOOG=a.get('curve_length'))}")
 
 
 @tool("civ_cross_sections", "Cross sections along an axis over the terrain, in a grid of views.",
       {"axis": AXIS, "at": PT, "every": NUM, "left": NUM, "right": NUM, "exaggeration": NUM, "per_row": NUM})
 def t_sections(a):
-    return OCS.run(f"CIV_DWARSPROFIELEN {_kv(AS=a.get('axis'), PLAATS=a.get('at') and _pt(a['at']), OM=a.get('every'), LINKS=a.get('left'), RECHTS=a.get('right'), DOVERHOGING=a.get('exaggeration'), PERRIJ=a.get('per_row'))}")
+    return OCS.run(f"CIV_CROSS_SECTIONS {_kv(AS=a.get('axis'), PLAATS=a.get('at') and _pt(a['at']), OM=a.get('every'), LINKS=a.get('left'), RECHTS=a.get('right'), DOVERHOGING=a.get('exaggeration'), PERRIJ=a.get('per_row'))}")
 
 
 @tool("civ_corridor", "Corridor: an assembly swept along an axis and its design profile (or a level / height above ground), daylight to the ground, design TIN (N), feature lines, cut/fill per section and volumes; optional section views.",
@@ -748,7 +748,7 @@ LINE = {"type": "string", "description": "Handle of a line, polyline or feature 
       {"line": LINE, "points": PTS, "heights": {"type": "string", "enum": ["MAAIVELD", "ONTWERP", "EIGEN"]}, "grade_breaks": {"type": "boolean"},
        "start_level": NUM, "grades_pct": {"type": "array", "items": NUM}, "levels": STR, "closed": {"type": "boolean"}, "name": STR})
 def t_feature_line(a):
-    return OCS.run("CIV_KANTLIJN " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), HOOGTE=a.get("heights"),
+    return OCS.run("CIV_FEATURE_LINE " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), HOOGTE=a.get("heights"),
                                         TUSSENPUNTEN=a.get("grade_breaks"), START=a.get("start_level"), HELLING=_list(a.get("grades_pct") or []),
                                         PEILEN=a.get("levels"), GESLOTEN=a.get("closed"), NAAM=a.get("name")))
 
@@ -758,8 +758,8 @@ def t_feature_line(a):
       {"line": LINE, "action": {"type": "string", "enum": ["level", "raise", "point", "grade"]}, "corner": NUM, "at": PT, "z": NUM, "dz": NUM,
        "from_corner": NUM, "to_corner": NUM, "grade_pct": NUM}, ["action"])
 def t_feature_edit(a):
-    verb = {"level": "PEIL", "raise": "VERHOOG", "point": "PUNT", "grade": "HELLING"}[a["action"]]
-    return OCS.run(f"CIV_KANTLIJN_{verb} " + _kv(KANTLIJN=a.get("line"), PUNT=a.get("corner"), BIJ=a.get("at") and _pt(a["at"]), Z=a.get("z"),
+    verb = {"level": "LEVEL", "raise": "RAISE", "point": "POINT", "grade": "GRADE"}[a["action"]]
+    return OCS.run(f"CIV_FEATURE_LINE_{verb} " + _kv(KANTLIJN=a.get("line"), PUNT=a.get("corner"), BIJ=a.get("at") and _pt(a["at"]), Z=a.get("z"),
                                                  DZ=a.get("dz"), VAN=a.get("from_corner"), TOT=a.get("to_corner"), HELLING=a.get("grade_pct")))
 
 
@@ -778,7 +778,7 @@ def t_plateau(a):
       {"line": LINE, "points": PTS, "side": {"type": "string", "enum": ["LINKS", "RECHTS"]}, "to": {"type": "string", "enum": ["MAAIVELD", "AFSTAND", "PEIL"]},
        "slope": NUM, "cut_slope": NUM, "fill_slope": NUM, "width": NUM, "level": NUM, "up": {"type": "boolean"}, "edge_level": NUM, "name": STR})
 def t_slope(a):
-    return OCS.run("CIV_TALUD " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), ZIJDE=a.get("side"), NAAR=a.get("to"),
+    return OCS.run("CIV_SLOPE " + _kv(LIJN=a.get("line"), PUNTEN=a.get("points") and _pts(a["points"]), ZIJDE=a.get("side"), NAAR=a.get("to"),
                                      TALUD=a.get("slope"), TALUD_AF=a.get("cut_slope"), TALUD_OP=a.get("fill_slope"), BREEDTE=a.get("width"),
                                      PEIL=a.get("level"), RICHTING=("OP" if a.get("up") else None), RANDPEIL=a.get("edge_level"), NAAM=a.get("name")))
 
@@ -797,7 +797,7 @@ def t_volume_tin(a):
       "haul (m³·km), free haul and overhaul, surplus/shortage; drawn as a graph, returned per station.",
       {"axis": AXIS, "source": {"type": "string", "enum": ["AUTO", "CORRIDOR", "TIN"]}, "factor": NUM, "reuse_pct": NUM, "free_haul": NUM, "at": PT})
 def t_mass_haul(a):
-    return OCS.run("CIV_GRONDBALANS " + _kv(AS=a.get("axis"), BRON=a.get("source"), FACTOR=a.get("factor"), HERGEBRUIK=a.get("reuse_pct"),
+    return OCS.run("CIV_MASS_HAUL " + _kv(AS=a.get("axis"), BRON=a.get("source"), FACTOR=a.get("factor"), HERGEBRUIK=a.get("reuse_pct"),
                                            VRIJ=a.get("free_haul"), PLAATS=a.get("at") and _pt(a["at"])))
 
 
@@ -808,8 +808,8 @@ def t_mass_haul(a):
       {"name": STR, "copy_to": STR, "at": PT})
 def t_assemblies(a):
     if a.get("name"):
-        return OCS.run(f"CIV_PROFIELTYPE {_kv(NAAM=_assembly(a['name']), KOPIE=a.get('copy_to'), PLAATS=a.get('at') and _pt(a['at']))}")
-    return OCS.run("CIV_PROFIELTYPEN")
+        return OCS.run(f"CIV_ASSEMBLY {_kv(NAAM=_assembly(a['name']), KOPIE=a.get('copy_to'), PLAATS=a.get('at') and _pt(a['at']))}")
+    return OCS.run("CIV_ASSEMBLIES")
 
 
 @tool("civ_corridor_range", "A corridor with any assembly (preset or own JSON) over a station range, e.g. from a junction's or roundabout's mouth "
@@ -828,7 +828,7 @@ def t_corridor_range(a):
       ["main", "side"])
 def t_junction(a):
     radii = ";".join(_num(r) for r in a.get("radii") or [])
-    return OCS.run("CIV_KRUISPUNT " + _kv(HOOFD=a["main"], ZIJ=a["side"], R=radii, PROFIELTYPE=_assembly(a.get("assembly")), PROFIELTYPE_HOOFD=_assembly(a.get("main_assembly")),
+    return OCS.run("CIV_JUNCTION " + _kv(HOOFD=a["main"], ZIJ=a["side"], R=radii, PROFIELTYPE=_assembly(a.get("assembly")), PROFIELTYPE_HOOFD=_assembly(a.get("main_assembly")),
                                            PROFIELTYPE_ZIJ=_assembly(a.get("side_assembly")), NIVEAU=a.get("level")))
 
 
@@ -837,7 +837,7 @@ def t_junction(a):
       {"axes": {"type": "array", "items": STR}, "centre": PT, "kind": {"type": "string", "enum": ["binnen", "buiten"]}, "diameter": NUM, "assembly": STR, "level": NUM},
       ["axes"])
 def t_roundabout(a):
-    return OCS.run("CIV_ROTONDE " + _kv(ASSEN=";".join(a["axes"]), MIDDEN=a.get("centre") and _pt(a["centre"]), TYPE=a.get("kind"), D=a.get("diameter"),
+    return OCS.run("CIV_ROUNDABOUT " + _kv(ASSEN=";".join(a["axes"]), MIDDEN=a.get("centre") and _pt(a["centre"]), TYPE=a.get("kind"), D=a.get("diameter"),
                                          PROFIELTYPE=_assembly(a.get("assembly")), NIVEAU=a.get("level")))
 
 
@@ -853,14 +853,14 @@ def t_bag3d(a):
 
 @tool("civ_photo_terrain", "The AHN ground of the project area as a 3D surface coloured by the PDOK aerial photo.", {"cell": NUM})
 def t_photo(a):
-    return OCS.run(f"CIV_FOTOTERREIN {_kv(CEL=a.get('cell'))}", 1800)
+    return OCS.run(f"CIV_AERIAL_TERRAIN {_kv(CEL=a.get('cell'))}", 1800)
 
 
 @tool("civ_water_level", "A water surface at a level (m NAP) over the project area, to see what floods; call again with another "
       "level to move it. Returns the share of the area below that level (AHN ground).",
       {"level": NUM}, ["level"])
 def t_water(a):
-    return OCS.run(f"CIV_WATERPEIL PEIL={_num(a['level'])}")
+    return OCS.run(f"CIV_WATER_LEVEL PEIL={_num(a['level'])}")
 
 
 @tool("gis_server", "Import any map server of the catalogue by id (PDOK, 600 worldwide services, HisGIS, Topotijdreis, the user's own): "
@@ -888,8 +888,8 @@ def t_klic3d(a):
 def t_see_through(a):
     pct = a.get("percent")
     if pct is not None and float(pct) <= 0:
-        return OCS.run("CIV_DOORZICHT UIT")
-    return OCS.run(f"CIV_DOORZICHT {_kv(PCT=pct)} {'ALLES' if a.get('all') else ''}")
+        return OCS.run("CIV_SEE_THROUGH UIT")
+    return OCS.run(f"CIV_SEE_THROUGH {_kv(PCT=pct)} {'ALLES' if a.get('all') else ''}")
 
 
 @tool("civ_citygml", "Import a CityGML file (2.0 or 3.0, also IMGeo/BGT GML) or CityJSON (1.x/2.0, also CityJSONSeq .jsonl) as 3D meshes in the project area: buildings with roof and wall "
@@ -917,8 +917,8 @@ def t_bgt3d(a):
        "graphs": {"type": "boolean"}, "labels": {"type": "boolean"}, "plan_only": {"type": "boolean"}})
 def t_subsurface(a):
     if a.get("plan_only"):
-        return OCS.run(f"GIS_Q_SONDERINGEN {_kv(BRON=a.get('source'))}", 600)
-    return OCS.run(f"CIV_SONDERINGEN3D {_kv(BRON=a.get('source'), MAX=a.get('max'), STRAAL=a.get('radius'), MINLAAG=a.get('min_layer'), QC=a.get('graphs'), LABELS=a.get('labels'))}", 1800)
+        return OCS.run(f"GIS_Q_CPT {_kv(BRON=a.get('source'))}", 600)
+    return OCS.run(f"CIV_CPT3D {_kv(BRON=a.get('source'), MAX=a.get('max'), STRAAL=a.get('radius'), MINLAAG=a.get('min_layer'), QC=a.get('graphs'), LABELS=a.get('labels'))}", 1800)
 
 
 # Geotechnics (#78): soil profile, slope stability, settlement. A calculation aid, not a stamped design.
@@ -943,7 +943,7 @@ def _soil(a):
 @tool("civ_soil_units", "The soil units of NEN 9997-1 table 2.b (Dutch characteristic soil properties) with their codes and parameters "
       "(γ, γsat, c', φ', Koppejan C'p/C's, Cc/(1+e0), Csw/(1+e0), Cα; cv is an estimate). Use the codes in 'layers' and 'overrides'.")
 def t_soil_units(a):
-    return OCS.run("CIV_GRONDSOORTEN")
+    return OCS.run("CIV_SOIL_UNITS")
 
 
 @tool("civ_soil_profile", "Soil profile along a line or axis from the BRO CPTs (Robertson 2010 classes) and boreholes (NEN-EN-ISO 14688 / "
@@ -953,7 +953,7 @@ def t_soil_units(a):
       {"line": LINE, "source": SOIL["source"], "radius": NUM, "max": NUM, "min_layer": NUM, "name": STR, "overrides": SOIL["overrides"], "at": PT})
 def t_soil_profile(a):
     over = ";".join(f"{code}:" + ",".join(f"{k}={_num(v)}" for k, v in kv.items()) for code, kv in (a.get("overrides") or {}).items())
-    return OCS.run("CIV_GRONDPROFIEL " + _kv(LIJN=a.get("line"), BRON=a.get("source"), STRAAL=a.get("radius"), MAX=a.get("max"),
+    return OCS.run("CIV_SOIL_PROFILE " + _kv(LIJN=a.get("line"), BRON=a.get("source"), STRAAL=a.get("radius"), MAX=a.get("max"),
                                             MINLAAG=a.get("min_layer"), NAAM=a.get("name"), GROND=over, PLAATS=a.get("at") and _pt(a["at"])), 1800)
 
 
@@ -972,7 +972,7 @@ def t_slope_stability(a):
     if a.get("phreatic_points"):
         phreatic = ";".join(f"{_num(x)}:{_num(z)}" for x, z in a["phreatic_points"])
     load = ":".join(_num(v) for v in a["load"]) if a.get("load") else None
-    return OCS.run("CIV_STABILITEIT " + _kv(LIJN=a.get("line"), AS=a.get("axis"), STATION=a.get("station"), LINKS=a.get("left"), RECHTS=a.get("right"),
+    return OCS.run("CIV_SLOPE_STABILITY " + _kv(LIJN=a.get("line"), AS=a.get("axis"), STATION=a.get("station"), LINKS=a.get("left"), RECHTS=a.get("right"),
                                            FREATISCH=phreatic, BELASTING=load, METHODE=a.get("method"), OPPERVLAK=a.get("surface"),
                                            MINDIEPTE=a.get("min_depth"), NAAM=a.get("name"), PLAATS=a.get("at") and _pt(a["at"])) + " " + _soil(a), 1800)
 
@@ -986,7 +986,7 @@ def t_slope_stability(a):
             "groundwater_depth": {"type": "number", "description": "Phreatic level below the existing ground (m), default 1"},
             "margin": NUM, "bands": NUM}, **SOIL))
 def t_settlement(a):
-    return OCS.run("CIV_ZETTING " + _kv(GEBIED=a.get("area") and _pts(a["area"]), HOOGTE=a.get("height"), ONTWERP=a.get("design"), GAMMA=a.get("gamma"),
+    return OCS.run("CIV_SETTLEMENT " + _kv(GEBIED=a.get("area") and _pts(a["area"]), HOOGTE=a.get("height"), ONTWERP=a.get("design"), GAMMA=a.get("gamma"),
                                        TIJD=a.get("years"), CEL=a.get("cell"), PUNT=a.get("point") and _pt(a["point"]), METHODE=a.get("method"),
                                        FREATISCH=a.get("phreatic"), GRONDWATER=a.get("groundwater_depth"), MARGE=a.get("margin"),
                                        BANDEN=a.get("bands")) + " " + _soil(a), 1800)

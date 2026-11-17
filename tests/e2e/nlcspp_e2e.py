@@ -89,7 +89,7 @@ def main():
         return r["ok"] and f"{n_source} objecten" in r["message"], r["message"][:160]
 
     def check():
-        r = cmd("GIS_NLCSPP_CONTROLE NETBEHEERDER=Enexis AANNEMER=OpenAEC", "check")
+        r = cmd("GIS_NLCSPP_CHECK NETBEHEERDER=Enexis AANNEMER=OpenAEC", "check")
         d = r.get("data") or {}
         # The example's own code-value errors (25 LSmof Functie, 7 LSkabel Kabelopbouw) and rule R.5.
         return r["ok"] and d.get("objecten") == n_source and d.get("fouten", 0) >= 32, r["message"][:200]

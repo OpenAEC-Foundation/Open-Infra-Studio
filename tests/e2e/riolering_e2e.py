@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end test of the sewer design tools (CIV_RIOOL*) in Open CAD Studio.
+"""End-to-end test of the sewer design tools (CIV_SEWER*) in Open CAD Studio.
 
 Runs its own Open CAD Studio with an isolated configuration folder
 (``XDG_CONFIG_HOME``), so the plugin installed for daily use is left alone.
@@ -10,19 +10,19 @@ KLIC delivery around the Grote Kerk in Dordrecht), with the site set to
 ``GIS_SITE RD 104885 425320 200 150 Dordrecht`` and AHN as ground level.
 
 Steps
-  ontwerp      CIV_RIOOL: a DWA run of 6 manholes, PVC 250, cover 0,80 m,
+  ontwerp      CIV_SEWER: a DWA run of 6 manholes, PVC 250, cover 0,80 m,
                1:250; BOB, cover and slope checked, NLCS RI layers and XDATA.
-  profiel      CIV_RIOOL_PROFIEL: the length profile, frame and pipes.
-  tweede riool CIV_RIOOL STELSEL=HWA crossing the first run.
-  toets        CIV_RIOOL_TOETS Q=…: KLIC crossings (depth unknown in the
+  profiel      CIV_SEWER_PROFILE: the length profile, frame and pipes.
+  tweede riool CIV_SEWER STELSEL=HWA crossing the first run.
+  toets        CIV_SEWER_CHECK Q=…: KLIC crossings (depth unknown in the
                KLIC sample → warnings; a 3D test line on a KLIC layer with a
                known level → an error), the crossing with the HWA run,
                capacity per pipe, markers and the CSV report.
-  bijwerken    a manhole moved in the drawing, then CIV_RIOOL_BIJWERKEN; a
+  bijwerken    a manhole moved in the drawing, then CIV_SEWER_UPDATE; a
                pipe made larger by argument.
-  export       CIV_RIOOL_EXPORT FORMAAT=GWSW and FORMAAT=CSV.
-  terug        a new drawing: CIV_RIOOL_IMPORT reads the GWSW-OroX back by
-               the GWSW import's route; CIV_RIOOL_GWSW takes it over as an
+  export       CIV_SEWER_EXPORT FORMAAT=GWSW and FORMAAT=CSV.
+  terug        a new drawing: CIV_SEWER_IMPORT reads the GWSW-OroX back by
+               the GWSW import's route; CIV_SEWER_GWSW takes it over as an
                editable network; a new run joins one of its manholes.
 
 Usage
@@ -134,7 +134,7 @@ def main():
     step("projectlocatie Dordrecht + KLIC-voorbeeld", site)
 
     def ontwerp():
-        r = run_id(f"CIV_RIOOL PUNTEN={pts(RUN)} STELSEL=DWA DIAMETER=250 MATERIAAL=PVC DEKKING=0.8 VERHANG=1:250 PUT=800 PUTNR=P101 NAAM=DWA1", "riool_ontwerp")
+        r = run_id(f"CIV_SEWER PUNTEN={pts(RUN)} STELSEL=DWA DIAMETER=250 MATERIAAL=PVC DEKKING=0.8 VERHANG=1:250 PUT=800 PUTNR=P101 NAAM=DWA1", "riool_ontwerp")
         state["ontwerp"] = r
         if not r["ok"]:
             return False, r["message"]
@@ -172,7 +172,7 @@ def main():
     def profiel():
         # Below the example drawing (300 × 250 m around the site), so the
         # capture shows the profile alone.
-        r = run_id("CIV_RIOOL_PROFIEL RIOOL=DWA1 PLAATS=104780,424950", "riool_profiel")
+        r = run_id("CIV_SEWER_PROFILE RIOOL=DWA1 PLAATS=104780,424950", "riool_profiel")
         state["profiel"] = r
         if not r["ok"]:
             return False, r["message"]
@@ -185,7 +185,7 @@ def main():
     step("lengteprofiel", profiel)
 
     def tweede():
-        r = run_id(f"CIV_RIOOL PUNTEN={pts(HWA)} STELSEL=HWA DIAMETER=315 PUTNR=H1 NAAM=HWA1", "riool_hwa")
+        r = run_id(f"CIV_SEWER PUNTEN={pts(HWA)} STELSEL=HWA DIAMETER=315 PUTNR=H1 NAAM=HWA1", "riool_hwa")
         layers = ocs.layers()
         return r["ok"] and "N-XX-RI-HWA_RIOOLLEIDING_PVC_315-G" in layers, r["message"]
 
@@ -211,7 +211,7 @@ def main():
     step("testkabel met bekende hoogte op een KLIC-laag", testlijn)
 
     def toets():
-        r = run_id("CIV_RIOOL_TOETS RIOOL=DWA1 Q=12", "riool_toets")
+        r = run_id("CIV_SEWER_CHECK RIOOL=DWA1 Q=12", "riool_toets")
         state["toets"] = r
         if not r["ok"]:
             return False, r["message"]
@@ -239,7 +239,7 @@ def main():
         p = state["ontwerp"]["data"]["putten"][2]
         ocs.call("/entities/transform", {"handles": [p["handle"]], "action": "move", "vector": [3.0, 2.0, 0.0], "document_id": ocs.doc()})
         time.sleep(1)
-        r = run_id("CIV_RIOOL_BIJWERKEN RIOOL=DWA1", "riool_bijwerken")
+        r = run_id("CIV_SEWER_UPDATE RIOOL=DWA1", "riool_bijwerken")
         if not r["ok"]:
             return False, r["message"]
         d = r["data"]
@@ -247,7 +247,7 @@ def main():
         moved = abs(p3["x"] - (p["x"] + 3.0)) < 0.01 and abs(p3["y"] - (p["y"] + 2.0)) < 0.01
         x = xd(p3["handle"])
         changed = any("P103" in c for c in d["wijzigingen"])
-        r2 = run_id("CIV_RIOOL_BIJWERKEN RIOOL=DWA1 LEIDING=P104-P105 DIAMETER=315", "riool_bijwerken2")
+        r2 = run_id("CIV_SEWER_UPDATE RIOOL=DWA1 LEIDING=P104-P105 DIAMETER=315", "riool_bijwerken2")
         l = next(q for q in r2["data"]["leidingen"] if q["naam"] == "P104-P105")
         e = ocs.entity(l["handle"])
         bigger = l["diameter"] == 315 and e.get("layer") == "N-XX-RI-DWA_RIOOLLEIDING_PVC_315-G"
@@ -258,8 +258,8 @@ def main():
 
     def export():
         ttl = OUT / "riool_dwa1.orox.ttl"
-        r = run_id(f"CIV_RIOOL_EXPORT RIOOL=DWA1 FORMAAT=GWSW PAD={ttl}", "riool_export")
-        r2 = run_id(f"CIV_RIOOL_EXPORT RIOOL=DWA1 FORMAAT=CSV PAD={OUT / 'riool_dwa1.csv'}", "riool_csv")
+        r = run_id(f"CIV_SEWER_EXPORT RIOOL=DWA1 FORMAAT=GWSW PAD={ttl}", "riool_export")
+        r2 = run_id(f"CIV_SEWER_EXPORT RIOOL=DWA1 FORMAAT=CSV PAD={OUT / 'riool_dwa1.csv'}", "riool_csv")
         text = ttl.read_text() if ttl.exists() else ""
         puts = (OUT / "riool_dwa1_putten.csv").read_text().splitlines() if (OUT / "riool_dwa1_putten.csv").exists() else []
         ok = r["ok"] and r2["ok"] and "gwsw:Vuilwaterriool" in text and "gwsw:BobBeginpuntLeiding" in text and len(puts) == 7
@@ -305,7 +305,7 @@ def main():
 
     def terug():
         ttl = OUT / "riool_dwa1.orox.ttl"
-        r = run_id(f"CIV_RIOOL_IMPORT {ttl}", "riool_import")
+        r = run_id(f"CIV_SEWER_IMPORT {ttl}", "riool_import")
         if not r["ok"]:
             return False, r["message"]
         pipes = ocs.handles("B-XX-RI-DWA_RIOOLLEIDING_PVC_250-G") + ocs.handles("B-XX-RI-DWA_RIOOLLEIDING_PVC_315-G")
@@ -321,7 +321,7 @@ def main():
     step("GWSW-OroX teruglezen (GWSW-import)", terug)
 
     def overnemen():
-        r = run_id("CIV_RIOOL_GWSW NAAM=Bestaand", "riool_gwsw")
+        r = run_id("CIV_SEWER_GWSW NAAM=Bestaand", "riool_gwsw")
         if not r["ok"]:
             return False, r["message"]
         left = ocs.handles("B-XX-RI-DWA_RIOOLLEIDING_PVC_250-G")
@@ -336,7 +336,7 @@ def main():
         # The moved P103 is where the export put it.
         x, y = p103["x"] + 3.0, p103["y"] + 2.0
         # From the east along the street, into P103.
-        r = run_id(f"CIV_RIOOL PUNTEN={x + 40},{y - 3};{x},{y} STELSEL=DWA DIAMETER=250", "riool_uitbreiding")
+        r = run_id(f"CIV_SEWER PUNTEN={x + 40},{y - 3};{x},{y} STELSEL=DWA DIAMETER=250", "riool_uitbreiding")
         if not r["ok"]:
             return False, r["message"]
         d = r["data"]

@@ -30,7 +30,7 @@ Alle coördinaten zijn **projectcoördinaten in meters**. Bij een relatieve teke
 
 | Commando | Invoer en resultaat |
 |---|---|
-| `GIS_INFRA_LIBRARY` | Venster openen; alias `GIS_INFRA_BIBLIOTHEEK` |
+| `GIS_INFRA_LIBRARY` | Venster openen |
 | `GIS_INFRA_CATALOG QUERY=... CATEGORY=...` | Catalogus inclusief parametergrenzen, bronnen en aansluitmogelijkheden; beide filters zijn optioneel |
 | `GIS_INFRA_PLACE ITEM=...` | Interactief invoegpunt/richting of lijn-/vlakpunten kiezen; Enter voltooit, Esc annuleert |
 | `GIS_INFRA_PLACE ITEM=... AT=x,y,z` | Op opgegeven positie plaatsen; `INSTANCE=naam` kiest een herkenbaar uniek instantie-ID |

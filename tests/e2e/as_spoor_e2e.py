@@ -9,19 +9,19 @@ for daily use is left alone. A window appears, as with ``ocs_e2e.py``.
 Steps
   site + BGT     ``GIS_SITE RD 106000 423300 …`` (Dordrecht), the BGT
                  (buildings for the sight check in plan).
-  road           ``CIV_AS PI=… R=150 A=100``: a clothoid–arc–clothoid; the
+  road           ``CIV_ALIGNMENT PI=… R=150 A=100``: a clothoid–arc–clothoid; the
                  main points BO/BC/EC/EO, the clothoid records in XDATA.
-  offset         ``CIV_AS_OFFSET`` beside the clothoids; ``CIV_STATION``.
+  offset         ``CIV_ALIGNMENT_OFFSET`` beside the clothoids; ``CIV_STATION``.
   terrain        ``CIV_TIN BRON=AHN``: the existing ground for the sight check.
   profile        length and design profile of the road.
-  criteria       ``CIV_ONTWERPCRITERIA`` ROA 2017 niet-hoofdbaan 70 km/h on
-                 the axis; ``CIV_AS_TOETS``: exactly one violation, the
+  criteria       ``CIV_DESIGN_CRITERIA`` ROA 2017 niet-hoofdbaan 70 km/h on
+                 the axis; ``CIV_ALIGNMENT_CHECK``: exactly one violation, the
                  deliberate R 150 < 160 m, with its station and a marker.
-  sight          ``CIV_ZICHT`` (NOA 80 km/h: 103 m) both ways: a deficit where
+  sight          ``CIV_SIGHT_DISTANCE`` (NOA 80 km/h: 103 m) both ways: a deficit where
                  the building on the inside of the bend blocks the view.
-  rail           ``CIV_SPOOR`` two tracks, V 80, R 600, clothoids of 80 m:
+  rail           ``CIV_TRACK`` two tracks, V 80, R 600, clothoids of 80 m:
                  cant per curve, ramps and the cant diagram.
-  turnout        ``CIV_WISSEL`` 1:9 to the right: the diverging track.
+  turnout        ``CIV_TURNOUT`` 1:9 to the right: the diverging track.
   IFC            ``CIV_IFC``: clothoids and cant in IFC 4.3, checked with
                  tests/ifc_validate.py when IfcOpenShell is in target/venv.
   captures       PNGs of the plan, the diagrams and the turnout.
@@ -135,7 +135,7 @@ def main():
         return n > 10, f"{c['entities']} elementen, {n} op {build[:1]}"
 
     def road():
-        r = result("as1", f"CIV_AS PI={ROAD} R=150 A=100 NAAM=Rondweg")
+        r = result("as1", f"CIV_ALIGNMENT PI={ROAD} R=150 A=100 NAAM=Rondweg")
         d = r.get("data", {})
         codes = [m["code"] for m in d.get("raakpunten", [])]
         state["as"] = d.get("as")
@@ -147,7 +147,7 @@ def main():
         return ok, f"{r['message']} | codes {codes} | A {a} | XDATA {spirals[:1]}"
 
     def offset_and_station():
-        r = result("off1", f"CIV_AS_OFFSET AS={state['as']} VERSCHUIVING=-3.5;3.5")
+        r = result("off1", f"CIV_ALIGNMENT_OFFSET AS={state['as']} VERSCHUIVING=-3.5;3.5")
         lines = r.get("data", {}).get("lijnen", [])
         # A point 2 m right of the axis in the middle of the bend.
         s = result("st1", f"CIV_STATION AS={state['as']} 105950,423350")
@@ -159,15 +159,15 @@ def main():
         return r["ok"], r["message"]
 
     def profile():
-        r = result("lp1", f"CIV_LENGTEPROFIEL AS={state['as']}", timeout=300)
+        r = result("lp1", f"CIV_LONG_PROFILE AS={state['as']}", timeout=300)
         n = state["len"]
-        p = result("op1", f"CIV_ONTWERPPROFIEL AS={state['as']} PVI=0:1.0;{n/2:.1f}:2.0;{n:.1f}:1.2 BOOG=120")
+        p = result("op1", f"CIV_DESIGN_PROFILE AS={state['as']} PVI=0:1.0;{n/2:.1f}:2.0;{n:.1f}:1.2 BOOG=120")
         return r["ok"] and p["ok"], f"{r['message']} | {p['message']}"
 
     def criteria():
-        c = result("crit1", f"CIV_ONTWERPCRITERIA RICHTLIJN=roa CATEGORIE=niethoofdbaan V=70 AS={state['as']}")
+        c = result("crit1", f"CIV_DESIGN_CRITERIA RICHTLIJN=roa CATEGORIE=niethoofdbaan V=70 AS={state['as']}")
         time.sleep(1)
-        t = result("toets1", f"CIV_AS_TOETS AS={state['as']}")
+        t = result("toets1", f"CIV_ALIGNMENT_CHECK AS={state['as']}")
         d = t.get("data", {})
         v = d.get("overtredingen", [])
         marks = layer_like("-AL-AANKLEDING-G")
@@ -178,7 +178,7 @@ def main():
 
     def sight():
         # NOA 80 km/h: 103 m stopping sight; the building inside the bend blocks it.
-        r = result("zicht1", f"CIV_ZICHT AS={state['as']} RICHTLIJN=noa CATEGORIE=autosnelweg V=80 OM=10 RICHTING=beide", timeout=400)
+        r = result("zicht1", f"CIV_SIGHT_DISTANCE AS={state['as']} RICHTLIJN=noa CATEGORIE=autosnelweg V=80 OM=10 RICHTING=beide", timeout=400)
         d = r.get("data", {})
         st = d.get("stations", [])
         state["zicht"] = d
@@ -188,7 +188,7 @@ def main():
         return ok, f"{r['message']} | {len(st)} stations, min {worst} m, {len(d.get('tekorten', []))} tekort(en), {d.get('obstakelranden')} randen"
 
     def rail():
-        r = result("sp1", f"CIV_SPOOR PI={RAIL} R=600 LS=80 V=80 VMIN=40 SPOREN=2 SPOORAFSTAND=4.5 NAAM=Spoor", timeout=300)
+        r = result("sp1", f"CIV_TRACK PI={RAIL} R=600 LS=80 V=80 VMIN=40 SPOREN=2 SPOORAFSTAND=4.5 NAAM=Spoor", timeout=300)
         d = r.get("data", {})
         state["spoor"] = d.get("as")
         bogen = d.get("bogen", [])
@@ -201,7 +201,7 @@ def main():
         return ok, f"{r['message']} | D {bogen[0]['d_mm'] if bogen else None} mm, ramps {[round(x['helling_mm_per_m'], 2) for x in ramps]}"
 
     def turnout():
-        r = result("w1", f"CIV_WISSEL AS={state['spoor']} STATION=60 TYPE=1:9 ZIJDE=rechts LENGTE=40")
+        r = result("w1", f"CIV_TURNOUT AS={state['spoor']} STATION=60 TYPE=1:9 ZIJDE=rechts LENGTE=40")
         d = r.get("data", {})
         state["wissel"] = d
         ok = r["ok"] and d.get("type") == "1:9" and abs(d.get("hoek_graden", 0) - 6.3402) < 1e-3 and d.get("as")

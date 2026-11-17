@@ -55,7 +55,7 @@ Options:
 - text height and colour;
 - clipping to the import area.
 
-Commands: `GIS_BESTAND | GIS_FILE [path]` (window) and `GIS_BESTAND_IMPORT | GIS_FILE_IMPORT <path> [EPSG:code]` (straight in).
+Commands: `GIS_FILE [path]` (window) and `GIS_FILE_IMPORT <path> [EPSG:code]` (straight in).
 
 ## GWSW sewers (issue #6)
 
@@ -72,7 +72,7 @@ Manholes carry their name on the PUTNUMMER object, and every object carries its 
 
 ## Updating the BGT (issue #11)
 
-`GIS_BGT_BIJWERKEN | GIS_BGT_UPDATE`, also in the "BGT · BRK · KLIC" menu, brings the BGT in the drawing up to date instead of importing it again. It fetches the current BGT for the collections that are in the drawing and compares object by object on `lokaal_id` from the object data:
+`GIS_BGT_UPDATE`, also in the "BGT · BRK · KLIC" menu, brings the BGT in the drawing up to date instead of importing it again. It fetches the current BGT for the collections that are in the drawing and compares object by object on `lokaal_id` from the object data:
 
 | Case | What happens |
 |---|---|
@@ -89,7 +89,7 @@ The message gives the counts. Cadastre and KLIC can follow the same way.
 - **CRS:** from the MapGuide XML or the WKT;
 - **absolute or relative:** absolute when the design point equals the reference point.
 
-**Writing.** Every time the project location is stored (`GIS_SITE`, the location window, `GIS_GEBIED`, the KLIC area, the project region), Open Infra also sets the drawing's GEODATA object through the plugin API (`set_geo_location`, Open CAD Studio v2026.46): the CRS as its EPSG code, the reference point at the base point, the design point at 0,0 (relative) or at the base point in drawing units (absolute), and north along drawing +Y. Open CAD Studio takes the drawing units from INSUNITS when it creates the object. The `OPENINFRA/SITE` record and GEODATA are one undo step.
+**Writing.** Every time the project location is stored (`GIS_SITE`, the location window, `GIS_AREA`, the KLIC area, the project region), Open Infra also sets the drawing's GEODATA object through the plugin API (`set_geo_location`, Open CAD Studio v2026.46): the CRS as its EPSG code, the reference point at the base point, the design point at 0,0 (relative) or at the base point in drawing units (absolute), and north along drawing +Y. Open CAD Studio takes the drawing units from INSUNITS when it creates the object. The `OPENINFRA/SITE` record and GEODATA are one undo step.
 
 The record stays leading. When Open CAD Studio refuses the CRS (not in its EPSG registry), the location is still stored and one error line warns that GEODATA could not be updated. A drawing whose location was set before this, with only the record, gets GEODATA at the next change of the location; opening it changes nothing, so a drawing is never marked as changed just by opening it. `GIS_GEODATA` remains as an export of a copy with GEODATA.
 
@@ -131,9 +131,9 @@ Each vehicle becomes a block, `OI_<ID>_TOP` or `OI_<ID>_SIDE`:
 
 | Command | What |
 |---|---|
-| `GIS_VOERTUIG \| GIS_VEHICLE <id> [ZIJ\|SIDE]` | pick the front, then the driving direction (Enter: east). A side view picked to the left is mirrored. |
-| `GIS_VOERTUIGOVERZICHT \| GIS_VEHICLE_CATALOG [category] [ZIJ\|SIDE]` | a catalogue sheet: rows per category, with names and dimensions |
-| `GIS_VOERTUIGEN \| GIS_VEHICLES` | the window |
+| `GIS_VEHICLE \| GIS_VEHICLE <id> [ZIJ\|SIDE]` | pick the front, then the driving direction (Enter: east). A side view picked to the left is mirrored. |
+| `GIS_VEHICLE_CATALOG \| GIS_VEHICLE_CATALOG [category] [ZIJ\|SIDE]` | a catalogue sheet: rows per category, with names and dimensions |
+| `GIS_VEHICLES \| GIS_VEHICLES` | the window |
 
 The data is `assets/library/vehicles.json`. Each vehicle has:
 - its units (tractor and semitrailer, bus and rear section, ...), each with its length and width;
@@ -144,7 +144,7 @@ The data is `assets/library/vehicles.json`. Each vehicle has:
 
 ## Swept paths
 
-`GIS_VEEGPAD | GIS_SWEPT_PATH <id> [interval]` drives a vehicle along a selected polyline, or along picked points ended with Enter:
+`GIS_SWEPT_PATH <id> [interval]` drives a vehicle along a selected polyline, or along picked points ended with Enter:
 - the steer axle follows the line;
 - each rear axle and each trailer follows as a tractrix (the low-speed model of swept-path software).
 

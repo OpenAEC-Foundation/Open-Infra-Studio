@@ -2,15 +2,15 @@
 //! profiles and cross sections were made from which axis and which ground,
 //! and for cross sections also the BGT surfaces, KLIC lines and survey
 //! points they cut, with a fingerprint of each source as it was.
-//! `CIV_BIJWERKEN` compares the fingerprints with the sources now (for cross
+//! `CIV_PROFILES_UPDATE` compares the fingerprints with the sources now (for cross
 //! sections: what their section lines cut now) and makes again only what a changed
 //! source touches, at the same place in the drawing (with the current
-//! settings); `CIV_BIJWERKEN CONTROLE` only reports. A product whose axis is
+//! settings); `CIV_PROFILES_UPDATE CONTROLE` only reports. A product whose axis is
 //! gone is taken out of the graph and its drawing removed.
 //!
 //! Open CAD Studio has no reactors, so this is the "only the affected part"
 //! of the roadmap without watching every edit. Labels keep their own sources
-//! the same way (`CIV_LABELS_BIJWERKEN`).
+//! the same way (`CIV_LABELS_UPDATE`).
 //!
 //! Kept in the drawing as JSON (XRecord `OPENINFRA/GRAAF`).
 
@@ -197,7 +197,7 @@ fn reasons(p: &Product, now: &[(String, String)]) -> Option<String> {
     (!out.is_empty()).then(|| out.join(", "))
 }
 
-/// `CIV_BIJWERKEN [CONTROLE]`.
+/// `CIV_PROFILES_UPDATE [CONTROLE]`.
 pub fn update(opt: &CivielOptions, only_check: bool, progress: &dyn Fn(String)) -> Result<String, String> {
     let products = read();
     if products.is_empty() {
