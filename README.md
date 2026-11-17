@@ -426,7 +426,7 @@ Beside the drawing, unless the command is given a path.
 | **Geodata** | GeoPackage (project CRS; points, lines, areas) or GeoJSON (WGS 84), every element with its layer, NLCS meaning and object data: `export.gpkg` | `GIS_EXPORT`, Output → Export |
 | **Sewer for hydraulic models** | GWSW-HydX: the ten CSV files in `<sewer>_hydx/` | `CIV_RIOOL_EXPORT FORMAAT=HYDX` |
 | **BGT mutation** | IMGeo-GML 2.1.1 (`bgt-mutatie.gml`) with a Markdown report (`bgt-mutatie.md`) | `GIS_BGT_MUTATIE` |
-| **DWG with GEODATA** | A copy of the drawing (`<drawing>_geodata.dwg`, or `.dxf`) with the AutoCAD GEODATA object for the project location (CRS, base point, units), as GEOGRAPHICLOCATION writes it, for AutoCAD, Civil 3D and BricsCAD. Checked with ezdxf. | `GIS_GEODATA [<path.dwg\|path.dxf>]`, Output → Export |
+| **DWG with GEODATA** | The drawing itself carries the project location as its GEODATA object (CRS, base point, north) from the moment the location is set, so a plain save opens georeferenced in AutoCAD, Civil 3D and BricsCAD. This command also writes a copy (`<drawing>_geodata.dwg`, or `.dxf`) with that object, as GEOGRAPHICLOCATION writes it, for a drawing you do not want to change. Checked with ezdxf. | `GIS_GEODATA [<path.dwg\|path.dxf>]`, Output → Export |
 | **KLIC request** | The Kadaster's GIA-POST message (`<drawing>_klic-aanvraag.json`) and the local check (`.md`); not sent | `GIS_KLIC_AANVRAAG` |
 | **IFC 4.3** | IFC4X3_ADD2: `<drawing>_IFC4X3.ifc` (see [IFC 4.3 export](#ifc-43-export)) | `GIS_IFC`, `CIV_IFC` |
 | **Command results** | JSON per call: `<config>/OpenCADStudio/open-infra/api/<ID>.json` | any `CIV_` or GIS data command with `ID=<name>` |
@@ -465,7 +465,7 @@ For the command line, scripts and automation:
 | Workbench pages | `GIS_LOCATIE`, `GIS_KAART`, `GIS_WFS`, `GIS_SERVICES`, `GIS_OSM`, `GIS_PDOK`, `GIS_BGT`, `GIS_COORD`, `GIS_SERVERS` |
 | Service catalogue | `GIS_SERVICES [ZOEK=<text>] [CATEGORIE=<c>] [TYPE=WMS\|WFS\|XYZ] [HIER \| LON= LAT=] [LIMIET=50]`, `GIS_SERVICE_LOAD DIENST=<id> [LAAG=<layer>]` |
 | In the drawing | `GIS_GEBIED` (pick the import area), `GIS_PUNT` (point info) |
-| Location | `GIS_SITE RD <x> <y> [width] [height] [name]`, `GIS_SITE <lon> <lat> [width] [height] [EPSG:code] [name]`, `GIS_GEODATA [<path>]` (a copy with AutoCAD GEODATA) |
+| Location | `GIS_SITE RD <x> <y> [width] [height] [name]`, `GIS_SITE <lon> <lat> [width] [height] [EPSG:code] [name]`, `GIS_GEODATA [<path>]` (a copy with AutoCAD GEODATA; the drawing itself gets GEODATA when its location is set) |
 | Map images | `GIS_Q_LUCHTFOTO`, `GIS_Q_KADASTER`, `GIS_Q_AHN`, `GIS_Q_OSMKAART`, `GIS_Q_SATELLIET`, `GIS_Q_NATURA2000`, `GIS_Q_GEOMORFOLOGIE`, `GIS_Q_BODEMKAART`, `GIS_Q_HISGIS`, `GIS_Q_TIJDREIS`; any server of the catalogue: `GIS_Q_SERVER <id> [LAAG=] [RES=m/px]`, Topotijdreis of any year: `GIS_Q_SERVER JAAR=1850` |
 | Vector data | `GIS_Q_BAG`, `GIS_Q_PERCELEN`, `GIS_Q_NWB`, `GIS_Q_HECTO`, `GIS_Q_SPOOR`, `GIS_Q_OSM` |
 | NLCS base data | `GIS_Q_BGT`, `GIS_Q_BRK`, `GIS_Q_SONDERINGEN [BRON=]` (BRO CPTs and boreholes in plan), `GIS_KLIC [file]` (opens the page), `GIS_KLIC_IMPORT <file>`, `GIS_KLIC_AANVRAAG [SOORT=orientatie\|graaf\|calamiteit] [REFERENTIE=] [START=yyyy-mm-dd] [EIND=] [WERK=proefsleuvenGraven,…] [OMSCHRIJVING=] [PAD=]`, `GIS_KLIC_MAP [MAP=] [VOLGEN=ja\|nee]`, `GIS_KLIC_VOLGEN [MAP=]`, `GIS_TEKENBLAD [subject]` |

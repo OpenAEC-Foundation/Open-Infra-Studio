@@ -1,3 +1,9 @@
+**Unreleased — the project location as GEODATA in the drawing**
+
+- **GEODATA in the drawing itself** (#8): storing the project location (`GIS_SITE`, the location window, `GIS_GEBIED`, the KLIC area, the project region) now also sets the drawing's own GEODATA object, through the plugin API of Open CAD Studio v2026.46. A plain save then gives a DWG that AutoCAD, Civil 3D and BricsCAD open with its location and coordinate system. Open Infra's record `OPENINFRA/SITE` stays leading: when Open CAD Studio refuses the coordinate system, the location is still stored and one error line says that the drawing has no GEODATA. The record and GEODATA are one undo step.
+- **Existing drawings**: a drawing whose location was set before this release gets GEODATA at the next change of its location. Opening it changes nothing.
+- **`GIS_GEODATA`** stays as an export: it writes a copy (DWG or DXF) with GEODATA, for a drawing you do not want to change.
+
 **New in 2026.47.0 — Open CAD Studio v2026.46 and safer managed MCP files**
 
 - **Open CAD Studio v2026.46** (#125): both plugins are built against the v2026.46 plugin API (API 23). They do not load in older Open CAD Studio versions. 2026.46.1 was the corresponding build for v2026.45 (#122).

@@ -236,13 +236,44 @@ pub fn require_work_folder() -> Result<(), String> {
     Ok(())
 }
 
-/// Store the site in memory and in the drawing (NOD XRecord, round-trips DWG).
+/// Store the site in memory and in the drawing: the NOD XRecord (leading,
+/// round-trips DWG) and the drawing's GEODATA object, in one undo step, so
+/// other CAD programs open the saved drawing georeferenced. A GEODATA refusal
+/// (a CRS the host does not know) keeps the stored site and says so once.
 pub fn save_site(site: &Site) -> Result<(), String> {
     let t = target().ok_or("geen tekening actief")?;
     let tab = t.tab_id;
     let mut written = site_writes().lock().unwrap();
-    store_site(site, t)?;
+    let sender = t.sender.clone();
+    let label = crate::lang::tr("Projectlocatie", "Project location").to_string();
+    let grouped = matches!(sender.request(PluginRequest::BeginUndoGroup { label }), Ok(PluginResponse::Ok));
+    let stored = store_site(site, t.clone());
+    let geodata = stored.is_ok().then(|| {
+        let location = crate::gis::geodata::location_for(site, t.unit_factor);
+        match traced(trace_on().then(|| "SetGeoLocation".into()), || sender.request(PluginRequest::SetGeoLocation { location })) {
+            Ok(PluginResponse::GeoLocationSet(r)) => r.map(|_| ()),
+            Ok(PluginResponse::Error(e)) => Err(e),
+            Ok(other) => Err(format!("onverwacht antwoord: {other:?}")),
+            Err(e) => Err(e.to_string()),
+        }
+    });
+    if grouped {
+        let _ = sender.request(PluginRequest::EndUndoGroup);
+    }
+    stored?;
     written.insert(tab);
+    if let Some(Err(e)) = geodata {
+        crate::civiel::api::note("geodata_geweigerd", e.clone());
+        let _ = sender.request(PluginRequest::PushError(format!(
+            "[Open Infra] {} {}: {e}. {}",
+            crate::lang::tr("GEODATA niet gezet voor", "GEODATA not set for"),
+            site.crs,
+            crate::lang::tr(
+                "De projectlocatie staat wel in de tekening, maar AutoCAD, Civil 3D en BricsCAD lezen hem niet; kies een stelsel met een EPSG-code.",
+                "The project location is stored in the drawing, but AutoCAD, Civil 3D and BricsCAD do not read it; choose a coordinate system with an EPSG code."
+            )
+        )));
+    }
     Ok(())
 }
 
@@ -1084,6 +1115,8 @@ mod command_worker_tests {
                         }
                         Ok(PluginResponse::XRecordUpdateResult(Ok(Handle::from(1u64))))
                     }
+                    PluginRequest::BeginUndoGroup { .. } | PluginRequest::EndUndoGroup => Ok(PluginResponse::Ok),
+                    PluginRequest::SetGeoLocation { .. } => Ok(PluginResponse::GeoLocationSet(Ok(Handle::from(2u64)))),
                     other => panic!("onverwacht verzoek: {other:?}"),
                 }
             }
@@ -1137,6 +1170,8 @@ mod command_worker_tests {
                         }
                         Ok(PluginResponse::XRecordUpdateResult(Ok(Handle::from(1u64))))
                     }
+                    PluginRequest::BeginUndoGroup { .. } | PluginRequest::EndUndoGroup => Ok(PluginResponse::Ok),
+                    PluginRequest::SetGeoLocation { .. } => Ok(PluginResponse::GeoLocationSet(Ok(Handle::from(2u64)))),
                     other => panic!("onverwacht verzoek: {other:?}"),
                 }
             }
@@ -1181,4 +1216,73 @@ mod command_worker_tests {
         assert_eq!(writes.lock().unwrap().len(), 3);
     }
 
+
+    /// Every request one drawing receives; `geodata` is the host's answer to
+    /// SetGeoLocation.
+    struct Recorder { seen: Arc<Mutex<Vec<PluginRequest>>>, geodata: Result<Handle, String> }
+    impl PluginRequestSender for Recorder {
+        fn request(&self, req: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+            let answer = match &req {
+                PluginRequest::UpdateXRecord { name, .. } => {
+                    assert_eq!(name, "SITE");
+                    PluginResponse::XRecordUpdateResult(Ok(Handle::from(1u64)))
+                }
+                PluginRequest::SetGeoLocation { .. } => PluginResponse::GeoLocationSet(self.geodata.clone()),
+                PluginRequest::BeginUndoGroup { .. } | PluginRequest::EndUndoGroup | PluginRequest::PushError(_) => PluginResponse::Ok,
+                other => panic!("onverwacht verzoek: {other:?}"),
+            };
+            self.seen.lock().unwrap().push(req);
+            Ok(answer)
+        }
+    }
+
+    fn rd_site(absolute: bool) -> Site {
+        let mut site = Site::default();
+        site.crs = "EPSG:28992".into();
+        site.set_origin(104885.0, 425330.0);
+        site.absolute = absolute;
+        site
+    }
+
+    #[test]
+    fn a_saved_site_is_also_the_drawings_geodata() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        for (tab_id, absolute, unit_factor) in [(120020, true, 1000.0), (120021, false, 1.0)] {
+            let seen = Arc::new(Mutex::new(Vec::new()));
+            let sender = Arc::new(Recorder { seen: seen.clone(), geodata: Ok(Handle::from(7u64)) });
+            let target = Target { sender, tab_id, unit_factor, doc_path: None };
+            with_command_context(target, None, None, || save_site(&rd_site(absolute)).unwrap());
+            let seen = seen.lock().unwrap();
+            let kinds: Vec<String> = seen.iter().map(kind).collect();
+            assert_eq!(kinds, ["BeginUndoGroup", "UpdateXRecord", "SetGeoLocation", "EndUndoGroup"], "één ongedaanmaakstap voor record en GEODATA");
+            let Some(PluginRequest::SetGeoLocation { location }) = seen.iter().find(|r| matches!(r, PluginRequest::SetGeoLocation { .. })) else { unreachable!() };
+            let design = if absolute { [104885.0 * unit_factor, 425330.0 * unit_factor, 0.0] } else { [0.0; 3] };
+            assert_eq!(
+                *location,
+                ocs_plugin_api::host::GeoLocation { coordinate_system: "EPSG:28992".into(), design_point: design, reference_point: [104885.0, 425330.0, 0.0], north_direction: [0.0, 1.0] }
+            );
+        }
+    }
+
+    #[test]
+    fn a_refused_geodata_keeps_the_site_and_says_so_once() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let sender = Arc::new(Recorder { seen: seen.clone(), geodata: Err("EPSG:9999 is not in the embedded CRS registry".into()) });
+        let target = Target { sender, tab_id: 120022, unit_factor: 1.0, doc_path: None };
+        let mut site = rd_site(true);
+        site.label = "Weigering".into();
+        with_command_context(target, None, None, || {
+            save_site(&site).expect("de projectlocatie blijft opgeslagen");
+            assert_eq!(super::site().unwrap().label, "Weigering");
+        });
+        let seen = seen.lock().unwrap();
+        let records = seen.iter().filter(|r| matches!(r, PluginRequest::UpdateXRecord { .. })).count();
+        assert_eq!(records, 1, "het SITE-record is geschreven");
+        let warnings: Vec<&String> = seen.iter().filter_map(|r| match r { PluginRequest::PushError(m) => Some(m), _ => None }).collect();
+        assert_eq!(warnings.len(), 1, "precies één melding");
+        assert!(warnings[0].contains("GEODATA") && warnings[0].contains("EPSG:9999"), "{}", warnings[0]);
+        let kinds: Vec<String> = seen.iter().map(kind).collect();
+        assert_eq!(kinds, ["BeginUndoGroup", "UpdateXRecord", "SetGeoLocation", "EndUndoGroup", "PushError"], "de groep is ook na een weigering gesloten");
+    }
 }
