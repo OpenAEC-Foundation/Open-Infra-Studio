@@ -149,7 +149,7 @@ pub fn tables(nets: &[&Net], rd: &dyn Fn(XY) -> Result<XY, String>, date: &str, 
     }
     out.insert(
         "Meta",
-        format!("{META}\n{};Open Infra Studio {};{date};;;{};Open Infra Studio (CIV_RIOOL_EXPORT FORMAAT=HYDX);Kunstwerken, oppervlakken en debieten zijn niet ingevuld\n", FILES.len(), env!("CARGO_PKG_VERSION"), field(description)),
+        format!("{META}\n{};Open Infra Studio {};{date};;;{};Open Infra Studio (CIV_SEWER_EXPORT FORMAAT=HYDX);Kunstwerken, oppervlakken en debieten zijn niet ingevuld\n", FILES.len(), env!("CARGO_PKG_VERSION"), field(description)),
     );
     Ok(out)
 }

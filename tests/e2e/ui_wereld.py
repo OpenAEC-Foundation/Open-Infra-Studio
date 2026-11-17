@@ -140,7 +140,7 @@ def inner(a):
             return False
         ui.click(ok["node"])
         time.sleep(4)
-        r = ocs.mcp.run(f"CIV_FOTOTERREIN CEL={a.cel}", timeout=900)
+        r = ocs.mcp.run(f"CIV_AERIAL_TERRAIN CEL={a.cel}", timeout=900)
         msg = r.get("message", "")
         step("terrein met luchtfoto", r.get("ok", False), msg[:300])
         if a.verwacht:

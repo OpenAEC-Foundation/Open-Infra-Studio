@@ -266,7 +266,7 @@ fn seg_to_drawing(ctx: &Ctx, s: &Seg) -> Seg {
     }
 }
 
-/// `GIS_LANDXML <file>`: points, surfaces and alignments in one undo step.
+/// `CIV_LANDXML <file>`: points, surfaces and alignments in one undo step.
 pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn Fn(String)) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;

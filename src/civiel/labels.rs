@@ -10,7 +10,7 @@
 //! source (`bron`: a handle, or `tin:B` for a terrain) and a fingerprint of
 //! the source's geometry and data (`vingerafdruk`); spot heights also keep
 //! where they sit (`plek`). The labels are indexed per source in the
-//! drawing (OPENINFRA/INDEX, kind "labels"). `CIV_LABELS_BIJWERKEN` compares
+//! drawing (OPENINFRA/INDEX, kind "labels"). `CIV_LABELS_UPDATE` compares
 //! the fingerprints with the sources as they are now: the labels of a
 //! changed or moved source are drawn again, those of a deleted source go.
 
@@ -880,7 +880,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
                 groups.push(entity_group(&painter, &doc, *kind, e)?);
             }
             Kind::Pvi | Kind::Hellingen => {
-                let e = design.ok_or(tr("geen ontwerpprofiel: maak het eerst (CIV_ONTWERPPROFIEL) en geef AS= van zijn as", "no design profile: make it first (CIV_ONTWERPPROFIEL) and give AS= of its alignment"))?;
+                let e = design.ok_or(tr("geen ontwerpprofiel: maak het eerst (CIV_DESIGN_PROFILE) en geef AS= van zijn as", "no design profile: make it first (CIV_DESIGN_PROFILE) and give AS= of its alignment"))?;
                 groups.push(entity_group(&painter, &doc, *kind, e)?);
             }
             Kind::Punten => {
@@ -930,7 +930,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
     Ok(t2(format!("Labels: {total} elementen ({list}), stijl {path}."), format!("Labels: {total} entities ({list}), style {path}.")))
 }
 
-/// `CIV_LABELS_BIJWERKEN`: labels follow their source.
+/// `CIV_LABELS_UPDATE`: labels follow their source.
 pub fn update(opt: &CivielOptions, progress: &dyn Fn(String)) -> Result<String, String> {
     let style = style()?;
     let ctx = Ctx::new(opt)?;

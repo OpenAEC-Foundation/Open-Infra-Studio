@@ -1436,7 +1436,7 @@ pub fn gml(m: &Mutation, now: &(String, String)) -> String {
 // ── Command ─────────────────────────────────────────────────────────────────
 
 /// Read the active drawing, write `<drawing>_bgt-mutatie.gml` and `.md`
-/// beside it, and say what is in them. For `GIS_BGT_MUTATIE` and the window.
+/// beside it, and say what is in them. For `GIS_BGT_MUTATION` and the window.
 pub fn export(bronhouder: &str, as_built: bool, only: Option<std::collections::HashSet<Handle>>) -> Result<String, String> {
     let site = crate::bridge::site().ok_or("stel eerst de projectlocatie in (GIS → Locatie)")?;
     let t = crate::bridge::target().ok_or("geen tekening actief")?;

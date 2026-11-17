@@ -7,13 +7,13 @@ Runs its own Open CAD Studio with an isolated configuration folder
 daily use is left alone. A window appears, as with ``ocs_e2e.py``.
 
 Steps (Dordrecht, around the Grote Kerk)
-  codes        CIV_PUNTEN_IMPORT tests/data/landmeten/dordrecht-codes.csv CODES=JA:
+  codes        CIV_POINTS_IMPORT tests/data/landmeten/dordrecht-codes.csv CODES=JA:
                kerbs with arcs, a closed building, a hedge as 3D polylines on
                their NLCS layers; trees, manholes, gullies, lamp posts as
-               symbol blocks; an unknown code reported. CIV_CODES_TOEPASSEN
+               symbol blocks; an unknown code reported. CIV_CODES_APPLY
                again replaces the linework instead of doubling it.
   parcels      a 2100 m² plot split by area (400 m²) perpendicular to a street,
-               another into 4 equal parts parallel to 30°; CIV_PERCEEL_INFO.
+               another into 4 equal parts parallel to 30°; CIV_PARCEL_INFO.
   hydrology    a TIN from AHN, two water drops, catchments of two picked
                outlets on AHN and of the coded gullies on the TIN, ponds.
   swept path   a semitrailer reversing round a gentle arc (no jackknife) and
@@ -133,7 +133,7 @@ def main():
     csv = DATA / "landmeten" / "dordrecht-codes.csv"
 
     def codes():
-        out = cmd(f"CIV_PUNTEN_IMPORT {csv} CODES=JA", "codes", 120)
+        out = cmd(f"CIV_POINTS_IMPORT {csv} CODES=JA", "codes", 120)
         d = out["data"]
         kerbs = on_layer("B-XX-VH-KANTOPSLUITING_TROTTOIRBAND-G")
         trees = on_layer("B-XX-GR-BOOM-S")
@@ -158,7 +158,7 @@ def main():
 
     def codes_again():
         before = len(on_layer("B-XX-VH-KANTOPSLUITING_TROTTOIRBAND-G"))
-        out = cmd("CIV_CODES_TOEPASSEN", "codes2", 120)
+        out = cmd("CIV_CODES_APPLY", "codes2", 120)
         after = len(on_layer("B-XX-VH-KANTOPSLUITING_TROTTOIRBAND-G"))
         trees = len(on_layer("B-XX-GR-BOOM-S"))
         d = out["data"]
@@ -171,7 +171,7 @@ def main():
         plot = create([[104900, 425330], [104960, 425330], [104960, 425360], [104900, 425370]], True)
         street = create([[104890, 425326], [104970, 425326]], False)
         handles.update(plot=plot, street=street)
-        out = cmd(f"CIV_PERCELEN KAVEL={plot} STRAAT={street} OPP=400", "perc1", 120)
+        out = cmd(f"CIV_PARCELS KAVEL={plot} STRAAT={street} OPP=400", "perc1", 120)
         rows = out["data"].get("percelen", [])
         areas = [r["oppervlakte_m2"] for r in rows]
         csv_file = Path(out["data"].get("csv", ""))
@@ -182,7 +182,7 @@ def main():
 
     def parcels_equal():
         plot = create([[104900, 425375], [104950, 425375], [104950, 425392], [104900, 425392]], True)
-        out = cmd(f"CIV_PERCELEN KAVEL={plot} N=4 RICHTING=30 PREFIX=K START=11", "perc2", 120)
+        out = cmd(f"CIV_PARCELS KAVEL={plot} N=4 RICHTING=30 PREFIX=K START=11", "perc2", 120)
         rows = out["data"].get("percelen", [])
         areas = [r["oppervlakte_m2"] for r in rows]
         names = [r["perceel"] for r in rows]
@@ -190,7 +190,7 @@ def main():
 
     def parcel_info():
         hs = ";".join(handles.get("parcels", [])[:2])
-        out = cmd(f"CIV_PERCEEL_INFO PERCEEL={hs} STRAAT={handles['street']}", "pinfo", 60)
+        out = cmd(f"CIV_PARCEL_INFO PERCEEL={hs} STRAAT={handles['street']}", "pinfo", 60)
         rows = out["data"].get("percelen", [])
         return out["ok"] and len(rows) == 2 and all(abs(r["oppervlakte_m2"] - 400.0) <= 0.01 and r["front_m"] and r["front_m"] > 5 for r in rows), out["message"]
 
@@ -200,7 +200,7 @@ def main():
         return out["ok"] and out["data"].get("driehoeken", 0) > 1000, out["message"]
 
     def drops():
-        out = cmd("CIV_WATERDRUPPEL PUNTEN=104870,425340;104920,425280;104830,425310", "drop", 300)
+        out = cmd("CIV_WATER_DROP PUNTEN=104870,425340;104920,425280;104830,425310", "drop", 300)
         rows = out["data"].get("druppels", [])
         lines = on_layer("OI-WATERDRUPPEL", kind=("polyline3d", "polyline"))
         down = all(r["verval_m"] >= 0 for r in rows)
@@ -213,7 +213,7 @@ def main():
         # Outlets: the bottoms of the two largest ponds, and a point on a
         # street that may fall on a cell without a height (it snaps).
         pts = ";".join(f"{x},{y}" for x, y in pond_points[:2]) + ";104860,425300"
-        out = cmd(f"CIV_STROOMGEBIED BRON=AHN CEL=1 SNAP=3 PLASSEN=nee PUNTEN={pts}", "sg", 600)
+        out = cmd(f"CIV_CATCHMENT BRON=AHN CEL=1 SNAP=3 PLASSEN=nee PUNTEN={pts}", "sg", 600)
         d = out["data"]
         sg = d.get("stroomgebieden", [])
         ponds = d.get("plassen", [])
@@ -222,13 +222,13 @@ def main():
         return ok, f"{[(r['stroomgebied'], r['afvoerpunt'], r['oppervlakte_m2']) for r in sg]}; skipped {d.get('overgeslagen', [])}"
 
     def catchments_gullies():
-        out = cmd("CIV_STROOMGEBIED BRON=TIN CEL=1 LAAG=*KOLK* PLASSEN=nee", "sg2", 600)
+        out = cmd("CIV_CATCHMENT BRON=TIN CEL=1 LAAG=*KOLK* PLASSEN=nee", "sg2", 600)
         sg = out["data"].get("stroomgebieden", [])
         skipped = out["data"].get("overgeslagen", [])
         return out["ok"] and len(sg) + len(skipped) == 3 and len(sg) >= 1, f"{[(r['afvoerpunt'], r['oppervlakte_m2']) for r in sg]} skipped {skipped}"
 
     def ponds_only():
-        out = cmd("CIV_PLASSEN BRON=AHN CEL=1 MINDIEPTE=0.05 MINOPP=2", "ponds", 600)
+        out = cmd("CIV_PONDS BRON=AHN CEL=1 MINDIEPTE=0.05 MINOPP=2", "ponds", 600)
         ponds = out["data"].get("plassen", [])
         layer = on_layer("OI-PLAS")
         pond_points.extend((p["x"], p["y"]) for p in sorted(ponds, key=lambda p: -p["volume_m3"]))
@@ -245,7 +245,7 @@ def main():
     def swept_gentle():
         path = arc_path(104800, 425345, 30.0, 45, 20)
         before = len(on_layer("OI-VEEGPAD"))
-        out = cmd(f"GIS_VEEGPAD eu_tractor_semitrailer_16_5 10 ACHTERUIT PAD={path}", "vp1", 120)
+        out = cmd(f"GIS_SWEPT_PATH eu_tractor_semitrailer_16_5 10 ACHTERUIT PAD={path}", "vp1", 120)
         d = out["data"]
         traces = len(on_layer("OI-VEEGPAD")) - before
         ok = out["ok"] and d.get("achteruit") is True and not d.get("scharen") and 0 < d.get("knikhoek_max_graden", 0) < d.get("knikhoek_grens_graden", 0) and traces == 8
@@ -253,25 +253,25 @@ def main():
 
     def swept_jackknife():
         path = arc_path(104835, 425365, 5.0, 100, 15)
-        out = cmd(f"GIS_VEEGPAD eu_tractor_semitrailer_16_5 10 ACHTERUIT PAD={path}", "vp2", 120)
+        out = cmd(f"GIS_SWEPT_PATH eu_tractor_semitrailer_16_5 10 ACHTERUIT PAD={path}", "vp2", 120)
         d = out["data"]
         return out["ok"] and d.get("scharen") is True, out["message"]
 
     # ── 5. Parking bays ──────────────────────────────────────────────────
     def parking_90():
-        out = cmd("GIS_PARKEERVAKKEN HOEK=90 LIJN=104900,425260;104950,425260 MET_VEEGPAD=car_vw_golf", "pk1", 120)
+        out = cmd("GIS_PARKING HOEK=90 LIJN=104900,425260;104950,425260 MET_VEEGPAD=car_vw_golf", "pk1", 120)
         d = out["data"]
         bays = on_layer("OI-PARKEREN")
         c = d.get("controle") or {}
         return out["ok"] and d.get("vakken") == 40 and d.get("rijbaan_m") == 6.0 and len(bays) == 40 and c.get("past") is True, f"{len(bays)} bays; {out['message']}"
 
     def parking_45():
-        out = cmd("GIS_PARKEERVAKKEN HOEK=45 KLASSE=nietopenbaar ZIJDE=links START=101 LIJN=104900,425285;104950,425285", "pk2", 120)
+        out = cmd("GIS_PARKING HOEK=45 KLASSE=nietopenbaar ZIJDE=links START=101 LIJN=104900,425285;104950,425285", "pk2", 120)
         d = out["data"]
         return out["ok"] and d.get("vakken", 0) >= 10 and d.get("rijbaan_m") == 3.0 and d.get("diepte_m") == 4.95, out["message"]
 
     def parking_parallel():
-        out = cmd("GIS_PARKEERVAKKEN HOEK=LANGS ZIJDE=links START=201 LIJN=104800,425250;104850,425250 MET_VEEGPAD=car_vw_golf", "pk3", 120)
+        out = cmd("GIS_PARKING HOEK=LANGS ZIJDE=links START=201 LIJN=104800,425250;104850,425250 MET_VEEGPAD=car_vw_golf", "pk3", 120)
         d = out["data"]
         c = d.get("controle") or {}
         return out["ok"] and d.get("vakken") == 8 and c.get("achteruit") is True and c.get("past") is True, out["message"]

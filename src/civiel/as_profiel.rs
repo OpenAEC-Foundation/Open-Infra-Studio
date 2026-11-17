@@ -957,7 +957,7 @@ pub fn draw_axis(ctx: &Ctx, al: &Alignment, axis: &LayerSpec, axis_t: &LayerSpec
     Ok(drawing)
 }
 
-/// `CIV_AS`: an axis on AM-AS with stationing (AM-KILOMETRERING), tangent
+/// `CIV_ALIGNMENT`: an axis on AM-AS with stationing (AM-KILOMETRERING), tangent
 /// points (AM-TANGENTPUNT), radii and clothoids.
 pub fn create(opt: &super::CivielOptions, input: AxisInput, name: Option<String>, start: Option<f64>) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
@@ -1029,7 +1029,7 @@ fn heights(ground: &mut Maaiveld, pts: &[XY], f: f64) -> Vec<Option<f64>> {
     pts.iter().map(|p| ground.height(*p, f)).collect()
 }
 
-/// `GIS_AS_LENGTEPROFIEL`: the length profile of the selected axis with its
+/// `CIV_LONG_PROFILE`: the length profile of the selected axis with its
 /// lower-left corner at `at`.
 pub fn length_profile(opt: &super::CivielOptions, handle: Option<Handle>, at: Option<XY>, progress: &dyn Fn(String)) -> Result<String, String> {
     let doc = Arc::new(super::document(&["tin"], &handle.into_iter().collect::<Vec<_>>())?);
@@ -1518,7 +1518,7 @@ pub fn draw_section_views(ctx: &Ctx, al: &Alignment, views: &[SectionView], left
     Ok((rows, at))
 }
 
-/// `CIV_AS_OFFSET`: lines beside the selected axis at the offsets of the
+/// `CIV_ALIGNMENT_OFFSET`: lines beside the selected axis at the offsets of the
 /// settings (offset alignments), on AM-STRING_HULP.
 pub fn offsets(opt: &super::CivielOptions, handle: Option<Handle>) -> Result<String, String> {
     let opt = opt.clone();
@@ -1608,7 +1608,7 @@ fn data_f64(e: &EntityType, key: &str) -> Option<f64> {
     super::data_value(e, key).and_then(|v| v.parse().ok())
 }
 
-/// `CIV_ONTWERPPROFIEL`: the selected polyline, drawn in a length profile,
+/// `CIV_DESIGN_PROFILE`: the selected polyline, drawn in a length profile,
 /// becomes the design profile: its vertices are the PVIs, with parabolic
 /// curves between the grades.
 pub fn design_profile(opt: &super::CivielOptions, drawn_line: Option<Handle>, axis_h: Option<Handle>, pvi: Option<Vec<(f64, f64)>>) -> Result<String, String> {
@@ -1631,7 +1631,7 @@ pub fn design_profile(opt: &super::CivielOptions, drawn_line: Option<Handle>, ax
                 .iter()
                 .rev()
                 .find(|(e, _)| super::data_value(e, "as").as_deref() == Some(al.name.as_str()))
-                .ok_or_else(|| format!("maak eerst een lengteprofiel van {} (CIV_LENGTEPROFIEL)", if al.name.is_empty() { "deze as" } else { &al.name }))?;
+                .ok_or_else(|| format!("maak eerst een lengteprofiel van {} (CIV_LONG_PROFILE)", if al.name.is_empty() { "deze as" } else { &al.name }))?;
             (*frame, true, list)
         }
         // A line drawn in a length profile.

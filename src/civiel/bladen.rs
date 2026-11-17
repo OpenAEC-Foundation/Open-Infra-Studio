@@ -1,5 +1,5 @@
 //! Plan and profile sheets (plan production; the Dutch bestektekening):
-//! `CIV_BLADEN` divides an alignment into sheets and makes
+//! `CIV_SHEETS` divides an alignment into sheets and makes
 //! one paper-space layout per sheet, with the plan strip turned along the
 //! alignment in a twisted viewport, the length profile of the sheet's
 //! station range in a second viewport, match lines (aansluitlijnen) with
@@ -14,7 +14,7 @@
 //! alignment (view frames, AL-TEKENBLADGRENS, not plotted), the match lines
 //! (AL-BLADVERWIJZING_AS) and one profile view per sheet below the project.
 //!
-//! `CIV_BLADEN_PDF` plots every sheet to PDF through the host's `-PLOT`.
+//! `CIV_SHEETS_PDF` plots every sheet to PDF through the host's `-PLOT`.
 
 use std::f64::consts::FRAC_PI_2;
 
@@ -60,7 +60,7 @@ impl Paper {
     }
 
     /// Width of the title column on the right: the 185 mm of the NLCS title
-    /// block of `GIS_TEKENBLAD`, narrower on A3 so the views keep their width.
+    /// block of `GIS_SHEET`, narrower on A3 so the views keep their width.
     pub fn column(&self) -> f64 {
         if self.w < 500.0 {
             125.0
@@ -425,7 +425,7 @@ pub fn fit_vertical(ranges: &[Option<(f64, f64)>], avail_mm: f64, scale: f64, wa
 
 // ── The command ─────────────────────────────────────────────────────────────
 
-/// `CIV_BLADEN`: what to make.
+/// `CIV_SHEETS`: what to make.
 #[derive(Clone, Debug)]
 pub struct Request {
     pub axis: Option<Handle>,
@@ -583,7 +583,7 @@ struct View {
     size: [f64; 2],
 }
 
-/// `CIV_BLADEN`: the sheet set of an alignment.
+/// `CIV_SHEETS`: the sheet set of an alignment.
 pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> Result<String, String> {
     let mut opt = opt.clone();
     opt.nlcs.scale = req.scale;
@@ -791,7 +791,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
 /// scale): the band with stations, ground and design heights, grades and
 /// vertical curves, the alignment; the graph with height grid, ground line,
 /// design line, PVIs and tangent points. Same layers as the length profile
-/// of `CIV_LENGTEPROFIEL`.
+/// of `CIV_LONG_PROFILE`.
 #[allow(clippy::too_many_arguments)]
 fn draw_profile(ctx: &Ctx, al: &Alignment, samples: &Samples, design: Option<&[Pvi]>, view: &View, rows: &[Row], vert: &Vertical, title: &str, out: &mut Sheets) -> Result<(), String> {
     let (f, k) = (ctx.f, ctx.k);
@@ -1159,15 +1159,15 @@ fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[S
 
 // ── PDF ─────────────────────────────────────────────────────────────────────
 
-/// `CIV_BLADEN_PDF`: every sheet of the axis (or of all axes) to its own PDF
+/// `CIV_SHEETS_PDF`: every sheet of the axis (or of all axes) to its own PDF
 /// through the host's `-PLOT`. The prompts split on spaces, so the folder
 /// may not hold any: then the plugin's own folder is used.
 pub fn pdf(axis: Option<String>, dir: Option<std::path::PathBuf>, progress: &dyn Fn(String)) -> Result<String, String> {
     let sheets: Vec<(String, String, String)> = sheets_read().into_iter().filter(|(a, l, _)| a != "-" && l != "-" && axis.as_ref().is_none_or(|x| x == a)).collect();
     if sheets.is_empty() {
         return Err(match axis {
-            Some(a) => t2(format!("geen bladen van {a}: maak ze eerst met CIV_BLADEN"), format!("no sheets of {a}: make them first with CIV_BLADEN")),
-            None => tr("geen bladen in deze tekening: maak ze eerst met CIV_BLADEN", "no sheets in this drawing: make them first with CIV_BLADEN").into(),
+            Some(a) => t2(format!("geen bladen van {a}: maak ze eerst met CIV_SHEETS"), format!("no sheets of {a}: make them first with CIV_SHEETS")),
+            None => tr("geen bladen in deze tekening: maak ze eerst met CIV_SHEETS", "no sheets in this drawing: make them first with CIV_SHEETS").into(),
         });
     }
     let spaced = |p: &std::path::Path| p.to_string_lossy().chars().any(char::is_whitespace);

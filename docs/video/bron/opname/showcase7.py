@@ -23,7 +23,7 @@ if __name__ == "__main__":
     run("CIV_BGT3D PANDEN=nee")
     run("CIV_BAG3D RAMEN=nee")
     run(f"CIV_KLIC3D {KLIC} VERGROOT=2")
-    run("CIV_SONDERINGEN3D MAX=60")
+    run("CIV_CPT3D MAX=60")
     run("GIS_Q_NWB")
     d = rec.OCS.document_id()
     best = None
@@ -38,9 +38,9 @@ if __name__ == "__main__":
             best = e["handle"]
     print("straat:", best, flush=True)
     run("CIV_TIN BRON=AHN AFSTAND=5")
-    r = run(f"CIV_AS AS={best} NAAM=Street")
+    r = run(f"CIV_ALIGNMENT AS={best} NAAM=Street")
     ax = r["data"].get("as")
-    run(f"CIV_LENGTEPROFIEL AS={ax}")
+    run(f"CIV_LONG_PROFILE AS={ax}")
     run(f"CIV_CORRIDOR AS={ax} SJABLOON=weg BOVEN=0.05 FREQUENTIE=10 DWARSPROFIELEN=ja")
     rec.host("QSAVE")
     time.sleep(20)

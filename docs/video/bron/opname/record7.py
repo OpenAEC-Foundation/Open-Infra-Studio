@@ -92,12 +92,12 @@ def nl():
     # Wide: Dordrecht, the Biesbosch and the rivers.
     run("GIS_SITE RD 109000 423500 32000 20000 Drechtsteden en Biesbosch")
     near, far = box(104900, 425330, 2600), box(109000, 423000, 30000)
-    run("GIS_Q_LUCHTFOTO", 1800)
+    run("GIS_Q_AERIAL", 1800)
     stage("n-zoomuit", near, far, 90)
     run("GIS_Q_NATURA2000", 1800)
     stage("n-natura", far, box(110500, 422500, 22000))
     rasters_off()
-    run("GIS_Q_GEOMORFOLOGIE", 1800)
+    run("GIS_Q_GEOMORPHOLOGY", 1800)
     stage("n-geo", box(110500, 422500, 22000), box(106500, 424300, 12000))
     rasters_off()
     run("GIS_SITE RD 104900 425300 7000 4500 Dordrecht")
@@ -163,8 +163,8 @@ def geo():
     clean()
     clear()
     run("GIS_SITE RD 109000 423500 32000 20000 Drechtsteden en Biesbosch")
-    run("GIS_Q_LUCHTFOTO", 1800)
-    run("GIS_Q_GEOMORFOLOGIE", 1800)
+    run("GIS_Q_AERIAL", 1800)
+    run("GIS_Q_GEOMORPHOLOGY", 1800)
     stage("n-geo", box(110500, 422500, 22000), box(106500, 424300, 12000))
 
 
@@ -195,7 +195,7 @@ def klic():
     layers(on=["B-XX-KL-*", "B-OI-KL-*", "B-XX-MO-*", "*-ONDERZOEK*"])
     a, b = box(104868, 425300, 170), box(104872, 425306, 115)
     seq("k-dicht", "SWISO", "GOURAUDSHADED", a, b, 3.0)
-    run("CIV_DOORZICHT PCT=78")
+    run("CIV_SEE_THROUGH PCT=78")
     seq("k-doorzicht", "SWISO", "GOURAUDSHADED", a, b, 3.0)
     # Down and under: orbit from above to below the street, a few pixels a frame.
     d = OUT / "k-onder"
@@ -211,7 +211,7 @@ def klic():
         rec.OCS.request("pointer", {"document_id": doc, "events": ev, "modifiers": "shift"})
         rec.capture(d / f"{i:04d}.png", bounds=fixed)
     print("k-onder", n, flush=True)
-    run("CIV_DOORZICHT UIT")
+    run("CIV_SEE_THROUGH UIT")
 
 
 if __name__ == "__main__":

@@ -273,7 +273,7 @@ pub fn parse_overrides(text: &str) -> Result<BTreeMap<String, Vec<(String, f64)>
 }
 
 pub fn unknown_code(code: &str) -> String {
-    format!("{} '{}' ({})", crate::lang::tr("onbekende grondsoort", "unknown soil unit"), code.trim(), crate::lang::tr("CIV_GRONDSOORTEN geeft de lijst", "CIV_GRONDSOORTEN lists them"))
+    format!("{} '{}' ({})", crate::lang::tr("onbekende grondsoort", "unknown soil unit"), code.trim(), crate::lang::tr("CIV_SOIL_UNITS geeft de lijst", "CIV_SOIL_UNITS lists them"))
 }
 
 /// The table parameters of `code` with its overrides applied.

@@ -3,12 +3,12 @@
 Open Infra turns the subsurface data of a project into three everyday
 geotechnical checks:
 
-- **`CIV_GRONDPROFIEL`**: a soil profile along a line, from the CPTs and
+- **`CIV_SOIL_PROFILE`**: a soil profile along a line, from the CPTs and
   boreholes of the Dutch key register (BRO), kept as a soil model.
-- **`CIV_STABILITEIT`**: the stability of a slope in a cross section (a dike,
+- **`CIV_SLOPE_STABILITY`**: the stability of a slope in a cross section (a dike,
   an embankment or a ditch bank), with Bishop's simplified method or the
   ordinary method of slices.
-- **`CIV_ZETTING`**: the settlement of a fill, over an area and in time.
+- **`CIV_SETTLEMENT`**: the settlement of a fill, over an area and in time.
 
 They sit in the **Grading** group of the **Civiel** ribbon, in the
 **Geotechnics** menu. The soil profile from the BRO appears there when the Dutch
@@ -25,7 +25,7 @@ layers you give yourself (`LAGEN=`).
 
 ### Table
 
-`CIV_GRONDSOORTEN` lists the soil units with their codes and values.
+`CIV_SOIL_UNITS` lists the soil units with their codes and values.
 Each unit is a row of **NEN 9997-1 table 2.b** ("Karakteristieke waarden van
 grondeigenschappen"), the Dutch table of characteristic soil properties by
 main soil, admixture and consistency. The rows are, for example,
@@ -107,7 +107,7 @@ The report keeps the source of every value. Overridden values are marked as
 - **CPT layers.** Each CPT layer is classified by Robertson's (2010) soil
   behaviour type (P.K. Robertson, "Soil behaviour type from the CPT: an
   update", CPT'10). The classification is computed from qc and Rf, as
-  `CIV_SONDERINGEN3D` already does. The zone gives the main soil and the
+  `CIV_CPT3D` already does. The zone gives the main soil and the
   admixture, and the layer's mean qc gives the consistency: the row with the
   nearest representative qc on a log scale.
 
@@ -170,17 +170,17 @@ The method, as implemented in `src/civiel/geotechnics/model.rs`:
 
 The model is stored in the drawing (XRecord `OPENINFRA/GRONDMODEL`) under its
 name, with its line in project coordinates, its columns and its unit
-parameters. `CIV_STABILITEIT` and `CIV_ZETTING` take the soil from it:
+parameters. `CIV_SLOPE_STABILITY` and `CIV_SETTLEMENT` take the soil from it:
 
 - they use `MODEL=<name>`, or the stored model whose line passes nearest;
 - without a model, they use `LAGEN=` or the BRO around the section or area.
 
 For an area without a model, the nearest column holds under each point.
 
-## `CIV_GRONDPROFIEL`
+## `CIV_SOIL_PROFILE`
 
 ```
-CIV_GRONDPROFIEL [LIJN=<handle>|AS=<handle>] [BRON=sonderingen|boringen|alles]
+CIV_SOIL_PROFILE [LIJN=<handle>|AS=<handle>] [BRON=sonderingen|boringen|alles]
                  [STRAAL=50] [MAX=30] [MINLAAG=0.3] [NAAM=] [GROND=] [PLAATS=x,y] [ID=]
 ```
 
@@ -198,10 +198,10 @@ CIV_GRONDPROFIEL [LIJN=<handle>|AS=<handle>] [BRON=sonderingen|boringen|alles]
 - **Vertical scale.** The vertical exaggeration is the `OVERHOGING` setting.
 - **Result.** The JSON result holds the whole model.
 
-## `CIV_STABILITEIT`
+## `CIV_SLOPE_STABILITY`
 
 ```
-CIV_STABILITEIT [LIJN=<handle> | AS=<handle> STATION=<m> [LINKS=] [RECHTS=]]
+CIV_SLOPE_STABILITY [LIJN=<handle> | AS=<handle> STATION=<m> [LINKS=] [RECHTS=]]
                 [FREATISCH=<m NAP> | FREATISCH=x:z;x:z;…] [BELASTING=kPa:from:to]
                 [METHODE=bishop|fellenius] [OPPERVLAK=AUTO|B|N] [MINDIEPTE=0.5]
                 [LAGEN=top:code;… [BASIS=]] [MODEL=] [GROND=] [BRON=] [STRAAL=]
@@ -294,10 +294,10 @@ both minima and the other method's factor on the critical circle.
   - `surface`, `phreatic`, `load`;
   - `grid`, with each centre's lowest F.
 
-## `CIV_ZETTING`
+## `CIV_SETTLEMENT`
 
 ```
-CIV_ZETTING [GEBIED=x,y;x,y;… HOOGTE=<m> | ONTWERP=ja [GEBIED=…]] [GAMMA=18] [TIJD=30]
+CIV_SETTLEMENT [GEBIED=x,y;x,y;… HOOGTE=<m> | ONTWERP=ja [GEBIED=…]] [GAMMA=18] [TIJD=30]
             [CEL=] [PUNT=x,y] [METHODE=koppejan|terzaghi]
             [FREATISCH=<m NAP> | GRONDWATER=<m below ground, 1>] [MARGE=5] [BANDEN=8]
             [LAGEN=…] [MODEL=] [GROND=] [BRON=] [STRAAL=] [ID=]

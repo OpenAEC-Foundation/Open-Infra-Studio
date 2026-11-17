@@ -1,4 +1,4 @@
-//! Rail (`CIV_SPOOR`, `CIV_WISSEL`): a track alignment with cant and
+//! Rail (`CIV_TRACK`, `CIV_TURNOUT`): a track alignment with cant and
 //! turnouts. Each circular curve gets its equilibrium cant D_eq = c·V²/R
 //! (c = 11.8 for standard gauge: V km/h, R m, D mm), an applied cant within
 //! the limits, and the cant deficiency (and excess for slow trains). The
@@ -349,7 +349,7 @@ fn breach_text(b: &Breach) -> String {
     }
 }
 
-/// Rail options of `CIV_SPOOR`.
+/// Rail options of `CIV_TRACK`.
 pub struct RailRequest {
     pub input: AxisInput,
     pub name: Option<String>,
@@ -366,7 +366,7 @@ pub struct RailRequest {
     pub diagram: Option<XY>,
 }
 
-/// `CIV_SPOOR`: a track on AM-AS_SPOOR_TREIN with stationing, main points,
+/// `CIV_TRACK`: a track on AM-AS_SPOOR_TREIN with stationing, main points,
 /// radii, clothoids and the cant per curve; parallel tracks at the track
 /// centre distance; the cant diagram below the project.
 pub fn track(opt: &super::CivielOptions, req: RailRequest) -> Result<String, String> {
@@ -565,7 +565,7 @@ fn cant_diagram(ctx: &Ctx, al: &Alignment, plan: &CantPlan, v: f64, t: &RailTabl
     Ok(at)
 }
 
-/// `CIV_WISSEL`: a turnout of a standard type at a station of a track,
+/// `CIV_TURNOUT`: a turnout of a standard type at a station of a track,
 /// to the left or right: the diverging track as an alignment, the main
 /// points WB (start), MS (crossing point of the axes) and WE (end).
 #[allow(clippy::too_many_arguments)]

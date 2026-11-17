@@ -36,7 +36,7 @@ The city centre of Dordrecht around the Grote Kerk, 700 × 560 m. Plan and 3D mo
   - a length profile and a design profile (3 PVIs, vertical curve 40 m);
   - a corridor with the *weg* template: 39 cross sections, 7 m³ cut and 1,432 m³ fill.
 
-| Beneath a see-through ground (`CIV_DOORZICHT`) | Around the Grote Kerk |
+| Beneath a see-through ground (`CIV_SEE_THROUGH`) | Around the Grote Kerk |
 |---|---|
 | ![KLIC and CPTs beneath the ground](dordrecht-3d-3d-ondergrond.png) | ![Cables, pipes and manholes around the Grote Kerk](dordrecht-3d-ondergrond-grote-kerk.png) |
 

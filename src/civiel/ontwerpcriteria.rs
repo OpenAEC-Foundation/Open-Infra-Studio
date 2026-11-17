@@ -1,5 +1,5 @@
-//! Design criteria (`CIV_ONTWERPCRITERIA`,
-//! `CIV_AS_TOETS`): per guideline, road category and design speed the
+//! Design criteria (`CIV_DESIGN_CRITERIA`,
+//! `CIV_ALIGNMENT_CHECK`): per guideline, road category and design speed the
 //! minimum radius, clothoid parameter, grades, vertical curve radii,
 //! superelevation and stopping sight distance, from the tables in
 //! `assets/criteria/*.json` (every value with its source, estimates marked)
@@ -171,7 +171,7 @@ impl Choice {
     }
 }
 
-/// The choice of this session (`CIV_ONTWERPCRITERIA` without an axis).
+/// The choice of this session (`CIV_DESIGN_CRITERIA` without an axis).
 pub fn session() -> Option<Choice> {
     store().lock().unwrap().clone()
 }
@@ -374,7 +374,7 @@ pub fn limits_text(l: &Limits) -> String {
     parts.join(" · ")
 }
 
-/// `CIV_ONTWERPCRITERIA`: without a choice the tables there are; with one
+/// `CIV_DESIGN_CRITERIA`: without a choice the tables there are; with one
 /// its values, kept for the session and, with an axis, on the axis.
 pub fn criteria(choice: Option<Choice>, axis_h: Option<Handle>) -> Result<String, String> {
     let all = guidelines();
@@ -443,7 +443,7 @@ fn profile_frame(doc: &CadDocument, axis_name: &str) -> Option<(f64, f64, f64, f
     Some((g("x_nul")?, g("y_basis")?, g("basis")?, g("overhoging")?, g("eenheid")?))
 }
 
-/// `CIV_AS_TOETS`: the axis and its design profile against the design
+/// `CIV_ALIGNMENT_CHECK`: the axis and its design profile against the design
 /// criteria; every violation marked in plan (and in the length profile) on
 /// AL-AANKLEDING, and listed with its stations.
 pub fn check(opt: &super::CivielOptions, axis_h: Option<Handle>, choice: Option<Choice>, superelevation: Option<f64>) -> Result<String, String> {
@@ -451,7 +451,7 @@ pub fn check(opt: &super::CivielOptions, axis_h: Option<Handle>, choice: Option<
     let doc = super::document(&["as", "ontwerpprofiel", "lengteprofiel"], &axis_h.into_iter().collect::<Vec<_>>())?;
     let (al, h, _) = as_profiel::axis(&doc, axis_h)?;
     let axis_e = doc.get_entity(h);
-    let choice = choice_for(choice, axis_e).ok_or_else(|| crate::lang::tr("kies eerst de ontwerpcriteria: CIV_ONTWERPCRITERIA RICHTLIJN= CATEGORIE= V= (of geef ze hier mee)", "choose the design criteria first: CIV_ONTWERPCRITERIA RICHTLIJN= CATEGORIE= V= (or give them here)").to_string())?;
+    let choice = choice_for(choice, axis_e).ok_or_else(|| crate::lang::tr("kies eerst de ontwerpcriteria: CIV_DESIGN_CRITERIA RICHTLIJN= CATEGORIE= V= (of geef ze hier mee)", "choose the design criteria first: CIV_DESIGN_CRITERIA RICHTLIJN= CATEGORIE= V= (or give them here)").to_string())?;
     let (g, c, l) = choice.resolve(&guidelines())?;
     let f = ctx.f;
     let len_m = al.length() / f;

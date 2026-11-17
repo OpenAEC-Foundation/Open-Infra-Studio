@@ -1204,8 +1204,8 @@ pub fn corridor(opt: &super::CivielOptions, req: Request, progress: &dyn Fn(Stri
         Some(g) => g,
         None => Grade::Profile(profile_of(&doc, &al.name).ok_or_else(|| {
             trf!(
-                "{} heeft geen ontwerpprofiel: maak er een (CIV_ONTWERPPROFIEL) of geef NIVEAU=… of BOVEN=…",
-                "{} has no design profile: make one (CIV_ONTWERPPROFIEL) or give NIVEAU=… or BOVEN=…",
+                "{} heeft geen ontwerpprofiel: maak er een (CIV_DESIGN_PROFILE) of geef NIVEAU=… of BOVEN=…",
+                "{} has no design profile: make one (CIV_DESIGN_PROFILE) or give NIVEAU=… or BOVEN=…",
                 if al.name.is_empty() { crate::lang::tr("de as", "the alignment") } else { &al.name }
             )
         })?),

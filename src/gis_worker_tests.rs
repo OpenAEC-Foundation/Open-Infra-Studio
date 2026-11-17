@@ -10,9 +10,25 @@ use ocs_plugin_api::host::{
 use ocs_plugin_api::ipc::protocol::{PluginRequest as Q, PluginResponse as A};
 
 #[derive(Default)]
-struct IdleHost { command: Option<Box<dyn InteractiveCommand>> }
+struct IdleHost { command: Option<Box<dyn InteractiveCommand>>, drawing: Option<usize> }
+
+/// A drawing without content or GEODATA, for commands that only need a target.
+struct EmptyDrawing;
+impl PluginRequestSender for EmptyDrawing {
+    fn request(&self, req: Q) -> Result<A, PluginRequestError> {
+        match req {
+            Q::OpenDocumentViewV4 { .. } => Err(PluginRequestError("geen GEODATA beschikbaar".into())),
+            Q::CloseDocumentViewV4 { .. } | Q::PushInfo(_) => Ok(A::Ok),
+            other => Err(PluginRequestError(format!("onverwacht verzoek: {other:?}"))),
+        }
+    }
+}
+
 impl HostApi for IdleHost {
-    fn tab_index(&self) -> usize { 120003 }
+    fn tab_index(&self) -> usize { self.drawing.unwrap_or(120003) }
+    fn plugin_request_sender(&self) -> Option<Box<dyn PluginRequestSender>> {
+        self.drawing.map(|_| Box::new(EmptyDrawing) as Box<dyn PluginRequestSender>)
+    }
     fn document(&self) -> &Document { panic!("geen directe documenttoegang") }
     fn document_mut(&mut self) -> &mut Document { panic!("geen directe documenttoegang") }
     fn document_reader(&self) -> Box<dyn DocumentReader + '_> { panic!("geen directe documenttoegang") }
@@ -102,4 +118,24 @@ fn an_area_started_in_a_keeps_its_site_after_callbacks_resume_with_b_active() {
     assert_eq!(written[0].width, 100.0);
     assert_eq!(written[0].height, 50.0);
     assert!(second.lock().unwrap().is_empty(), "A's gebied kwam in B");
+}
+
+#[test]
+fn an_old_command_name_starts_the_same_command_as_the_english_name() {
+    let _one = bridge::COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let start = |line: &str| {
+        // Its own tab: GEODATA adoption is tried once per tab.
+        let mut host = IdleHost { drawing: Some(120020), ..IdleHost::default() };
+        assert!(OpenInfra.dispatch(&mut host, line));
+        host.command.take().unwrap_or_else(|| panic!("{line} startte geen opdracht")).prompt()
+    };
+    for name in ["GIS_AREA", "GIS_POINT_INFO"] {
+        let english = start(name);
+        let aliases: Vec<&str> = commands::ALIASES.iter().filter(|(_, n)| *n == name).map(|(a, _)| *a).collect();
+        assert!(!aliases.is_empty(), "{name} heeft geen oude naam");
+        for alias in aliases {
+            assert_eq!(start(alias), english, "{alias} ≠ {name}");
+        }
+    }
+    assert_ne!(start("GIS_AREA"), start("GIS_POINT_INFO"), "twee opdrachten, twee vragen");
 }

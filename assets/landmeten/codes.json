@@ -1,6 +1,6 @@
 {
   "versie": 1,
-  "toelichting": "Codetabel voor CIV_PUNTEN_IMPORT CODES=JA en CIV_CODES_TOEPASSEN (code table). De codes volgen de startcodelijst die in Nederland met veel totaalstations en GNSS-veldcomputers wordt meegeleverd: lijncodes beginnen met L, puntcodes met S, een lijnnummer staat direct achter de code (LTRB1, LTRB2) en stuurcodes staan als los woord achter de code (LTRB1 B). De koppeling aan NLCS-objecten en symbolen is van Open Infra. Een gebruikerskopie staat in <config>/OpenCADStudio/open-infra/landmeten/codes.json en gaat voor deze tabel.",
+  "toelichting": "Codetabel voor CIV_POINTS_IMPORT CODES=JA en CIV_CODES_APPLY (code table). De codes volgen de startcodelijst die in Nederland met veel totaalstations en GNSS-veldcomputers wordt meegeleverd: lijncodes beginnen met L, puntcodes met S, een lijnnummer staat direct achter de code (LTRB1, LTRB2) en stuurcodes staan als los woord achter de code (LTRB1 B). De koppeling aan NLCS-objecten en symbolen is van Open Infra. Een gebruikerskopie staat in <config>/OpenCADStudio/open-infra/landmeten/codes.json en gaat voor deze tabel.",
   "stuurcodes": {
     "begin": ["B", "ST"],
     "einde": ["E", "END"],

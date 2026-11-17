@@ -980,7 +980,7 @@ pub fn draw_codes(ctx: &Ctx, table: &CodeTable, lw: &Linework, points: &[SurveyP
 
 /// Linework and symbols from the codes of `points` (measuring order), one
 /// undo step; the handles go into the drawing's index ("codes"), so
-/// `CIV_CODES_TOEPASSEN` can replace them. `replace` removes the earlier
+/// `CIV_CODES_APPLY` can replace them. `replace` removes the earlier
 /// code output first.
 pub fn apply_codes(ctx: &Ctx, table: &CodeTable, points: &[SurveyPoint], source: &str, replace: bool) -> Result<String, String> {
     let lw = linework(table, points);
@@ -1021,7 +1021,7 @@ pub fn apply_codes(ctx: &Ctx, table: &CodeTable, points: &[SurveyPoint], source:
     ))
 }
 
-/// `CIV_CODES_TOEPASSEN`: the codes of the points in the drawing (the
+/// `CIV_CODES_APPLY`: the codes of the points in the drawing (the
 /// selected ones, when there are) again, in the order they were made. With
 /// all points the earlier code output is replaced.
 pub fn apply_in_drawing(opt: &super::CivielOptions, codes: CodeOptions) -> Result<String, String> {

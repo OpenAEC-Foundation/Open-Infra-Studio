@@ -20,17 +20,17 @@ Dordrecht found three to eleven CPTs at each):
 
 Steps
   site and terrain  GIS_SITE, CIV_TIN BRON=AHN (1 m).
-  BRO               GIS_Q_SONDERINGEN: the CPTs and boreholes of the site.
-  soil profile      CIV_GRONDPROFIEL along a line across the dike through the
+  BRO               GIS_Q_CPT: the CPTs and boreholes of the site.
+  soil profile      CIV_SOIL_PROFILE along a line across the dike through the
                     CPTs: columns, soil units, polygons, the stored soil
                     model, XDATA.
-  stability         CIV_STABILITEIT on a dike section along the same line:
+  stability         CIV_SLOPE_STABILITY on a dike section along the same line:
                     Bishop on the soil model with the default phreatic level;
                     the ordinary method of slices with a phreatic line and a
                     13 kPa traffic load on the crest; Bishop with layers given
                     by hand (LAGEN=) and own peat parameters (GROND=).
   settlement        at POLDER: the AHN TIN, a soil profile along the CPT row,
-                    CIV_ZETTING of a 1.5 m fill on it: Koppejan and Terzaghi,
+                    CIV_SETTLEMENT of a 1.5 m fill on it: Koppejan and Terzaghi,
                     the map, contours and the time curve.
   captures          the profile, the stability section, the settlement map
                     and the graph, the site, in target/e2e-geotechniek/.
@@ -165,7 +165,7 @@ def main():
             return d["driehoeken"] > 20000, f"{d['driehoeken']} triangles, {d['hoogte_min']:.2f} to {d['hoogte_max']:.2f} m NAP"
 
         def bro():
-            d = run.cmd("GIS_Q_SONDERINGEN")
+            d = run.cmd("GIS_Q_CPT")
             objs = d["objecten"]
             cpts = [o for o in objs if o["soort"] == "sondering"]
             s["cpts"] = cpts
@@ -182,18 +182,18 @@ def main():
             L = math.dist((ax, ay), (bx, by))
             ux, uy = (bx - ax) / L, (by - ay) / L
             p0, p1 = (ax - 30 * ux, ay - 30 * uy), (bx + 60 * ux, by + 60 * uy)
-            d = run.cmd(f"CIV_AS PI={p0[0]:.2f},{p0[1]:.2f};{p1[0]:.2f},{p1[1]:.2f} NAAM=Dijkprofiel")
+            d = run.cmd(f"CIV_ALIGNMENT PI={p0[0]:.2f},{p0[1]:.2f};{p1[0]:.2f},{p1[1]:.2f} NAAM=Dijkprofiel")
             s["axis"] = d["as"]
             s["line"] = (p0, p1)
             s["dir"] = (ux, uy)
             # The stability section: the same line, 30 m before the crest to 90 m behind it.
             q0, q1 = p0, (ax + 90 * ux, ay + 90 * uy)
-            e = run.cmd(f"CIV_AS PI={q0[0]:.2f},{q0[1]:.2f};{q1[0]:.2f},{q1[1]:.2f} NAAM=Dijkdoorsnede")
+            e = run.cmd(f"CIV_ALIGNMENT PI={q0[0]:.2f},{q0[1]:.2f};{q1[0]:.2f},{q1[1]:.2f} NAAM=Dijkdoorsnede")
             s["section"] = e["as"]
             return bool(d["as"]) and bool(e["as"]), f"profile axis {d['as']} from {hi['bro_id']} (mv {hi['maaiveld_m_nap']:.2f}) to {lo['bro_id']} (mv {lo['maaiveld_m_nap']:.2f}), {L + 90:.0f} m; section {e['as']}, 120 m"
 
         def profile():
-            d = run.cmd(f"CIV_GRONDPROFIEL AS={s['axis']} STRAAL=30 NAAM=Dijkprofiel")
+            d = run.cmd(f"CIV_SOIL_PROFILE AS={s['axis']} STRAAL=30 NAAM=Dijkprofiel")
             s["profile"] = d
             m = d["model"]
             cols = m["columns"]
@@ -211,7 +211,7 @@ def main():
                         f"base {m['base']:.2f} m NAP; skipped {len(d['skipped'])}")
 
         def stability():
-            d = run.cmd(f"CIV_STABILITEIT LIJN={s['section']} MODEL=Dijkprofiel NAAM=Dijkvak")
+            d = run.cmd(f"CIV_SLOPE_STABILITY LIJN={s['section']} MODEL=Dijkprofiel NAAM=Dijkvak")
             s["stab"] = d
             c = d["critical_circle"]
             sl = d["slices"]
@@ -236,7 +236,7 @@ def main():
             x0, z0 = surf[0]
             x1, z1 = surf[-1]
             line = f"{x0:.1f}:{min(z0, crest_z) - 1.0:.2f};{crest_x:.1f}:{crest_z - 2.0:.2f};{x1:.1f}:{z1 - 0.5:.2f}"
-            d = run.cmd(f"CIV_STABILITEIT LIJN={s['section']} MODEL=Dijkprofiel METHODE=fellenius "
+            d = run.cmd(f"CIV_SLOPE_STABILITY LIJN={s['section']} MODEL=Dijkprofiel METHODE=fellenius "
                         f"FREATISCH={line} BELASTING=13:{crest_x - 2:.1f}:{crest_x + 2:.1f} NAAM=Dijkvak_belast")
             s["stab2"] = d
             f2, f1 = d["factor_of_safety"], s["stab"]["other_method"]["minimum"]
@@ -246,7 +246,7 @@ def main():
         def stability_layers():
             # Layers given by hand: clay dike over soft clay, peat and Pleistocene sand.
             lay = "8:klei_zwak_zandig_matig;1:klei_schoon_slap;-2:veen_slap;-6:klei_zwak_zandig_slap;-12:zand_schoon_vast"
-            d = run.cmd(f"CIV_STABILITEIT LIJN={s['section']} LAGEN={lay} BASIS=-25 GROND=veen_slap:c=2,phi=17 NAAM=Dijkvak_lagen")
+            d = run.cmd(f"CIV_SLOPE_STABILITY LIJN={s['section']} LAGEN={lay} BASIS=-25 GROND=veen_slap:c=2,phi=17 NAAM=Dijkvak_lagen")
             s["stab3"] = d
             units = d["units"]
             ok = "veen_slap" in units and units["veen_slap"]["c"] == 2 and units["veen_slap"]["phi"] == 17 and 0.2 < d["factor_of_safety"] < 10
@@ -258,15 +258,15 @@ def main():
             ocs.run(f"GIS_SITE RD {x:.0f} {y:.0f} {w:.0f} {h:.0f} Moordrecht polder")
             time.sleep(2)
             t = run.cmd("CIV_TIN BRON=AHN AFSTAND=2")
-            b = run.cmd("GIS_Q_SONDERINGEN")
+            b = run.cmd("GIS_Q_CPT")
             c = [o for o in b["objecten"] if o["soort"] == "sondering" and (o["einddiepte_m"] or 0) > 5]
             a0, a1 = max(((p, q) for i, p in enumerate(c) for q in c[i + 1:]), key=lambda pq: math.dist((pq[0]["x"], pq[0]["y"]), (pq[1]["x"], pq[1]["y"])))
             (ax, ay), (bx, by) = (a0["x"], a0["y"]), (a1["x"], a1["y"])
             L = math.dist((ax, ay), (bx, by))
             ux, uy = (bx - ax) / L, (by - ay) / L
             p0, p1 = (ax - 20 * ux, ay - 20 * uy), (bx + 20 * ux, by + 20 * uy)
-            a = run.cmd(f"CIV_AS PI={p0[0]:.2f},{p0[1]:.2f};{p1[0]:.2f},{p1[1]:.2f} NAAM=Polderprofiel")
-            d = run.cmd(f"CIV_GRONDPROFIEL AS={a['as']} STRAAL=30 NAAM=Polderprofiel")
+            a = run.cmd(f"CIV_ALIGNMENT PI={p0[0]:.2f},{p0[1]:.2f};{p1[0]:.2f},{p1[1]:.2f} NAAM=Polderprofiel")
+            d = run.cmd(f"CIV_SOIL_PROFILE AS={a['as']} STRAAL=30 NAAM=Polderprofiel")
             s["polder_profile"] = d
             cols = d["model"]["columns"]
             # A 40 × 30 m fill on the middle of the CPT row.
@@ -281,7 +281,7 @@ def main():
         def settlement():
             area = ";".join(f"{x:.2f},{y:.2f}" for x, y in s["fill"])
             c = s["fill_centre"]
-            d = run.cmd(f"CIV_ZETTING GEBIED={area} HOOGTE=1.5 GAMMA=18 TIJD=30 CEL=2 PUNT={c[0]:.2f},{c[1]:.2f} MODEL=Polderprofiel")
+            d = run.cmd(f"CIV_SETTLEMENT GEBIED={area} HOOGTE=1.5 GAMMA=18 TIJD=30 CEL=2 PUNT={c[0]:.2f},{c[1]:.2f} MODEL=Polderprofiel")
             s["zet"] = d
             pt = d["point"]
             curve = [p["settlement_m"] for p in d["curve"]]
@@ -300,7 +300,7 @@ def main():
         def settlement_terzaghi():
             area = ";".join(f"{x:.2f},{y:.2f}" for x, y in s["fill"])
             c = s["fill_centre"]
-            d = run.cmd(f"CIV_ZETTING GEBIED={area} HOOGTE=1.5 TIJD=30 CEL=2 PUNT={c[0]:.2f},{c[1]:.2f} METHODE=terzaghi MODEL=Polderprofiel BANDEN=4")
+            d = run.cmd(f"CIV_SETTLEMENT GEBIED={area} HOOGTE=1.5 TIJD=30 CEL=2 PUNT={c[0]:.2f},{c[1]:.2f} METHODE=terzaghi MODEL=Polderprofiel BANDEN=4")
             s["zet2"] = d
             k = s["zet"]["point"]["primary_m"]
             t = d["point"]["primary_m"]
@@ -309,7 +309,7 @@ def main():
             return same and abs(t - k) / max(k, 1e-6) < 0.05, f"Terzaghi total {d['point']['total_m'] * 1000:.0f} mm, primary {t * 1000:.0f} mm against Koppejan primary {k * 1000:.0f} mm (same table, ln 10/C'p = Cc/(1+e0))"
 
         def units():
-            d = run.cmd("CIV_GRONDSOORTEN")
+            d = run.cmd("CIV_SOIL_UNITS")
             rows = {r["code"]: r for r in d["units"]}
             r = rows["klei_schoon_slap"]
             return len(rows) == 26 and r["gamma"] == 14 and r["cp"] == 7, f"{len(rows)} units; klei_schoon_slap γ {r['gamma']}, φ' {r['phi']}, C'p {r['cp']}, C's {r['cs']}"

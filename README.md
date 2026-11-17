@@ -186,11 +186,11 @@ Survey codes to linework and symbols, parcels, water drops, catchments and ponds
 
 | | |
 |---|---|
-| **Terrein + luchtfoto** (`CIV_FOTOTERREIN [CEL=] [FOTO=]`) | The ground of the project area as a 3D surface, anywhere in the world. Each cell takes the colour of the photo beneath it, quantised to a palette, with one mesh per colour; gaps (water, under buildings) are filled from their lowest neighbour. Heights: AHN in the Netherlands (cells of 2 m by default), elsewhere the Terrain Tiles mosaic, mostly US-government data (NASA SRTM, USGS 3DEP and GMTED2010, NOAA ETOPO; cells of 10 m by default, 5 m at best). Photo (`FOTO=auto`): the PDOK aerial photo (8 cm) in the Netherlands, the USGS National Map imagery (public domain) in the United States, and Sentinel-2 cloudless by EOX (10 m, the 2016 mosaic under CC BY 4.0) elsewhere. `FOTO=pdok`, `usgs`, `sentinel2` or `sentinel2-2017` … `sentinel2-2025` chooses one; the later Sentinel-2 years are CC BY-NC-SA 4.0 (non-commercial), and the command says so. Tested at Half Dome (Yosemite) and the Matterhorn. |
+| **Terrein + luchtfoto** (`CIV_AERIAL_TERRAIN [CEL=] [FOTO=]`) | The ground of the project area as a 3D surface, anywhere in the world. Each cell takes the colour of the photo beneath it, quantised to a palette, with one mesh per colour; gaps (water, under buildings) are filled from their lowest neighbour. Heights: AHN in the Netherlands (cells of 2 m by default), elsewhere the Terrain Tiles mosaic, mostly US-government data (NASA SRTM, USGS 3DEP and GMTED2010, NOAA ETOPO; cells of 10 m by default, 5 m at best). Photo (`FOTO=auto`): the PDOK aerial photo (8 cm) in the Netherlands, the USGS National Map imagery (public domain) in the United States, and Sentinel-2 cloudless by EOX (10 m, the 2016 mosaic under CC BY 4.0) elsewhere. `FOTO=pdok`, `usgs`, `sentinel2` or `sentinel2-2017` … `sentinel2-2025` chooses one; the later Sentinel-2 years are CC BY-NC-SA 4.0 (non-commercial), and the command says so. Tested at Half Dome (Yosemite) and the Matterhorn. |
 | **3D BAG** (`CIV_BAG3D`) | Every building from the [3D BAG](https://3dbag.nl) (TU Delft, CC BY 4.0) in LoD 1.2, 1.3 or 2.2, with BAG id, year of construction and height as object data. `STIJL=mooi` ("nice", the default): crisp planes, each roof in its colour on the aerial photo, walls by year of construction, monuments in stone, windows per storey and a plinth into the ground. `STIJL=maquette`: a white architectural model. `STIJL=realistisch` or `nlcs`: two plain colours, or the layer colours. |
-| **Waterpeil** (water level, `CIV_WATERPEIL PEIL=<m NAP>`) | A water surface at a level over the project area: what floods, and which share of the area lies lower (AHN ground). Again with another level moves the same surface. |
+| **Waterpeil** (water level, `CIV_WATER_LEVEL PEIL=<m NAP>`) | A water surface at a level over the project area: what floods, and which share of the area lies lower (AHN ground). Again with another level moves the same surface. |
 | **KLIC in 3D** (`CIV_KLIC3D [<delivery>] [VERGROOT=1]`) | The cables and pipes of a KLIC delivery as 3D tubes under the AHN ground, in IMKL colours on their NLCS layers: at the depth the delivery gives, otherwise at the usual cover depth per network type (data and low voltage 0.6 m, medium voltage and gas 0.8 m, water 1.0 m, high voltage 1.2 m, gravity sewer 2.0 m). The diameter comes from the delivery where present. Ducts and cable beds are grey sleeves; appurtenances are short columns. The object data says whether the depth came from the delivery or was assumed. Without a file, the delivery imported last on the GIS tab is used. `VERGROOT=` thickens the tubes for overview pictures. |
-| **Maaiveld doorzichtig** (see-through ground, `CIV_DOORZICHT [PCT=70] [ALLES] [UIT]`) | Makes every ground surface (terrain, BGT in 3D, water, TIN) transparent, so cables, pipes and soil columns can be seen beneath it from any angle. Buildings stay solid unless `ALLES` is given; `UIT` makes the ground opaque again. |
+| **Maaiveld doorzichtig** (see-through ground, `CIV_SEE_THROUGH [PCT=70] [ALLES] [UIT]`) | Makes every ground surface (terrain, BGT in 3D, water, TIN) transparent, so cables, pipes and soil columns can be seen beneath it from any angle. Buildings stay solid unless `ALLES` is given; `UIT` makes the ground opaque again. |
 | **CityGML/JSON** (`CIV_CITYGML <file> [STIJL=]`) | A 3D city model from a file: CityGML 1.0, 2.0 or 3.0 (`.gml`, `.xml`), IMGeo/BGT GML, CityJSON 1.x/2.0 (`.city.json`) or CityJSONSeq (`.city.jsonl`). The file's coordinate system (EPSG codes, RD + NAP 7415, the German AdV names such as `ETRS89_UTM32*DE_DHHN2016_NH`) is transformed to the project location, and only objects in the project area are kept while reading. Buildings get roof and wall meshes on the NLCS building layers, in the same styles as the 3D BAG (walls by year of construction when the file has it); the highest LoD per object is used. Roads, green, water, bridges, tunnels and land use go to the NLCS layer of their BGT counterpart, relief (TIN) to the triangulation layer. 2D objects (IMGeo) are made 3D like `CIV_BGT3D`: draped on the AHN, water at its level, buildings extruded. Tested with the NRW LoD2 tiles (Cologne, 56–97 MB, 1,600–4,500 buildings in 1–2 s) and 3D BAG CityJSON. |
 | **BGT naar 3D** (`CIV_BGT3D`) | The whole BGT of the project area in 3D, on its NLCS layers. Areas are draped on the ground: the edges every 3 m, a grid inside, and holes respected. Buildings and walls are extruded to the AHN surface, water lies at its level, bridges at deck height, lines are draped, and posts and trees become 3D symbols (trees with a round crown). Colours are natural by default (asphalt, paving, grass, water…); `KLEUR=nlcs` uses the layer colours. |
 
@@ -222,8 +222,8 @@ The BRO (Basisregistratie Ondergrond, the successor of DINOloket) holds the Dutc
 
 | | |
 |---|---|
-| **Sonderingen 3D** (`CIV_SONDERINGEN3D`, Civiel → 3D-model) | Every CPT and borehole in the project area becomes a vertical column from its surface level (m NAP) down: 12 sides for a CPT, 8 for a borehole, radius 0.4 m. Each soil layer is its own mesh in a conventional colour: sand yellow, silty sand pale yellow, silt/loam grey-green, clay green, peat brown, gravel orange, made ground grey. Beside each CPT, qc (red, east, 0.1 m per MPa) and Rf (blue, west, 0.25 m per %) are drawn as 3D lines. A plan symbol with the BRO id, surface level and end depth goes with each column. |
-| **Sonderingen en boringen (BRO)** (`GIS_Q_SONDERINGEN`, GIS → BGT · BRK · KLIC) | Only the plan symbols and labels, without fetching the measurements: a quick overview of what has been tested. |
+| **Sonderingen 3D** (`CIV_CPT3D`, Civiel → 3D-model) | Every CPT and borehole in the project area becomes a vertical column from its surface level (m NAP) down: 12 sides for a CPT, 8 for a borehole, radius 0.4 m. Each soil layer is its own mesh in a conventional colour: sand yellow, silty sand pale yellow, silt/loam grey-green, clay green, peat brown, gravel orange, made ground grey. Beside each CPT, qc (red, east, 0.1 m per MPa) and Rf (blue, west, 0.25 m per %) are drawn as 3D lines. A plan symbol with the BRO id, surface level and end depth goes with each column. |
+| **Sonderingen en boringen (BRO)** (`GIS_Q_CPT`, GIS → BGT · BRK · KLIC) | Only the plan symbols and labels, without fetching the measurements: a quick overview of what has been tested. |
 
 - **Soil type from a CPT:** each sample is classified with Robertson's (2010) soil behaviour type index, Isbt = √((3.47 − log₁₀(qc/pa))² + (log₁₀ Rf + 1.22)²), with pa = 0.1 MPa:
 
@@ -254,8 +254,8 @@ With `ID=<name>` the outcome is written to `<config>/OpenCADStudio/open-infra/ap
 
 ```
 GIS_SITE RD 104900 425350 1200 1000 Dordrecht binnenstad ID=s1
-CIV_AS PI=104350,424900;104800,424950;105300,424900 R=200 NAAM=Rondweg ID=a1     → data.as = handle
-CIV_ONTWERPPROFIEL AS=<handle> PVI=0:1.5;400:3.0;800:2.0 BOOG=120
+CIV_ALIGNMENT PI=104350,424900;104800,424950;105300,424900 R=200 NAAM=Rondweg ID=a1     → data.as = handle
+CIV_DESIGN_PROFILE AS=<handle> PVI=0:1.5;400:3.0;800:2.0 BOOG=120
 CIV_CORRIDOR AS=<handle> SJABLOON=weg RIJSTROOK=3.5 TALUD=3 DWARSPROFIELEN=ja ID=c1
 ```
 
@@ -294,10 +294,10 @@ The NLCS tables and the official NLCS-BGT 5.0 mapping are built in from [`assets
   - Each theme goes on its KL or RI object.
   - Cables and pipes get labels such as `G-LD Stedin 160 mm PVC`, with duplicates on parallel cables left out.
   - IMKL theme colours can be used instead of the NLCS colours.
-  - **Request** (`GIS_KLIC_AANVRAAG`, Dutch base data → *Prepare KLIC request*): an oriëntatieverzoek, graafmelding or calamiteitenmelding for the selected closed polyline (or the project's import extent). The location's nearest address and BAG id come from the PDOK Locatieserver. The request is checked locally against the Kadaster's rules for the B2B API: polygon (RD, simple, at most 50 points, within the Netherlands, 500 × 500 m or 2500 × 2500 m), required fields per kind, dates, lengths and code lists. It is written as the GIA-POST message `<drawing>_klic-aanvraag.json`, with the findings in `.md`. **Open Infra never sends it.** A KLIC notification is a paid, legal act in your name, and the B2B API needs a Kadaster OAuth client of your own. The requester's details (`klic-aanvrager.json`, written empty on first use) stay in the local config folder, never in the drawing.
-  - **Deliveries read in by themselves** (`GIS_KLIC_VOLGEN`, Dutch base data → *Read KLIC deliveries automatically*): every minute, a new `Levering_*.zip` (or extracted delivery) in the folder is drawn into the drawing the command was given in. The folder defaults to the previous one, else Downloads; `GIS_KLIC_VOLGEN MAP=<folder>` picks another. `GIS_KLIC_MAP [MAP=]` does one pass, and `GIS_KLIC_MAP VOLGEN=nee` stops. The drawing remembers which notifications it holds, so nothing is drawn twice.
+  - **Request** (`GIS_KLIC_REQUEST`, Dutch base data → *Prepare KLIC request*): an oriëntatieverzoek, graafmelding or calamiteitenmelding for the selected closed polyline (or the project's import extent). The location's nearest address and BAG id come from the PDOK Locatieserver. The request is checked locally against the Kadaster's rules for the B2B API: polygon (RD, simple, at most 50 points, within the Netherlands, 500 × 500 m or 2500 × 2500 m), required fields per kind, dates, lengths and code lists. It is written as the GIA-POST message `<drawing>_klic-aanvraag.json`, with the findings in `.md`. **Open Infra never sends it.** A KLIC notification is a paid, legal act in your name, and the B2B API needs a Kadaster OAuth client of your own. The requester's details (`klic-aanvrager.json`, written empty on first use) stay in the local config folder, never in the drawing.
+  - **Deliveries read in by themselves** (`GIS_KLIC_WATCH`, Dutch base data → *Read KLIC deliveries automatically*): every minute, a new `Levering_*.zip` (or extracted delivery) in the folder is drawn into the drawing the command was given in. The folder defaults to the previous one, else Downloads; `GIS_KLIC_WATCH MAP=<folder>` picks another. `GIS_KLIC_FOLDER [MAP=]` does one pass, and `GIS_KLIC_FOLDER VOLGEN=nee` stops. The drawing remembers which notifications it holds, so nothing is drawn twice.
 - **Object data:** each entity carries its source attributes as XDATA `OPENINFRA`, for example BGT `lokaal_id`, function and material, or the KLIC operator, diameter and material.
-- **BGT mutation (`GIS_BGT_MUTATIE`):** the design on NLCS layers back to the BGT, as IMGeo-GML 2.1.1 with a report beside the drawing.
+- **BGT mutation (`GIS_BGT_MUTATION`):** the design on NLCS layers back to the BGT, as IMGeo-GML 2.1.1 with a report beside the drawing.
   - Layers N become plan topography (IMGeo plus-status `plan`); R (or N with `GEREALISEERD`) is as built; V ends the BGT object. BGT objects keep their `lokaal_id`; new ones get `<bronhouder>.<uuid>`.
   - The NLCS-BGT mapping is used backwards. Where a layer stands for several BGT types or functions (asphalt: the BGT classes wegdeel, ondersteunend wegdeel or onbegroeid terreindeel, i.e. road section, auxiliary road section or unvegetated terrain), the type and function come from the object data, else from the BGT object the new surface covers most. What stays ambiguous is listed in the report, not exported.
   - Checks: self-intersections, at most 5000 points, coordinates to the millimetre, ring orientation, overlaps on ground level among the mutation and with BGT objects that stay.
@@ -306,7 +306,7 @@ The NLCS tables and the official NLCS-BGT 5.0 mapping are built in from [`assets
   - **Read:** an NLCS++ XML of any operator and version (the KLIC file button recognises it, or `GIS_NLCSPP_IMPORT <file>`) is drawn on its NLCS++ layers, with Z, every field as object data.
   - **Layer grammar both ways:** `<Status>-OI-KL-<parts>[-<toestand>]-<G|GV|S>`, e.g. `B-OI-KL-ET_LS_AANSLUITNET_400 V_4x10Cu as10-G`. The positions of attribute values follow the information model, the fixed parts the layers of the operators' DWG templates and the official example deliveries. On the official Enexis example, 594 of 785 objects get exactly the layer of the drawing; the others lie in that drawing on a layer their own XML attributes contradict.
   - **Code lists per operator** (Liander/Alliander, Enexis, Stedin), from their V12.1 XSDs: [`nlcspp/assets`](nlcspp/assets), regenerated with `tools/import_nlcspp.py`.
-  - **Check** (Netherlands → NLCS → *NLCS++ check*, `GIS_NLCSPP_CONTROLE [NETBEHEERDER=]`): the schema rules (required fields, code values, lengths, types, geometry) plus rule R.5 of the operators and whether each object lies on the layer its attributes ask for, as **Fout**, **Waarschuwing** and **Informerend**. On the official examples it finds exactly the code-value errors the operator's XSD finds. The operators' full content rules (Schematron, 39 rules of *Inhoudelijke validaties*) run with `tools/nlcspp_schematron.py` (SaxonC-HE from Python, no Java).
+  - **Check** (Netherlands → NLCS → *NLCS++ check*, `GIS_NLCSPP_CHECK [NETBEHEERDER=]`): the schema rules (required fields, code values, lengths, types, geometry) plus rule R.5 of the operators and whether each object lies on the layer its attributes ask for, as **Fout**, **Waarschuwing** and **Informerend**. On the official examples it finds exactly the code-value errors the operator's XSD finds. The operators' full content rules (Schematron, 39 rules of *Inhoudelijke validaties*) run with `tools/nlcspp_schematron.py` (SaxonC-HE from Python, no Java).
   - **Delivery** (*NLCS++ delivery*, `GIS_NLCSPP_EXPORT [NETBEHEERDER=] [PROJECTNUMMER=] [AANNEMER=] [TEKENINGTYPE=] [VOLGNUMMER=] [PAD=]`): V12.1 XML beside the drawing with the project reference over the project area; `Handle` is the CAD handle of each element and `ID` follows from it, so XML and DWG stay linked. Valid against the operator's XSD (tested with the official examples).
 - **Drawing sheet:**
   - The sheet format is chosen automatically (A3–A0 landscape).
@@ -318,12 +318,12 @@ The NLCS tables and the official NLCS-BGT 5.0 mapping are built in from [`assets
 
 - **Heights:** AHN4 from the PDOK WCS: DTM (ground level) and DSM (surface), 0.5 m float grids in m NAP. Larger areas are fetched in tiles or at a coarser cell size.
 - **Spot heights** go on `OG-HOOGTEPUNT`, with labels such as `+2,43`. **Contour lines** go on `OG-HOOGTELIJN_MINOR/MAJOR` (marching squares on a lightly smoothed grid). Both sit at their real height (Z).
-- **Length profile (`GIS_PROFIEL`):**
+- **Length profile (`GIS_PROFILE`):**
   - Select a polyline or line, or pick points and press Enter. Then pick the lower-left corner of the profile.
   - The profile draws the ground line on `GW-MAAIVELD`, optionally the surface line, and a height grid with NAP labels.
   - The profile band (`AL-PROFIELBALK`) lists distances and heights. The NAP line is drawn when it is in range, and the section line A–A' in plan.
   - The profile breaks where AHN has no ground level (buildings, water).
-- **Point cloud (`GIS_PUNTENWOLK`):**
+- **Point cloud (`GIS_POINT_CLOUD`):**
   - AHN5 or AHN4 is read as COPC (Cloud Optimized Point Cloud) from Het Waterschapshuis' 1 km tiles. Only the octree nodes in the import area are downloaded, at the chosen point spacing.
   - The cloud is coloured by class (ground, buildings, water, structures, other), by height or by RGB.
   - It is saved as `.rcs` next to the drawing and attached with POINTCLOUDATTACH.
@@ -363,7 +363,7 @@ GIS_SITE RD 104885 425320 300 250 Dordrecht, Grote Kerk
 GIS_Q_BGT
 GIS_Q_BRK
 GIS_KLIC_IMPORT <path>/Levering_21O072584_1.zip
-GIS_TEKENBLAD Situatie bestaand - BGT, kadaster en kabels en leidingen
+GIS_SHEET Situatie bestaand - BGT, kadaster en kabels en leidingen
 ```
 
 ## IFC 4.3 export
@@ -402,10 +402,10 @@ Open CAD Studio itself opens and saves the drawing (DWG and DXF, R13 to 2018) an
 
 | Kind | Formats | Command |
 |---|---|---|
-| **Vector GIS** | GeoJSON (`.geojson`, `.json`) · Shapefile (`.shp` with `.dbf`, `.shx`, `.prj`) · GeoPackage (`.gpkg`, pick a layer) · KML (`.kml`) · KMZ (`.kmz`) · GPX (`.gpx`) · GML (`.gml`, `.xml`) · CSV, TXT and TSV with coordinate columns (`x`/`y`, `lon`/`lat`) | `GIS_BESTAND <file>`, or *Maps & data → Files*; attributes become object data |
-| **Rasters and height grids** | GeoTIFF (`.tif`, `.tiff`), both images and float32 height grids · ASCII grid (`.asc`) · JPEG and PNG (`.jpg`, `.jpeg`, `.png`) with a world file (`.jgw`, `.pgw`, `.wld`) and `.prj` | `GIS_BESTAND <file>`; images go behind the vectors |
-| **Point clouds** | LAS and LAZ (`.las`, `.laz`), CRS from the file | `GIS_BESTAND <file>`; written to `.rcs` and attached |
-| **Survey points** | PNEZD, PENZD, NEZD and ENZD in `.csv`, `.txt`, `.xyz`, `.pnt` or `.asc`; separator, decimal comma and north/east order are detected | `CIV_PUNTEN_IMPORT` |
+| **Vector GIS** | GeoJSON (`.geojson`, `.json`) · Shapefile (`.shp` with `.dbf`, `.shx`, `.prj`) · GeoPackage (`.gpkg`, pick a layer) · KML (`.kml`) · KMZ (`.kmz`) · GPX (`.gpx`) · GML (`.gml`, `.xml`) · CSV, TXT and TSV with coordinate columns (`x`/`y`, `lon`/`lat`) | `GIS_FILE <file>`, or *Maps & data → Files*; attributes become object data |
+| **Rasters and height grids** | GeoTIFF (`.tif`, `.tiff`), both images and float32 height grids · ASCII grid (`.asc`) · JPEG and PNG (`.jpg`, `.jpeg`, `.png`) with a world file (`.jgw`, `.pgw`, `.wld`) and `.prj` | `GIS_FILE <file>`; images go behind the vectors |
+| **Point clouds** | LAS and LAZ (`.las`, `.laz`), CRS from the file | `GIS_FILE <file>`; written to `.rcs` and attached |
+| **Survey points** | PNEZD, PENZD, NEZD and ENZD in `.csv`, `.txt`, `.xyz`, `.pnt` or `.asc`; separator, decimal comma and north/east order are detected | `CIV_POINTS_IMPORT` |
 | **LandXML** | LandXML 1.x (`.xml`, `.landxml`): points (CgPoints), surfaces (TIN), alignments with lines, arcs and clothoids | `CIV_LANDXML` |
 | **3D city models** | CityGML 1.0, 2.0 and 3.0 (`.gml`, `.xml`, `.citygml`) · IMGeo/BGT GML · CityJSON 1.x and 2.0 (`.city.json`, `.json`) · CityJSONSeq (`.city.jsonl`, `.jsonl`) | `CIV_CITYGML <file>` |
 | **KLIC delivery** | IMKL 2.0: the delivery as `.zip`, or its GI `.xml` | `GIS_KLIC_IMPORT <file>`, or drop it on the workbench window |
@@ -417,17 +417,17 @@ Beside the drawing, unless the command is given a path.
 | Output | Format and name | Command |
 |---|---|---|
 | **Map images** | PNG, in the folder `<drawing>_GIS` | every WMS, tile and raster import |
-| **Point cloud** | `.rcs`, attached to the drawing | `GIS_PUNTENWOLK`, LAS/LAZ import |
-| **Survey points** | CSV as PENZD (default), PNEZD, NEZD or ENZD: `punten.csv` | `CIV_PUNTEN_EXPORT` |
+| **Point cloud** | `.rcs`, attached to the drawing | `GIS_POINT_CLOUD`, LAS/LAZ import |
+| **Survey points** | CSV as PENZD (default), PNEZD, NEZD or ENZD: `punten.csv` | `CIV_POINTS_EXPORT` |
 | **Mass balance** | CSV per corridor: `corridor_<name>.csv` | `CIV_CORRIDOR` |
-| **Quantities** | CSV: `hoeveelheden.csv`, or a table in the drawing. Double-drawn elements (the same shape on the same layer to the millimetre, either direction, with the same object data) count once and are listed; the window can select the copies. | `GIS_HOEVEELHEDEN_CSV`, `GIS_HOEVEELHEDEN_TABEL` |
-| **NLCS check** | Markdown report: `nlcs-controle.md` | `GIS_NLCS_RAPPORT` |
-| **NLCS++ delivery** | V12.1 XML `nlcspp.xml` and the check `nlcspp-controle.md` | `GIS_NLCSPP_EXPORT`, `GIS_NLCSPP_CONTROLE` |
+| **Quantities** | CSV: `hoeveelheden.csv`, or a table in the drawing. Double-drawn elements (the same shape on the same layer to the millimetre, either direction, with the same object data) count once and are listed; the window can select the copies. | `GIS_QUANTITIES_CSV`, `GIS_QUANTITIES_TABLE` |
+| **NLCS check** | Markdown report: `nlcs-controle.md` | `GIS_NLCS_REPORT` |
+| **NLCS++ delivery** | V12.1 XML `nlcspp.xml` and the check `nlcspp-controle.md` | `GIS_NLCSPP_EXPORT`, `GIS_NLCSPP_CHECK` |
 | **Geodata** | GeoPackage (project CRS; points, lines, areas) or GeoJSON (WGS 84), every element with its layer, NLCS meaning and object data: `export.gpkg` | `GIS_EXPORT`, Output → Export |
-| **Sewer for hydraulic models** | GWSW-HydX: the ten CSV files in `<sewer>_hydx/` | `CIV_RIOOL_EXPORT FORMAAT=HYDX` |
-| **BGT mutation** | IMGeo-GML 2.1.1 (`bgt-mutatie.gml`) with a Markdown report (`bgt-mutatie.md`) | `GIS_BGT_MUTATIE` |
+| **Sewer for hydraulic models** | GWSW-HydX: the ten CSV files in `<sewer>_hydx/` | `CIV_SEWER_EXPORT FORMAAT=HYDX` |
+| **BGT mutation** | IMGeo-GML 2.1.1 (`bgt-mutatie.gml`) with a Markdown report (`bgt-mutatie.md`) | `GIS_BGT_MUTATION` |
 | **DWG with GEODATA** | A copy of the drawing (`<drawing>_geodata.dwg`, or `.dxf`) with the AutoCAD GEODATA object for the project location (CRS, base point, units), as GEOGRAPHICLOCATION writes it, for AutoCAD, Civil 3D and BricsCAD. Checked with ezdxf. | `GIS_GEODATA [<path.dwg\|path.dxf>]`, Output → Export |
-| **KLIC request** | The Kadaster's GIA-POST message (`<drawing>_klic-aanvraag.json`) and the local check (`.md`); not sent | `GIS_KLIC_AANVRAAG` |
+| **KLIC request** | The Kadaster's GIA-POST message (`<drawing>_klic-aanvraag.json`) and the local check (`.md`); not sent | `GIS_KLIC_REQUEST` |
 | **IFC 4.3** | IFC4X3_ADD2: `<drawing>_IFC4X3.ifc` (see [IFC 4.3 export](#ifc-43-export)) | `GIS_IFC`, `CIV_IFC` |
 | **Command results** | JSON per call: `<config>/OpenCADStudio/open-infra/api/<ID>.json` | any `CIV_` or GIS data command with `ID=<name>` |
 
@@ -462,18 +462,20 @@ For the command line, scripts and automation:
 
 | Purpose | Commands |
 |---|---|
-| Workbench pages | `GIS_LOCATIE`, `GIS_KAART`, `GIS_WFS`, `GIS_SERVICES`, `GIS_OSM`, `GIS_PDOK`, `GIS_BGT`, `GIS_COORD`, `GIS_SERVERS` |
+| Workbench pages | `GIS_LOCATION`, `GIS_WMS`, `GIS_WFS`, `GIS_SERVICES`, `GIS_OSM`, `GIS_PDOK`, `GIS_BGT`, `GIS_COORD`, `GIS_SERVERS` |
 | Service catalogue | `GIS_SERVICES [ZOEK=<text>] [CATEGORIE=<c>] [TYPE=WMS\|WFS\|XYZ] [HIER \| LON= LAT=] [LIMIET=50]`, `GIS_SERVICE_LOAD DIENST=<id> [LAAG=<layer>]` |
-| In the drawing | `GIS_GEBIED` (pick the import area), `GIS_PUNT` (point info) |
+| In the drawing | `GIS_AREA` (pick the import area), `GIS_POINT_INFO` (point info) |
 | Location | `GIS_SITE RD <x> <y> [width] [height] [name]`, `GIS_SITE <lon> <lat> [width] [height] [EPSG:code] [name]`, `GIS_GEODATA [<path>]` (a copy with AutoCAD GEODATA) |
-| Map images | `GIS_Q_LUCHTFOTO`, `GIS_Q_KADASTER`, `GIS_Q_AHN`, `GIS_Q_OSMKAART`, `GIS_Q_SATELLIET`, `GIS_Q_NATURA2000`, `GIS_Q_GEOMORFOLOGIE`, `GIS_Q_BODEMKAART`, `GIS_Q_HISGIS`, `GIS_Q_TIJDREIS`; any server of the catalogue: `GIS_Q_SERVER <id> [LAAG=] [RES=m/px]`, Topotijdreis of any year: `GIS_Q_SERVER JAAR=1850` |
-| Vector data | `GIS_Q_BAG`, `GIS_Q_PERCELEN`, `GIS_Q_NWB`, `GIS_Q_HECTO`, `GIS_Q_SPOOR`, `GIS_Q_OSM` |
-| NLCS base data | `GIS_Q_BGT`, `GIS_Q_BRK`, `GIS_Q_SONDERINGEN [BRON=]` (BRO CPTs and boreholes in plan), `GIS_KLIC [file]` (opens the page), `GIS_KLIC_IMPORT <file>`, `GIS_KLIC_AANVRAAG [SOORT=orientatie\|graaf\|calamiteit] [REFERENTIE=] [START=yyyy-mm-dd] [EIND=] [WERK=proefsleuvenGraven,…] [OMSCHRIJVING=] [PAD=]`, `GIS_KLIC_MAP [MAP=] [VOLGEN=ja\|nee]`, `GIS_KLIC_VOLGEN [MAP=]`, `GIS_TEKENBLAD [subject]` |
-| AHN | `GIS_AHN` (page), `GIS_HOOGTEPUNTEN`, `GIS_HOOGTELIJNEN`, `GIS_PROFIEL`, `GIS_PUNTENWOLK` |
-| NLCS | `GIS_NLCS_CONTROLE`, `GIS_NLCS_RAPPORT`, `GIS_NLCS_HERSTEL`, `GIS_HOEVEELHEDEN`, `GIS_HOEVEELHEDEN_CSV`, `GIS_HOEVEELHEDEN_TABEL`, `GIS_BGT_MUTATIE [BRONHOUDER=G0505] [GEREALISEERD] [SELECTIE]` |
+| Map images | `GIS_Q_AERIAL`, `GIS_Q_CADASTRE`, `GIS_Q_AHN`, `GIS_Q_OSM_MAP`, `GIS_Q_SATELLITE`, `GIS_Q_NATURA2000`, `GIS_Q_GEOMORPHOLOGY`, `GIS_Q_SOIL_MAP`, `GIS_Q_HISGIS`, `GIS_Q_TIJDREIS`; any server of the catalogue: `GIS_Q_SERVER <id> [LAAG=] [RES=m/px]`, Topotijdreis of any year: `GIS_Q_SERVER JAAR=1850` |
+| Vector data | `GIS_Q_BAG`, `GIS_Q_PARCELS`, `GIS_Q_NWB`, `GIS_Q_HECTO`, `GIS_Q_RAIL`, `GIS_Q_OSM` |
+| NLCS base data | `GIS_Q_BGT`, `GIS_Q_BRK`, `GIS_Q_CPT [BRON=]` (BRO CPTs and boreholes in plan), `GIS_KLIC [file]` (opens the page), `GIS_KLIC_IMPORT <file>`, `GIS_KLIC_REQUEST [SOORT=orientatie\|graaf\|calamiteit] [REFERENTIE=] [START=yyyy-mm-dd] [EIND=] [WERK=proefsleuvenGraven,…] [OMSCHRIJVING=] [PAD=]`, `GIS_KLIC_FOLDER [MAP=] [VOLGEN=ja\|nee]`, `GIS_KLIC_WATCH [MAP=]`, `GIS_SHEET [subject]` |
+| AHN | `GIS_AHN` (page), `GIS_SPOT_HEIGHTS`, `GIS_CONTOURS`, `GIS_PROFILE`, `GIS_POINT_CLOUD` |
+| NLCS | `GIS_NLCS_CHECK`, `GIS_NLCS_REPORT`, `GIS_NLCS_REPAIR`, `GIS_QUANTITIES`, `GIS_QUANTITIES_CSV`, `GIS_QUANTITIES_TABLE`, `GIS_BGT_MUTATION [BRONHOUDER=G0505] [GEREALISEERD] [SELECTIE]` |
 | IFC 4.3 | `GIS_IFC`, `CIV_IFC` `[BESTAND=<pad>] [SELECTIE] [TEKST=nee]` |
-| Civiel tab | `CIV_PUNTEN_IMPORT`, `CIV_PUNT`, `CIV_PUNTEN_EXPORT`, `CIV_LANDXML`, `CIV_TIN`, `CIV_HOOGTELIJNEN`, `CIV_ANALYSE`, `CIV_VOLUME`, `CIV_AS`, `CIV_AS_OFFSET`, `CIV_STATION`, `CIV_LENGTEPROFIEL`, `CIV_ONTWERPPROFIEL`, `CIV_DWARSPROFIELEN`, `CIV_CORRIDOR`, `CIV_BAG3D`, `CIV_FOTOTERREIN`, `CIV_BGT3D`, `CIV_WATERPEIL`, `CIV_CITYGML`, `CIV_KLIC3D`, `CIV_DOORZICHT`, `CIV_SONDERINGEN3D`, `CIV_3DMODEL`, `CIV_INFO`, `CIV_INSTELLINGEN` |
+| Civiel tab | `CIV_POINTS_IMPORT`, `CIV_POINT`, `CIV_POINTS_EXPORT`, `CIV_LANDXML`, `CIV_TIN`, `CIV_CONTOURS`, `CIV_ELEVATION_ANALYSIS`, `CIV_VOLUME`, `CIV_ALIGNMENT`, `CIV_ALIGNMENT_OFFSET`, `CIV_STATION`, `CIV_LONG_PROFILE`, `CIV_DESIGN_PROFILE`, `CIV_CROSS_SECTIONS`, `CIV_CORRIDOR`, `CIV_BAG3D`, `CIV_AERIAL_TERRAIN`, `CIV_BGT3D`, `CIV_WATER_LEVEL`, `CIV_CITYGML`, `CIV_KLIC3D`, `CIV_SEE_THROUGH`, `CIV_CPT3D`, `CIV_3DMODEL`, `CIV_INFO`, `CIV_SETTINGS` |
 | Help | `GIS_HELP`, `CIV_HELP` |
+
+Command names are English. The older Dutch names of the same commands keep working as aliases, so existing scripts, macros and agents run unchanged; [`src/commands.rs`](src/commands.rs) lists every alias with the command it runs.
 
 ## Coordinate systems and units
 

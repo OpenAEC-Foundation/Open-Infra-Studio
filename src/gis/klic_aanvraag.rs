@@ -5,7 +5,7 @@
 //! Kadaster's own rules before anything is sent.
 //!
 //! Sending is a paid, legal act in the requester's name: Open Infra only
-//! prepares and checks the message (`GIS_KLIC_AANVRAAG`) and never sends it
+//! prepares and checks the message (`GIS_KLIC_REQUEST`) and never sends it
 //! by itself. The message follows the API's Swagger description
 //! (service10.kadaster.nl/klic/api-docs, gia-post-api.json) and the
 //! examples of the specification. The requester's details stay in the local config folder

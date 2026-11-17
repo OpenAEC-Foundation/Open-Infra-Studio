@@ -1,4 +1,4 @@
-//! KLIC deliveries read in by themselves: `GIS_KLIC_MAP` reads every delivery
+//! KLIC deliveries read in by themselves: `GIS_KLIC_FOLDER` reads every delivery
 //! in a folder (the Kadaster's `Levering_*.zip`, or an extracted folder's
 //! `GI_gebiedsinformatielevering_*.xml`) that this drawing has not read yet,
 //! and with `VOLGEN=ja` keeps looking (every minute, while Open CAD Studio
@@ -19,7 +19,7 @@ use crate::lang::tr;
 
 const RECORD: &str = "KLIC_GELEZEN";
 
-/// The one folder being followed; a new `GIS_KLIC_MAP` (or `VOLGEN=nee`) ends the previous.
+/// The one folder being followed; a new `GIS_KLIC_FOLDER` (or `VOLGEN=nee`) ends the previous.
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// The candidates in a folder, oldest first: zips, and the delivery XML of
@@ -77,7 +77,7 @@ fn pass(site: &Site, dir: &Path, tried: &mut HashSet<PathBuf>) -> Result<Vec<Str
     Ok(lines)
 }
 
-/// `GIS_KLIC_MAP [MAP=<map>] [VOLGEN=ja|nee]`.
+/// `GIS_KLIC_FOLDER [MAP=<map>] [VOLGEN=ja|nee]`.
 pub fn command(site: Site, dir: Option<PathBuf>, follow: Option<bool>) -> Result<String, String> {
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     if follow == Some(false) && dir.is_none() {
@@ -108,7 +108,7 @@ pub fn command(site: Site, dir: Option<PathBuf>, follow: Option<bool>) -> Result
             Ok(_) => {}
             Err(e) => {
                 // The drawing closed (or cannot be written): stop following.
-                bridge::error(&format!("GIS_KLIC_MAP {}: {e}", tr("gestopt", "stopped")));
+                bridge::error(&format!("GIS_KLIC_FOLDER {}: {e}", tr("gestopt", "stopped")));
                 return;
             }
         }

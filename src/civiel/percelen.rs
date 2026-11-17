@@ -530,7 +530,7 @@ fn arc_points(a: XY, b: XY, bulge: f64, tol: f64) -> Vec<XY> {
 
 /// A closed outline or an open line, in drawing coordinates, with `tol` the
 /// largest distance (drawing units) between an arc segment and its chords:
-/// arcs count with their segment, as `CIV_HOEVEELHEDEN` measures them. An
+/// arcs count with their segment, as `GIS_QUANTITIES` measures them. An
 /// infinite `tol` gives the vertices only.
 fn outline(e: &EntityType, tol: f64) -> Option<(Vec<XY>, bool)> {
     match e {
@@ -604,7 +604,7 @@ pub struct Request {
     pub id: Option<String>,
 }
 
-/// `CIV_PERCELEN`: split the plot into parcels and draw them.
+/// `CIV_PARCELS`: split the plot into parcels and draw them.
 pub fn parcels(opt: &super::CivielOptions, req: Request) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let f = ctx.f;
@@ -759,7 +759,7 @@ pub fn parcels(opt: &super::CivielOptions, req: Request) -> Result<String, Strin
     ))
 }
 
-/// `CIV_PERCEEL_INFO`: area, perimeter and frontage of the selected parcels
+/// `CIV_PARCEL_INFO`: area, perimeter and frontage of the selected parcels
 /// (closed polylines), or of `PERCEEL=` handles.
 pub fn info(opt: &super::CivielOptions, handles: Vec<Handle>, street: Option<Handle>) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
@@ -935,7 +935,7 @@ mod tests {
         let (r, th) = (40.0, 60f64.to_radians());
         let exact = 1200.0 + r * r / 2.0 * (th - th.sin());
         let e = arched_plot();
-        // CIV_HOEVEELHEDEN measures the same polyline with its arc.
+        // GIS_QUANTITIES measures the same polyline with its arc.
         assert!((crate::hoeveelheden::measure(&e).1 - exact).abs() < 1e-6);
         let (ring, closed) = outline(&e, ARC_TOLERANCE).unwrap();
         assert!(closed);

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end test of plan production in Open CAD Studio: sheet sets along an
-alignment (CIV_BLADEN, CIV_BLADEN_PDF) and labels that follow their source
-(CIV_LABELS, CIV_LABELS_BIJWERKEN).
+alignment (CIV_SHEETS, CIV_SHEETS_PDF) and labels that follow their source
+(CIV_LABELS, CIV_LABELS_UPDATE).
 
 Runs its own Open CAD Studio with an isolated configuration folder
 (``XDG_CONFIG_HOME`` under target/e2e-bladen), so the plugins installed for
@@ -18,7 +18,7 @@ Steps
   labels       stationing, curve data, PVIs and grades; a TIN from AHN with
                spot heights and slope arrows; survey points with labels.
   follow       the alignment moved and a survey point deleted:
-               CIV_LABELS_BIJWERKEN redraws the axis labels at the new place
+               CIV_LABELS_UPDATE redraws the axis labels at the new place
                and removes the point's labels; the profile labels stay.
   save         QSAVEAS target/e2e-bladen/bladen.dwg.
 
@@ -169,17 +169,17 @@ def main():
             if not args.zonder_bgt:
                 ocs.run("GIS_Q_BGT")
                 ocs.settle(minimum_seconds=3.0, timeout=600, first_change=240)
-            a = run.civ(f"CIV_AS PI={PIS} R={RADII} NAAM=Rondweg SCHAAL=1000", "as")
+            a = run.civ(f"CIV_ALIGNMENT PI={PIS} R={RADII} NAAM=Rondweg SCHAAL=1000", "as")
             state["as"] = a["data"]["as"]
             state["len"] = a["data"]["lengte_m"]
             # Placed well away from the plan windows of the sheets.
-            run.civ(f"CIV_LENGTEPROFIEL AS={state['as']} PLAATS=106200,425300 SCHAAL=1000", "lp", 900)
+            run.civ(f"CIV_LONG_PROFILE AS={state['as']} PLAATS=106200,425300 SCHAAL=1000", "lp", 900)
             n = state["len"]
-            run.civ(f"CIV_ONTWERPPROFIEL AS={state['as']} PVI=0:1.0;300:2.6;650:1.4;{n:.2f}:2.2 BOOG=120 SCHAAL=1000", "op")
+            run.civ(f"CIV_DESIGN_PROFILE AS={state['as']} PVI=0:1.0;300:2.6;650:1.4;{n:.2f}:2.2 BOOG=120 SCHAAL=1000", "op")
             return 900 < n < 1200, f"alignment {state['as']} of {n:.1f} m, entities {ocs.entities()}"
 
         def sheets(paper, scale, rid, expect):
-            r = run.civ(f"CIV_BLADEN AS={state['as']} FORMAAT={paper} SCHAAL={scale} VSCHAAL=10", rid, 900)
+            r = run.civ(f"CIV_SHEETS AS={state['as']} FORMAAT={paper} SCHAAL={scale} VSCHAAL=10", rid, 900)
             d = r["data"]
             state[rid] = d
             n, layouts, matches = d["bladen"], d["layouts"], d["aansluitlijnen"]
@@ -209,7 +209,7 @@ def main():
             return len(done) >= 3, ", ".join(done)
 
         def pdf():
-            r = run.civ(f"CIV_BLADEN_PDF AS={state['as']} MAP={pdf_dir}", "pdf", 900)
+            r = run.civ(f"CIV_SHEETS_PDF AS={state['as']} MAP={pdf_dir}", "pdf", 900)
             files = r["data"]["pdf"]
             want = state["b1"]["bladen"] + state["b2"]["bladen"]
             pngs = []
@@ -228,7 +228,7 @@ def main():
             r2 = run.civ("CIV_LABELS SOORT=hoogtes RASTER=25 SCHAAL=500", "l2")
             r3 = run.civ("CIV_LABELS SOORT=hoogtes PUNTEN=104860,425300;104900,425340 SCHAAL=500", "l3")
             r4 = run.civ("CIV_LABELS SOORT=afschot RASTER=20 SCHAAL=500", "l4")
-            run.civ("CIV_PUNT 104850,425290 104920,425350 NR=101 CODE=PUT LABELS=nee", "pt")
+            run.civ("CIV_POINT 104850,425290 104920,425350 NR=101 CODE=PUT LABELS=nee", "pt")
             r5 = run.civ("CIV_LABELS SOORT=punten SCHAAL=500", "l5")
             kinds = r1["data"]["soorten"]
             ok = all(kinds.get(k, 0) > 0 for k in ("stationering", "bogen", "pvi", "hellingen"))
@@ -255,14 +255,14 @@ def main():
             if gone:
                 ocs.call("/entities", {"handles": [gone], "document_id": ocs.doc()}, method="DELETE")
             time.sleep(1)
-            r = run.civ("CIV_LABELS_BIJWERKEN SCHAAL=1000", "lb")
+            r = run.civ("CIV_LABELS_UPDATE SCHAAL=1000", "lb")
             after = station_labels()
             moved = [k for k in before if k in after and before[k] and after[k] and abs(after[k][0] - before[k][0] - 10.0) < 1e-3 and abs(after[k][1] - before[k][1] - 5.0) < 1e-3]
             pvi_after = len([e for e in run.on("-AM-AS-T") if xd(ocs, e["handle"]).get("label") == "pvi"])
             d = r["data"]
             ok = d["bijgewerkt"] >= 2 and d["verwijderd"] >= 1 and len(moved) == len(before) > 0 and pvi_after == pvi_before
             # Nothing changed since: a second run touches nothing.
-            r2 = run.civ("CIV_LABELS_BIJWERKEN SCHAAL=1000", "lb2")
+            r2 = run.civ("CIV_LABELS_UPDATE SCHAAL=1000", "lb2")
             ok &= r2["data"]["bijgewerkt"] == 0
             return ok, f"{d}; {len(moved)}/{len(before)} station labels moved by (10, 5); PVI labels {pvi_before}→{pvi_after}; again: {r2['data']}"
 
@@ -301,7 +301,7 @@ def main():
             want = state["b1"]["layouts"] + state["b2"]["layouts"]
             ok = all(l in layouts for l in want)
             # The labels' object data and index came along: nothing to redo.
-            r = run.civ("CIV_LABELS_BIJWERKEN SCHAAL=1000", "lb3")
+            r = run.civ("CIV_LABELS_UPDATE SCHAAL=1000", "lb3")
             ok &= r["data"]["bijgewerkt"] == 0 and r["data"]["ongewijzigd"] > 0
             note = f"; lossy: {lossy}" if lossy else ""
             return ok, f"{path.name} {path.stat().st_size // 1024} kB; reopened: {len(layouts)} layouts ({sum(l in layouts for l in want)}/{len(want)} sheets), labels {r['data']}{note}"

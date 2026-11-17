@@ -12,7 +12,7 @@ AHN ground between about −1 and +1.6 m NAP, with ditches and ponds.
 
 Steps
   terrain        CIV_TIN BRON=AHN: the existing ground (B).
-  feature lines  CIV_KANTLIJN from the ground (with grade breaks), from a start
+  feature lines  CIV_FEATURE_LINE from the ground (with grade breaks), from a start
                  level and grades, and from fixed levels; the four edits
                  (level, raise, height point, grade) keep the same handle.
   plateaus       two building plots: one in fill with a fall, one from a
@@ -146,7 +146,7 @@ def main():
             return d["driehoeken"] > 20000, f"{d['driehoeken']} triangles, {d['hoogte_min']:.2f} to {d['hoogte_max']:.2f} m"
 
         def feature_surface():
-            d = run.cmd(f"CIV_KANTLIJN PUNTEN={pts((100, -80), (140, -80), (140, -40))} HOOGTE=MAAIVELD TUSSENPUNTEN=ja NAAM=Sloot")
+            d = run.cmd(f"CIV_FEATURE_LINE PUNTEN={pts((100, -80), (140, -80), (140, -40))} HOOGTE=MAAIVELD TUSSENPUNTEN=ja NAAM=Sloot")
             s["kl_ground"] = d
             e = ocs.entity(d["kantlijn"])
             xd = " ".join(map(str, ocs.xdata(d["kantlijn"])))
@@ -154,29 +154,29 @@ def main():
             return ok, f"{d['punten']} points (grade breaks), {d['z_min']:.2f} to {d['z_max']:.2f} m, {e.get('type')} on {d['laag']}"
 
         def feature_grades():
-            d = run.cmd(f"CIV_KANTLIJN PUNTEN={pts((100, -95), (130, -95), (150, -95))} START=0.5 HELLING=1;-2 NAAM=Rand")
+            d = run.cmd(f"CIV_FEATURE_LINE PUNTEN={pts((100, -95), (130, -95), (150, -95))} START=0.5 HELLING=1;-2 NAAM=Rand")
             s["kl"] = d
             z = d["hoogtes"]
             return close(z[1], 0.8) and close(z[2], 0.4), f"heights {[round(v, 3) for v in z]} (0.5 + 1 % × 30 m − 2 % × 20 m)"
 
         def feature_levels():
-            d = run.cmd(f"CIV_KANTLIJN PUNTEN={pts((100, -60), (120, -60), (140, -60), (140, -50))} PEILEN=1:0.2;3:0.6")
+            d = run.cmd(f"CIV_FEATURE_LINE PUNTEN={pts((100, -60), (120, -60), (140, -60), (140, -50))} PEILEN=1:0.2;3:0.6")
             z = d["hoogtes"]
             return close(z[1], 0.4) and close(z[3], 0.6), f"heights {[round(v, 3) for v in z]}"
 
         def edits():
             h = s["kl"]["kantlijn"]
             notes = []
-            d = run.cmd(f"CIV_KANTLIJN_VERHOOG KANTLIJN={h} DZ=0.25")
+            d = run.cmd(f"CIV_FEATURE_LINE_RAISE KANTLIJN={h} DZ=0.25")
             ok = close(d["hoogtes"][0], 0.75) and d["kantlijn"] == h
             notes.append(f"raise → {d['hoogtes'][0]:.2f}")
-            d = run.cmd(f"CIV_KANTLIJN_PEIL KANTLIJN={h} PUNT=2 Z=1.4")
+            d = run.cmd(f"CIV_FEATURE_LINE_LEVEL KANTLIJN={h} PUNT=2 Z=1.4")
             ok &= close(d["hoogtes"][1], 1.4)
             notes.append(f"level → {d['hoogtes'][1]:.2f}")
-            d = run.cmd(f"CIV_KANTLIJN_PUNT KANTLIJN={h} BIJ={rd(115, -95)}")
+            d = run.cmd(f"CIV_FEATURE_LINE_POINT KANTLIJN={h} BIJ={rd(115, -95)}")
             ok &= d["punten"] == 4 and close(d["hoogtes"][1], (0.75 + 1.4) / 2)
             notes.append(f"point → {d['punten']} points, {d['hoogtes'][1]:.3f}")
-            d = run.cmd(f"CIV_KANTLIJN_HELLING KANTLIJN={h} VAN=1 TOT=4 HELLING=1.5")
+            d = run.cmd(f"CIV_FEATURE_LINE_GRADE KANTLIJN={h} VAN=1 TOT=4 HELLING=1.5")
             ok &= close(d["hoogtes"][3], 0.75 + 0.015 * 50) and close(d["hoogtes"][1], 0.75 + 0.015 * 15)
             ok &= d["kantlijn"] == h
             notes.append(f"grade → {[round(v, 3) for v in d['hoogtes']]}")
@@ -186,7 +186,7 @@ def main():
 
         def plateau_fill():
             # Ground level under the plot first, from a feature line on it.
-            g = run.cmd(f"CIV_KANTLIJN PUNTEN={pts((95, -5), (125, -5), (125, 25), (95, 25))} GESLOTEN=ja NAAM=Kavel_1_maaiveld")
+            g = run.cmd(f"CIV_FEATURE_LINE PUNTEN={pts((95, -5), (125, -5), (125, 25), (95, 25))} GESLOTEN=ja NAAM=Kavel_1_maaiveld")
             level = round(g["z_max"] + 0.6, 2)
             s["p1_level"] = level
             d = run.cmd(f"CIV_PLATEAU PUNTEN={pts((95, -5), (125, -5), (125, 25), (95, 25))} PEIL={level} AFSCHOT=1 RICHTING=Z TALUD_AF=1:2 TALUD_OP=1:3 NAAM=Kavel_1")
@@ -200,7 +200,7 @@ def main():
             corners = [(95, -45), (125, -45), (125, -15), (110, -15), (110, -30), (95, -30)]
             r = ocs.call("/entities", {"entities": [{"type": "LwPolyline", "vertices": [[SITE[0] + x, SITE[1] + y] for x, y in corners], "closed": True}], "document_id": ocs.doc()})
             h = r["result"]["handles"][0]
-            g = run.cmd(f"CIV_KANTLIJN LIJN={h} NAAM=Kavel_2_maaiveld")
+            g = run.cmd(f"CIV_FEATURE_LINE LIJN={h} NAAM=Kavel_2_maaiveld")
             level = round((g["z_min"] + g["z_max"]) / 2, 2)
             d = run.cmd(f"CIV_PLATEAU LIJN={h} PEIL={level} TALUD=1:2 NAAM=Kavel_2")
             s["p2"] = d
@@ -208,12 +208,12 @@ def main():
             return ok, f"L-shaped plot at {level}: cut {d['afgraven_m3']:.1f} m³, fill {d['ophogen_m3']:.1f} m³, design surface {d['ontwerp_driehoeken']} triangles"
 
         def slope():
-            d = run.cmd(f"CIV_TALUD LIJN={s['kl']['kantlijn']} ZIJDE=RECHTS NAAR=PEIL PEIL=-0.5 TALUD=1:2 NAAM=Talud_rand")
+            d = run.cmd(f"CIV_SLOPE LIJN={s['kl']['kantlijn']} ZIJDE=RECHTS NAAR=PEIL PEIL=-0.5 TALUD=1:2 NAAM=Talud_rand")
             s["t1"] = d
             return d["oppervlak_talud_m2"] > 10 and d["ontwerp_driehoeken"] > s["p2"]["ontwerp_driehoeken"], f"{d['oppervlak_talud_m2']:.0f} m², cut {d['afgraven_m3']:.1f} m³, fill {d['ophogen_m3']:.1f} m³"
 
         def contours():
-            d = run.cmd("CIV_HOOGTELIJNEN OPPERVLAK=N INTERVAL=0.1")
+            d = run.cmd("CIV_CONTOURS OPPERVLAK=N INTERVAL=0.1")
             return d.get("elementen", 0) > 0, d["_message"][:120]
 
         def volume_tin():
@@ -236,19 +236,19 @@ def main():
             return ok, f"CIV_VOLUME grid 0.5 m: cut {d['afgraven_m3']:.2f}, fill {d['ophogen_m3']:.2f} m³ against TIN {t['afgraven_m3']:.2f} / {t['ophogen_m3']:.2f}"
 
         def corridor():
-            a = run.cmd(f"CIV_AS PI={pts((-105, -95), (-100, 0), (-115, 95))} R=200 NAAM=Polderweg")
+            a = run.cmd(f"CIV_ALIGNMENT PI={pts((-105, -95), (-100, 0), (-115, 95))} R=200 NAAM=Polderweg")
             s["as"] = a
-            lp = run.cmd(f"CIV_LENGTEPROFIEL AS={a['as']}")
+            lp = run.cmd(f"CIV_LONG_PROFILE AS={a['as']}")
             mean = (lp["maaiveld_min"] + lp["maaiveld_max"]) / 2
             L = a["lengte_m"]
             pvi = f"0:{mean + 0.5:.2f};{L / 2:.1f}:{mean - 0.45:.2f};{L:.1f}:{mean + 0.5:.2f}"
-            run.cmd(f"CIV_ONTWERPPROFIEL AS={a['as']} PVI={pvi} BOOG=60")
+            run.cmd(f"CIV_DESIGN_PROFILE AS={a['as']} PVI={pvi} BOOG=60")
             c = run.cmd(f"CIV_CORRIDOR AS={a['as']} SJABLOON=weg FREQUENTIE=10")
             s["c"] = c
             return c["dwarsprofielen"] > 10 and Path(c["csv"]).exists(), f"{L:.0f} m, {c['dwarsprofielen']} sections, cut {c['afgraven_m3']:.0f} m³, fill {c['ophogen_m3']:.0f} m³"
 
         def mass_haul():
-            d = run.cmd(f"CIV_GRONDBALANS AS={s['as']['as']} VRIJ=50 FACTOR=0.9 HERGEBRUIK=80")
+            d = run.cmd(f"CIV_MASS_HAUL AS={s['as']['as']} VRIJ=50 FACTOR=0.9 HERGEBRUIK=80")
             s["gb"] = d
             c = s["c"]
             ok = len(d["stations"]) == c["dwarsprofielen"] and close(d["afgraven_m3"], c["afgraven_m3"], 0.001, 1.0) and close(d["ophogen_m3"], c["ophogen_m3"], 0.001, 1.0)
@@ -263,7 +263,7 @@ def main():
             )
 
         def mass_haul_tin():
-            d = run.cmd(f"CIV_GRONDBALANS AS={s['as']['as']} BRON=TIN VRIJ=50 FACTOR=0.9 HERGEBRUIK=80 PLAATS={rd(-150, -400)}")
+            d = run.cmd(f"CIV_MASS_HAUL AS={s['as']['as']} BRON=TIN VRIJ=50 FACTOR=0.9 HERGEBRUIK=80 PLAATS={rd(-150, -400)}")
             c = s["gb"]
             ok = close(d["afgraven_m3"], c["afgraven_m3"], 0.03, 5.0) and close(d["ophogen_m3"], c["ophogen_m3"], 0.03, 5.0)
             return ok, f"measured on the TINs: cut {d['afgraven_m3']:.0f}, fill {d['ophogen_m3']:.0f} m³ against the corridor list {c['afgraven_m3']:.0f} / {c['ophogen_m3']:.0f}"

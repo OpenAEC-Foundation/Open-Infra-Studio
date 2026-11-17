@@ -1,6 +1,6 @@
-//! Geotechnics: soil profiles from CPTs and boreholes (`CIV_GRONDPROFIEL`),
+//! Geotechnics: soil profiles from CPTs and boreholes (`CIV_SOIL_PROFILE`),
 //! slope stability of dikes, embankments and ditch banks
-//! (`CIV_STABILITEIT`) and the settlement of fills (`CIV_ZETTING`).
+//! (`CIV_SLOPE_STABILITY`) and the settlement of fills (`CIV_SETTLEMENT`).
 //!
 //! A calculation aid, not a stamped design: the defaults come from a cited
 //! table and are marked as estimates where no source holds; the engineer
@@ -231,7 +231,7 @@ pub fn subsoil(ctx: &Ctx, args: &SoilArgs, near: &[XY], as_line: bool, progress:
                     "{} {} m{why}; {}",
                     tr("geen sonderingen of boringen in de BRO binnen", "no CPTs or boreholes in the BRO within"),
                     args.radius,
-                    tr("geef LAGEN=bovenkant:grondsoort;… of maak eerst een grondprofiel (CIV_GRONDPROFIEL)", "give LAGEN=top:unit;… or make a soil profile first (CIV_GRONDPROFIEL)")
+                    tr("geef LAGEN=bovenkant:grondsoort;… of maak eerst een grondprofiel (CIV_SOIL_PROFILE)", "give LAGEN=top:unit;… or make a soil profile first (CIV_SOIL_PROFILE)")
                 ));
             }
             let base = columns.iter().map(|c| c.end).fold(f64::MAX, f64::min);
@@ -362,7 +362,7 @@ pub fn unit_line(code: &str, p: &soil::Params) -> String {
     format!("{name} — γ {}/{} kN/m³, φ' {}°, c' {} kPa, C'p {}{cs}", num(p.gamma, 1), num(p.gamma_sat, 1), num(p.phi, 1), num(p.c, 1), num(p.cp, 0))
 }
 
-/// The table of soil units for `CIV_GRONDSOORTEN`.
+/// The table of soil units for `CIV_SOIL_UNITS`.
 pub fn list_units() -> Result<String, String> {
     let rows: Vec<serde_json::Value> = soil::TABLE
         .iter()

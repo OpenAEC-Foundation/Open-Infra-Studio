@@ -4,7 +4,7 @@ The Civiel tab's corridor sweeps an assembly (profieltype) along an axis and its
 
 - the parts library, with pavement layers;
 - assemblies as JSON files, with conditions and targets;
-- junctions (`CIV_KRUISPUNT`) and roundabouts (`CIV_ROTONDE`);
+- junctions (`CIV_JUNCTION`) and roundabouts (`CIV_ROUNDABOUT`);
 - where every design value comes from.
 
 All commands also run from scripts and agents: `KEY=value` arguments, coordinates `x,y` in project coordinates, and `ID=<name>` for a JSON result in `<config>/OpenCADStudio/open-infra/api/<name>.json`.
@@ -14,10 +14,10 @@ All commands also run from scripts and agents: `KEY=value` arguments, coordinate
 | Command | Arguments | What it does |
 |---|---|---|
 | `CIV_CORRIDOR` | `AS=<handle>` `PROFIELTYPE=<name>` or `<file.json>` (`SJABLOON=` still works), `NIVEAU=` or `BOVEN=`, `VAN=` and `TOT=` (stations), `DOELEN=name:handle;…`, `FREQUENTIE=`, `DWARSPROFIELEN=ja` or `x,y`, `KLEUR=nlcs`, and the overrides `RIJSTROOK=`, `BERM=`, `HELLING=`, `BERMHELLING=`, `TALUD=`, `INGRAVING=`, `KRUIN=`, `VERKANTING=`, `REIKWIJDTE=` | Builds the corridor (see [Output](#what-a-corridor-builds)). `VAN`/`TOT` limit it to a station range, so a junction or roundabout can fill the rest. |
-| `CIV_PROFIELTYPEN` | – | Lists every assembly (presets and your own), with its parts and any error in your files. With `ID=`: the full definitions and the named build-ups. |
-| `CIV_PROFIELTYPE` | `NAAM=<name>` `[KOPIE=<new name>]` `[PLAATS=x,y]` | Shows one assembly. `KOPIE` copies it into your folder as a start for your own. `PLAATS` draws it as a template section at that point: in fill and, with conditions, also in cut, with its layers and a label per part. |
-| `CIV_KRUISPUNT` | `HOOFD=<handle>` `ZIJ=<handle>` `[R=8;10;…]` `[PROFIELTYPE=]` `[PROFIELTYPE_HOOFD=]` `[PROFIELTYPE_ZIJ=]` `[NIVEAU=]` `[NAAM=]` | A T or X junction between two axes with design profiles. From the ribbon: select both axes; the one that ends at the crossing is the side road. |
-| `CIV_ROTONDE` | `ASSEN=<handle>;<handle>…` `[MIDDEN=x,y]` `[TYPE=binnen|buiten]` `[D=]` `[RIJBAAN=]` `[OVERRIJDBAAR=]` `[IN=]` `[UIT=]` `[INBREEDTE=]` `[UITBREEDTE=]` `[MIDDENGELEIDER=]` `[LENGTE=]` `[AANSLUITING=]` `[HELLING=]` `[PROFIELTYPE=]` `[NIVEAU=]` `[NAAM=]` | A single-lane roundabout on the given axes. Without `MIDDEN`, its centre is where the first two axes cross. From the ribbon: select the axes. |
+| `CIV_ASSEMBLIES` | – | Lists every assembly (presets and your own), with its parts and any error in your files. With `ID=`: the full definitions and the named build-ups. |
+| `CIV_ASSEMBLY` | `NAAM=<name>` `[KOPIE=<new name>]` `[PLAATS=x,y]` | Shows one assembly. `KOPIE` copies it into your folder as a start for your own. `PLAATS` draws it as a template section at that point: in fill and, with conditions, also in cut, with its layers and a label per part. |
+| `CIV_JUNCTION` | `HOOFD=<handle>` `ZIJ=<handle>` `[R=8;10;…]` `[PROFIELTYPE=]` `[PROFIELTYPE_HOOFD=]` `[PROFIELTYPE_ZIJ=]` `[NIVEAU=]` `[NAAM=]` | A T or X junction between two axes with design profiles. From the ribbon: select both axes; the one that ends at the crossing is the side road. |
+| `CIV_ROUNDABOUT` | `ASSEN=<handle>;<handle>…` `[MIDDEN=x,y]` `[TYPE=binnen|buiten]` `[D=]` `[RIJBAAN=]` `[OVERRIJDBAAR=]` `[IN=]` `[UIT=]` `[INBREEDTE=]` `[UITBREEDTE=]` `[MIDDENGELEIDER=]` `[LENGTE=]` `[AANSLUITING=]` `[HELLING=]` `[PROFIELTYPE=]` `[NIVEAU=]` `[NAAM=]` | A single-lane roundabout on the given axes. Without `MIDDEN`, its centre is where the first two axes cross. From the ribbon: select the axes. |
 
 The ribbon's Corridor group has the buttons **Corridor**, **Profieltypen / Assemblies**, **Kruispunt / Junction** and **Rotonde / Roundabout**.
 
@@ -115,13 +115,13 @@ The IFC 4.3 export (`CIV_IFC` / `GIS_IFC`) puts each corridor, junction and roun
 | other edge lines (asphalt, tiles, paving) | `IfcPavement` |
 | give-way triangles | `IfcSurfaceFeature` or `IfcCivilElement` |
 | the axis | `IfcAlignment` with its design profile |
-| an assembly drawn with `CIV_PROFIELTYPE … PLAATS=` | left out |
+| an assembly drawn with `CIV_ASSEMBLY … PLAATS=` | left out |
 
 The courses are not aggregated into one `IfcPavement` per part. Each material of a corridor is one course.
 
 ## Your own assemblies (JSON)
 
-Put a file `<name>.json` in `<config>/OpenCADStudio/open-infra/assemblies/`. On Linux that is `~/.config/OpenCADStudio/open-infra/assemblies/`; on Windows `%APPDATA%\OpenCADStudio\open-infra\assemblies\`. A file with a preset's name replaces that preset. `CIV_PROFIELTYPE NAAM=weg KOPIE=mijnweg` writes a copy to start from.
+Put a file `<name>.json` in `<config>/OpenCADStudio/open-infra/assemblies/`. On Linux that is `~/.config/OpenCADStudio/open-infra/assemblies/`; on Windows `%APPDATA%\OpenCADStudio\open-infra\assemblies\`. A file with a preset's name replaces that preset. `CIV_ASSEMBLY NAAM=weg KOPIE=mijnweg` writes a copy to start from.
 
 ```json
 {
@@ -154,7 +154,7 @@ Put a file `<name>.json` in `<config>/OpenCADStudio/open-infra/assemblies/`. On 
   - `breedte_doel`: a number is a fixed distance from the axis for the part's outer edge; a name is a line in the drawing, given with `CIV_CORRIDOR … DOELEN=name:handle`. The part ends where the section crosses that line.
   - `hoogte_doel`: a number is a level (m), `"maaiveld"` the existing ground at the outer edge, and a name a line (a 3D polyline gives its height). The part's slope changes to reach it, within `helling_min` … `helling_max` (%).
   - The kerb's upstand never changes: a footway with a level target behind a kerb starts at the kerb's top, and only its slope adapts ("keep the kerb upstand").
-- **Errors:** they name the file, the side and the part number, in the interface language. `CIV_PROFIELTYPEN` shows them per file.
+- **Errors:** they name the file, the side and the part number, in the interface language. `CIV_ASSEMBLIES` shows them per file.
 
 ### Presets
 
@@ -166,7 +166,7 @@ Put a file `<name>.json` in `<config>/OpenCADStudio/open-infra/assemblies/`. On 
 | `polderweg` | 2 × 2,50 m asphalt and shoulders; in cut a ditch, in fill a wider shoulder |
 | `2x2-middenberm` | a 4,00 m central reserve, 2 × 2 lanes of 3,50 m and shoulders |
 
-## Junctions (`CIV_KRUISPUNT`)
+## Junctions (`CIV_JUNCTION`)
 
 Input: a main road and a side road, each an axis with a design profile, and an assembly per road. Without `PROFIELTYPE`, the assembly comes from the road's newest corridor, else `weg`.
 
@@ -176,7 +176,7 @@ Input: a main road and a side road, each an axis with a design profile, and an a
 4. **Surface.** A TIN patch on `N-…-OG-TRIANGULATIE-G` with the junction's object data covers the paved area: the main road between its mouths, the side arms, and the corners up to the kerb returns. At each mouth it is the road's own section, so a corridor built from that station on (`TOT=` or `VAN=`, given per arm in the JSON result) fits it.
 5. **Plan.** In 2D: the kerb returns (front and back of the kerb) as arcs, and the carriageway edges of the arms up to the mouths. In 3D: the kerb returns' foot and top. Give-way triangles (`VW-MARKERING_DWARS_DRIEHOEK`) cross the side road's approach lane: 0,50 m base, 0,60 m high, 0,25 m apart, an **estimate**.
 
-## Roundabouts (`CIV_ROTONDE`)
+## Roundabouts (`CIV_ROUNDABOUT`)
 
 A single-lane roundabout after CROW publication 126, *Eenheid in rotondes* (1998). The dimensions come from its chapter *Maatvoering ontwerpelementen* (CROW Kennisbank):
 
@@ -225,7 +225,7 @@ What it builds:
   - an axis must run through (or end at) the centre;
   - the cone is level all round, so a roundabout on a slope ties in over the arms' length.
 - **Section views** take their height range from the ground and the design. A deep build-up in cut may run out of the frame.
-- **No dialog.** There is no assembly window; assemblies are JSON files, and `CIV_PROFIELTYPE … PLAATS=` draws one to check it.
+- **No dialog.** There is no assembly window; assemblies are JSON files, and `CIV_ASSEMBLY … PLAATS=` draws one to check it.
 
 ## Sources
 

@@ -220,7 +220,7 @@ fn preview(shapes: &[Vec<[f64; 2]>], at: [f64; 2], rotation: f64, mirror: bool, 
         .collect()
 }
 
-/// `GIS_VOERTUIG <id> [ZIJ]`: pick the front of the vehicle, then the
+/// `GIS_VEHICLE <id> [ZIJ]`: pick the front of the vehicle, then the
 /// direction it drives to (Enter: to the east / to the right).
 pub struct InsertCmd {
     pub vehicle: &'static Vehicle,
@@ -297,7 +297,7 @@ impl InteractiveCommand for InsertCmd {
     }
 }
 
-/// `GIS_VOERTUIGOVERZICHT [categorie] [ZIJ]`: pick the lower-left corner.
+/// `GIS_VEHICLE_CATALOG [categorie] [ZIJ]`: pick the lower-left corner.
 pub struct CatalogueCmd {
     pub list: Vec<&'static Vehicle>,
     pub view: View,
@@ -470,7 +470,7 @@ pub fn swept_path(v: &Vehicle, path: &[[f64; 2]], o: &SweptOptions) -> Result<St
     Ok(swept_message(v, &s, o))
 }
 
-/// `GIS_VEEGPAD <id> [interval]`: the path is a selected polyline, or picked
+/// `GIS_SWEPT_PATH <id> [interval]`: the path is a selected polyline, or picked
 /// points ended with Enter.
 pub struct SweptCmd {
     pub vehicle: &'static Vehicle,
@@ -568,7 +568,7 @@ pub fn project_points(text: &str) -> Result<Vec<[f64; 2]>, String> {
         .collect()
 }
 
-/// `GIS_VEEGPAD | GIS_SWEPT_PATH <id> [interval] [ACHTERUIT|REVERSE]
+/// `GIS_SWEPT_PATH <id> [interval] [ACHTERUIT|REVERSE]
 /// [KNIK=<graden>] [PAD=x,y;x,y;…]`: along `PAD=` (project coordinates), the
 /// selected line, or picked points.
 pub fn swept_command(host: &mut dyn ocs_plugin_api::host::HostApi, cmd: &str) {

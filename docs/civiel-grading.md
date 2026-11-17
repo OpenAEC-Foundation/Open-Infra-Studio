@@ -8,18 +8,18 @@ Everything works on drawings in metres, millimetres or centimetres, at any locat
 
 | Button | Command | From the ribbon |
 |---|---|---|
-| **Kantlijn / Feature line** | `CIV_KANTLIJN` | The selected (poly)line becomes a feature line on the ground, with points where the grade of the ground changes. |
+| **Kantlijn / Feature line** | `CIV_FEATURE_LINE` | The selected (poly)line becomes a feature line on the ground, with points where the grade of the ground changes. |
 | **Plateau** | `CIV_PLATEAU` | The selected closed polyline becomes a plateau at the level of the settings (Civiel settings, *peil*), or at the heights of a selected feature line. |
-| **Talud / Slope** | `CIV_TALUD` | Select a line, then click the side: a slope to the ground. |
-| **Hoogtepunt / Height point** | `CIV_KANTLIJN_PUNT` | Select a feature line, then click points on it: each becomes a height point (height interpolated). Enter ends. |
+| **Talud / Slope** | `CIV_SLOPE` | Select a line, then click the side: a slope to the ground. |
+| **Hoogtepunt / Height point** | `CIV_FEATURE_LINE_POINT` | Select a feature line, then click points on it: each becomes a height point (height interpolated). Enter ends. |
 | **Grondverzet TIN / Volume TIN** | `CIV_VOLUME_TIN` | Exact cut and fill of the design against the existing ground, with the map. |
-| **Grondbalans / Mass haul** | `CIV_GRONDBALANS` | The mass haul diagram of the selected axis. |
+| **Grondbalans / Mass haul** | `CIV_MASS_HAUL` | The mass haul diagram of the selected axis. |
 
 There is no dialog API for plugins, so the values that need typing (levels, grades, falls) go in as command arguments.
 
 The MCP server offers the same as `civ_feature_line`, `civ_feature_line_edit`, `civ_plateau`, `civ_slope`, `civ_volume_tin` and `civ_mass_haul`.
 
-## Feature lines (`CIV_KANTLIJN`)
+## Feature lines (`CIV_FEATURE_LINE`)
 
 A 3D polyline on `N-…-OG-BREUKLIJN-G` (status N unless `STATUS=` is given), with object data `kantlijn`, `bron`, `punten`, `lengte_m`, `z_min`, `z_max` and `hellingen` (grade per segment, %). Labels on `…-OG-BREUKLIJN-T`: the level at each corner and the grade of each segment with an arrow down the slope (on lines of more than 30 points only the ends get a level).
 
@@ -36,10 +36,10 @@ A 3D polyline on `N-…-OG-BREUKLIJN-G` (status N unless `STATUS=` is given), wi
 
 | Command | What it does |
 |---|---|
-| `CIV_KANTLIJN_PEIL KANTLIJN=<h> PUNT=<n>` or `BIJ=x,y` `Z=<m>` | One corner (by number from 1, or the corner nearest to a point) to a level. |
-| `CIV_KANTLIJN_VERHOOG KANTLIJN=<h> DZ=<m>` | Everything up (or down with a negative value). |
-| `CIV_KANTLIJN_PUNT KANTLIJN=<h> BIJ=x,y [Z=<m>]` | A height point on the line at the foot of `x,y`, at `Z` or interpolated. On a corner it sets that corner's level. |
-| `CIV_KANTLIJN_HELLING KANTLIJN=<h> VAN=<n> TOT=<n> [HELLING=<%>]` | Constant grade between two corners: from the first at the given grade, or straight between the two levels. |
+| `CIV_FEATURE_LINE_LEVEL KANTLIJN=<h> PUNT=<n>` or `BIJ=x,y` `Z=<m>` | One corner (by number from 1, or the corner nearest to a point) to a level. |
+| `CIV_FEATURE_LINE_RAISE KANTLIJN=<h> DZ=<m>` | Everything up (or down with a negative value). |
+| `CIV_FEATURE_LINE_POINT KANTLIJN=<h> BIJ=x,y [Z=<m>]` | A height point on the line at the foot of `x,y`, at `Z` or interpolated. On a corner it sets that corner's level. |
+| `CIV_FEATURE_LINE_GRADE KANTLIJN=<h> VAN=<n> TOT=<n> [HELLING=<%>]` | Constant grade between two corners: from the first at the given grade, or straight between the two levels. |
 
 The labels are redrawn after each edit, and the object data gets `bewerkt=` with the last change. If the host refuses the change in place, the line is drawn anew and the JSON returns its new handle.
 
@@ -71,7 +71,7 @@ The JSON gives the plateau and slope areas, the daylight length, the number of s
 
 Every point of a slope belongs to the nearest point of the edge, and the slope runs square to the edge from there. At an outside corner the slopes form a cone (a fan of slope lines every 10°); at an inside corner the slopes of both sides meet on the line where both edges are equally far away, so nothing overlaps and nothing needs cleaning up. Each slope line runs at the cut or fill slope (chosen at its start) until it meets the ground, found every 0.25 m and interpolated in between. The plateau inside the edge is triangulated with the same edge points, so plateau and slopes share their edges.
 
-## Slopes (`CIV_TALUD`)
+## Slopes (`CIV_SLOPE`)
 
 A slope from an open (or closed) line on one side:
 
@@ -93,7 +93,7 @@ All gradings join one design surface: meshes on `N-…-OG-TRIANGULATIE-G` with o
 | **Fill slope** | the highest | the highest | the new one |
 | **Cut slope** | the lowest | the new one | the lowest |
 
-So a fill slope only raises what it runs over and a cut slope only lowers it: the fill slope of a higher plot runs onto a lower neighbour until it is below that plot's level. The result has no T-junctions, so its contours (`CIV_HOOGTELIJNEN OPPERVLAK=N`), height analysis (`CIV_ANALYSE OPPERVLAK=N`) and volumes work as on any TIN. The object index keeps the surface under `bouwrijp` and `tin`/`N`. With `SAMENVOEGEN=nee` a grading becomes a surface of its own.
+So a fill slope only raises what it runs over and a cut slope only lowers it: the fill slope of a higher plot runs onto a lower neighbour until it is below that plot's level. The result has no T-junctions, so its contours (`CIV_CONTOURS OPPERVLAK=N`), height analysis (`CIV_ELEVATION_ANALYSIS OPPERVLAK=N`) and volumes work as on any TIN. The object index keeps the surface under `bouwrijp` and `tin`/`N`. With `SAMENVOEGEN=nee` a grading becomes a surface of its own.
 
 ## Exact earthwork between two TINs (`CIV_VOLUME BASIS=TIN`, `CIV_VOLUME_TIN`)
 
@@ -113,7 +113,7 @@ The map lies in plan (z = 0): cut bands from yellow to red on `OI-GRONDVERZET-AF
 
 If several design surfaces overlap in plan (for example a corridor running through the grading surface), `ONTWERP=N` counts both; use `ONTWERP=BOUWRIJP` or select the faces.
 
-## Mass haul (`CIV_GRONDBALANS`)
+## Mass haul (`CIV_MASS_HAUL`)
 
 The cumulative volume along an axis: every interval adds the reused cut times the factor and subtracts the fill. The diagram follows the classical mass diagram method (see Sources):
 - the **mass line** rises in cut and falls in fill;
