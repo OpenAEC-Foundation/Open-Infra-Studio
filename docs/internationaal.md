@@ -83,13 +83,17 @@ Manholes carry their name on the PUTNUMMER object, and every object carries its 
 
 The message gives the counts. Cadastre and KLIC can follow the same way.
 
-## GEODATA (issue #8, reading)
+## GEODATA (issue #8)
 
-A drawing from other CAD programs with a geographic location (GEOGRAPHICLOCATION, GEOMAP) and no Open Infra site takes its site from the GEODATA object:
+**Reading.** A drawing from other CAD programs with a geographic location (GEOGRAPHICLOCATION, GEOMAP) and no Open Infra site takes its site from the GEODATA object:
 - **CRS:** from the MapGuide XML or the WKT;
 - **absolute or relative:** absolute when the design point equals the reference point.
 
-Writing GEODATA needs Open CAD Studio to offer it: the plugin API v2026.42 creates no objects other than XRecords.
+**Writing.** Every time the project location is stored (`GIS_SITE`, the location window, `GIS_AREA`, the KLIC area, the project region), Open Infra also sets the drawing's GEODATA object through the plugin API (`set_geo_location`, Open CAD Studio v2026.46): the CRS as its EPSG code, the reference point at the base point, the design point at 0,0 (relative) or at the base point in drawing units (absolute), and north along drawing +Y. Open CAD Studio takes the drawing units from INSUNITS when it creates the object. The `OPENINFRA/SITE` record and GEODATA are one undo step.
+
+The record stays leading. When Open CAD Studio refuses the CRS (not in its EPSG registry), the location is still stored and one error line warns that GEODATA could not be updated. A drawing whose location was set before this, with only the record, gets GEODATA at the next change of the location; opening it changes nothing, so a drawing is never marked as changed just by opening it. `GIS_GEODATA` remains as an export of a copy with GEODATA.
+
+Removing the project location is not a command. When updating it, Open Infra removes the previous GEODATA before creating the new object, within the same undo group. This makes the host take the current INSUNITS again and prevents an old location from remaining when a new CRS is refused. The SITE record stays stored even if the GEODATA update fails; the error line warns that other CAD programs may read an old location or none.
 
 ## RD New with NSGI's 2018 procedure (issue #5)
 

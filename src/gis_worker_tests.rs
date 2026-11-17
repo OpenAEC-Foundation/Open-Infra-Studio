@@ -10,7 +10,7 @@ use ocs_plugin_api::host::{
 use ocs_plugin_api::ipc::protocol::{PluginRequest as Q, PluginResponse as A};
 
 #[derive(Default)]
-struct IdleHost { command: Option<Box<dyn InteractiveCommand>>, drawing: Option<usize> }
+struct IdleHost { command: Option<Box<dyn InteractiveCommand>>, drawing: Option<usize>, insunits: Option<i16> }
 
 /// A drawing without content or GEODATA, for commands that only need a target.
 struct EmptyDrawing;
@@ -42,10 +42,33 @@ impl HostApi for IdleHost {
     fn push_info(&mut self, _: &str) {}
     fn push_output(&mut self, _: &str) {}
     fn push_error(&mut self, msg: &str) { panic!("{msg}") }
+    fn system_variable(&self, name: &str) -> Option<ocs_plugin_api::host::HostSettingValue> {
+        (name == "INSUNITS").then(|| self.insunits.map(|n| ocs_plugin_api::host::HostSettingValue::Number(f64::from(n)))).flatten()
+    }
     fn start_interactive(&mut self, command: Box<dyn InteractiveCommand>) { self.command = Some(command); }
     fn plugin_state_any(&self, _: &str) -> Option<&(dyn Any + Send + Sync)> { None }
     fn plugin_state_any_mut(&mut self, _: &str) -> Option<&mut (dyn Any + Send + Sync)> { None }
     fn ensure_plugin_state_any(&mut self, _: &'static str, _: &mut dyn FnMut() -> Box<dyn Any + Send + Sync>) -> Option<&mut (dyn Any + Send + Sync)> { None }
+}
+
+#[test]
+fn live_units_take_precedence_over_the_tab_cache() {
+    let _one = bridge::COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    struct UnitsWriter;
+    impl PluginRequestSender for UnitsWriter {
+        fn request(&self, req: Q) -> Result<A, PluginRequestError> {
+            let Q::UpdateXRecord { name, .. } = req else { panic!("{req:?}") };
+            assert_eq!(name, "UNITS");
+            Ok(A::XRecordUpdateResult(Ok(Handle::from(1u64))))
+        }
+    }
+    let target = bridge::Target { sender: Arc::new(UnitsWriter), tab_id: 120025, unit_factor: 1.0, doc_path: None };
+    bridge::with_command_context(target, None, None, || {
+        let mut host = IdleHost { insunits: Some(4), ..Default::default() };
+        assert_eq!(bridge::units(&mut host, 120025, false), 1000.0);
+        host.insunits = Some(6);
+        assert_eq!(bridge::units(&mut host, 120025, false), 1.0, "attach mag de oude factor niet terugzetten");
+    });
 }
 
 #[test]
@@ -90,6 +113,10 @@ fn an_area_started_in_a_keeps_its_site_after_callbacks_resume_with_b_active() {
                     A::XRecordUpdateResult(Ok(Handle::from(1u64)))
                 }
                 Q::PushInfo(_) => { self.done.send(()).unwrap(); A::Ok }
+                Q::BeginUndoGroup { .. } | Q::EndUndoGroup => A::Ok,
+                Q::SetGeoLocation { .. } => A::GeoLocationSet(Ok(Handle::from(2u64))),
+                Q::RemoveGeoLocation => A::GeoLocationRemoved(Ok(false)),
+                Q::GetSystemVariable { name } if name == "INSUNITS" => A::SystemVariable(Some(ocs_plugin_api::host::HostSettingValue::Number(6.0))),
                 other => panic!("onverwacht verzoek: {other:?}"),
             })
         }

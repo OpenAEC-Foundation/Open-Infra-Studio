@@ -631,8 +631,9 @@ fn ifc_command(host: &mut dyn HostApi, cmd: &str) {
 
 /// `GIS_GEODATA [<pad.dwg|pad.dxf>]`: a copy of the drawing with a GEODATA
 /// object for the project location (as AutoCAD's GEOGRAPHICLOCATION writes
-/// it), for AutoCAD, Civil 3D and BricsCAD. The open drawing keeps its
-/// OPENINFRA/SITE: the plugin API cannot add GEODATA to it yet.
+/// it), for AutoCAD, Civil 3D and BricsCAD. The open drawing itself gets its
+/// GEODATA whenever the site is stored (`bridge::save_site`); the copy is
+/// for a drawing that should stay unchanged, or for DXF.
 fn geodata_command(host: &mut dyn HostApi, cmd: &str) {
     let Some(site) = require_site(host) else { return };
     let arg = cmd.split_once(char::is_whitespace).map(|(_, a)| a.trim().trim_matches('"').to_string()).unwrap_or_default();
@@ -886,10 +887,6 @@ fn quick(host: &mut dyn HostApi, q: &'static Quick, label: &'static str) {
 /// `GIS_SITE RD <x> <y> [breedte] [hoogte] [RELATIEF] [naam]`: set the project
 /// location from a script, without the window.
 fn site_command(host: &mut dyn HostApi, cmd: &str) {
-    // The units may have changed since the drawing was first used.
-    let tab = host.tab_id();
-    bridge::units(host, tab, true);
-    bridge::attach(host);
     let args: Vec<&str> = cmd.split_whitespace().skip(1).collect();
     let num = |i: usize| args.get(i).and_then(|a| a.replace(',', ".").parse::<f64>().ok());
     let mut site = bridge::site().unwrap_or_else(||Site::for_region(localisation::current()));

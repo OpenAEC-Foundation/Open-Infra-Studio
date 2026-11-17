@@ -2,11 +2,11 @@
 //! programs write (GEOGRAPHICLOCATION, GEOMAP). Open Infra
 //! reads it to set the project site of a drawing that has none yet.
 //!
-//! Open CAD Studio's plugin API cannot create objects other than XRecords
-//! (HakanSeven12/OpenCADStudio#2303), so in the open drawing Open Infra keeps
-//! its site in the `OPENINFRA/SITE` XRecord. `GIS_GEODATA` writes a copy of
-//! the drawing (DWG or DXF) with a GEODATA object for the project location,
-//! through the codec, for AutoCAD, Civil 3D and BricsCAD.
+//! Open Infra keeps its site in the `OPENINFRA/SITE` XRecord and, from
+//! Open CAD Studio v2026.46 (plugin API 22+), also sets the open drawing's
+//! GEODATA object from it ([`location_for`]), so a plain save opens
+//! georeferenced in AutoCAD, Civil 3D and BricsCAD. `GIS_GEODATA` writes a
+//! copy of the drawing (DWG or DXF) with a GEODATA object, through the codec.
 
 use super::crs;
 use super::files::epsg_from_wkt;
@@ -94,22 +94,34 @@ pub fn definition_for(code: &str) -> String {
     )
 }
 
-/// The GEODATA object for a project site in a drawing of `unit_factor`
-/// drawing units per metre, the inverse of [`site_from`]: a local grid (the
-/// reference point in the CRS) with the design point at the site's base
-/// point (0,0 for a relative site).
+/// The drawing's geographic location for a project site in a drawing of
+/// `unit_factor` drawing units per metre, the inverse of [`site_from`]: the
+/// reference point is the base point in the CRS, the design point the same
+/// point in the drawing (0,0 for a relative site); north is drawing +Y.
+pub fn location_for(site: &Site, unit_factor: f64) -> ocs_plugin_api::host::GeoLocation {
+    let f = if unit_factor > 0.0 { unit_factor } else { 1.0 };
+    ocs_plugin_api::host::GeoLocation {
+        coordinate_system: site.crs.clone(),
+        design_point: if site.absolute { [site.origin_e * f, site.origin_n * f, 0.0] } else { [0.0; 3] },
+        reference_point: [site.origin_e, site.origin_n, 0.0],
+        north_direction: [0.0, 1.0],
+    }
+}
+
+/// The GEODATA object for a project site, as [`location_for`] places it, for
+/// a copy of the drawing written through the codec.
 pub fn geodata_for(site: &Site, unit_factor: f64) -> ocs_plugin_api::host::codec::objects::GeoData {
     use ocs_plugin_api::host::codec::{Vector2, Vector3};
     let f = if unit_factor > 0.0 { unit_factor } else { 1.0 };
+    let at = location_for(site, f);
     let mut g = ocs_plugin_api::host::codec::objects::GeoData::new();
     g.version = 2;
     // Local grid: the reference point in the CRS's own coordinates, as
     // AutoCAD writes it (and the configuration ezdxf has tested).
     g.coordinate_type = 1;
-    let design = if site.absolute { [site.origin_e * f, site.origin_n * f] } else { [0.0, 0.0] };
-    g.design_point = Vector3::new(design[0], design[1], 0.0);
-    g.reference_point = Vector3::new(site.origin_e, site.origin_n, 0.0);
-    g.north_direction = Vector2::new(0.0, 1.0);
+    g.design_point = Vector3::new(at.design_point[0], at.design_point[1], 0.0);
+    g.reference_point = Vector3::new(at.reference_point[0], at.reference_point[1], 0.0);
+    g.north_direction = Vector2::new(at.north_direction[0], at.north_direction[1]);
     g.up_direction = Vector3::new(0.0, 0.0, 1.0);
     // Drawing units per metre; INSUNITS-style unit codes (6 metres, 4 millimetres).
     let units = if (f - 1000.0).abs() < 1e-9 { 4 } else if (f - 100.0).abs() < 1e-9 { 5 } else { 6 };

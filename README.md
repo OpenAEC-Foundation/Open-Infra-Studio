@@ -426,7 +426,7 @@ Beside the drawing, unless the command is given a path.
 | **Geodata** | GeoPackage (project CRS; points, lines, areas) or GeoJSON (WGS 84), every element with its layer, NLCS meaning and object data: `export.gpkg` | `GIS_EXPORT`, Output → Export |
 | **Sewer for hydraulic models** | GWSW-HydX: the ten CSV files in `<sewer>_hydx/` | `CIV_SEWER_EXPORT FORMAAT=HYDX` |
 | **BGT mutation** | IMGeo-GML 2.1.1 (`bgt-mutatie.gml`) with a Markdown report (`bgt-mutatie.md`) | `GIS_BGT_MUTATION` |
-| **DWG with GEODATA** | A copy of the drawing (`<drawing>_geodata.dwg`, or `.dxf`) with the AutoCAD GEODATA object for the project location (CRS, base point, units), as GEOGRAPHICLOCATION writes it, for AutoCAD, Civil 3D and BricsCAD. Checked with ezdxf. | `GIS_GEODATA [<path.dwg\|path.dxf>]`, Output → Export |
+| **DWG with GEODATA** | The drawing itself carries the project location as its GEODATA object (CRS, base point, north) from the moment the location is set, so a plain save opens georeferenced in AutoCAD, Civil 3D and BricsCAD. This command also writes a copy (`<drawing>_geodata.dwg`, or `.dxf`) with that object, as GEOGRAPHICLOCATION writes it, for a drawing you do not want to change. Checked with ezdxf. | `GIS_GEODATA [<path.dwg\|path.dxf>]`, Output → Export |
 | **KLIC request** | The Kadaster's GIA-POST message (`<drawing>_klic-aanvraag.json`) and the local check (`.md`); not sent | `GIS_KLIC_REQUEST` |
 | **IFC 4.3** | IFC4X3_ADD2: `<drawing>_IFC4X3.ifc` (see [IFC 4.3 export](#ifc-43-export)) | `GIS_IFC`, `CIV_IFC` |
 | **Command results** | JSON per call: `<config>/OpenCADStudio/open-infra/api/<ID>.json` | any `CIV_` or GIS data command with `ID=<name>` |
