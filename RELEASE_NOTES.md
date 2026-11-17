@@ -1,3 +1,7 @@
+**Next release — English command names**
+
+- **Commands**: the GIS and Civiel command names are now English; the old names remain aliases. Standalone buttons saved in the Quick Access Toolbar keep working. A menu button you pinned shows its default option after the update; choose your option again.
+
 **New in 2026.47.0 — Open CAD Studio v2026.46 and safer managed MCP files**
 
 - **Open CAD Studio v2026.46** (#125): both plugins are built against the v2026.46 plugin API (API 23). They do not load in older Open CAD Studio versions. 2026.46.1 was the corresponding build for v2026.45 (#122).

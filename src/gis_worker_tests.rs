@@ -139,3 +139,22 @@ fn an_old_command_name_starts_the_same_command_as_the_english_name() {
     }
     assert_ne!(start("GIS_AREA"), start("GIS_POINT_INFO"), "twee opdrachten, twee vragen");
 }
+
+#[test]
+fn saved_ribbon_buttons_keep_their_ids_and_run_english_commands() {
+    let tools: Vec<_> = GisModule.ribbon_groups().iter().flat_map(|g| &g.tools).filter_map(|item| match item {
+        RibbonItem::Tool(t) | RibbonItem::LargeTool(t) | RibbonItem::LabeledTool(t) => Some(t),
+        _ => None,
+    }).collect();
+    let ids: std::collections::HashSet<_> = tools.iter().map(|t| t.id).collect();
+    assert_eq!(ids.len(), tools.len(), "duplicate ribbon button id");
+    for id in include_str!("../tests/fixtures/ribbon-command-ids.txt").lines().filter(|id| id.starts_with("GIS_")) {
+        if id == "GIS_US_SERVICES" && localisation::current() != localisation::Region::UnitedStates { continue; }
+        let tool = tools.iter().find(|t| t.id == id).unwrap_or_else(|| panic!("saved button {id} is missing"));
+        let cmd = match &tool.event {
+            ModuleEvent::Command(cmd) | ModuleEvent::PluginFileDialog { command: cmd, .. } => cmd,
+            _ => panic!("{id}: expected a command or file dialog"),
+        };
+        assert_eq!(cmd, commands::canonical(id), "{id}: ribbon must run its English command");
+    }
+}

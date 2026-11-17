@@ -3,6 +3,8 @@
 //! keep working as aliases, so existing scripts, macros and agents do not
 //! break. Both plugins put every command line through [`normalise`] before
 //! anything reads it, so the rest of the code only sees the English name.
+//! Standalone ribbon buttons keep their old ids so saved Quick Access Toolbar
+//! buttons remain enabled; their events use the English command names.
 
 /// `(alias, name)`: an older name and the command it runs. An alias keeps
 /// its plugin's prefix, because the host routes by prefix before the plugin
@@ -178,8 +180,8 @@ mod tests {
                     files(&path, out);
                 }
             } else if matches!(path.extension().and_then(|e| e.to_str()), Some("rs" | "py" | "md" | "json" | "jsonl" | "toml" | "yml" | "txt"))
-                // The release notes and known bugs record history in the names of the time.
-                && !matches!(name.as_str(), "RELEASE_NOTES.md" | "knownbugs.md")
+                // History and the upgrade fixture retain the names used before the change.
+                && !matches!(name.as_str(), "RELEASE_NOTES.md" | "knownbugs.md" | "ribbon-command-ids.txt")
                 && path != root().join("src/commands.rs")
             {
                 out.push(path);
@@ -188,10 +190,14 @@ mod tests {
     }
 
     /// Whether `text` names `word` as a whole command name.
-    fn names(text: &str, word: &str) -> bool {
+    fn names(text: &str, word: &str, ribbon_ids: bool) -> bool {
         let part = |c: char| c.is_ascii_alphanumeric() || c == '_';
         text.match_indices(word).any(|(i, _)| {
-            !text[..i].chars().next_back().is_some_and(part) && !text[i + word.len()..].chars().next().is_some_and(part)
+            // Only the id argument of a standalone ribbon builder (or ToolDef)
+            // may keep the old name. Events, menus, help and docs must be English.
+            let kept_id = ribbon_ids && ["tool(\"", "small(\"", "large(\"", "file_tool(\"", "id: \""]
+                .iter().any(|start| text[..i].ends_with(start));
+            !kept_id && !text[..i].chars().next_back().is_some_and(part) && !text[i + word.len()..].chars().next().is_some_and(part)
         })
     }
 
@@ -204,7 +210,8 @@ mod tests {
         for path in &all {
             let Ok(text) = std::fs::read_to_string(path) else { continue };
             for (alias, name) in ALIASES {
-                if names(&text, alias) {
+                let ribbon_ids = path == &root().join("src/lib.rs") || path == &root().join("civiel/src/lib.rs");
+                if names(&text, alias, ribbon_ids) {
                     found.push(format!("{}: {alias} → {name}", path.strip_prefix(root()).unwrap().display()));
                 }
             }

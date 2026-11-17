@@ -144,8 +144,9 @@ fn is_raster(q: &Quick) -> bool {
     matches!(q, Quick::Data(import::Dataset::Raster { .. }))
 }
 
+// Keep the old button ids: Open CAD Studio uses them to enable saved Quick Access Toolbar buttons.
 fn tool(id: &'static str, label: &'static str, icon: IconKind) -> RibbonItem {
-    RibbonItem::LargeTool(ToolDef { id, label, icon, event: ModuleEvent::Command(id.to_string()) })
+    RibbonItem::LargeTool(ToolDef { id, label, icon, event: ModuleEvent::Command(commands::canonical(id).to_string()) })
 }
 
 struct GisModule;
@@ -170,15 +171,15 @@ impl CadModule for GisModule {
                 QUICK.iter().filter(|(c, _, q)| !world(c) && !c.starts_with("GIS_US_") && is_raster(q) == raster).map(|(c, l, _)| (*c, ql(l), I_QUICK)).collect()
             };
             let quick_world: Vec<(&'static str, &'static str, IconKind)> = QUICK.iter().filter(|(c, ..)| world(c)).map(|(c, l, _)| (*c, ql(l), I_QUICK)).collect();
-            let small = |id: &'static str, label: &'static str, icon: IconKind| RibbonItem::LabeledTool(ToolDef { id, label, icon, event: ModuleEvent::Command(id.to_string()) });
+            let small = |id: &'static str, label: &'static str, icon: IconKind| RibbonItem::LabeledTool(ToolDef { id, label, icon, event: ModuleEvent::Command(commands::canonical(id).to_string()) });
             let menu = |id: &'static str, label: &'static str, icon: IconKind, items: Vec<(&'static str, &'static str, IconKind)>, default: &'static str| RibbonItem::LabeledDropdown { id, label, icon, items, default };
             let mut groups = vec![
                 RibbonGroup {
                     title: tr("Locatie", "Location"),
                     tools: vec![
-                        tool("GIS_LOCATION", tr("Geo-locatie", "Geolocation"), I_LOCATION),
-                        small("GIS_AREA", tr("Gebied", "Area"), I_AREA),
-                        small("GIS_POINT_INFO", tr("Punt info", "Point info"), I_POINT),
+                        tool("GIS_LOCATIE", tr("Geo-locatie", "Geolocation"), I_LOCATION),
+                        small("GIS_GEBIED", tr("Gebied", "Area"), I_AREA),
+                        small("GIS_PUNT", tr("Punt info", "Point info"), I_POINT),
                         small("GIS_COORD", tr("Coördinaten", "Coordinates"), I_POINT),
                     ],
                 },
@@ -187,13 +188,13 @@ impl CadModule for GisModule {
                     title: tr("Kaarten & data", "Maps & data"),
                     tools: vec![
                         tool("GIS_SERVICES", tr("Services wereldwijd", "Services worldwide"), I_SERVICES),
-                        tool("GIS_WMS", "WMS / TMS", I_MAP),
+                        tool("GIS_KAART", "WMS / TMS", I_MAP),
                         tool("GIS_WFS", "WFS", I_VECTOR),
                         tool("GIS_OSM", "OpenStreetMap", I_GLOBE),
                         RibbonItem::LargeDropdown { id: "GIS_Q_WERELD", label: tr("Snel (wereld)", "Quick (world)"), icon: I_LAYERS, items: quick_world, default: "GIS_Q_OSM_MAP" },
                         // One file dialog for vector files, rasters and point clouds.
                         RibbonItem::LargeTool(ToolDef {
-                            id: "GIS_FILE",
+                            id: "GIS_BESTAND",
                             label: tr("Bestand openen", "Open file"),
                             icon: I_FILE,
                             event: ModuleEvent::PluginFileDialog {
@@ -209,15 +210,15 @@ impl CadModule for GisModule {
                 RibbonGroup {
                     title: tr("Hoogte", "Elevation"),
                     tools: vec![
-                        small("GIS_SPOT_HEIGHTS", tr("Hoogtepunten", "Spot heights"), I_POINT),
-                        small("GIS_CONTOURS", tr("Hoogtelijnen", "Contours"), I_CONTOURS),
-                        small("GIS_PROFILE", tr("Profiel", "Profile"), I_PROFILE),
+                        small("GIS_HOOGTEPUNTEN", tr("Hoogtepunten", "Spot heights"), I_POINT),
+                        small("GIS_HOOGTELIJNEN", tr("Hoogtelijnen", "Contours"), I_CONTOURS),
+                        small("GIS_PROFIEL", tr("Profiel", "Profile"), I_PROFILE),
                     ],
                 },
                 RibbonGroup {
                     title: tr("Uitvoer", "Output"),
                     tools: vec![
-                        tool("GIS_SHEET", tr("Tekenblad", "Drawing sheet"), I_SHEET),
+                        tool("GIS_TEKENBLAD", tr("Tekenblad", "Drawing sheet"), I_SHEET),
                         menu("GIS_MENU_EXPORT", tr("Exporteren", "Export"), I_IFC, vec![
                             ("GIS_IFC", "IFC 4x3", I_IFC),
                             ("GIS_EXPORT_GPKG", "GeoPackage", I_FILE),
@@ -233,10 +234,10 @@ impl CadModule for GisModule {
                     title: tr("Bibliotheek", "Library"),
                     tools: vec![
                         small("GIS_INFRA_LIBRARY", tr("Infra-objecten", "Infrastructure"), I_CATALOGUE),
-                        tool("GIS_VEHICLES", tr("Voertuigen", "Vehicles"), I_VEHICLE),
-                        small("GIS_VEHICLE_CATALOG", tr("Overzicht", "Catalogue"), I_CATALOGUE),
-                        small("GIS_SWEPT_PATH", tr("Veegpad", "Swept path"), I_SWEPT),
-                        small("GIS_PARKING", tr("Parkeervakken", "Parking bays"), I_PARKING),
+                        tool("GIS_VOERTUIGEN", tr("Voertuigen", "Vehicles"), I_VEHICLE),
+                        small("GIS_VOERTUIGOVERZICHT", tr("Overzicht", "Catalogue"), I_CATALOGUE),
+                        small("GIS_VEEGPAD", tr("Veegpad", "Swept path"), I_SWEPT),
+                        small("GIS_PARKEERVAKKEN", tr("Parkeervakken", "Parking bays"), I_PARKING),
                     ],
                 },
             ];

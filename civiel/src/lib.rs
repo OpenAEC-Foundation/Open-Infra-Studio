@@ -104,8 +104,9 @@ const I_SOIL_PROFILE: IconKind = icon!("grondprofiel.svg");
 const I_STABILITY: IconKind = icon!("stabiliteit.svg");
 const I_SETTLEMENT: IconKind = icon!("zetting.svg");
 
+// Keep the old button ids: Open CAD Studio uses them to enable saved Quick Access Toolbar buttons.
 fn command(id: &'static str) -> ModuleEvent {
-    ModuleEvent::Command(id.to_string())
+    ModuleEvent::Command(open_infra::commands::canonical(id).to_string())
 }
 
 fn large(id: &'static str, label: &'static str, icon: IconKind) -> RibbonItem {
@@ -122,7 +123,7 @@ fn file_tool(id: &'static str, label: &'static str, icon: IconKind, title: &str,
         label,
         icon,
         event: ModuleEvent::PluginFileDialog {
-            command: id.into(),
+            command: open_infra::commands::canonical(id).into(),
             title: title.into(),
             filter_name: filter.into(),
             extensions: ext.iter().map(|e| e.to_string()).collect(),
@@ -141,7 +142,7 @@ fn terrain_tools() -> Vec<RibbonItem> {
     let exts = &["las", "laz", "e57", "ply", "pts", "xyz", "txt"];
     let mut tools = vec![
         large("CIV_TIN", tr("TIN maken", "Create TIN"), I_TIN),
-        file_tool("CIV_POINT_CLOUD_FILE", tr("TIN uit puntenwolk", "TIN from point cloud"), I_CLOUD_TIN, tr("Puntenwolk openen", "Open a point cloud"), cloud, exts, false),
+        file_tool("CIV_PUNTENWOLK_BESTAND", tr("TIN uit puntenwolk", "TIN from point cloud"), I_CLOUD_TIN, tr("Puntenwolk openen", "Open a point cloud"), cloud, exts, false),
     ];
     // The mesh of the AHN points, or (without the Dutch modules) of a file.
     if dutch() {
@@ -211,7 +212,7 @@ impl CadModule for CivielModule {
                 RibbonGroup {
                     title: tr("Punten", "Points"),
                     tools: vec![
-                        file_tool("CIV_POINTS_IMPORT", tr("Punten importeren", "Import points"), I_POINTS, tr("Puntenbestand openen", "Open a point file"), tr("Puntenbestand (PNEZD, PENZD, CSV)", "Point file (PNEZD, PENZD, CSV)"), &["csv", "txt", "xyz", "pnt", "asc"], true),
+                        file_tool("CIV_PUNTEN_IMPORT", tr("Punten importeren", "Import points"), I_POINTS, tr("Puntenbestand openen", "Open a point file"), tr("Puntenbestand (PNEZD, PENZD, CSV)", "Point file (PNEZD, PENZD, CSV)"), &["csv", "txt", "xyz", "pnt", "asc"], true),
                         file_tool("CIV_LANDXML", "LandXML", I_LANDXML, tr("LandXML openen", "Open LandXML"), "LandXML", &["xml", "landxml"], false),
                         menu("CIV_MENU_PUNTEN", tr("Punten", "Points"), I_PLACE, vec![
                             ("CIV_POINT", tr("Punt plaatsen", "Place point"), I_PLACE),
@@ -230,7 +231,7 @@ impl CadModule for CivielModule {
                 RibbonGroup {
                     title: tr("As en profiel", "Alignment and profile"),
                     tools: vec![
-                        large("CIV_ALIGNMENT", tr("As maken", "Create alignment"), I_AXIS),
+                        large("CIV_AS", tr("As maken", "Create alignment"), I_AXIS),
                         menu("CIV_MENU_AS", tr("As", "Alignment"), I_OFFSET, vec![
                             ("CIV_ALIGNMENT_OFFSET", tr("As verschuiven", "Offset alignment"), I_OFFSET),
                             ("CIV_STATION", tr("Station / offset", "Station / offset"), I_STATION),
@@ -238,9 +239,9 @@ impl CadModule for CivielModule {
                             ("CIV_DESIGN_CRITERIA", tr("Ontwerpcriteria", "Design criteria"), I_CRITERIA),
                             ("CIV_SIGHT_DISTANCE", tr("Zichtafstand", "Sight distance"), I_SIGHT),
                         ], "CIV_ALIGNMENT_OFFSET"),
-                        small("CIV_LONG_PROFILE", tr("Lengteprofiel", "Length profile"), I_PROFILE),
-                        small("CIV_DESIGN_PROFILE", tr("Ontwerpprofiel", "Design profile"), I_DESIGN),
-                        small("CIV_CROSS_SECTIONS", tr("Dwarsprofielen", "Cross sections"), I_SECTIONS),
+                        small("CIV_LENGTEPROFIEL", tr("Lengteprofiel", "Length profile"), I_PROFILE),
+                        small("CIV_ONTWERPPROFIEL", tr("Ontwerpprofiel", "Design profile"), I_DESIGN),
+                        small("CIV_DWARSPROFIELEN", tr("Dwarsprofielen", "Cross sections"), I_SECTIONS),
                         menu("CIV_MENU_SPOOR", tr("Spoor", "Rail"), I_RAIL, vec![
                             ("CIV_TRACK", tr("Spooras", "Track"), I_RAIL),
                             ("CIV_TURNOUT", tr("Wissel", "Turnout"), I_TURNOUT),
@@ -252,7 +253,7 @@ impl CadModule for CivielModule {
                     title: "Corridor",
                     tools: vec![
                         large("CIV_CORRIDOR", "Corridor", I_CORRIDOR),
-                        small("CIV_ASSEMBLIES", tr("Profieltypen", "Assemblies"), I_ASSEMBLY),
+                        small("CIV_PROFIELTYPEN", tr("Profieltypen", "Assemblies"), I_ASSEMBLY),
                         menu("CIV_MENU_KRUISPUNT", tr("Kruispunten", "Junctions"), I_JUNCTION, vec![
                             ("CIV_JUNCTION", tr("Kruispunt", "Junction"), I_JUNCTION),
                             ("CIV_ROUNDABOUT", tr("Rotonde", "Roundabout"), I_ROUNDABOUT),
@@ -263,7 +264,7 @@ impl CadModule for CivielModule {
                 RibbonGroup {
                     title: tr("Grondwerk", "Grading"),
                     tools: vec![
-                        large("CIV_FEATURE_LINE", tr("Kantlijn", "Feature line"), I_FEATURE),
+                        large("CIV_KANTLIJN", tr("Kantlijn", "Feature line"), I_FEATURE),
                         menu("CIV_MENU_VORM", tr("Vormgeven", "Shape"), I_PLATEAU, vec![
                             ("CIV_PLATEAU", tr("Plateau", "Plateau"), I_PLATEAU),
                             ("CIV_SLOPE", tr("Talud", "Slope"), I_SLOPE),
@@ -282,7 +283,7 @@ impl CadModule for CivielModule {
                 RibbonGroup {
                     title: tr("Uitvoer en 3D", "Output and 3D"),
                     tools: vec![
-                        large("CIV_SHEETS", tr("Bladen maken", "Create sheets"), I_SHEETS),
+                        large("CIV_BLADEN", tr("Bladen maken", "Create sheets"), I_SHEETS),
                         menu("CIV_MENU_BLADEN", tr("Bladen", "Sheets"), I_SHEETS_PDF, vec![
                             ("CIV_SHEETS_PDF", tr("Bladen naar PDF", "Sheets to PDF"), I_SHEETS_PDF),
                             ("CIV_LABELS", "Labels", I_LABELS),
@@ -1044,11 +1045,11 @@ fn riool_tools() -> Vec<RibbonItem> {
         items.push(("CIV_SEWER_GWSW", tr("GWSW overnemen", "Take over GWSW"), I_RIOOL_GWSW));
     }
     let mut tools = vec![
-        large("CIV_SEWER", tr("Riool ontwerpen", "Design sewer"), I_RIOOL),
+        large("CIV_RIOOL", tr("Riool ontwerpen", "Design sewer"), I_RIOOL),
         RibbonItem::LabeledDropdown { id: "CIV_MENU_RIOOL", label: tr("Riool", "Sewer"), icon: I_RIOOL_TOETS, items, default: "CIV_SEWER_CHECK" },
     ];
     if open_infra::lang::dutch() {
-        tools.push(file_tool("CIV_SEWER_IMPORT", tr("GWSW-bestand", "GWSW file"), I_RIOOL_GWSW, tr("GWSW-OroX openen", "Open GWSW-OroX"), "GWSW-OroX (Turtle)", &["ttl"], false));
+        tools.push(file_tool("CIV_RIOOL_IMPORT", tr("GWSW-bestand", "GWSW file"), I_RIOOL_GWSW, tr("GWSW-OroX openen", "Open GWSW-OroX"), "GWSW-OroX (Turtle)", &["ttl"], false));
     }
     tools
 }
