@@ -80,6 +80,8 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 
 44. **OCS API 23 meldt het oude tab-ID niet af bij herladen na een externe wijziging** (#130, Sol ronde 2, [BEVESTIGD] VERVOLG). De host geeft de vervangende tekening een nieuw ID en meldt alleen `DocumentOpened` voor dat ID. De werkbankstatus en sender voor het oude ID blijven dan geregistreerd. Richting: stuur op de vervangingsroute ook `DocumentTabClosed` voor het oude tab-ID.
 
+   1. **Widgettest bij hergebruik van een tab-ID** (#130, Sol ronde 5, [BEVESTIGD] VERVOLG). De nieuwe werkbank krijgt een eigen widgetscope bij hergebruik van een tab-ID. De tests in `src/ui/mod.rs` wisselen tussen twee verschillende ID’s. Breid één ervan uit met sluiten en opnieuw openen onder hetzelfde ID.
+
 45. **AHN-lintacties lezen opties in de worker** (#130, Sol ronde 3, [BEVESTIGD] VERVOLG). Contouren, hoogtepunten, de puntenwolk en profiel nemen een wijziging mee die tussen het lintcommando en de start van de worker valt. Richting: leg de opties vóór het starten van de worker vast.
 
 46. **OCS API 23 kiest de tekening pas na terugkeer van de bestandskiezer** (#130, Sol ronde 3, [BEVESTIGD] VERVOLG). Als de gebruiker van A naar B gaat terwijl de kiezer openstaat, levert OCS B als bron voor File of Klic. Richting: leg in de host het tab-ID vast bij het openen van de kiezer en controleer bij terugkeer of het tabblad nog open is.
