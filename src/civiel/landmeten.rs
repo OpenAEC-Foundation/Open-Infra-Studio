@@ -873,10 +873,14 @@ fn ensure_symbol(name: &str, made: &mut HashSet<String>) -> Result<String, Strin
     };
     let description = t!("Open Infra meetsymbool {shape} (papiermillimeters)", "Open Infra survey symbol {shape} (paper millimetres)");
     // Whether it exists, without changing it: OCS refuses a change of
-    // nothing with this answer only for a block that exists, so a block a
-    // user changed keeps its settings.
+    // nothing, first for a block that does not exist, so a block a user
+    // changed keeps its settings.
     let none = TableOperation::BlockModify { name: block.clone(), description: None, explodable: None, scale_uniformly: None };
-    let exists = matches!(table(none), Err(e) if e == "no block properties to change");
+    let exists = match table(none) {
+        Err(e) if e == format!("block {block:?} does not exist") => false,
+        Err(e) if e != "no block properties to change" => return Err(e),
+        _ => true,
+    };
     if !exists {
         let geometry: Vec<EntityType> = symbol_shapes(&shape)
             .into_iter()
@@ -901,7 +905,8 @@ fn ensure_symbol(name: &str, made: &mut HashSet<String>) -> Result<String, Strin
             .collect();
         let handles = crate::bridge::add_entities_handles(&format!("Open Infra: {block}"), geometry)?;
         table(TableOperation::BlockCreate { name: block.clone(), entities: handles, base_point: [0.0, 0.0, 0.0], erase_originals: true, description: Some(description) })?;
-        table(TableOperation::BlockModify { name: block.clone(), description: None, explodable: Some(true), scale_uniformly: Some(true) })?;
+        // A new block explodes already.
+        table(TableOperation::BlockModify { name: block.clone(), description: None, explodable: None, scale_uniformly: Some(true) })?;
     }
     made.insert(block.clone());
     Ok(block)

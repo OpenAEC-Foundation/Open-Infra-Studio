@@ -1394,6 +1394,17 @@ pub(crate) fn take_over_layer(old: &str, new: &str) {
     }
 }
 
+/// Whether every element on layer `name` carries Open Infra's object data:
+/// an import drew there, no one by hand (#143).
+pub(crate) fn imported_layer(name: &str) -> bool {
+    let count = |query: serde_json::Value| match request(PluginRequest::QueryEntities { query: query.to_string() }) {
+        Ok(PluginResponse::EntityPage(Ok(page))) => Some(page.count),
+        _ => None,
+    };
+    let all = count(serde_json::json!({"layer": name, "limit": 0}));
+    all.is_some() && count(serde_json::json!({"layer": name, "xdata_app": XDATA_APP, "limit": 0})) == all
+}
+
 /// A layer group's name: cleaned as a layer name ([`emit::clean_name`]).
 /// OCS compares group names without case, so a source named by its data
 /// has its kind in front (`Bestand-bgt`, `WMS-Luchtfoto_2025`, `XYZ-…`,
@@ -2261,9 +2272,15 @@ pub(crate) mod replacement_test_host {
                 }
                 Q::WriteRecord { handle, .. } => A::Bool(doc.get_entity(handle).is_some_and(|e| !locked(&doc, e))),
                 // As OCS: refused without a change when it cannot rename.
-                Q::TableOperation { operation: TableOperation::LayerRename { from, to } } => A::TableResult(
-                    if doc.layers.contains(&to) { Err(format!("layer {to:?} already exists")) } else { doc.rename_layer(&from, &to).map_err(|e| e.to_string()) },
-                ),
+                Q::TableOperation { operation: TableOperation::LayerRename { from, to } } => A::TableResult(if doc.layers.contains(&to) {
+                    Err(format!("layer {to:?} already exists"))
+                } else {
+                    let renamed = doc.rename_layer(&from, &to).map_err(|e| e.to_string());
+                    if renamed.is_ok() {
+                        self.log.lock().unwrap().push(format!("rename {from} {to}"));
+                    }
+                    renamed
+                }),
                 // As OCS: a block that does not exist first, then a change of
                 // nothing.
                 Q::TableOperation { operation: TableOperation::BlockModify { name, description, explodable, scale_uniformly } } => {
@@ -2331,7 +2348,12 @@ pub(crate) mod replacement_test_host {
                 Q::QueryEntities { query } => {
                     let query: serde_json::Value = serde_json::from_str(&query).unwrap();
                     let layer = query["layer"].as_str().unwrap();
-                    let entities: Vec<EntityType> = doc.model_space_entities().filter(|e| e.common().layer == layer).cloned().collect();
+                    let app = query["xdata_app"].as_str();
+                    let entities: Vec<EntityType> = doc
+                        .model_space_entities()
+                        .filter(|e| e.common().layer == layer && app.is_none_or(|app| e.common().extended_data.get_record(app).is_some()))
+                        .cloned()
+                        .collect();
                     A::EntityPage(Ok(ocs_plugin_api::host::EntityPage { count: entities.len() as u64, entities, next_offset: None }))
                 }
                 Q::BeginUndoGroup { .. } => {

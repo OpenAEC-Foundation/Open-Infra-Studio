@@ -72,9 +72,11 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     let base = emit::clean_name(opt.layer.trim());
     // The name a drawing from before #143 has for it: the layer as typed,
     // the default one with the spaces of the file's name.
-    let old_base = if opt.layer.trim() == emit::layer_name("GIS", stem) { emit::spaced_layer_name("GIS", stem) } else { opt.layer.clone() };
+    let default = opt.layer.trim() == emit::layer_name("GIS", stem);
+    let old_base = if default { emit::spaced_layer_name("GIS", stem) } else { opt.layer.clone() };
     let text_h = opt.text_m * f;
-    let mut layers: Vec<String> = Vec::new();
+    // Each layer with its name from before #143.
+    let mut layers: Vec<(String, String)> = Vec::new();
     let mut out: Vec<EntityType> = Vec::new();
     let mut n_features = 0;
     for (i, feat) in data.features.iter().enumerate() {
@@ -88,10 +90,8 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         n_features += 1;
         let value = opt.split_by.as_ref().and_then(|k| feat.props.get(k)).and_then(emit::attribute_text);
         let layer = value.as_deref().map_or_else(|| base.clone(), |v| emit::layer_name(&base, v));
-        if !layers.contains(&layer) {
-            // Once per layer: the one from before #143 takes this name.
-            bridge::take_over_layer(&value.as_deref().map_or_else(|| old_base.clone(), |v| emit::spaced_layer_name(&old_base, v)), &layer);
-            layers.push(layer.clone());
+        if !layers.iter().any(|(l, _)| *l == layer) {
+            layers.push((layer.clone(), value.as_deref().map_or_else(|| old_base.clone(), |v| emit::spaced_layer_name(&old_base, v))));
         }
         let record = emit::feature_data(feat);
         out.extend(emit::polylines(&lines, &layer, 1.0, Some(&record)));
@@ -117,8 +117,14 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     }
     let label = format!("GIS {source}");
     let handles = bridge::with_import_undo(&label, || {
-        for l in &layers {
-            bridge::ensure_layer(l, Color::from_index(opt.aci));
+        for (layer, old) in &layers {
+            // The layer from before #143 takes this name, in this undo step:
+            // the default one always, a typed one only when an import made
+            // it, never a layer of someone's own drawing.
+            if old != layer && (default || bridge::imported_layer(old)) {
+                bridge::take_over_layer(old, layer);
+            }
+            bridge::ensure_layer(layer, Color::from_index(opt.aci));
         }
         // A file is its own source: its layers are named after it, so is its group.
         bridge::add_imported_entities(&label, &format!("Bestand-{stem}"), out)
@@ -133,7 +139,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         source,
         handles.len(),
         tr("elementen op", "entities on"),
-        if layers.len() == 1 { layers[0].clone() } else { format!("{} {}", layers.len(), tr("lagen", "layers")) }
+        if layers.len() == 1 { layers[0].0.clone() } else { format!("{} {}", layers.len(), tr("lagen", "layers")) }
     )))
 }
 
@@ -141,7 +147,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
 mod tests {
     use std::sync::Arc;
 
-    use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Point};
+    use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Line, Point};
 
     use super::*;
     use crate::bridge::replacement_test_host::Drawing;
@@ -164,6 +170,28 @@ mod tests {
             message = bridge::with_command_context(target, Some(site.clone()), None, || place(&site, data, &opt, file, &|_| {}).unwrap());
         });
         message
+    }
+
+    /// One point per value of `soort`.
+    fn per_value(values: &[&str]) -> FileData {
+        let mut data = one_feature(&[]);
+        data.features = values.iter().flat_map(|v| one_feature(&[("soort", *v)]).features).collect();
+        data
+    }
+
+    /// A point on `layer` as an import places it, with its object data.
+    fn imported(layer: &str) -> EntityType {
+        let mut point = Point::default();
+        point.common.layer = layer.into();
+        point.common.extended_data.add_record(bridge::object_data([("soort", "dicht asfalt".to_string())]));
+        EntityType::Point(point)
+    }
+
+    /// A line someone drew on `layer`.
+    fn by_hand(layer: &str) -> EntityType {
+        let mut line = Line::default();
+        line.common.layer = layer.into();
+        EntityType::Line(line)
     }
 
     fn groups(drawing: &Drawing) -> Vec<(String, Vec<String>)> {
@@ -189,7 +217,8 @@ mod tests {
 
     /// A drawing from before #143 has a layer per value with the spaces of
     /// the file's name: a re-import draws on that layer, renamed, and its
-    /// layer group holds it (#143).
+    /// layer group holds it. That name is the import's own, whatever is on
+    /// it (#143).
     #[test]
     fn a_reimport_per_value_takes_over_the_layer_with_spaces_from_before() {
         let mut doc = CadDocument::new();
@@ -211,9 +240,7 @@ mod tests {
     fn a_typed_name_like_the_default_takes_over_its_layers_with_spaces() {
         let mut doc = CadDocument::new();
         doc.layers.add(Layer::new("GIS-WEGEN WEST-DICHT ASFALT")).unwrap();
-        let mut point = Point::default();
-        point.common.layer = "GIS-WEGEN WEST-DICHT ASFALT".into();
-        let old = doc.add_entity(EntityType::Point(point)).unwrap();
+        let old = doc.add_entity(imported("GIS-WEGEN WEST-DICHT ASFALT")).unwrap();
         let drawing = Arc::new(Drawing::new(doc, false));
         import(&drawing, 143_205, "wegen_west.gpkg", &one_feature(&[("soort", "dicht asfalt")]), |opt| {
             opt.layer = "GIS-WEGEN WEST".into();
@@ -226,24 +253,46 @@ mod tests {
     }
 
     /// A layer name typed with a space and a layer per value: a re-import
-    /// takes over the layers an import from before #143 made from that
-    /// name, spaces and all (#143).
+    /// takes over, in its own undo step, a layer that an import from
+    /// before #143 made from that name, spaces and all. A layer someone
+    /// also drew on by hand keeps its name and stays out of the group (#143).
     #[test]
-    fn a_reimport_with_a_typed_base_takes_over_its_layers_with_spaces() {
+    fn a_reimport_with_a_typed_base_takes_over_only_the_layers_an_import_made() {
         let mut doc = CadDocument::new();
-        doc.layers.add(Layer::new("ONTWERP WEGEN-DICHT ASFALT")).unwrap();
-        let mut point = Point::default();
-        point.common.layer = "ONTWERP WEGEN-DICHT ASFALT".into();
-        let old = doc.add_entity(EntityType::Point(point)).unwrap();
+        for layer in ["ONTWERP WEGEN-DICHT ASFALT", "ONTWERP WEGEN-OPEN ASFALT"] {
+            doc.layers.add(Layer::new(layer)).unwrap();
+        }
+        let old = doc.add_entity(imported("ONTWERP WEGEN-DICHT ASFALT")).unwrap();
+        doc.add_entity(imported("ONTWERP WEGEN-OPEN ASFALT")).unwrap();
+        let line = doc.add_entity(by_hand("ONTWERP WEGEN-OPEN ASFALT")).unwrap();
         let drawing = Arc::new(Drawing::new(doc, false));
-        import(&drawing, 143_204, "wegen.gpkg", &one_feature(&[("soort", "dicht asfalt")]), |opt| {
+        import(&drawing, 143_204, "wegen.gpkg", &per_value(&["dicht asfalt", "open asfalt"]), |opt| {
             opt.layer = "Ontwerp wegen".into();
             opt.split_by = Some("soort".into());
         });
-        assert_eq!(groups(&drawing), [group("Bestand-wegen", &["ONTWERP_WEGEN-DICHT_ASFALT"])]);
+        let log = drawing.log.lock().unwrap().clone();
+        assert_eq!(log[..3], ["begin", "rename ONTWERP WEGEN-DICHT ASFALT ONTWERP_WEGEN-DICHT_ASFALT", "end"], "{log:?}");
+        assert_eq!(groups(&drawing), [group("Bestand-wegen", &["ONTWERP_WEGEN-DICHT_ASFALT", "ONTWERP_WEGEN-OPEN_ASFALT"])]);
         let doc = drawing.doc.lock().unwrap();
         assert!(!doc.layers.contains("ONTWERP WEGEN-DICHT ASFALT"));
         assert_eq!(doc.get_entity(old).unwrap().common().layer, "ONTWERP_WEGEN-DICHT_ASFALT");
+        assert_eq!(doc.get_entity(line).unwrap().common().layer, "ONTWERP WEGEN-OPEN ASFALT");
+    }
+
+    /// A first import onto a typed layer name with a space where someone
+    /// drew by hand: that layer keeps its name and its drawing, outside the
+    /// import's layer group (#143).
+    #[test]
+    fn a_first_import_leaves_a_layer_drawn_by_hand_alone() {
+        let mut doc = CadDocument::new();
+        doc.layers.add(Layer::new("Ontwerp wegen")).unwrap();
+        let line = doc.add_entity(by_hand("Ontwerp wegen")).unwrap();
+        let drawing = Arc::new(Drawing::new(doc, false));
+        import(&drawing, 143_206, "metingen.csv", &one_feature(&[]), |opt| opt.layer = "Ontwerp wegen".into());
+        assert_eq!(groups(&drawing), [group("Bestand-metingen", &["Ontwerp_wegen"])]);
+        let doc = drawing.doc.lock().unwrap();
+        assert!(doc.layers.contains("Ontwerp wegen"));
+        assert_eq!(doc.get_entity(line).unwrap().common().layer, "Ontwerp wegen");
     }
 
     /// A layer name typed with a space: the import draws on it without the
