@@ -117,13 +117,17 @@ impl FilesPage {
             });
             ui.end_row();
             ui.label(RichText::new(tr("Laag", "Layer")).weak());
-            // The name the import draws on, shown as typed: a space becomes
-            // `_`, as a layer group cannot hold a layer with one (#143).
-            let typed = ui.add(egui::TextEdit::singleline(&mut opt.layer).desired_width(260.0))
-                .on_hover_text(tr("Zonder spaties, zodat de laag in de laaggroep van dit bestand past.", "Without spaces, so the layer fits in this file's layer group."));
-            if typed.changed() {
-                opt.layer = crate::emit::clean_name(&opt.layer);
-            }
+            // Kept as typed, so a re-import finds the layer an import from
+            // before #143 made with it; drawn without spaces, as a layer
+            // group cannot hold a layer with one (#143).
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut opt.layer).desired_width(260.0));
+                let drawn = crate::emit::clean_name(opt.layer.trim());
+                if drawn != opt.layer {
+                    ui.label(RichText::new(format!("{} {drawn}", tr("wordt", "becomes"))).small().color(Color32::GRAY))
+                        .on_hover_text(tr("Zonder spaties, zodat de laag in de laaggroep van dit bestand past.", "Without spaces, so the layer fits in this file's layer group."));
+                }
+            });
             ui.end_row();
             let fields = data.fields();
             let field_combo = |ui: &mut egui::Ui, id: &str, value: &mut Option<String>| {

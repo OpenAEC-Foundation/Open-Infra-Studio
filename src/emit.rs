@@ -68,16 +68,19 @@ pub(crate) fn clean_name(name: &str) -> String {
 
 /// DWG layer names (see [`clean_name`]), upper case like the rest.
 pub fn layer_name(prefix: &str, name: &str) -> String {
-    let mut s = clean_name(&format!("{prefix}-{name}")).to_uppercase();
-    s.truncate(60);
-    s
+    cut(clean_name(&format!("{prefix}-{name}")).to_uppercase())
 }
 
 /// The name [`layer_name`] gave before #143, spaces kept.
 pub(crate) fn spaced_layer_name(prefix: &str, name: &str) -> String {
     let clean: String = name.chars().map(|c| if NOT_IN_NAMES.contains(c) { '-' } else { c }).collect();
-    let mut s = format!("{prefix}-{clean}").to_uppercase();
-    s.truncate(60);
+    cut(format!("{prefix}-{clean}").to_uppercase())
+}
+
+/// At most 60 bytes, cut between characters.
+fn cut(mut s: String) -> String {
+    let end = (0..=s.len().min(60)).rev().find(|&i| s.is_char_boundary(i)).unwrap_or(0);
+    s.truncate(end);
     s
 }
 
@@ -167,5 +170,15 @@ mod tests {
         // Drawings from before #143 kept the spaces.
         assert_eq!(super::spaced_layer_name("GIS-WMS", "Luchtfoto 2025 (8 cm)"), "GIS-WMS-LUCHTFOTO 2025 (8 CM)");
         assert_eq!(super::spaced_layer_name("GIS", "a/b"), "GIS-A-B");
+    }
+
+    /// A long name is cut to 60 bytes on a character boundary: a non-breaking
+    /// space (two bytes) becomes `_` (one), so `É` straddles byte 60 (#143).
+    #[test]
+    fn a_long_name_is_cut_between_characters() {
+        let name = format!("{}\u{a0}Éé", "a".repeat(54));
+        let cut = super::layer_name("GIS", &name);
+        assert_eq!(cut, format!("GIS-{}_", "A".repeat(54)));
+        assert!(super::spaced_layer_name("GIS", &name).len() <= 60);
     }
 }

@@ -1120,7 +1120,7 @@ impl Uit {
     fn write(self, label: &str, originals: Option<&[(Handle, String)]>) -> Result<Written, String> {
         let tags = self.tags_in_order();
         let handles = match originals {
-            Some(originals) => self.out.write_to(label, super::LayerWrite::Append(originals))?,
+            Some(originals) => self.out.write_to(label, super::LayerWrite::Append(None, originals))?,
             None => self.out.write_handles(label)?,
         };
         let pairs = tags.into_iter().zip(handles.iter().copied()).collect();
@@ -2206,7 +2206,7 @@ pub fn profiel(opt: &super::CivielOptions, naam: Option<String>, van: Option<Str
     let mut out = Out::default();
     let (at, len, _) = draw_profile(&ctx, &g.net, &path, &mut ground, opt, at, &mut out)?;
     let originals = original_layers(&doc, old)?;
-    let hs = out.write_to(&t!("Lengteprofiel {}", "Length profile {}", g.net.naam), super::LayerWrite::Append(&originals))?;
+    let hs = out.write_to(&t!("Lengteprofiel {}", "Length profile {}", g.net.naam), super::LayerWrite::Append(None, &originals))?;
     bridge::index_add("rioolprofiel", &g.net.naam, &hs, true);
     ground.note_source();
     let names: Vec<String> = std::iter::once(g.net.putten[g.net.leidingen[path[0]].van].naam.clone()).chain(path.iter().map(|i| g.net.putten[g.net.leidingen[*i].naar].naam.clone())).collect();

@@ -70,9 +70,9 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     let stem = Path::new(source).file_stem().and_then(|s| s.to_str()).unwrap_or("file");
     // No spaces: a layer group cannot name such a layer (#143).
     let base = emit::clean_name(opt.layer.trim());
-    // The name a drawing from before #143 has for it: the default layer
-    // kept the spaces of the file's name.
-    let old_base = if base == emit::layer_name("GIS", stem) { emit::spaced_layer_name("GIS", stem) } else { base.clone() };
+    // The name a drawing from before #143 has for it: the layer as typed,
+    // the default one with the spaces of the file's name.
+    let old_base = if base == emit::layer_name("GIS", stem) { emit::spaced_layer_name("GIS", stem) } else { opt.layer.clone() };
     let text_h = opt.text_m * f;
     let mut layers: Vec<String> = Vec::new();
     let mut out: Vec<EntityType> = Vec::new();
@@ -203,6 +203,27 @@ mod tests {
         let doc = drawing.doc.lock().unwrap();
         assert!(!doc.layers.contains("GIS-WEGEN WEST-DICHT ASFALT"));
         assert_eq!(doc.get_entity(old).unwrap().common().layer, "GIS-WEGEN_WEST-DICHT_ASFALT");
+    }
+
+    /// A layer name typed with a space and a layer per value: a re-import
+    /// takes over the layers an import from before #143 made from that
+    /// name, spaces and all (#143).
+    #[test]
+    fn a_reimport_with_a_typed_base_takes_over_its_layers_with_spaces() {
+        let mut doc = CadDocument::new();
+        doc.layers.add(Layer::new("ONTWERP WEGEN-DICHT ASFALT")).unwrap();
+        let mut point = Point::default();
+        point.common.layer = "ONTWERP WEGEN-DICHT ASFALT".into();
+        let old = doc.add_entity(EntityType::Point(point)).unwrap();
+        let drawing = Arc::new(Drawing::new(doc, false));
+        import(&drawing, 143_204, "wegen.gpkg", &one_feature(&[("soort", "dicht asfalt")]), |opt| {
+            opt.layer = "Ontwerp wegen".into();
+            opt.split_by = Some("soort".into());
+        });
+        assert_eq!(groups(&drawing), [group("Bestand-wegen", &["ONTWERP_WEGEN-DICHT_ASFALT"])]);
+        let doc = drawing.doc.lock().unwrap();
+        assert!(!doc.layers.contains("ONTWERP WEGEN-DICHT ASFALT"));
+        assert_eq!(doc.get_entity(old).unwrap().common().layer, "ONTWERP_WEGEN-DICHT_ASFALT");
     }
 
     /// A layer name typed with a space: the import draws on it without the

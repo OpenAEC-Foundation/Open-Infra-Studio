@@ -250,9 +250,9 @@ enum LayerWrite<'a> {
     Draw,
     /// An import into this layer group.
     Import(&'a str),
-    /// Drawn from an outside source, in this layer group, without locking.
-    From(&'a str),
-    Append(&'a [(ocs_plugin_api::host::codec::Handle, String)]),
+    /// Added without locking, in this layer group, after which the
+    /// originals go.
+    Append(Option<&'a str>, &'a [(ocs_plugin_api::host::codec::Handle, String)]),
 }
 
 impl Out {
@@ -281,14 +281,15 @@ impl Out {
         self.write_to(label, LayerWrite::Import(group))
     }
 
-    /// Drawn from an outside source (AHN, a point cloud): in layer group
-    /// `group`, and its layers stay open for the next design write.
+    /// Drawn from an outside source (AHN, a point cloud, survey codes): in
+    /// layer group `group`, and its layers stay open for the next design
+    /// write.
     pub(crate) fn write_from(self, label: &str, group: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
-        self.write_to(label, LayerWrite::From(group))
+        self.write_to(label, LayerWrite::Append(Some(group), &[]))
     }
 
     fn append(self, label: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
-        self.write_to(label, LayerWrite::Append(&[]))
+        self.write_to(label, LayerWrite::Append(None, &[]))
     }
 
     fn write_to(self, label: &str, mode: LayerWrite<'_>) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
@@ -302,8 +303,7 @@ impl Out {
             let handles = match mode {
                 LayerWrite::Draw => bridge::add_entities_handles(label, all)?,
                 LayerWrite::Import(group) => bridge::add_imported_entities(label, group, all)?,
-                LayerWrite::From(group) => bridge::append_entities(label, Some(group), all, &[])?,
-                LayerWrite::Append(originals) => bridge::append_entities(label, None, all, originals)?,
+                LayerWrite::Append(group, originals) => bridge::append_entities(label, group, all, originals)?,
             };
             // The host registers the XDATA application only through a record write.
             if let (Some(h), Some(r)) = (handles.first(), first_data) {

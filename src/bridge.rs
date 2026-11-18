@@ -1599,7 +1599,12 @@ impl ImportLayers {
         if let Err(error) = entity_batches(entities, |chunk| self.add(chunk, &mut handles)) {
             if let Some(label) = rollback_label {
                 match remove_entities(label, &handles) {
-                    Ok(count) if count == handles.len() => {}
+                    // Taken back: a layer only these drew on joins no group.
+                    Ok(count) if count == handles.len() => {
+                        for layers in self.members.values_mut() {
+                            layers.retain(|_, (_, drawn)| !handles.contains(drawn));
+                        }
+                    }
                     _ => return Err(format!("{error}\n{}", crate::lang::tr(
                         "OCS kon de reeds geplaatste kopieën niet allemaal opruimen. Gebruik Ongedaan maken.",
                         "OCS could not clean up all newly added copies. Use Undo.",
@@ -2675,6 +2680,25 @@ mod layer_group_tests {
 
     fn groups(drawing: &Drawing) -> Vec<(String, Vec<String>)> {
         drawing.groups.lock().unwrap().clone()
+    }
+
+    /// OCS refused part of a write, which is taken back: what it drew is no
+    /// proof of a layer group, so none is made (#143).
+    #[test]
+    fn a_write_taken_back_makes_no_layer_group() {
+        crate::settings::with_test_file(|| {
+            let mut drawing = Drawing::new(CadDocument::new(), false);
+            drawing.reject_profile = true;
+            let drawing = Arc::new(drawing);
+            let target = Target { sender: drawing.clone(), tab_id: 143_009, unit_factor: 1.0, doc_path: None };
+            with_command_context(target, None, None, || {
+                ensure_layer("B-XX-AL-TEKENBLADGRENS-G", Color::from_index(7));
+                let mut refused = on("B-XX-AL-TEKENBLADGRENS-G");
+                refused.common_mut().extended_data.add_record(object_data([("rioolprofiel", "x".to_string())]));
+                assert!(append_entities("Tekenblad", Some("Tekenblad"), vec![on("B-XX-AL-TEKENBLADGRENS-G"), refused], &[]).is_err());
+            });
+            assert!(groups(&drawing).is_empty(), "{:?}", groups(&drawing));
+        });
     }
 
     /// Each import fills the layer group of its source (#143), after its

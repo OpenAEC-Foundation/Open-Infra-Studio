@@ -991,7 +991,7 @@ pub fn apply_codes(ctx: &Ctx, table: &CodeTable, points: &[SurveyPoint], source:
         let old: Vec<Handle> = crate::bridge::index_read().into_iter().filter(|(k, _, _)| k == "codes").flat_map(|(_, _, h)| h).collect();
         removed = crate::bridge::remove_entities(crate::lang::tr("Codes opnieuw", "Codes again"), &old)?;
     }
-    let handles = if out.is_empty() { Vec::new() } else { out.write_handles(&format!("Codes {source}"))? };
+    let handles = if out.is_empty() { Vec::new() } else { out.write_from(&format!("Codes {source}"), "Landmeten")? };
     crate::bridge::index_add("codes", "", &handles, replace);
     let mut per_code: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
     for f in &lw.figures {
@@ -1054,6 +1054,31 @@ pub fn apply_in_drawing(opt: &super::CivielOptions, codes: CodeOptions) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A coded survey: its points, and the kerb line and tree its codes
+    /// draw, all in layer group Landmeten (#143).
+    #[test]
+    fn a_coded_survey_puts_its_linework_and_symbols_in_its_layer_group() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::CadDocument;
+        crate::settings::with_test_file(|| {
+            let file = std::env::temp_dir().join(format!("ois-143-meting-{}.txt", std::process::id()));
+            std::fs::write(&file, "1;105000;425000;1,0;LTRB1 B\n2;105010;425000;1,0;LTRB1\n3;105005;425005;1,0;SBM Eik 30\n").unwrap();
+            let drawing = std::sync::Arc::new(Drawing::new(CadDocument::new(), false));
+            let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 143_301, unit_factor: 1.0, doc_path: None };
+            crate::bridge::with_command_context(target, None, None, || {
+                import_coded(&file, &super::super::CivielOptions::default(), Some(CodeOptions { table: None })).unwrap();
+            });
+            let _ = std::fs::remove_file(&file);
+            let groups = drawing.groups.lock().unwrap().clone();
+            assert_eq!(groups.len(), 1, "{groups:?}");
+            assert_eq!(groups[0].0, "Landmeten");
+            let doc = drawing.doc.lock().unwrap();
+            let drawn: HashSet<String> = doc.model_space_entities().map(|e| e.common().layer.clone()).collect();
+            assert!(drawn.len() >= 3, "points, kerb and tree: {drawn:?}");
+            assert!(drawn.iter().all(|l| groups[0].1.contains(l)), "{drawn:?} outside {:?}", groups[0].1);
+        });
+    }
 
     #[test]
     fn point_files_in_all_flavours() {
