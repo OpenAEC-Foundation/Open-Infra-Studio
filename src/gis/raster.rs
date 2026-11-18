@@ -260,6 +260,34 @@ fn wms_tiles(bbox: [f64; 4], [w, h]: [u32; 2], [max_w, max_h]: [u32; 2]) -> impl
     })
 }
 
+// The PDOK orthophoto is sampled on the RD grid. Independent off-grid
+// requests can differ by a source pixel at their join, even if their BBOX
+// edges coincide. Use native-aligned request grids, then sample the original
+// drawing grid at its pixel centres.
+fn pdok_request_step(caps: &WmsCaps, layer: &WmsLayer, crs: &str, pitch: [f64; 2]) -> Option<[f64; 2]> {
+    if crs != "EPSG:28992" || layer.name != "Actueel_orthoHR"
+        || !caps.get_map_url.starts_with("https://service.pdok.nl/hwh/luchtfotorgb/wms/")
+    {
+        return None;
+    }
+    let native = super::foto::Photo::Pdok.finest();
+    Some(pitch.map(|res| {
+        if res >= native {
+            native * (res / native).floor()
+        } else {
+            native / (native / res).ceil()
+        }
+    }))
+}
+
+fn aligned_request(tile: &WmsTile, [sx, sy]: [f64; 2]) -> ([f64; 4], u32, u32) {
+    let west = (tile.bbox[0] / sx).floor();
+    let south = (tile.bbox[1] / sy).floor();
+    let east = (tile.bbox[2] / sx).ceil();
+    let north = (tile.bbox[3] / sy).ceil();
+    ([west * sx, south * sy, east * sx, north * sy], (east - west) as u32, (north - south) as u32)
+}
+
 fn fetch_wms_tile(url: &str, width: u32, height: u32) -> Result<RgbaImage, String> {
     let bytes = http::get_image(url)?;
     let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
@@ -295,7 +323,19 @@ fn import_wms_mosaic(
     super::crs::ensure(&crs)?;
     let direct = crs == site.crs;
     let source_bbox = if direct { bbox } else { envelope(bbox, &Transformer::new(&site.crs, &crs)?)? };
-    let tile_size = [caps.max_width, caps.max_height].map(|n| n.unwrap_or(MAX_TILE_PX).min(MAX_TILE_PX));
+    let mut tile_size = [caps.max_width, caps.max_height].map(|n| n.unwrap_or(MAX_TILE_PX).min(MAX_TILE_PX));
+    let pitch = [(bbox[2] - bbox[0]) / f64::from(px[0]), (bbox[3] - bbox[1]) / f64::from(px[1])];
+    let aligned_step = if direct && tile_size.iter().all(|&n| n > 2) {
+        pdok_request_step(caps, layer, &crs, pitch)
+    } else {
+        None
+    };
+    if let Some(step) = aligned_step {
+        for axis in 0..2 {
+            // Reserve the two edge pixels the outward snap can add.
+            tile_size[axis] = (f64::from(tile_size[axis] - 2) * step[axis] / pitch[axis]).floor().max(1.0) as u32;
+        }
+    }
     let tiles = wms_tiles(source_bbox, px, tile_size);
     let parts = tiles.len() as u32;
     let mut missing = Vec::new();
@@ -303,14 +343,24 @@ fn import_wms_mosaic(
     let mut mosaic = RgbaImage::new(px[0], px[1]);
     for (i, tile) in tiles.enumerate() {
         let part = i as u32 + 1;
-        let url = get_map_url(caps, &layer.name, &crs, tile.bbox, tile.width, tile.height, format);
+        let (request_bbox, width, height) = aligned_step
+            .map(|step| aligned_request(&tile, step))
+            .unwrap_or((tile.bbox, tile.width, tile.height));
+        let url = get_map_url(caps, &layer.name, &crs, request_bbox, width, height, format);
         progress(format!("{} {part}/{parts}…", tr("Kaartdeel ophalen", "Fetching map part")));
-        let raster = fetch_wms_tile(&url, tile.width, tile.height).or_else(|_| {
+        let raster = fetch_wms_tile(&url, width, height).or_else(|_| {
             progress(format!("{} {part}/{parts}…", tr("Kaartdeel opnieuw ophalen", "Retrying map part")));
-            fetch_wms_tile(&url, tile.width, tile.height)
+            fetch_wms_tile(&url, width, height)
         });
         match raster {
-            Ok(img) => image::imageops::replace(&mut mosaic, &img, i64::from(tile.x), i64::from(tile.y)),
+            Ok(img) => {
+                let img = if request_bbox == tile.bbox && (width, height) == (tile.width, tile.height) {
+                    img
+                } else {
+                    warp(&img, &crs, request_bbox, &crs, tile.bbox, tile.width, tile.height)?
+                };
+                image::imageops::replace(&mut mosaic, &img, i64::from(tile.x), i64::from(tile.y));
+            }
             Err(err) => {
                 missing.push(part);
                 last_error = err;
@@ -502,6 +552,32 @@ mod tests {
         // No common fallback: a built-in system before an unknown first one.
         assert_eq!(request_crs(&layer(&["EPSG:2180", "EPSG:25833"]), "EPSG:28992"), "EPSG:25833");
         assert_eq!(request_crs(&layer(&["EPSG:2180"]), "EPSG:28992"), "EPSG:2180");
+    }
+
+    #[test]
+    fn pdok_requests_share_the_native_grid_across_the_gouda_join() {
+        let caps = super::super::caps::parse_wms(
+            "https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0",
+            r#"<WMS_Capabilities><Capability><Layer><Name>Actueel_orthoHR</Name>
+                <CRS>EPSG:28992</CRS></Layer></Capability></WMS_Capabilities>"#,
+        ).unwrap();
+        let [west, south, east, north] = [107758.5, 447453.0, 108641.5, 447747.0];
+        let px = raster_size([east - west, north - south], 0.08);
+        let pitch = [(east - west) / f64::from(px[0]), (north - south) / f64::from(px[1])];
+        let step = pdok_request_step(&caps, &caps.layers[0], "EPSG:28992", pitch).unwrap();
+        assert_eq!(step, [0.08; 2]);
+        let tiles: Vec<_> = wms_tiles([west, south, east, north], px, [2045, 2046]).collect();
+        let left = &tiles[7];
+        let right = &tiles[9];
+        assert_eq!(left.bbox[2], right.bbox[0]);
+        let (lb, w, h) = aligned_request(left, step);
+        let (rb, rw, rh) = aligned_request(right, step);
+        assert!(w <= 2048 && h <= 2048 && rw <= 2048 && rh <= 2048);
+        assert!((lb[2] - rb[0] - step[0]).abs() < 1e-9);
+        for (i, bound) in lb.into_iter().chain(rb).enumerate() {
+            let index = bound / step[i % 2];
+            assert!((index - index.round()).abs() < 1e-8);
+        }
     }
 
     #[test]
