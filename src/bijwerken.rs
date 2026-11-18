@@ -136,40 +136,43 @@ fn update_drawing(
     // Objects of the fetched collections that the BGT no longer has.
     let vanished: Vec<Handle> = drawn.iter().filter(|(id, d)| !seen.contains(*id) && collections.contains(&d.collection)).flat_map(|(_, d)| d.handles.iter().copied()).collect();
     let n_vanished = drawn.iter().filter(|(id, d)| !seen.contains(*id) && collections.contains(&d.collection)).count();
-    let mut changed = 0;
-    let placed = if redraw.is_empty() {
-        String::new()
-    } else {
-        basisdata::bgt_place_with(site, &redraw, opt, |layers, confirmed| {
-            let originals: Vec<_> = replacements.iter()
-                .filter(|(id, _)| confirmed.contains(*id))
-                .flat_map(|(_, handles)| {
-                    changed += 1;
-                    handles.iter().map(|h| (*h, entities[h].common().layer.clone()))
-                }).collect();
-            layers.remove_originals(&originals)
-        })?
-    };
-    if !vanished.is_empty() {
-        bridge::ensure_layer(vanished_layer(), Color::from_index(1));
-        let moved: Vec<EntityType> = vanished
-            .iter()
-            .filter_map(|h| entities.get(h).cloned())
-            .map(|mut e| {
-                e.common_mut().layer = vanished_layer().to_string();
-                e
-            })
-            .collect();
-        let label = tr("BGT bijwerken: vervallen objecten", "BGT update: removed objects");
-        bridge::with_import_layers(label, |layers| {
-            layers.unlock(vanished.iter().map(|h| entities[h].common().layer.clone())
-                .chain(std::iter::once(vanished_layer().to_owned())))?;
-            if bridge::update_entities(label, moved)? > 0 {
-                layers.mark_written(vanished_layer());
-            }
-            Ok(())
-        })?;
-    }
+    let (changed, placed) = bridge::with_import_undo(tr("BGT bijwerken", "Update BGT"), || {
+        let mut changed = 0;
+        let placed = if redraw.is_empty() {
+            String::new()
+        } else {
+            basisdata::bgt_place_with(site, &redraw, opt, |layers, confirmed| {
+                let originals: Vec<_> = replacements.iter()
+                    .filter(|(id, _)| confirmed.contains(*id))
+                    .flat_map(|(_, handles)| {
+                        changed += 1;
+                        handles.iter().map(|h| (*h, entities[h].common().layer.clone()))
+                    }).collect();
+                layers.remove_originals(&originals)
+            })?
+        };
+        if !vanished.is_empty() {
+            bridge::ensure_layer(vanished_layer(), Color::from_index(1));
+            let moved: Vec<EntityType> = vanished
+                .iter()
+                .filter_map(|h| entities.get(h).cloned())
+                .map(|mut e| {
+                    e.common_mut().layer = vanished_layer().to_string();
+                    e
+                })
+                .collect();
+            let label = tr("BGT bijwerken: vervallen objecten", "BGT update: removed objects");
+            bridge::with_import_layers(label, |layers| {
+                layers.unlock(vanished.iter().map(|h| entities[h].common().layer.clone())
+                    .chain(std::iter::once(vanished_layer().to_owned())))?;
+                if bridge::update_entities(label, moved)? > 0 {
+                    layers.mark_written(vanished_layer());
+                }
+                Ok(())
+            })?;
+        }
+        Ok((changed, placed))
+    })?;
     let mut msg = format!(
         "{}: {added} {}, {changed} {}, {n_vanished} {} ({}), {same} {}.",
         tr("BGT bijgewerkt", "BGT updated"),

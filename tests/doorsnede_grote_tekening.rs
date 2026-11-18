@@ -102,7 +102,8 @@ impl PluginRequestSender for Drawing {
                 self.records.lock().unwrap().insert(name, entries);
                 PluginResponse::XRecordCreateResult(Ok(Handle::from(1002u64)))
             }
-            PluginRequest::PushUndo { .. }
+            PluginRequest::BeginUndoGroup { .. }
+            | PluginRequest::EndUndoGroup
             | PluginRequest::WriteRecord { .. }
             | PluginRequest::SetDirty
             | PluginRequest::BumpGeometry

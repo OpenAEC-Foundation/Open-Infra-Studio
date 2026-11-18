@@ -1706,12 +1706,8 @@ impl App {
                         if origin || aerial {
                             self.loc.apply = Some(Job::spawn(tr("Bezig…", "Working…"), move |p| {
                                 let mut out = vec![summary];
-                                if origin {
-                                    out.push(import::geo_origin(&site)?);
-                                }
-                                if aerial {
-                                    out.push(import::aerial(&site, p)?);
-                                }
+                                let photos = if aerial { vec![import::prepare_aerial(&site, p)?] } else { Vec::new() };
+                                out.extend(import::place_datasets(&site, tr("Locatiegegevens importeren", "Import location data"), origin, photos)?);
                                 Ok(out.join(" "))
                             }));
                         } else {
@@ -1837,18 +1833,23 @@ impl App {
                 let s = site.clone();
                 self.pdok.run = Some(Job::spawn("PDOK…", move |p| {
                     let mut done = Vec::new();
+                    let mut datasets = Vec::new();
                     for (k, i) in chosen.iter().enumerate() {
                         let d = &PDOK[*i];
                         let label = tr(d.label, d.label_en);
                         p(format!("{}/{}: {}…", k + 1, chosen.len(), label));
-                        match import::run_dataset(&s, &d.data, &|m: String| p(format!("{}/{}: {} — {m}", k + 1, chosen.len(), label))) {
-                            Ok(message) if matches!(&d.data, import::Dataset::Raster { .. }) => {
-                                done.push(message.trim_end_matches('.').to_string());
+                        match import::prepare_dataset(&s, &d.data, &|m: String| p(format!("{}/{}: {} — {m}", k + 1, chosen.len(), label))) {
+                            Ok(dataset) => {
+                                done.push(match &dataset {
+                                    import::PreparedDataset::Map { summary, .. } => summary.trim_end_matches('.').to_string(),
+                                    import::PreparedDataset::Vector { .. } => label.to_string(),
+                                });
+                                datasets.push(dataset);
                             }
-                            Ok(_) => done.push(label.to_string()),
                             Err(e) => done.push(tr_format!("{} (mislukt: {e})", "{} (failed: {e})", label)),
                         }
                     }
+                    import::place_datasets(&s, tr("PDOK-gegevens importeren", "Import PDOK data"), false, datasets)?;
                     Ok(tr_format!("PDOK geïmporteerd: {}.", "PDOK data imported: {}.", done.join("; ")))
                 }));
             }
@@ -2070,7 +2071,6 @@ impl App {
                 let (opt, kopt, lev, sheet, info) = (self.nlcs.options(), self.nlcs.klic_options(), self.nlcs.klic.clone().filter(|_| klic_ready), self.nlcs.sheet, self.nlcs.info.clone());
                 let (s, cols) = (site.clone(), collections.clone());
                 self.nlcs.run = Some(Job::spawn(tr("Basisdata…", "Reference data…"), move |p| {
-                    let mut done = Vec::new();
                     let (bgt_data, cad) = match cached {
                         Some(c) => (c.2, c.3),
                         None => {
@@ -2079,22 +2079,26 @@ impl App {
                             (b, c)
                         }
                     };
-                    if !bgt_data.is_empty() {
-                        p(tr("BGT tekenen…", "Drawing BGT features…").into());
-                        done.push(basisdata::bgt_place(&s, &bgt_data, &opt)?);
-                    }
-                    if let Some(c) = cad {
-                        p(tr("Kadaster tekenen…", "Drawing cadastral features…").into());
-                        done.push(basisdata::cadastre_place(&s, &c, &opt)?);
-                    }
-                    if let Some(lev) = lev {
-                        p(tr("KLIC tekenen…", "Drawing KLIC features…").into());
-                        done.push(basisdata::klic_place(&s, &lev, &kopt)?);
-                    }
-                    if sheet {
-                        p(tr("Tekenblad…", "Drawing sheet…").into());
-                        done.push(tekenblad::draw(&s, &opt, &info)?);
-                    }
+                    let done = bridge::with_import_undo(tr("Basisdata importeren", "Import reference data"), || {
+                        let mut done = Vec::new();
+                        if !bgt_data.is_empty() {
+                            p(tr("BGT tekenen…", "Drawing BGT features…").into());
+                            done.push(basisdata::bgt_place(&s, &bgt_data, &opt)?);
+                        }
+                        if let Some(c) = cad {
+                            p(tr("Kadaster tekenen…", "Drawing cadastral features…").into());
+                            done.push(basisdata::cadastre_place(&s, &c, &opt)?);
+                        }
+                        if let Some(lev) = lev {
+                            p(tr("KLIC tekenen…", "Drawing KLIC features…").into());
+                            done.push(basisdata::klic_place(&s, &lev, &kopt)?);
+                        }
+                        if sheet {
+                            p(tr("Tekenblad…", "Drawing sheet…").into());
+                            done.push(tekenblad::draw(&s, &opt, &info)?);
+                        }
+                        Ok(done)
+                    })?;
                     bridge::zoom_extents();
                     Ok(done.join(" "))
                 }));

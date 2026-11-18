@@ -118,23 +118,25 @@ impl Out {
         }
     }
     fn write(self, label: &str, imported: bool) -> Result<usize, String> {
-        let mut all = Vec::new();
-        let mut first_data = None;
-        for (spec, e) in self.layers {
-            bridge::ensure_nlcs_layer(&spec);
-            if !imported && first_data.is_none() {
-                first_data = e.iter().find_map(|x| x.common().extended_data.get_record(bridge::XDATA_APP).cloned());
+        bridge::with_import_undo(label, || {
+            let mut all = Vec::new();
+            let mut first_data = None;
+            for (spec, e) in self.layers {
+                bridge::ensure_nlcs_layer(&spec);
+                if !imported && first_data.is_none() {
+                    first_data = e.iter().find_map(|x| x.common().extended_data.get_record(bridge::XDATA_APP).cloned());
+                }
+                all.extend(e);
             }
-            all.extend(e);
-        }
-        if imported {
-            return bridge::add_imported_entities(label, all).map(|h| h.len());
-        }
-        let handles = bridge::add_entities_handles(label, all)?;
-        if let (Some(h), Some(r)) = (handles.first(), first_data) {
-            bridge::register_object_data(*h, r);
-        }
-        Ok(handles.len())
+            if imported {
+                return bridge::add_imported_entities(label, all).map(|h| h.len());
+            }
+            let handles = bridge::add_entities_handles(label, all)?;
+            if let (Some(h), Some(r)) = (handles.first(), first_data) {
+                bridge::register_object_data(*h, r);
+            }
+            Ok(handles.len())
+        })
     }
 }
 

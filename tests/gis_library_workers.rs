@@ -33,7 +33,7 @@ impl PluginRequestSender for Drawing {
             Q::AddLayer(_) => A::OptHandle(Some(Handle::from(1000u64))),
             // The vehicle blocks already exist in this test drawing.
             Q::TableOperation { .. } => A::TableResult(Ok(Handle::from(1001u64))),
-            Q::PushUndo { .. } | Q::SetDirty | Q::BumpGeometry => A::Ok,
+            Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup | Q::SetDirty | Q::BumpGeometry => A::Ok,
             Q::AddEntities(entities) => {
                 let mut all = self.drawn.lock().unwrap();
                 let handles = (all.len()..all.len() + entities.len()).map(|i| Handle::from(i as u64 + 1)).collect();
