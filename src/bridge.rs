@@ -63,6 +63,7 @@ fn closed_drawing_sender_refuses_and_does_not_forward_a_request() {
 struct CommandContext { target: Option<Target>, site: Option<Site>, reply: Option<String> }
 thread_local! { static COMMAND_CONTEXT: std::cell::RefCell<Option<CommandContext>> = const { std::cell::RefCell::new(None) }; }
 thread_local! { static IMPORT_UNDO_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+thread_local! { static WRITES_HELD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 
 /// Bind a queued worker to its originating document and result ID, even if the active tab changes.
 pub fn with_command_context<R>(target: Target, site: Option<Site>, reply: Option<String>, f: impl FnOnce() -> R) -> R {
@@ -1081,28 +1082,51 @@ pub(crate) fn with_import_undo<R>(label: &str, write: impl FnOnce() -> Result<R,
         let t = target().ok_or("geen tekening actief")?;
         return with_command_context(t, site(), None, || with_import_undo(label, write));
     }
-    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-    begin_layer_undo(label)?;
-    struct CloseUndo;
-    impl Drop for CloseUndo {
-        fn drop(&mut self) {
-            if IMPORT_UNDO_OPEN.replace(false) {
-                let _ = request(PluginRequest::EndUndoGroup);
+    with_writes_held(|| {
+        begin_layer_undo(label)?;
+        struct CloseUndo;
+        impl Drop for CloseUndo {
+            fn drop(&mut self) {
+                if IMPORT_UNDO_OPEN.replace(false) {
+                    let _ = request(PluginRequest::EndUndoGroup);
+                }
             }
         }
+        IMPORT_UNDO_OPEN.set(true);
+        let _close = CloseUndo;
+        let result = write();
+        let closed = request(PluginRequest::EndUndoGroup).and_then(|response| match response {
+            PluginResponse::Ok => Ok(()),
+            other => Err(format!("EndUndoGroup: {other:?}")),
+        });
+        IMPORT_UNDO_OPEN.set(false);
+        // OCS's LAYERGROUP closes a held undo group: the import's layer
+        // groups follow its step, with the write lock still held (#143,
+        // knownbugs.md 153).
+        flush_layer_groups();
+        result.and_then(|value| closed.map(|()| value))
+    })
+}
+
+/// Hold the write lock that serialises plug-in writes, without an undo
+/// step: for what must happen together with a write but outside its undo
+/// group, such as switching to the layout it writes in (a switch with the
+/// block editor open closes an open undo group). Nested calls, and
+/// [`with_import_undo`] inside it, join the lock.
+pub(crate) fn with_writes_held<R>(f: impl FnOnce() -> R) -> R {
+    if WRITES_HELD.get() {
+        return f();
     }
-    IMPORT_UNDO_OPEN.set(true);
-    let _close = CloseUndo;
-    let result = write();
-    let closed = request(PluginRequest::EndUndoGroup).and_then(|response| match response {
-        PluginResponse::Ok => Ok(()),
-        other => Err(format!("EndUndoGroup: {other:?}")),
-    });
-    IMPORT_UNDO_OPEN.set(false);
-    // OCS's LAYERGROUP closes a held undo group: the import's layer groups
-    // follow its step (#143, knownbugs.md 153).
-    flush_layer_groups();
-    result.and_then(|value| closed.map(|()| value))
+    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+    struct Release;
+    impl Drop for Release {
+        fn drop(&mut self) {
+            WRITES_HELD.set(false);
+        }
+    }
+    WRITES_HELD.set(true);
+    let _release = Release;
+    f()
 }
 
 /// A generous guess of an entity's size on the wire.
@@ -2099,7 +2123,15 @@ pub(crate) mod replacement_test_host {
         /// outside model space.
         pub layout: Mutex<String>,
         pub outside: Mutex<Vec<Handle>>,
+        /// The block editor is open on a block with unsaved changes: a
+        /// switch of layout leaves it open.
         pub block_edit: bool,
+        /// The block editor is open on a block without changes: a switch of
+        /// layout closes it, then switches. Either way OCS first closes an
+        /// open undo group (`block_edit_delta` → `finish_pending_history`).
+        pub clean_block_edit: Mutex<bool>,
+        /// An undo group is open (OCS ignores an end without one).
+        open: Mutex<bool>,
         /// Two commands in step: the first two reads of a record wait for
         /// each other (at most a moment), as two commands started together.
         pub meet: Option<(Mutex<u32>, std::sync::Condvar)>,
@@ -2119,6 +2151,7 @@ pub(crate) mod replacement_test_host {
                 groups: Mutex::new(Vec::new()), blocks: Mutex::new(HashSet::new()), busy: Mutex::new(0), log: Mutex::new(Vec::new()), info: Mutex::new(Vec::new()),
                 clayer: Mutex::new("0".into()), layout: Mutex::new("Model".into()), outside: Mutex::new(Vec::new()), block_edit: false,
                 meet: None, refuse: Mutex::new(Vec::new()), hold_sheet: false, switched: std::sync::Condvar::new(),
+                clean_block_edit: Mutex::new(false), open: Mutex::new(false),
             }
         }
 
@@ -2146,7 +2179,7 @@ pub(crate) mod replacement_test_host {
 
         /// A new element, in the current layout or the block being edited.
         fn add(&self, doc: &mut CadDocument, mut entity: EntityType) -> Handle {
-            let outside = self.block_edit || *self.layout.lock().unwrap() != "Model";
+            let outside = self.block_edit || *self.clean_block_edit.lock().unwrap() || *self.layout.lock().unwrap() != "Model";
             if outside {
                 entity.common_mut().owner_handle = doc.header.paper_space_block_handle;
             }
@@ -2176,6 +2209,12 @@ pub(crate) mod replacement_test_host {
                 self.meet();
             }
             if let Q::TableOperation { operation: TableOperation::LayoutSetCurrent { name } } = &req {
+                let mut clean = self.clean_block_edit.lock().unwrap();
+                if (self.block_edit || *clean) && std::mem::take(&mut *self.open.lock().unwrap()) {
+                    self.log.lock().unwrap().push("end".into());
+                }
+                *clean = false;
+                drop(clean);
                 if !self.block_edit {
                     let mut layout = self.layout.lock().unwrap();
                     layout.clone_from(name);
@@ -2282,11 +2321,14 @@ pub(crate) mod replacement_test_host {
                     A::EntityPage(Ok(ocs_plugin_api::host::EntityPage { count: entities.len() as u64, entities, next_offset: None }))
                 }
                 Q::BeginUndoGroup { .. } => {
+                    *self.open.lock().unwrap() = true;
                     self.log.lock().unwrap().push("begin".into());
                     A::Ok
                 }
                 Q::EndUndoGroup => {
-                    self.log.lock().unwrap().push("end".into());
+                    if std::mem::take(&mut *self.open.lock().unwrap()) {
+                        self.log.lock().unwrap().push("end".into());
+                    }
                     A::Ok
                 }
                 Q::PushInfo(message) => {

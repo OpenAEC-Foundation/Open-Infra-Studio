@@ -474,8 +474,8 @@ struct BackToModel;
 impl Drop for BackToModel {
     fn drop(&mut self) {
         // Under the write lock, as every layout switch of a set (see
-        // `write_sheet`); OCS keeps no undo step for it.
-        let _ = bridge::with_import_undo("Model", || table(TableOperation::LayoutSetCurrent { name: "Model".into() }));
+        // `write_sheet`), and without an undo step.
+        let _ = bridge::with_writes_held(|| table(TableOperation::LayoutSetCurrent { name: "Model".into() }));
     }
 }
 
@@ -562,39 +562,42 @@ fn indexed(set: &str) -> Vec<Handle> {
 /// same write lock, so two starts at once replace it one after the other.
 fn replace_model(model: Sheets, set: &str, label: &str, axis: Handle) -> Result<Vec<Handle>, String> {
     let space = bridge::owner(axis)?;
-    bridge::with_import_undo(label, || {
-        // OCS adds to the current layout; the set deletes its sheets'
-        // layouts when it is replaced. Switched under the write lock, as
-        // every layout switch of a set, so no other set switches between
-        // this one and its write.
+    // OCS adds to the current layout; the set deletes its sheets' layouts
+    // when it is replaced. Switched under the write lock, as every layout
+    // switch of a set, so no other set switches between this one and its
+    // write; and before the undo step, as a switch with the block editor
+    // open closes an open undo group.
+    bridge::with_writes_held(|| {
         table(TableOperation::LayoutSetCurrent { name: "Model".into() })?;
-        let mut originals = Vec::new();
-        for chunk in indexed(set).chunks(500) {
-            // Elements a user deleted are gone already.
-            originals.extend(bridge::entities(chunk)?.into_iter().flatten().map(|e| (e.common().handle, e.common().layer.clone())));
-        }
-        let elsewhere = tr(
-            "OCS zette de bladen niet in de modelruimte, waar de as staat (wordt er een blok bewerkt?). Sluit de blokbewerker en probeer het opnieuw.",
-            "OCS did not put the sheets in model space, where the alignment is (is a block being edited?). Close the block editor and try again.",
-        );
-        let handles = bridge::append_in(label, model.out.into_entities(), space, elsewhere)?;
-        let removed = bridge::remove_replaced(label, &originals);
-        let mut index = handles.clone();
-        if removed.is_err() {
-            index.extend(originals.iter().map(|(h, _)| *h));
-        }
-        bridge::index_add("bladen", set, &index, true);
-        removed.map(|()| handles)
+        bridge::with_import_undo(label, || {
+            let mut originals = Vec::new();
+            for chunk in indexed(set).chunks(500) {
+                // Elements a user deleted are gone already.
+                originals.extend(bridge::entities(chunk)?.into_iter().flatten().map(|e| (e.common().handle, e.common().layer.clone())));
+            }
+            let elsewhere = tr(
+                "OCS zette de bladen niet in de modelruimte, waar de as staat (wordt er een blok bewerkt?). Sluit de blokbewerker en probeer het opnieuw.",
+                "OCS did not put the sheets in model space, where the alignment is (is a block being edited?). Close the block editor and try again.",
+            );
+            let handles = bridge::append_in(label, model.out.into_entities(), space, elsewhere)?;
+            let removed = bridge::remove_replaced(label, &originals);
+            let mut index = handles.clone();
+            if removed.is_err() {
+                index.extend(originals.iter().map(|(h, _)| *h));
+            }
+            bridge::index_add("bladen", set, &index, true);
+            removed.map(|()| handles)
+        })
     })
 }
 
 /// Write the sheet of one layout, in that layout: switched to under the
-/// same write lock, so no other set switches in between. A user may have
-/// locked a sheet layer (the legend layer, say): the write opens it and
-/// locks it again, so a set that replaces an older one is never left half
-/// made.
+/// same write lock, so no other set switches in between, and before the
+/// write's undo step (see [`replace_model`]). A user may have locked a
+/// sheet layer (the legend layer, say): the write opens it and locks it
+/// again, so a set that replaces an older one is never left half made.
 fn write_sheet(paper: Sheets, label: &str, layout: &str) -> Result<(), String> {
-    bridge::with_import_undo(label, || {
+    bridge::with_writes_held(|| {
         table(TableOperation::LayoutSetCurrent { name: layout.into() }).map_err(|e| format!("layout {layout}: {e}"))?;
         paper.out.append(label).map(drop)
     })
@@ -1494,6 +1497,35 @@ mod tests {
                 assert_eq!(model_space(drawing), old);
                 assert_eq!(indexed("As 1 A3"), old);
                 assert!(drawing.doc.lock().unwrap().layers.get(&frame_layer().name).unwrap().is_locked());
+            });
+        });
+    }
+
+    /// The block editor is open on a block without changes: the switch to
+    /// model space closes it, and the set is one undo step with its index,
+    /// as OCS closes an open undo group on that switch (#142).
+    #[test]
+    fn a_set_started_in_an_unchanged_block_editor_is_one_undo_step() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(1, |d| *d.clean_block_edit.get_mut().unwrap() = true, |drawing, _, axis| {
+                drawing.log.lock().unwrap().clear();
+                let new = replace_model(new_set(1), "As 1 A3", "Bladen As 1", axis).unwrap();
+                assert_eq!(*drawing.log.lock().unwrap(), ["begin", "record", "end"]);
+                assert_eq!(model_space(drawing), new);
+                assert!(drawing.outside.lock().unwrap().is_empty());
+            });
+        });
+    }
+
+    /// Back to model space after the sheets: no undo step of its own (#142).
+    #[test]
+    fn going_back_to_model_space_after_the_sheets_leaves_no_undo_step() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(0, |d| *d.layout.get_mut().unwrap() = "As 1 A3 blad 1".into(), |drawing, _, _| {
+                drawing.log.lock().unwrap().clear();
+                drop(BackToModel);
+                assert!(drawing.log.lock().unwrap().is_empty(), "{:?}", drawing.log.lock().unwrap());
+                assert_eq!(*drawing.layout.lock().unwrap(), "Model");
             });
         });
     }
