@@ -76,4 +76,8 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 
 47. **Een paar workbenchlabels blijven Nederlands in EN** (#131, Sol ronde 1, [BEVESTIGD] VERVOLG). Voorbeelden zijn `° O` op de kaart, `Laagspanning` bij KLIC, `bestaand` in de hoeveelheidstabel, `XYZ-tegels` in Serverbeheer en zoekbadges zoals `brug` en `kerk`. Richting: vertaal ze bij weergave en gebruik de bestaande codes en waarden voor opslag en verwerking.
 
-48. **De vertaalcontrole ziet alleen directe letterlijken in een aantal widgetaanroepen** (#131, Sol ronde 1, [BEVESTIGD] VERVOLG). De proef mist een letterlijke `checkbox`, raw string en `format!`-label. Een uitgeschreven widgetaanroep in commentaar telt onterecht mee. Richting: dek eerst de gangbare widgets met een label in een later argument af.
+48. **De vertaalcontrole ziet alleen directe letterlijken in een aantal widgetaanroepen** (#131, Sol ronde 1, [BEVESTIGD] VERVOLG). De proef mist een letterlijke `checkbox`, raw string en `format!`-label. Een uitgeschreven widgetaanroep in commentaar telt onterecht mee. Er is geen regressietest voor de drie taalneutrale opslagwaarden van de locatie en naamloze tegelserver. Richting: dek de gangbare widgets met een label in een later argument af en toets de opslagwaarden apart.
+
+49. **Een lange zoekbadge kan de resultaatnaam overlappen** (#131, Sol ronde 2, [BEVESTIGD] VERVOLG). De Engelse badge `water authority` is breder dan de ruimte vóór de vaste inspringing van de resultaatnaam. Richting: laat de naam beginnen na de rechterrand van de badge.
+
+50. **De Civiel-knoppentest herkent de Engelse vensterkop niet** (#131, Sol ronde 2, [BEVESTIGD] VERVOLG). De toegankelijkheidsproef zoekt uitsluitend `Open Infra · Civiel`. Richting: accepteer ook `Open Infra · Civil` in die herkenningsstap.
