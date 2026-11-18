@@ -1315,10 +1315,16 @@ pub(crate) fn add_imported_entities(label: &str, entities: Vec<EntityType>) -> R
 
 pub(crate) fn append_entities(label: &str, entities: Vec<EntityType>, originals: &[(Handle, String)]) -> Result<Vec<Handle>, String> {
     with_layer_writes(label, false, |layers| {
-        let handles = layers.write_entities_inner(entities, (!originals.is_empty()).then_some(label))?;
+        let handles = layers.write_entities_inner(entities, Some(label))?;
         layers.remove_originals(originals)?;
         Ok(handles)
     })
+}
+
+/// Remove `originals` (handle, layer) in one undo step, also from a locked
+/// layer, which is locked again after it.
+pub(crate) fn remove_replaced(label: &str, originals: &[(Handle, String)]) -> Result<(), String> {
+    with_layer_writes(label, false, |layers| layers.remove_originals(originals))
 }
 
 fn send_entities(entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
@@ -1357,12 +1363,17 @@ fn write_import(label: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec
 }
 
 impl ImportLayers {
-    /// Call only after all replacements have been acknowledged by OCS.
+    /// Remove `originals` (handle, layer), opening a locked layer for it. One
+    /// that is gone already counts as removed. A replacement that must keep
+    /// its originals until the new elements are in calls it after them
+    /// ([`append_entities`]).
     pub(crate) fn remove_originals(&mut self, originals: &[(Handle, String)]) -> Result<(), String> {
         self.unlock(originals.iter().map(|(_, layer)| layer.clone()))?;
         for (handle, _) in originals {
             match request(PluginRequest::RemoveEntity { handle: *handle })? {
                 PluginResponse::Bool(true) => {}
+                // Gone already (a user deleted it meanwhile): removed.
+                _ if entities(&[*handle])?.first().is_some_and(Option::is_none) => {}
                 _ => return Err(crate::lang::tr(
                     "OCS kon een origineel object niet verwijderen.",
                     "OCS could not remove an original entity.",
@@ -1828,11 +1839,33 @@ pub(crate) mod replacement_test_host {
         reject_batch: bool,
         pub reject_profile: bool,
         pub index: Mutex<Vec<XRecordEntry>>,
+        /// Undo groups and record writes, in order.
+        pub log: Mutex<Vec<String>>,
+        /// The current layout (CTAB). OCS adds to a sheet's layout while one
+        /// is current: `paper` keeps what went there.
+        pub layout: Mutex<String>,
+        pub paper: Mutex<Vec<Handle>>,
+        /// As OCS while a block is being edited: no switch of layout.
+        pub block_edit: bool,
+        /// Elements OCS refuses to remove (as on a layer locked meanwhile).
+        pub refuse: Mutex<Vec<Handle>>,
     }
 
     impl Drawing {
         pub(crate) fn new(doc: CadDocument, reject_batch: bool) -> Self {
-            Self { doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()) }
+            Self {
+                doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()), log: Mutex::new(Vec::new()),
+                layout: Mutex::new("Model".into()), paper: Mutex::new(Vec::new()), block_edit: false, refuse: Mutex::new(Vec::new()),
+            }
+        }
+
+        /// A new element, in the current layout.
+        fn add(&self, doc: &mut CadDocument, entity: EntityType) -> Handle {
+            let handle = doc.add_entity(entity).unwrap();
+            if *self.layout.lock().unwrap() != "Model" {
+                self.paper.lock().unwrap().push(handle);
+            }
+            handle
         }
     }
 
@@ -1861,31 +1894,49 @@ pub(crate) mod replacement_test_host {
                 Q::AddEntity(entity) => A::Handle(if locked(&doc, &entity) {
                     Handle::NULL
                 } else {
-                    doc.add_entity(entity).unwrap()
+                    self.add(&mut doc, entity)
                 }),
                 Q::AddEntities(entities) => A::Handles(entities.into_iter().map(|entity| {
                     if self.reject_batch || locked(&doc, &entity)
                         || (self.reject_profile && crate::civiel::data_value(&entity, "rioolprofiel").is_some()) {
                         Handle::NULL
                     } else {
-                        doc.add_entity(entity).unwrap()
+                        self.add(&mut doc, entity)
                     }
                 }).collect()),
                 Q::RemoveEntity { handle } => {
-                    let writable = doc.get_entity(handle).is_some_and(|e| !locked(&doc, e));
+                    let writable = doc.get_entity(handle).is_some_and(|e| !locked(&doc, e)) && !self.refuse.lock().unwrap().contains(&handle);
                     A::Bool(writable && doc.remove_entity(handle).is_some())
                 }
                 Q::WriteRecord { handle, .. } => A::Bool(doc.get_entity(handle).is_some_and(|e| !locked(&doc, e))),
+                Q::TableOperation { operation: TableOperation::LayoutSetCurrent { name } } => {
+                    if !self.block_edit {
+                        *self.layout.lock().unwrap() = name;
+                    }
+                    A::TableResult(Ok(Handle::NULL))
+                }
                 Q::TableOperation { .. } => A::TableResult(Ok(Handle::new(1001))),
+                Q::GetSystemVariable { name } if name == "CTAB" => {
+                    A::SystemVariable(Some(ocs_plugin_api::host::HostSettingValue::Text(self.layout.lock().unwrap().clone())))
+                }
                 Q::OpenDocumentViewV4 { .. } => A::Error("no shared view in the test host".into()),
                 Q::GetSelection => A::Selection(doc.model_space_entities().map(|e| e.common().handle).collect()),
                 Q::GetEntitiesBatch { handles } => A::GetEntitiesBatchResult(Ok(handles.iter().map(|h| doc.get_entity(*h).cloned()).collect())),
                 Q::ReadXRecord { .. } => A::XRecordEntries(Ok(self.index.lock().unwrap().clone())),
                 Q::UpdateXRecord { entries, .. } => {
+                    self.log.lock().unwrap().push("record".into());
                     *self.index.lock().unwrap() = entries;
                     A::XRecordUpdateResult(Ok(Handle::new(1002)))
                 }
-                Q::CloseDocumentViewV4 { .. } | Q::SetDirty | Q::BumpGeometry | Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup => A::Ok,
+                Q::BeginUndoGroup { .. } => {
+                    self.log.lock().unwrap().push("begin".into());
+                    A::Ok
+                }
+                Q::EndUndoGroup => {
+                    self.log.lock().unwrap().push("end".into());
+                    A::Ok
+                }
+                Q::CloseDocumentViewV4 { .. } | Q::SetDirty | Q::BumpGeometry | Q::PushUndo { .. } => A::Ok,
                 other => panic!("unexpected host request: {other:?}"),
             })
         }
