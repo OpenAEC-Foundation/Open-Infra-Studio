@@ -16,6 +16,7 @@ use super::jobs::{poll, Job};
 use super::map::{LonLat, MapEvent, MapView, Overlay};
 use super::{Product, Tab, UiMsg};
 use crate::bridge;
+use crate::lang::{tr, tr_format};
 use crate::gis::caps::{self, WfsCaps, WfsType, WmsCaps, WmsLayer};
 use crate::gis::crs::{self, CrsInfo, Transformer};
 use crate::gis::geocode::{self, Hit};
@@ -37,7 +38,17 @@ use crate::hoeveelheden::{self, Quantities};
 use crate::nlcs_check::{self, Report, Rule, Severity};
 use crate::civiel::{self, landmeten::Format, CivielOptions};
 
-const ACI_CHOICES: &[(i16, &str)] = &[(1, "rood"), (2, "geel"), (3, "groen"), (4, "cyaan"), (5, "blauw"), (6, "magenta"), (7, "wit/zwart"), (8, "grijs"), (30, "oranje")];
+const ACI_CHOICES: &[(i16, &str, &str)] = &[
+    (1, "rood", "red"),
+    (2, "geel", "yellow"),
+    (3, "groen", "green"),
+    (4, "cyaan", "cyan"),
+    (5, "blauw", "blue"),
+    (6, "magenta", "magenta"),
+    (7, "wit/zwart", "white/black"),
+    (8, "grijs", "grey"),
+    (30, "oranje", "orange"),
+];
 const ACCENT: Color32 = Color32::from_rgb(33, 150, 220);
 const OK_GREEN: Color32 = Color32::from_rgb(152, 195, 121);
 const ERR_RED: Color32 = Color32::from_rgb(224, 108, 117);
@@ -240,6 +251,66 @@ struct HoeveelhedenPage {
     filter: String,
     job: Option<Job<Quantities>>,
     result: Option<Quantities>,
+}
+
+fn drawing_status(status: Status) -> &'static str {
+    match status {
+        Status::B => tr(status.label(), "B — existing"),
+        Status::N => tr(status.label(), "N — new"),
+        Status::T => tr(status.label(), "T — temporary"),
+        Status::V => tr(status.label(), "V — to be removed"),
+    }
+}
+
+fn elevation_model(model: Model) -> &'static str {
+    match model {
+        Model::Dtm => tr(model.label(), "DTM — ground surface"),
+        Model::Dsm => tr(model.label(), "DSM — surface (buildings, trees)"),
+    }
+}
+
+fn point_colouring(colouring: Colouring) -> &'static str {
+    match colouring {
+        Colouring::Classification => tr(colouring.label(), "Class"),
+        Colouring::Height => tr(colouring.label(), "Elevation"),
+        Colouring::Rgb => tr(colouring.label(), "RGB (aerial imagery)"),
+    }
+}
+
+fn survey_format(format: Format) -> &'static str {
+    match format {
+        Format::Auto => tr(format.label(), "Automatic"),
+        Format::Pnezd => tr(format.label(), "PNEZD (point, northing, easting, Z, code)"),
+        Format::Penzd => tr(format.label(), "PENZD (point, X, Y, Z, code)"),
+        Format::Nezd => tr(format.label(), "NEZD (northing, easting, Z, code)"),
+        Format::Enzd => tr(format.label(), "ENZD (X, Y, Z, code)"),
+    }
+}
+
+fn severity_label(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Fout => tr(severity.label(), "error"),
+        Severity::Waarschuwing => tr(severity.label(), "warning"),
+        Severity::Info => severity.label(),
+    }
+}
+
+fn rule_title(rule: Rule) -> &'static str {
+    let english = match rule {
+        Rule::LayerName => "Layer name does not follow NLCS",
+        Rule::LayerObject => "Object is absent from the main group",
+        Rule::LayerElement => "Element type is disallowed for the object",
+        Rule::LayerColor => "Layer colour differs from NLCS",
+        Rule::LayerLineweight => "Layer lineweight differs from NLCS",
+        Rule::LayerLinetype => "Layer linetype differs from NLCS",
+        Rule::EntityColor => "Entity colour is not ByLayer",
+        Rule::EntityLineweight => "Entity lineweight is not ByLayer",
+        Rule::EntityLinetype => "Entity linetype is not ByLayer",
+        Rule::LayerZero => "Entities on layer 0",
+        Rule::TextHeight => "Text height does not match an NLCS text class",
+        Rule::EmptyLayer => "Empty NLCS layer",
+    };
+    tr(rule.title(), english)
 }
 
 fn severity_colour(s: Severity) -> Color32 {
@@ -692,7 +763,7 @@ impl App {
             controle: ControlePage::default(),
             hoev: HoeveelhedenPage::default(),
             civiel_run: None,
-            srv: ServersPage { region: "Eigen servers".into(), ..Default::default() },
+            srv: ServersPage::default(),
             coords: CoordsPage { crs: "EPSG:4326".into(), xy: [4.660_612, 51.814_158], picked: None, job: None },
             servers: servers::all(),
             lib: Default::default(),
@@ -780,9 +851,9 @@ impl App {
     fn saved_site(&mut self, ui: &mut egui::Ui) -> Option<Site> {
         let s = bridge::site();
         if s.is_none() {
-            group(ui, "Projectlocatie ontbreekt", |ui| {
-                ui.colored_label(WARN, "Deze tekening heeft nog geen projectlocatie. Stel die eerst in.");
-                if ui.button("Geografische locatie instellen…").clicked() {
+            group(ui, tr("Projectlocatie ontbreekt", "Project location missing"), |ui| {
+                ui.colored_label(WARN, tr("Deze tekening heeft nog geen projectlocatie. Stel die eerst in.", "Set a project location for this drawing first."));
+                if ui.button(tr("Geografische locatie instellen…", "Set geographic location…")).clicked() {
                     self.tab = Tab::Location;
                 }
             });
@@ -801,13 +872,13 @@ impl App {
             }
         }
         let mut event = None;
-        group(ui, "Kaart", |ui| {
+        group(ui, tr("Kaart", "Map"), |ui| {
             ui.horizontal(|ui| {
-                ui.add(egui::Button::image_and_text(icon("area"), "Gebied tekenen").selected(self.map.area_mode))
-                    .on_hover_text("Sleep op de kaart een rechthoek als importgebied (of houd Shift ingedrukt)")
+                ui.add(egui::Button::image_and_text(icon("area"), tr("Gebied tekenen", "Draw area")).selected(self.map.area_mode))
+                    .on_hover_text(tr("Sleep op de kaart een rechthoek als importgebied (of houd Shift ingedrukt)", "Drag a rectangle on the map to set the import area (or hold Shift)"))
                     .clicked()
                     .then(|| self.map.area_mode = !self.map.area_mode);
-                if ui.add_enabled(ring.is_some(), egui::Button::new("Zoom naar gebied")).clicked() {
+                if ui.add_enabled(ring.is_some(), egui::Button::new(tr("Zoom naar gebied", "Zoom to area"))).clicked() {
                     if let Some(r) = &ring {
                         self.map.fit(r, Vec2::new(ui.available_width(), map_h));
                     }
@@ -866,13 +937,13 @@ impl App {
                 self.loc.typed_at = None;
                 if q.chars().count() >= 3 && q != self.loc.hits_for {
                     let q2 = q.clone();
-                    self.loc.suggest = Some(Job::spawn("Suggesties…", move |_| geocode::suggest(&q2).map(|h| (q2, h))));
+                    self.loc.suggest = Some(Job::spawn(tr("Suggesties…", "Suggestions…"), move |_| geocode::suggest(&q2).map(|h| (q2, h))));
                 }
             }
         }
         if let Some(r) = poll(&mut self.loc.crs_job) {
             match r {
-                Ok(info) if info.proj4.contains("+proj=longlat") => self.err("Kies een geprojecteerd stelsel (in meters) als projectstelsel."),
+                Ok(info) if info.proj4.contains("+proj=longlat") => self.err(tr("Kies een geprojecteerd stelsel (in meters) als projectstelsel.", "Choose a projected coordinate system (in metres) for the project.")),
                 Ok(info) => {
                     self.draft.crs = info.code;
                     self.draft.reproject_origin();
@@ -887,7 +958,7 @@ impl App {
             }
         }
 
-        page_header(ui, "location", "Geografische locatie instellen", "Kies de projectlocatie op de kaart of zoek een adres; teken of typ de begrenzing van het importgebied.");
+        page_header(ui, "location", tr("Geografische locatie instellen", "Set geographic location"), tr("Kies de projectlocatie op de kaart of zoek een adres; teken of typ de begrenzing van het importgebied.", "Pick the project location on the map or search for an address. Draw or enter the import area bounds."));
         let draft = self.draft.clone();
         match self.map_section(ui, Some(&draft), Some([draft.lon, draft.lat]), None, &[]) {
             Some(MapEvent::Clicked(ll)) => {
@@ -911,13 +982,13 @@ impl App {
         let mut field: Option<egui::Rect> = None;
         let mut pick: Option<usize> = None;
         let mut search_all = false;
-        group(ui, "Locatie", |ui| {
+        group(ui, tr("Locatie", "Location"), |ui| {
             egui::Grid::new("loc").num_columns(2).spacing([14.0, 7.0]).min_col_width(170.0).show(ui, |ui| {
-                ui.label("Zoek plaats / adres");
+                ui.label(tr("Zoek plaats / adres", "Find a place or address"));
                 ui.horizontal(|ui| {
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut self.loc.query)
-                            .hint_text("adres, plaats, perceel, straat — of 51.814, 4.660 / RD 104885 425320")
+                            .hint_text(tr("adres, plaats, perceel, straat — of 51.814, 4.660 / RD 104885 425320", "address, place, parcel, street or 51.814, 4.660 / RD 104885 425320"))
                             .desired_width(ui.available_width() - 90.0),
                     );
                     field = Some(edit.rect);
@@ -955,13 +1026,13 @@ impl App {
                         }
                     }
                     let typed = !self.loc.query.trim().is_empty();
-                    if ui.add_enabled(self.loc.search.is_none() && typed, egui::Button::new("Zoeken")).on_hover_text("In Nederland (PDOK) en wereldwijd (OpenStreetMap)").on_disabled_hover_text("Typ eerst een adres, plaats of coördinaten").clicked() {
+                    if ui.add_enabled(self.loc.search.is_none() && typed, egui::Button::new(tr("Zoeken", "Search"))).on_hover_text(tr("In Nederland (PDOK) en wereldwijd (OpenStreetMap)", "In the Netherlands (PDOK) and worldwide (OpenStreetMap)")).on_disabled_hover_text(tr("Typ eerst een adres, plaats of coördinaten", "Enter an address, place or coordinates first")).clicked() {
                         search_all = true;
                     }
                 });
                 ui.end_row();
 
-                ui.label("Coördinatenstelsel (CRS)");
+                ui.label(tr("Coördinatenstelsel (CRS)", "Coordinate reference system (CRS)"));
                 ui.horizontal(|ui| {
                     let suggested = crs::suggest(self.draft.lon, self.draft.lat);
                     let mut list = crs::builtin_list();
@@ -976,7 +1047,7 @@ impl App {
                     let mut chosen = None;
                     egui::ComboBox::from_id_salt("crs").width(340.0).height(420.0).selected_text(current).show_ui(ui, |ui| {
                         for i in list.iter().filter(|i| !i.proj4.contains("+proj=longlat")) {
-                            let star = if i.code == suggested { "  ★ aanbevolen" } else { "" };
+                            let star = if i.code == suggested { tr("  ★ aanbevolen", "  ★ recommended") } else { "" };
                             if ui.selectable_label(i.code == self.draft.crs, format!("{} — {} ({}){star}", i.code, i.name, i.region)).clicked() {
                                 chosen = Some(i.code.clone());
                             }
@@ -986,15 +1057,15 @@ impl App {
                         self.draft.crs = c;
                         self.draft.reproject_origin();
                     }
-                    ui.add(egui::TextEdit::singleline(&mut self.loc.custom_epsg).hint_text("EPSG-code").desired_width(80.0));
-                    if ui.add_enabled(self.loc.crs_job.is_none() && !self.loc.custom_epsg.trim().is_empty(), egui::Button::new("Laden")).on_hover_text("Definitie ophalen via epsg.io").clicked() {
+                    ui.add(egui::TextEdit::singleline(&mut self.loc.custom_epsg).hint_text(tr("EPSG-code", "EPSG code")).desired_width(80.0));
+                    if ui.add_enabled(self.loc.crs_job.is_none() && !self.loc.custom_epsg.trim().is_empty(), egui::Button::new(tr("Laden", "Load"))).on_hover_text(tr("Definitie ophalen via epsg.io", "Fetch the definition from epsg.io")).clicked() {
                         let code = self.loc.custom_epsg.clone();
-                        self.loc.crs_job = Some(Job::spawn("Stelsel laden…", move |_| crs::ensure(&code)));
+                        self.loc.crs_job = Some(Job::spawn(tr("Stelsel laden…", "Loading CRS…"), move |_| crs::ensure(&code)));
                     }
                 });
                 ui.end_row();
 
-                ui.label("Breedtegraad / lengtegraad");
+                ui.label(tr("Breedtegraad / lengtegraad", "Latitude / longitude"));
                 ui.horizontal(|ui| {
                     let a = ui.add(egui::DragValue::new(&mut self.draft.lat).speed(0.0001).fixed_decimals(7).prefix("lat "));
                     let b = ui.add(egui::DragValue::new(&mut self.draft.lon).speed(0.0001).fixed_decimals(7).prefix("lon "));
@@ -1004,7 +1075,7 @@ impl App {
                 });
                 ui.end_row();
 
-                ui.label("Omschrijving");
+                ui.label(tr("Omschrijving", "Description"));
                 ui.add(egui::TextEdit::singleline(&mut self.draft.label).desired_width(f32::INFINITY));
                 ui.end_row();
             });
@@ -1019,15 +1090,15 @@ impl App {
             let q = self.loc.query.trim().to_string();
             self.loc.popup = true;
             self.loc.typed_at = None;
-            self.loc.search = Some(Job::spawn("Zoeken…", move |_| geocode::search(&q)));
+            self.loc.search = Some(Job::spawn(tr("Zoeken…", "Searching…"), move |_| geocode::search(&q)));
         }
         if let Some(i) = pick {
             self.pick_hit(i);
         }
 
-        group(ui, "Begrenzing en plaatsing", |ui| {
+        group(ui, tr("Begrenzing en plaatsing", "Bounds and placement"), |ui| {
             egui::Grid::new("bbox").num_columns(2).spacing([14.0, 7.0]).min_col_width(170.0).show(ui, |ui| {
-                ui.label("Basispunt X / Y (m)");
+                ui.label(tr("Basispunt X / Y (m)", "Origin X / Y (m)"));
                 ui.horizontal(|ui| {
                     let (mut e, mut n) = (self.draft.origin_e, self.draft.origin_n);
                     let a = ui.add(egui::DragValue::new(&mut e).speed(1.0).fixed_decimals(3).prefix("X "));
@@ -1037,7 +1108,7 @@ impl App {
                     }
                 });
                 ui.end_row();
-                ui.label("Begrenzing breedte × hoogte (m)");
+                ui.label(tr("Begrenzing breedte × hoogte (m)", "Area width × height (m)"));
                 ui.horizontal(|ui| {
                     ui.add(egui::DragValue::new(&mut self.draft.width).speed(10.0).range(10.0..=20_000.0));
                     ui.label("×");
@@ -1050,24 +1121,24 @@ impl App {
                     }
                 });
                 ui.end_row();
-                ui.label("Coördinaten in de tekening");
+                ui.label(tr("Coördinaten in de tekening", "Coordinates in the drawing"));
                 ui.vertical(|ui| {
-                    ui.radio_value(&mut self.draft.absolute, true, "Absoluut — CRS-coördinaten (bijv. RD) direct in de tekening");
-                    ui.radio_value(&mut self.draft.absolute, false, "Relatief — basispunt = 0,0");
+                    ui.radio_value(&mut self.draft.absolute, true, tr("Absoluut — CRS-coördinaten (bijv. RD) direct in de tekening", "Absolute — use CRS coordinates (e.g. RD) directly in the drawing"));
+                    ui.radio_value(&mut self.draft.absolute, false, tr("Relatief — basispunt = 0,0", "Relative — origin = 0,0"));
                 });
                 ui.end_row();
-                ui.label("Na opslaan");
+                ui.label(tr("Na opslaan", "After saving"));
                 ui.vertical(|ui| {
-                    ui.checkbox(&mut self.loc.geo_origin, "Basispunt-markering in de tekening plaatsen (GeoOrigin)");
-                    ui.checkbox(&mut self.loc.aerial, "Luchtfoto importeren (PDOK in NL, Sentinel-2 elders)");
+                    ui.checkbox(&mut self.loc.geo_origin, tr("Basispunt-markering in de tekening plaatsen (GeoOrigin)", "Place an origin marker in the drawing (GeoOrigin)"));
+                    ui.checkbox(&mut self.loc.aerial, tr("Luchtfoto importeren (PDOK in NL, Sentinel-2 elders)", "Import aerial imagery (PDOK in the Netherlands, Sentinel-2 elsewhere)"));
                 });
                 ui.end_row();
             });
             let units = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
-            ui.label(RichText::new(format!(
-                "Tekeneenheid: {} (INSUNITS){}",
-                if (units - 1.0).abs() < 1e-9 { "meter".to_string() } else if (units - 1000.0).abs() < 1e-9 { "millimeter".into() } else { format!("{units} per meter") },
-                if self.has_site { "" } else { " · deze tekening heeft nog geen projectlocatie" }
+            ui.label(RichText::new(tr_format!(
+                "Tekeneenheid: {} (INSUNITS){}", "Drawing unit: {} (INSUNITS){}",
+                if (units - 1.0).abs() < 1e-9 { tr("meter", "metre").to_string() } else if (units - 1000.0).abs() < 1e-9 { tr("millimeter", "millimetre").into() } else { tr_format!("{units} per meter", "{units} per metre") },
+                if self.has_site { "" } else { tr(" · deze tekening heeft nog geen projectlocatie", " · this drawing has no project location yet") }
             )).small().weak());
         });
 
@@ -1115,9 +1186,9 @@ impl App {
                             let h = &self.loc.hits[i];
                             if groups > 1 && h.source != last_source {
                                 let title = match h.source {
-                                    "PDOK" => "NEDERLAND · PDOK",
-                                    "OSM" => "WERELDWIJD · OPENSTREETMAP",
-                                    _ => "INVOER",
+                                    "PDOK" => tr("NEDERLAND · PDOK", "NETHERLANDS · PDOK"),
+                                    "OSM" => tr("WERELDWIJD · OPENSTREETMAP", "WORLDWIDE · OPENSTREETMAP"),
+                                    _ => tr("INVOER", "INPUT"),
                                 };
                                 ui.add_space(if last_source.is_empty() { 0.0 } else { 4.0 });
                                 ui.label(RichText::new(title).small().strong().color(ACCENT));
@@ -1128,18 +1199,18 @@ impl App {
                             }
                         }
                     } else if nothing {
-                        ui.label(RichText::new(format!("Niets gevonden voor \"{q}\".")).weak());
+                        ui.label(RichText::new(tr_format!("Niets gevonden voor \"{q}\".", "No results for \"{q}\".")).weak());
                     }
                     });
                     ui.separator();
                     ui.horizontal(|ui| {
                         if busy {
                             ui.spinner();
-                            ui.label(RichText::new(if self.loc.search.is_some() { "Zoeken in Nederland en wereldwijd…" } else { "Suggesties…" }).small().weak());
+                            ui.label(RichText::new(if self.loc.search.is_some() { tr("Zoeken in Nederland en wereldwijd…", "Searching in the Netherlands and worldwide…") } else { tr("Suggesties…", "Suggestions…") }).small().weak());
                         } else if self.loc.hits_full {
-                            ui.label(RichText::new("Pijltjes en Enter om te kiezen · Esc sluit").small().weak());
+                            ui.label(RichText::new(tr("Pijltjes en Enter om te kiezen · Esc sluit", "Arrow keys and Enter to select · Esc to close")).small().weak());
                         } else {
-                            ui.label(RichText::new("Enter of Zoeken: ook wereldwijd zoeken (OpenStreetMap) · pijltjes om te kiezen · Esc sluit").small().weak());
+                            ui.label(RichText::new(tr("Enter of Zoeken: ook wereldwijd zoeken (OpenStreetMap) · pijltjes om te kiezen · Esc sluit", "Enter or Search to include worldwide results (OpenStreetMap) · arrow keys to select · Esc to close")).small().weak());
                         }
                     });
                 });
@@ -1163,7 +1234,7 @@ impl App {
             self.draft.reproject_origin();
         } else {
             let c = code.clone();
-            self.loc.crs_job = Some(Job::spawn("Stelsel laden…", move |_| crs::ensure(&c)));
+            self.loc.crs_job = Some(Job::spawn(tr("Stelsel laden…", "Loading CRS…"), move |_| crs::ensure(&c)));
         }
         self.map.center = [h.lon, h.lat];
         self.fit_pending = true;
@@ -1172,7 +1243,7 @@ impl App {
         self.loc.popup = false;
         self.loc.highlight = None;
         self.loc.typed_at = None;
-        self.message = Some((true, format!("Locatie: {} — stelsel {code}. Klik op OK om op te slaan.", h.label)));
+        self.message = Some((true, tr_format!("Locatie: {} — stelsel {code}. Klik op OK om op te slaan.", "Location: {} · CRS {code}. Click OK to save.", h.label)));
     }
 
     // ── Rasterdata (WMS / TMS) ──────────────────────────────────────────────
@@ -1186,7 +1257,7 @@ impl App {
                     if let Some(l) = &self.raster.layer {
                         self.raster.format = raster::default_format(&c, &l.name);
                     }
-                    self.message = Some((true, format!("{} lagen (WMS {}).", c.layers.len(), c.version)));
+                    self.message = Some((true, tr_format!("{} lagen (WMS {}).", "{} layers (WMS {}).", c.layers.len(), c.version)));
                     self.raster.caps = Some(c);
                 }
                 Err(e) => self.err(e),
@@ -1197,9 +1268,9 @@ impl App {
                 Ok(p) => {
                     self.raster.preview = Some(p);
                     self.raster.preview_texture = None;
-                    self.message = Some((true, "Voorbeeld getoond op de kaart.".into()));
+                    self.message = Some((true, tr("Voorbeeld getoond op de kaart.", "Preview shown on the map.").into()));
                 }
-                Err(e) => self.err(format!("Test mislukt: {e}")),
+                Err(e) => self.err(tr_format!("Test mislukt: {e}", "Test failed: {e}")),
             }
         }
         if let Some(r) = poll(&mut self.raster.run) {
@@ -1209,7 +1280,7 @@ impl App {
             }
         }
 
-        page_header(ui, "map", "Rasterdata laden met WMS / TMS", "Luchtfoto's, kaarten en hoogtebeelden als onderlegger in de tekening.");
+        page_header(ui, "map", tr("Rasterdata laden met WMS / TMS", "Load raster data with WMS / TMS"), tr("Luchtfoto's, kaarten en hoogtebeelden als onderlegger in de tekening.", "Aerial imagery, maps and elevation imagery as drawing underlays."));
         let Some(site) = self.saved_site(ui) else { return };
         let preview = self.raster.preview.as_ref().map(|p| {
             self.raster.preview_texture.get_or_insert_with(|| {
@@ -1219,9 +1290,9 @@ impl App {
         });
         self.map_section(ui, Some(&site), None, preview.as_ref(), &[]);
 
-        group(ui, "Webserver / verzoek", |ui| {
+        group(ui, tr("Webserver / verzoek", "Web server / request"), |ui| {
             egui::Grid::new("wms").num_columns(2).spacing([14.0, 7.0]).min_col_width(170.0).show(ui, |ui| {
-                ui.label("Voorgedefinieerde server");
+                ui.label(tr("Voorgedefinieerde server", "Predefined server"));
                 if let Some(s) = server_combo(ui, "wms_srv", &self.servers, &[ServerKind::Wms, ServerKind::Xyz], self.raster.server.as_ref()) {
                     self.raster.caps = None;
                     self.raster.layer = None;
@@ -1230,7 +1301,7 @@ impl App {
                     self.raster.filter.clear();
                     if s.kind == ServerKind::Wms {
                         let url = s.url.clone();
-                        self.raster.caps_job = Some(Job::spawn("Capabilities ophalen…", move |_| caps::fetch_wms(&url)));
+                        self.raster.caps_job = Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wms(&url)));
                         self.raster.resolution = 0.25;
                     } else {
                         self.raster.resolution = 0.5;
@@ -1239,7 +1310,7 @@ impl App {
                 }
                 ui.end_row();
                 if let Some(s) = &self.raster.server {
-                    ui.label("Bron");
+                    ui.label(tr("Bron", "Source"));
                     ui.label(RichText::new(format!("{}  ·  {}", s.attribution, s.url)).small().weak());
                     ui.end_row();
                 }
@@ -1252,10 +1323,10 @@ impl App {
                     ui.end_row();
                 }
                 if let (Some(c), Some(ServerKind::Wms)) = (&self.raster.caps, self.raster.server.as_ref().map(|s| s.kind)) {
-                    ui.label("Laag");
-                    ui.label(RichText::new(self.raster.layer.as_ref().map(|l| format!("{}  ({})", l.title, l.name)).unwrap_or_else(|| "— kies hieronder —".into())).strong());
+                    ui.label(tr("Laag", "Layer"));
+                    ui.label(RichText::new(self.raster.layer.as_ref().map(|l| format!("{}  ({})", l.title, l.name)).unwrap_or_else(|| tr("— kies hieronder —", "— choose below —").into())).strong());
                     ui.end_row();
-                    ui.label("Formaat");
+                    ui.label(tr("Formaat", "Format"));
                     egui::ComboBox::from_id_salt("fmt").selected_text(self.raster.format.clone()).show_ui(ui, |ui| {
                         for f in c.formats.iter().filter(|f| f.starts_with("image/png") || f.starts_with("image/jpeg")) {
                             ui.selectable_value(&mut self.raster.format, f.clone(), f);
@@ -1266,14 +1337,14 @@ impl App {
             });
             if let (Some(c), Some(ServerKind::Wms)) = (&self.raster.caps, self.raster.server.as_ref().map(|s| s.kind)) {
                 ui.add_space(4.0);
-                ui.add(egui::TextEdit::singleline(&mut self.raster.filter).hint_text(format!("Filter {} lagen…", c.layers.len())).desired_width(f32::INFINITY));
+                ui.add(egui::TextEdit::singleline(&mut self.raster.filter).hint_text(tr_format!("Filter {} lagen…", "Filter {} layers…", c.layers.len())).desired_width(f32::INFINITY));
                 let mut chosen = None;
                 list_frame(ui, 170.0, "wms_layers", |ui| {
                     let f = self.raster.filter.to_lowercase();
                     for l in c.layers.iter().filter(|l| f.is_empty() || l.name.to_lowercase().contains(&f) || l.title.to_lowercase().contains(&f)) {
                         let sel = self.raster.layer.as_ref().is_some_and(|x| x.name == l.name);
                         let reproj = !l.crs.is_empty() && !l.crs.contains(&site.crs);
-                        let txt = format!("{}{}{}", l.title, if l.title != l.name { format!("   ({})", l.name) } else { String::new() }, if reproj { "   · herprojectie" } else { "" });
+                        let txt = format!("{}{}{}", l.title, if l.title != l.name { format!("   ({})", l.name) } else { String::new() }, if reproj { tr("   · herprojectie", "   · reprojection") } else { "" });
                         if ui.selectable_label(sel, txt).clicked() {
                             chosen = Some(l.clone());
                         }
@@ -1290,9 +1361,9 @@ impl App {
 
         let mut too_big = false;
         if self.raster.server.is_some() {
-            group(ui, "Import-instellingen", |ui| {
+            group(ui, tr("Import-instellingen", "Import settings"), |ui| {
                 egui::Grid::new("wms_imp").num_columns(2).spacing([14.0, 7.0]).min_col_width(170.0).show(ui, |ui| {
-                    ui.label("Resolutie");
+                    ui.label(tr("Resolutie", "Resolution"));
                     ui.horizontal(|ui| {
                         ui.add(egui::DragValue::new(&mut self.raster.resolution).speed(0.01).range(0.02..=100.0).suffix(" m/px"));
                         for r in [0.08, 0.25, 0.5, 1.0] {
@@ -1305,13 +1376,13 @@ impl App {
                     ui.label("Pixels");
                     let (w, h) = (site.width / self.raster.resolution, site.height / self.raster.resolution);
                     too_big = w * h > MAX_TOTAL_PX;
-                    ui.label(RichText::new(format!("{w:.0} × {h:.0} px voor {} × {} m{}", site.width, site.height, if too_big { " — te groot: verhoog de resolutie of verklein het gebied" } else { "" }))
+                    ui.label(RichText::new(tr_format!("{w:.0} × {h:.0} px voor {} × {} m{}", "{w:.0} × {h:.0} px for {} × {} m{}", site.width, site.height, if too_big { tr(" — te groot: verhoog de resolutie of verklein het gebied", " — too large: increase metres per pixel or reduce the area") } else { "" }))
                         .color(if too_big { ERR_RED } else { ui.visuals().weak_text_color() }));
                     ui.end_row();
-                    ui.label("Vervagen");
+                    ui.label(tr("Vervagen", "Fade"));
                     ui.add(egui::Slider::new(&mut self.raster.fade, 0..=80).suffix(" %"));
                     ui.end_row();
-                    ui.label("Laag in tekening");
+                    ui.label(tr("Laag in tekening", "Layer in drawing"));
                     let name = match (&self.raster.server, &self.raster.layer) {
                         (Some(s), _) if s.kind == ServerKind::Xyz => crate::emit::layer_name("GIS", &s.name),
                         (_, Some(l)) => crate::emit::layer_name("GIS-WMS", &l.title),
@@ -1332,7 +1403,7 @@ impl App {
                 Ok(c) => {
                     let pre = self.wfs.server.as_ref().map(|s| s.default_layer.clone()).unwrap_or_default();
                     self.wfs.ft = c.types.iter().find(|t| t.name == pre).or(c.types.first()).cloned();
-                    self.message = Some((true, format!("{} objecttypen (WFS {}).", c.types.len(), c.version)));
+                    self.message = Some((true, tr_format!("{} objecttypen (WFS {}).", "{} feature types (WFS {}).", c.types.len(), c.version)));
                     self.wfs.caps = Some(c);
                 }
                 Err(e) => self.err(e),
@@ -1346,7 +1417,7 @@ impl App {
                     self.wfs.label = HINTS.iter().find(|h| names.iter().any(|n| n == *h)).map(|h| h.to_string()).unwrap_or_default();
                     let color = aci_color(self.wfs.aci);
                     self.wfs.preview = lines.into_iter().map(|l| (l, color)).collect();
-                    self.message = Some((true, format!("{} objecten opgehaald{} — zie de kaart.", res.features.len(), if res.truncated { " (limiet bereikt)" } else { "" })));
+                    self.message = Some((true, tr_format!("{} objecten opgehaald{} — zie de kaart.", "{} features fetched{} — see the map.", res.features.len(), if res.truncated { tr(" (limiet bereikt)", " (limit reached)") } else { "" })));
                     self.wfs.result = Some(res);
                 }
                 Err(e) => self.err(e),
@@ -1359,22 +1430,22 @@ impl App {
             }
         }
 
-        page_header(ui, "vector", "2D-vectordata laden met WFS", "Percelen, panden, wegvakken, spoor en andere objecten als lijnen met labels.");
+        page_header(ui, "vector", tr("2D-vectordata laden met WFS", "Load 2D vector data with WFS"), tr("Percelen, panden, wegvakken, spoor en andere objecten als lijnen met labels.", "Parcels, buildings, road sections, railways and other features as lines with labels."));
         let Some(site) = self.saved_site(ui) else { return };
         let preview = std::mem::take(&mut self.wfs.preview);
         self.map_section(ui, Some(&site), None, None, &preview);
         self.wfs.preview = preview;
 
-        group(ui, "Webserver / verzoek", |ui| {
+        group(ui, tr("Webserver / verzoek", "Web server / request"), |ui| {
             egui::Grid::new("wfs").num_columns(2).spacing([14.0, 7.0]).min_col_width(170.0).show(ui, |ui| {
-                ui.label("Voorgedefinieerde server");
+                ui.label(tr("Voorgedefinieerde server", "Predefined server"));
                 if let Some(s) = server_combo(ui, "wfs_srv", &self.servers, &[ServerKind::Wfs], self.wfs.server.as_ref()) {
                     self.wfs.caps = None;
                     self.wfs.ft = None;
                     self.wfs.result = None;
                     self.wfs.preview.clear();
                     let url = s.url.clone();
-                    self.wfs.caps_job = Some(Job::spawn("Capabilities ophalen…", move |_| caps::fetch_wfs(&url)));
+                    self.wfs.caps_job = Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wfs(&url)));
                     self.wfs.server = Some(s);
                 }
                 ui.end_row();
@@ -1387,17 +1458,17 @@ impl App {
                     ui.end_row();
                 }
                 if let Some(_c) = &self.wfs.caps {
-                    ui.label("Objecttype");
-                    ui.label(RichText::new(self.wfs.ft.as_ref().map(|t| format!("{}  ({})", t.title, t.name)).unwrap_or_else(|| "— kies hieronder —".into())).strong());
+                    ui.label(tr("Objecttype", "Feature type"));
+                    ui.label(RichText::new(self.wfs.ft.as_ref().map(|t| format!("{}  ({})", t.title, t.name)).unwrap_or_else(|| tr("— kies hieronder —", "— choose below —").into())).strong());
                     ui.end_row();
-                    ui.label("Max. aantal objecten");
+                    ui.label(tr("Max. aantal objecten", "Maximum number of features"));
                     ui.add(egui::DragValue::new(&mut self.wfs.limit).speed(100).range(1..=200_000));
                     ui.end_row();
                 }
             });
             if let Some(c) = &self.wfs.caps {
                 ui.add_space(4.0);
-                ui.add(egui::TextEdit::singleline(&mut self.wfs.filter).hint_text(format!("Filter {} objecttypen…", c.types.len())).desired_width(f32::INFINITY));
+                ui.add(egui::TextEdit::singleline(&mut self.wfs.filter).hint_text(tr_format!("Filter {} objecttypen…", "Filter {} feature types…", c.types.len())).desired_width(f32::INFINITY));
                 let mut chosen = None;
                 list_frame(ui, 150.0, "wfs_types", |ui| {
                     let f = self.wfs.filter.to_lowercase();
@@ -1416,33 +1487,33 @@ impl App {
             }
         });
 
-        group(ui, "Import-instellingen", |ui| {
+        group(ui, tr("Import-instellingen", "Import settings"), |ui| {
             egui::Grid::new("wfs_imp").num_columns(2).spacing([14.0, 7.0]).min_col_width(170.0).show(ui, |ui| {
-                ui.label("Label (attribuut)");
+                ui.label(tr("Label (attribuut)", "Label (attribute)"));
                 let names = self.wfs.result.as_ref().map(|r| vector::property_names(&r.features)).unwrap_or_default();
                 ui.horizontal(|ui| {
-                    egui::ComboBox::from_id_salt("wfs_label").selected_text(if self.wfs.label.is_empty() { "— geen —".to_string() } else { self.wfs.label.clone() }).show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.wfs.label, String::new(), "— geen —");
+                    egui::ComboBox::from_id_salt("wfs_label").selected_text(if self.wfs.label.is_empty() { tr("— geen —", "— none —").to_string() } else { self.wfs.label.clone() }).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.wfs.label, String::new(), tr("— geen —", "— none —"));
                         for n in &names {
                             ui.selectable_value(&mut self.wfs.label, n.clone(), n);
                         }
                     });
                     if names.is_empty() {
-                        ui.label(RichText::new("eerst Test om attributen te zien").small().weak());
+                        ui.label(RichText::new(tr("eerst Test om attributen te zien", "Use Test to see attributes first")).small().weak());
                     }
                 });
                 ui.end_row();
-                ui.label("Teksthoogte");
+                ui.label(tr("Teksthoogte", "Text height"));
                 ui.add(egui::DragValue::new(&mut self.wfs.text_m).speed(0.1).range(0.05..=100.0).suffix(" m"));
                 ui.end_row();
-                ui.label("Lijnkleur (laag)");
+                ui.label(tr("Lijnkleur (laag)", "Line colour (layer)"));
                 if aci_combo(ui, "wfs_aci", &mut self.wfs.aci) {
                     let c = aci_color(self.wfs.aci);
                     self.wfs.preview.iter_mut().for_each(|(_, col)| *col = c);
                 }
                 ui.end_row();
-                ui.label("Begrenzing");
-                ui.checkbox(&mut self.wfs.clip, "Bijsnijden op het importgebied");
+                ui.label(tr("Begrenzing", "Bounds"));
+                ui.checkbox(&mut self.wfs.clip, tr("Bijsnijden op het importgebied", "Clip to the import area"));
                 ui.end_row();
             });
         });
@@ -1455,7 +1526,7 @@ impl App {
             match r {
                 Ok(f) => {
                     let n: usize = f.1.iter().map(Vec::len).sum();
-                    self.message = Some((true, format!("{n} OpenStreetMap-objecten opgehaald — zie de kaart.")));
+                    self.message = Some((true, tr_format!("{n} OpenStreetMap-objecten opgehaald — zie de kaart.", "{n} OpenStreetMap features fetched — see the map.")));
                     self.osm.fetched = Some(f);
                 }
                 Err(e) => self.err(e),
@@ -1468,30 +1539,30 @@ impl App {
             }
         }
 
-        page_header(ui, "globe", "OpenStreetMap importeren", "Wereldwijd: gebouwen, wegen, spoor, water, kunstwerken, leidingen en meer — elk thema op een eigen laag.");
+        page_header(ui, "globe", tr("OpenStreetMap importeren", "Import OpenStreetMap"), tr("Wereldwijd: gebouwen, wegen, spoor, water, kunstwerken, leidingen en meer — elk thema op een eigen laag.", "Worldwide buildings, roads, railways, water, structures, utilities and more, with each theme on its own layer."));
         let Some(site) = self.saved_site(ui) else { return };
         let fetched = self.osm.fetched.take();
         self.map_section(ui, Some(&site), None, None, fetched.as_ref().map(|f| f.2.as_slice()).unwrap_or(&[]));
         self.osm.fetched = fetched;
 
-        group(ui, "Thema's", |ui| {
+        group(ui, tr("Thema's", "Themes"), |ui| {
             egui::Grid::new("osm").num_columns(3).spacing([14.0, 5.0]).show(ui, |ui| {
                 for (i, t) in THEMES.iter().enumerate() {
                     let (rect, _) = ui.allocate_exact_size(Vec2::splat(12.0), egui::Sense::hover());
                     ui.painter().rect_filled(rect, 2.0, aci_color(t.aci));
-                    ui.checkbox(&mut self.osm.on[i], t.label);
+                    ui.checkbox(&mut self.osm.on[i], tr(t.label, t.label_en));
                     ui.label(RichText::new(t.layer).monospace().small().weak());
                     ui.end_row();
                 }
             });
         });
-        group(ui, "Import-instellingen", |ui| {
+        group(ui, tr("Import-instellingen", "Import settings"), |ui| {
             ui.horizontal(|ui| {
-                ui.checkbox(&mut self.osm.labels, "Namen en huisnummers als tekst");
-                ui.add(egui::DragValue::new(&mut self.osm.text_m).speed(0.1).range(0.1..=50.0).prefix("hoogte ").suffix(" m"));
+                ui.checkbox(&mut self.osm.labels, tr("Namen en huisnummers als tekst", "Names and house numbers as text"));
+                ui.add(egui::DragValue::new(&mut self.osm.text_m).speed(0.1).range(0.1..=50.0).prefix(tr("hoogte ", "height ")).suffix(" m"));
             });
-            ui.checkbox(&mut self.osm.clip, "Bijsnijden op het importgebied");
-            ui.label(RichText::new("Data © OpenStreetMap-bijdragers (ODbL), via de Overpass API. Publieke Overpass-servers zijn soms druk; ophalen kan een minuut duren.").small().weak());
+            ui.checkbox(&mut self.osm.clip, tr("Bijsnijden op het importgebied", "Clip to the import area"));
+            ui.label(RichText::new(tr("Data © OpenStreetMap-bijdragers (ODbL), via de Overpass API. Publieke Overpass-servers zijn soms druk; ophalen kan een minuut duren.", "Data © OpenStreetMap contributors (ODbL), via the Overpass API. Public Overpass servers can be busy. Fetching data can take a minute.")).small().weak());
         });
 
     }
@@ -1504,23 +1575,24 @@ impl App {
                 Err(e) => self.err(e),
             }
         }
-        page_header(ui, "pdok", "Nederlandse basisregistraties importeren (PDOK)", "Luchtfoto, kadaster, BAG, NWB en ProRail in één keer — kies wat u nodig hebt.");
+        page_header(ui, "pdok", tr("Nederlandse basisregistraties importeren (PDOK)", "Import Dutch reference datasets (PDOK)"), tr("Luchtfoto, kadaster, BAG, NWB en ProRail in één keer — kies wat u nodig hebt.", "Choose the aerial imagery, cadastre, BAG, NWB and ProRail data to import together."));
         let Some(site) = self.saved_site(ui) else { return };
         self.map_section(ui, Some(&site), None, None, &[]);
         if !(site.lon > 3.2 && site.lon < 7.3 && site.lat > 50.7 && site.lat < 53.7) {
-            ui.colored_label(WARN, "Let op: de projectlocatie ligt buiten Nederland; PDOK levert hier geen data.");
+            ui.colored_label(WARN, tr("Let op: de projectlocatie ligt buiten Nederland; PDOK levert hier geen data.", "The project location is outside the Netherlands, where PDOK does not provide data."));
         }
         let mut groups: Vec<&str> = Vec::new();
         for d in PDOK {
-            if !groups.contains(&d.group) {
-                groups.push(d.group);
+            let group = tr(d.group, d.group_en);
+            if !groups.contains(&group) {
+                groups.push(group);
             }
         }
         ui.columns(groups.len().max(1), |cols| {
             for (col, g) in cols.iter_mut().zip(&groups) {
                 group(col, g, |ui| {
-                    for (i, d) in PDOK.iter().enumerate().filter(|(_, d)| d.group == *g) {
-                        ui.checkbox(&mut self.pdok.on[i], d.label);
+                    for (i, d) in PDOK.iter().enumerate().filter(|(_, d)| tr(d.group, d.group_en) == *g) {
+                        ui.checkbox(&mut self.pdok.on[i], tr(d.label, d.label_en));
                     }
                 });
             }
@@ -1540,7 +1612,7 @@ impl App {
                 Err(e) => self.err(e),
             }
         }
-        page_header(ui, "point", "Coördinaten omrekenen", "Klik op de kaart, typ een coördinaat of gebruik \"Punt info\" in het lint om een punt in de tekening aan te wijzen.");
+        page_header(ui, "point", tr("Coördinaten omrekenen", "Convert coordinates"), tr("Klik op de kaart, typ een coördinaat of gebruik \"Punt info\" in het lint om een punt in de tekening aan te wijzen.", "Click the map, enter coordinates or use Point info on the ribbon to pick a point in the drawing."));
         let site = bridge::site();
         let marker = self.coords.picked.or_else(|| crs::transform(&self.coords.crs, "EPSG:4326", self.coords.xy).ok());
         if let Some(MapEvent::Clicked(ll)) = self.map_section(ui, site.as_ref(), marker, None, &[]) {
@@ -1549,7 +1621,7 @@ impl App {
                 self.coords.xy = q;
             }
         }
-        group(ui, "Invoer", |ui| {
+        group(ui, tr("Invoer", "Input"), |ui| {
             let mut codes: Vec<String> = crs::builtin_list().into_iter().map(|i| i.code).collect();
             if let Some(s) = &site {
                 if !codes.contains(&s.crs) {
@@ -1558,7 +1630,7 @@ impl App {
             }
             let geo = crs::is_geographic(&self.coords.crs);
             ui.horizontal(|ui| {
-                ui.label("Stelsel");
+                ui.label(tr("Stelsel", "CRS"));
                 let mut chosen = None;
                 egui::ComboBox::from_id_salt("coord_crs").width(320.0).selected_text(crs::known(&self.coords.crs).map(|i| format!("{} — {}", i.code, i.name)).unwrap_or(self.coords.crs.clone())).show_ui(ui, |ui| {
                     for c in &codes {
@@ -1579,7 +1651,7 @@ impl App {
                 }
             });
         });
-        group(ui, "Resultaat", |ui| {
+        group(ui, tr("Resultaat", "Result"), |ui| {
             let mut targets: Vec<String> = vec!["EPSG:4326".into(), "EPSG:28992".into(), "EPSG:3857".into()];
             if let Some(s) = &site {
                 targets.insert(1, s.crs.clone());
@@ -1616,16 +1688,16 @@ impl App {
         let ctx = ui.ctx().clone();
         let busy = self.loc.apply.is_some() || self.loc.crs_job.is_some() || self.loc.search.is_some();
         button_bar(ui, |ui| {
-            if ui.add_enabled(!busy, primary_button("OK")).on_hover_text("Projectlocatie opslaan in de tekening").clicked() {
+            if ui.add_enabled(!busy, primary_button("OK")).on_hover_text(tr("Projectlocatie opslaan in de tekening", "Save the project location in the drawing")).clicked() {
                 match bridge::save_site(&self.draft) {
                     Ok(()) => {
                         self.has_site = true;
                         let site = self.draft.clone();
                         self.saved_draft_base = Some(site.clone());
                         let (origin, aerial) = (self.loc.geo_origin, self.loc.aerial);
-                        let summary = format!("Projectlocatie opgeslagen: {} — {} X {:.2} Y {:.2}, {}×{} m.", site.label, site.crs, site.origin_e, site.origin_n, site.width, site.height);
+                        let summary = tr_format!("Projectlocatie opgeslagen: {} — {} X {:.2} Y {:.2}, {}×{} m.", "Project location saved: {} — {} X {:.2} Y {:.2}, {}×{} m.", site.label, site.crs, site.origin_e, site.origin_n, site.width, site.height);
                         if origin || aerial {
-                            self.loc.apply = Some(Job::spawn("Bezig…", move |p| {
+                            self.loc.apply = Some(Job::spawn(tr("Bezig…", "Working…"), move |p| {
                                 let mut out = vec![summary];
                                 if origin {
                                     out.push(import::geo_origin(&site)?);
@@ -1639,10 +1711,10 @@ impl App {
                             self.ok(summary);
                         }
                     }
-                    Err(e) => self.err(format!("Opslaan mislukt: {e}")),
+                    Err(e) => self.err(tr_format!("Opslaan mislukt: {e}", "Save failed: {e}")),
                 }
             }
-            if ui.button("Annuleren").on_hover_text("Wijzigingen terugdraaien en het venster sluiten").clicked() {
+            if ui.button(tr("Annuleren", "Cancel")).on_hover_text(tr("Wijzigingen terugdraaien en het venster sluiten", "Discard changes and close the window")).clicked() {
                 // As in the FreeCAD dialogs: drop the changes and close.
                 self.reload_site();
                 self.loc.query.clear();
@@ -1663,23 +1735,23 @@ impl App {
         let is_xyz = self.raster.server.as_ref().is_some_and(|s| s.kind == ServerKind::Xyz);
         let ready = self.raster.server.is_some() && (is_xyz || self.raster.layer.is_some());
         button_bar(ui, |ui| {
-            if ui.add_enabled(ready && !too_big && self.raster.run.is_none(), primary_button("OK en importeren")).clicked() {
+            if ui.add_enabled(ready && !too_big && self.raster.run.is_none(), primary_button(tr("OK en importeren", "OK and import"))).clicked() {
                 let server = self.raster.server.clone().unwrap();
                 let opt = raster::Options { resolution: self.raster.resolution, format: self.raster.format.clone() };
                 let (fade, caps, layer, s) = (self.raster.fade, self.raster.caps.clone(), self.raster.layer.clone(), site.clone());
-                self.raster.run = Some(Job::spawn("Importeren…", move |p| match server.kind {
+                self.raster.run = Some(Job::spawn(tr("Importeren…", "Importing…"), move |p| match server.kind {
                     ServerKind::Xyz => import::xyz(&s, &server, &opt, fade, p),
-                    _ => import::wms(&s, &server, caps.as_ref().ok_or("geen capabilities")?, layer.as_ref().ok_or("geen laag")?, &opt, fade, p),
+                    _ => import::wms(&s, &server, caps.as_ref().ok_or(tr("geen capabilities", "no capabilities"))?, layer.as_ref().ok_or(tr("geen laag", "no layer"))?, &opt, fade, p),
                 }));
             }
-            if ui.add_enabled(ready && self.raster.preview_job.is_none(), egui::Button::new("Test — voorbeeld op kaart")).clicked() {
+            if ui.add_enabled(ready && self.raster.preview_job.is_none(), egui::Button::new(tr("Test — voorbeeld op kaart", "Test — preview on map"))).clicked() {
                 let (server, caps, layer, fmt, s) = (self.raster.server.clone().unwrap(), self.raster.caps.clone(), self.raster.layer.clone(), self.raster.format.clone(), site.clone());
-                self.raster.preview_job = Some(Job::spawn("Voorbeeld ophalen…", move |_| match server.kind {
+                self.raster.preview_job = Some(Job::spawn(tr("Voorbeeld ophalen…", "Fetching preview…"), move |_| match server.kind {
                     ServerKind::Xyz => raster::preview_xyz(&s, &server),
-                    _ => raster::preview_wms(&s, caps.as_ref().ok_or("geen capabilities")?, layer.as_ref().ok_or("geen laag")?, &fmt, 900),
+                    _ => raster::preview_wms(&s, caps.as_ref().ok_or(tr("geen capabilities", "no capabilities"))?, layer.as_ref().ok_or(tr("geen laag", "no layer"))?, &fmt, 900),
                 }));
             }
-            if self.raster.preview.is_some() && ui.button("Voorbeeld wissen").clicked() {
+            if self.raster.preview.is_some() && ui.button(tr("Voorbeeld wissen", "Clear preview")).clicked() {
                 self.raster.preview = None;
                 self.raster.preview_texture = None;
             }
@@ -1692,21 +1764,21 @@ impl App {
         let Some(site) = bridge::site() else { return };
         button_bar(ui, |ui| {
             let can = self.wfs.ft.is_some() && self.wfs.place.is_none() && self.wfs.fetch.is_none();
-            if ui.add_enabled(can, primary_button("OK en importeren")).clicked() {
+            if ui.add_enabled(can, primary_button(tr("OK en importeren", "OK and import"))).clicked() {
                 let style = VectorStyle { aci: self.wfs.aci, label_field: (!self.wfs.label.is_empty()).then(|| self.wfs.label.clone()), text_m: self.wfs.text_m, clip: self.wfs.clip };
                 let (s, ft, caps, limit, cached) = (site.clone(), self.wfs.ft.clone().unwrap(), self.wfs.caps.clone(), self.wfs.limit, self.wfs.result.take());
                 self.wfs.preview.clear();
-                self.wfs.place = Some(Job::spawn("Importeren…", move |p| {
+                self.wfs.place = Some(Job::spawn(tr("Importeren…", "Importing…"), move |p| {
                     let res = match cached {
                         Some(r) => r,
-                        None => import::wfs_fetch(&s, caps.as_ref().ok_or("geen capabilities")?, &ft, limit, p)?,
+                        None => import::wfs_fetch(&s, caps.as_ref().ok_or(tr("geen capabilities", "no capabilities"))?, &ft, limit, p)?,
                     };
                     import::wfs_place(&s, &ft, &res, &style)
                 }));
             }
-            if ui.add_enabled(can, egui::Button::new("Test — ophalen en tonen")).clicked() {
+            if ui.add_enabled(can, egui::Button::new(tr("Test — ophalen en tonen", "Test — fetch and display"))).clicked() {
                 let (s, c, t, n) = (site.clone(), self.wfs.caps.clone().unwrap(), self.wfs.ft.clone().unwrap(), self.wfs.limit);
-                self.wfs.fetch = Some(Job::spawn("Objecten ophalen…", move |p| {
+                self.wfs.fetch = Some(Job::spawn(tr("Objecten ophalen…", "Fetching features…"), move |p| {
                     let res = import::wfs_fetch(&s, &c, &t, n, p)?;
                     let lines = vector::preview_lines(&s, &res.data_crs, &res.features)?;
                     Ok((res, lines))
@@ -1722,7 +1794,7 @@ impl App {
         let ids: Vec<&'static str> = THEMES.iter().zip(&self.osm.on).filter(|(_, on)| **on).map(|(t, _)| t.id).collect();
         let busy = self.osm.fetch.is_some() || self.osm.run.is_some();
         button_bar(ui, |ui| {
-            if ui.add_enabled(!ids.is_empty() && !busy, primary_button("OK en importeren")).clicked() {
+            if ui.add_enabled(!ids.is_empty() && !busy, primary_button(tr("OK en importeren", "OK and import"))).clicked() {
                 let cached = self.osm.fetched.take().filter(|f| f.0 == ids).map(|f| f.1);
                 let (s, ids2, labels, h, clip) = (site.clone(), ids.clone(), self.osm.labels, self.osm.text_m, self.osm.clip);
                 self.osm.run = Some(Job::spawn("OpenStreetMap…", move |p| {
@@ -1733,9 +1805,9 @@ impl App {
                     import::osm_place(&s, &ids2, &per_theme, labels, h, clip)
                 }));
             }
-            if ui.add_enabled(!ids.is_empty() && !busy, egui::Button::new("Test — ophalen en tonen")).clicked() {
+            if ui.add_enabled(!ids.is_empty() && !busy, egui::Button::new(tr("Test — ophalen en tonen", "Test — fetch and display"))).clicked() {
                 let (s, ids2) = (site.clone(), ids.clone());
-                self.osm.fetch = Some(Job::spawn("OpenStreetMap ophalen…", move |p| {
+                self.osm.fetch = Some(Job::spawn(tr("OpenStreetMap ophalen…", "Fetching OpenStreetMap data…"), move |p| {
                     let per_theme = import::osm_fetch(&s, &ids2, p)?;
                     let mut lines = Vec::new();
                     for (id, feats) in ids2.iter().zip(&per_theme) {
@@ -1754,19 +1826,20 @@ impl App {
         let Some(site) = bridge::site() else { return };
         button_bar(ui, |ui| {
             let chosen: Vec<usize> = (0..PDOK.len()).filter(|i| self.pdok.on[*i]).collect();
-            if ui.add_enabled(!chosen.is_empty() && self.pdok.run.is_none(), primary_button("OK en importeren")).clicked() {
+            if ui.add_enabled(!chosen.is_empty() && self.pdok.run.is_none(), primary_button(tr("OK en importeren", "OK and import"))).clicked() {
                 let s = site.clone();
                 self.pdok.run = Some(Job::spawn("PDOK…", move |p| {
                     let mut done = Vec::new();
                     for (k, i) in chosen.iter().enumerate() {
                         let d = &PDOK[*i];
-                        p(format!("{}/{}: {}…", k + 1, chosen.len(), d.label));
-                        match import::run_dataset(&s, &d.data, &|m: String| p(format!("{}/{}: {} — {m}", k + 1, chosen.len(), d.label))) {
-                            Ok(_) => done.push(d.label.to_string()),
-                            Err(e) => done.push(format!("{} (mislukt: {e})", d.label)),
+                        let label = tr(d.label, d.label_en);
+                        p(format!("{}/{}: {}…", k + 1, chosen.len(), label));
+                        match import::run_dataset(&s, &d.data, &|m: String| p(format!("{}/{}: {} — {m}", k + 1, chosen.len(), label))) {
+                            Ok(_) => done.push(label.to_string()),
+                            Err(e) => done.push(tr_format!("{} (mislukt: {e})", "{} (failed: {e})", label)),
                         }
                     }
-                    Ok(format!("PDOK geïmporteerd: {}.", done.join("; ")))
+                    Ok(tr_format!("PDOK geïmporteerd: {}.", "PDOK data imported: {}.", done.join("; ")))
                 }));
             }
             if let Some(j) = &self.pdok.run {
@@ -1782,7 +1855,7 @@ impl App {
         let Some(site) = bridge::site().or_else(|| Some(self.draft.clone())) else { return };
         self.nlcs.klic = None;
         self.nlcs.klic_preview.clear();
-        self.nlcs.klic_job = Some(Job::spawn("KLIC-levering lezen…", move |_| {
+        self.nlcs.klic_job = Some(Job::spawn(tr("KLIC-levering lezen…", "Reading KLIC delivery…"), move |_| {
             let lev = klic::read(&path)?;
             let preview = klic_preview(&site, &lev)?;
             Ok((lev, preview))
@@ -1793,7 +1866,7 @@ impl App {
         if let Some(r) = poll(&mut self.nlcs.klic_job) {
             match r {
                 Ok((lev, preview)) => {
-                    self.message = Some((true, format!("KLIC {}: {} objecten van {} netbeheerders.", lev.meldnummer, lev.features.len(), lev.operators.len())));
+                    self.message = Some((true, tr_format!("KLIC {}: {} objecten van {} netbeheerders.", "KLIC {}: {} features from {} network operators.", lev.meldnummer, lev.features.len(), lev.operators.len())));
                     self.nlcs.klic_on = lev.themes.iter().map(|(t, n)| (t.clone(), *n, true)).collect();
                     self.nlcs.klic = Some(Arc::new(lev));
                     self.nlcs.klic_preview = preview;
@@ -1805,7 +1878,7 @@ impl App {
             match r {
                 Ok(f) => {
                     let n: usize = f.2.iter().map(|(_, v)| v.len()).sum();
-                    self.message = Some((true, format!("{n} BGT-objecten opgehaald — zie de kaart.")));
+                    self.message = Some((true, tr_format!("{n} BGT-objecten opgehaald — zie de kaart.", "{n} BGT features fetched — see the map.")));
                     self.nlcs.fetched = Some(f);
                 }
                 Err(e) => self.err(e),
@@ -1824,24 +1897,24 @@ impl App {
             self.load_klic();
         }
 
-        page_header(ui, "nlcs", "BGT, kadaster en KLIC conform NLCS", "Basisdata voor een infra-ontwerp: elk object op zijn NLCS-laag, met kleur, lijndikte, lijntype en objectgegevens.");
+        page_header(ui, "nlcs", tr("BGT, kadaster en KLIC conform NLCS", "BGT, cadastre and KLIC in NLCS format"), tr("Basisdata voor een infra-ontwerp: elk object op zijn NLCS-laag, met kleur, lijndikte, lijntype en objectgegevens.", "Reference data for infrastructure design. Each feature is placed on its NLCS layer with colour, lineweight, linetype and attributes."));
         let Some(site) = self.saved_site(ui) else { return };
         let mut lines: Preview2 = self.nlcs.fetched.as_ref().map(|f| f.4.clone()).unwrap_or_default();
         lines.extend(self.nlcs.klic_preview.iter().cloned());
         self.map_section(ui, Some(&site), None, None, &lines);
         if !(site.lon > 3.2 && site.lon < 7.3 && site.lat > 50.7 && site.lat < 53.7) {
-            ui.colored_label(WARN, "Let op: BGT, BRK en KLIC bestaan alleen voor Nederland.");
+            ui.colored_label(WARN, tr("Let op: BGT, BRK en KLIC bestaan alleen voor Nederland.", "BGT, BRK and KLIC cover the Netherlands only."));
         }
 
-        group(ui, "Tekenstandaard NLCS 5.02", |ui| {
+        group(ui, tr("Tekenstandaard NLCS 5.02", "Drawing standard NLCS 5.02"), |ui| {
             egui::Grid::new("nlcs_std").num_columns(4).spacing([12.0, 6.0]).show(ui, |ui| {
-                ui.label("Tekenstatus");
-                egui::ComboBox::from_id_salt("nlcs_status").selected_text(self.nlcs.status.label()).show_ui(ui, |ui| {
+                ui.label(tr("Tekenstatus", "Drawing status"));
+                egui::ComboBox::from_id_salt("nlcs_status").selected_text(drawing_status(self.nlcs.status)).show_ui(ui, |ui| {
                     for st in Status::ALL {
-                        ui.selectable_value(&mut self.nlcs.status, st, st.label());
+                        ui.selectable_value(&mut self.nlcs.status, st, drawing_status(st));
                     }
                 });
-                ui.label("Schaal");
+                ui.label(tr("Schaal", "Scale"));
                 egui::ComboBox::from_id_salt("nlcs_scale").selected_text(format!("1:{}", self.nlcs.scale)).show_ui(ui, |ui| {
                     for sc in [100.0, 200.0, 250.0, 500.0, 1000.0, 2000.0, 5000.0] {
                         ui.selectable_value(&mut self.nlcs.scale, sc, format!("1:{sc}"));
@@ -1857,61 +1930,61 @@ impl App {
                         }
                     });
                 };
-                ui.label("Discipline BGT/BRK");
+                ui.label(tr("Discipline BGT/BRK", "BGT/BRK discipline"));
                 combo(ui, "nlcs_disc", &mut self.nlcs.discipline);
-                ui.label("Discipline KLIC");
+                ui.label(tr("Discipline KLIC", "KLIC discipline"));
                 combo(ui, "nlcs_disc_klic", &mut self.nlcs.klic_discipline);
                 ui.end_row();
             });
             ui.horizontal(|ui| {
-                ui.checkbox(&mut self.nlcs.object_data, "Objectgegevens (XDATA)");
-                ui.checkbox(&mut self.nlcs.labels, "Teksten: straatnamen, huisnummers, perceelnummers, leidinglabels");
-                ui.checkbox(&mut self.nlcs.clip, "Bijsnijden op het importgebied");
+                ui.checkbox(&mut self.nlcs.object_data, tr("Objectgegevens (XDATA)", "Feature attributes (XDATA)"));
+                ui.checkbox(&mut self.nlcs.labels, tr("Teksten: straatnamen, huisnummers, perceelnummers, leidinglabels", "Labels: street names, house numbers, parcel numbers, utility lines"));
+                ui.checkbox(&mut self.nlcs.clip, tr("Bijsnijden op het importgebied", "Clip to the import area"));
             });
-            ui.label(RichText::new("Laagnaam: STATUS-DISCIPLINE-HOOFDGROEP-OBJECT-ELEMENT, bijv. B-XX-VH-GESLOTENVERHARDING_ASFALT-G. Lijntypen in papier-mm met de lijntypeschaal van de tekenschaal; teksten krijgen de stijl van hun objectlaag, de teksten van het tekenblad volgen de NLCS-tekstklassen.").small().weak());
+            ui.label(RichText::new(tr("Laagnaam: STATUS-DISCIPLINE-HOOFDGROEP-OBJECT-ELEMENT, bijv. B-XX-VH-GESLOTENVERHARDING_ASFALT-G. Lijntypen in papier-mm met de lijntypeschaal van de tekenschaal; teksten krijgen de stijl van hun objectlaag, de teksten van het tekenblad volgen de NLCS-tekstklassen.", "Layer name: STATUS-DISCIPLINE-MAIN GROUP-OBJECT-ELEMENT, e.g. B-XX-VH-GESLOTENVERHARDING_ASFALT-G. Linetypes use paper millimetres and scale with the drawing. Labels use their object layer's text style. Sheet text follows NLCS text classes.")).small().weak());
         });
 
         ui.columns(2, |cols| {
-            group(&mut cols[0], "BGT (PDOK, actueel)", |ui| {
+            group(&mut cols[0], tr("BGT (PDOK, actueel)", "BGT (PDOK, current)"), |ui| {
                 for (i, g) in bgt::GROUPS.iter().enumerate() {
-                    ui.checkbox(&mut self.nlcs.bgt_on[i], g.label);
+                    ui.checkbox(&mut self.nlcs.bgt_on[i], tr(g.label, g.label_en));
                 }
             });
-            group(&mut cols[1], "Kadastrale kaart (BRK)", |ui| {
-                ui.checkbox(&mut self.nlcs.brk, "Perceelgrenzen en -nummers (KG-GRENS_PERCEEL)");
+            group(&mut cols[1], tr("Kadastrale kaart (BRK)", "Cadastral map (BRK)"), |ui| {
+                ui.checkbox(&mut self.nlcs.brk, tr("Perceelgrenzen en -nummers (KG-GRENS_PERCEEL)", "Parcel boundaries and numbers (KG-GRENS_PERCEEL)"));
             });
-            group(&mut cols[1], "Tekenblad", |ui| {
-                ui.checkbox(&mut self.nlcs.sheet, "Kader, titelblok, legenda, noordpijl, schaalbalk en RD-kruisen");
+            group(&mut cols[1], tr("Tekenblad", "Drawing sheet"), |ui| {
+                ui.checkbox(&mut self.nlcs.sheet, tr("Kader, titelblok, legenda, noordpijl, schaalbalk en RD-kruisen", "Border, title block, legend, north arrow, scale bar and RD grid crosses"));
                 let (paper, _, _) = tekenblad::paper_for(&site, self.nlcs.scale);
-                ui.label(RichText::new(format!("Formaat bij 1:{}: {paper} liggend", self.nlcs.scale)).small().weak());
+                ui.label(RichText::new(tr_format!("Formaat bij 1:{}: {paper} liggend", "Paper at 1:{}: {paper} landscape", self.nlcs.scale)).small().weak());
                 egui::Grid::new("sheet").num_columns(2).spacing([8.0, 4.0]).show(ui, |ui| {
                     ui.label("Project");
                     ui.add(egui::TextEdit::singleline(&mut self.nlcs.info.project).hint_text(site.label.as_str()).desired_width(240.0));
                     ui.end_row();
-                    ui.label("Onderwerp");
+                    ui.label(tr("Onderwerp", "Subject"));
                     ui.add(egui::TextEdit::singleline(&mut self.nlcs.info.subject).desired_width(240.0));
                     ui.end_row();
-                    ui.label("Tekeningnummer");
+                    ui.label(tr("Tekeningnummer", "Drawing number"));
                     ui.add(egui::TextEdit::singleline(&mut self.nlcs.info.number).desired_width(240.0));
                     ui.end_row();
-                    ui.label("Getekend");
+                    ui.label(tr("Getekend", "Drawn by"));
                     ui.add(egui::TextEdit::singleline(&mut self.nlcs.info.drawn_by).desired_width(240.0));
                     ui.end_row();
                 });
             });
         });
 
-        group(ui, "KLIC-levering (WIBON, IMKL 2.0)", |ui| {
+        group(ui, tr("KLIC-levering (WIBON, IMKL 2.0)", "KLIC delivery (WIBON, IMKL 2.0)"), |ui| {
             ui.horizontal(|ui| {
-                ui.label("Bestand");
-                ui.add(egui::TextEdit::singleline(&mut self.nlcs.klic_path).hint_text("Levering_….zip of GI_gebiedsinformatielevering_….xml — of sleep het bestand op dit venster").desired_width(ui.available_width() - 90.0));
-                if ui.add_enabled(!self.nlcs.klic_path.trim().is_empty() && self.nlcs.klic_job.is_none(), egui::Button::new("Lezen")).clicked() {
+                ui.label(tr("Bestand", "File"));
+                ui.add(egui::TextEdit::singleline(&mut self.nlcs.klic_path).hint_text(tr("Levering_….zip of GI_gebiedsinformatielevering_….xml — of sleep het bestand op dit venster", "Levering_….zip or GI_gebiedsinformatielevering_….xml — or drop the file on this window")).desired_width(ui.available_width() - 90.0));
+                if ui.add_enabled(!self.nlcs.klic_path.trim().is_empty() && self.nlcs.klic_job.is_none(), egui::Button::new(tr("Lezen", "Read"))).clicked() {
                     self.load_klic();
                 }
             });
             job_status(ui, &self.nlcs.klic_job);
             if let Some(lev) = self.nlcs.klic.clone() {
-                ui.label(RichText::new(format!("Melding {} · {} objecten · {}", lev.meldnummer, lev.features.len(), lev.operators.join(", "))).small());
+                ui.label(RichText::new(tr_format!("Melding {} · {} objecten · {}", "Request {} · {} features · {}", lev.meldnummer, lev.features.len(), lev.operators.join(", "))).small());
                 egui::Grid::new("klic_themes").num_columns(3).spacing([14.0, 4.0]).show(ui, |ui| {
                     for (i, (t, n, on)) in self.nlcs.klic_on.iter_mut().enumerate() {
                         let (rect, _) = ui.allocate_exact_size(Vec2::splat(12.0), egui::Sense::hover());
@@ -1923,8 +1996,8 @@ impl App {
                     }
                 });
                 ui.horizontal(|ui| {
-                    ui.checkbox(&mut self.nlcs.imkl_colors, "IMKL-themakleuren in plaats van NLCS-kleuren");
-                    if ui.button("Importgebied op deze levering zetten").clicked() {
+                    ui.checkbox(&mut self.nlcs.imkl_colors, tr("IMKL-themakleuren in plaats van NLCS-kleuren", "Use IMKL theme colours instead of NLCS colours"));
+                    if ui.button(tr("Importgebied op deze levering zetten", "Set import area to this delivery")).clicked() {
                         if let Some(b) = klic_extent(&lev) {
                             let mut s = site.clone();
                             let c = [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0];
@@ -1939,7 +2012,7 @@ impl App {
                                         self.draft = s;
                                         self.fit_pending = true;
                                         self.nlcs.fetched = None;
-                                        self.ok("Importgebied aangepast aan de KLIC-levering.");
+                                        self.ok(tr("Importgebied aangepast aan de KLIC-levering.", "Import area updated to match the KLIC delivery."));
                                     }
                                     Err(e) => self.err(e),
                                 }
@@ -1949,13 +2022,13 @@ impl App {
                 });
                 // The letters, conditions and sketches of the operators, folded away.
                 if !lev.extras.attachments.is_empty() {
-                    egui::CollapsingHeader::new(format!("Bijlagen ({})", lev.extras.attachments.len())).id_salt("klic_bijlagen").show(ui, |ui| {
+                    egui::CollapsingHeader::new(tr_format!("Bijlagen ({})", "Attachments ({})", lev.extras.attachments.len())).id_salt("klic_bijlagen").show(ui, |ui| {
                         egui::Grid::new("klic_attachments").num_columns(3).striped(true).spacing([12.0, 3.0]).show(ui, |ui| {
                             for a in &lev.extras.attachments {
                                 let name = a.path.rsplit('/').next().unwrap_or(&a.path).to_string();
                                 ui.label(RichText::new(format!("{} · {}", a.operator, a.kind)).small().weak());
                                 ui.label(RichText::new(&name).small()).on_hover_text(&a.path);
-                                if ui.small_button("Openen").clicked() {
+                                if ui.small_button(tr("Openen", "Open")).clicked() {
                                     let (src, rel) = (lev.source.clone(), a.path.clone());
                                     let dir = crate::gis::servers::config_dir().join("klic-bijlagen").join(&lev.meldnummer);
                                     std::thread::spawn(move || {
@@ -1982,11 +2055,11 @@ impl App {
         let busy = self.nlcs.fetch.is_some() || self.nlcs.run.is_some();
         let anything = !collections.is_empty() || brk || klic_ready;
         button_bar(ui, |ui| {
-            if ui.add_enabled(anything && !busy, primary_button("OK en importeren")).clicked() {
+            if ui.add_enabled(anything && !busy, primary_button(tr("OK en importeren", "OK and import"))).clicked() {
                 let cached = self.nlcs.fetched.take().filter(|f| f.0 == collections && f.1 == brk);
                 let (opt, kopt, lev, sheet, info) = (self.nlcs.options(), self.nlcs.klic_options(), self.nlcs.klic.clone().filter(|_| klic_ready), self.nlcs.sheet, self.nlcs.info.clone());
                 let (s, cols) = (site.clone(), collections.clone());
-                self.nlcs.run = Some(Job::spawn("Basisdata…", move |p| {
+                self.nlcs.run = Some(Job::spawn(tr("Basisdata…", "Reference data…"), move |p| {
                     let mut done = Vec::new();
                     let (bgt_data, cad) = match cached {
                         Some(c) => (c.2, c.3),
@@ -1997,28 +2070,28 @@ impl App {
                         }
                     };
                     if !bgt_data.is_empty() {
-                        p("BGT tekenen…".into());
+                        p(tr("BGT tekenen…", "Drawing BGT features…").into());
                         done.push(basisdata::bgt_place(&s, &bgt_data, &opt)?);
                     }
                     if let Some(c) = cad {
-                        p("Kadaster tekenen…".into());
+                        p(tr("Kadaster tekenen…", "Drawing cadastral features…").into());
                         done.push(basisdata::cadastre_place(&s, &c, &opt)?);
                     }
                     if let Some(lev) = lev {
-                        p("KLIC tekenen…".into());
+                        p(tr("KLIC tekenen…", "Drawing KLIC features…").into());
                         done.push(basisdata::klic_place(&s, &lev, &kopt)?);
                     }
                     if sheet {
-                        p("Tekenblad…".into());
+                        p(tr("Tekenblad…", "Drawing sheet…").into());
                         done.push(tekenblad::draw(&s, &opt, &info)?);
                     }
                     bridge::zoom_extents();
                     Ok(done.join(" "))
                 }));
             }
-            if ui.add_enabled((!collections.is_empty() || brk) && !busy, egui::Button::new("Test — ophalen en tonen")).clicked() {
+            if ui.add_enabled((!collections.is_empty() || brk) && !busy, egui::Button::new(tr("Test — ophalen en tonen", "Test — fetch and display"))).clicked() {
                 let (s, cols, labels) = (site.clone(), collections.clone(), self.nlcs.labels);
-                self.nlcs.fetch = Some(Job::spawn("BGT ophalen…", move |p| {
+                self.nlcs.fetch = Some(Job::spawn(tr("BGT ophalen…", "Fetching BGT data…"), move |p| {
                     let data = if cols.is_empty() { Vec::new() } else { bgt::fetch(&s, &cols, p)? };
                     let cad = if brk { Some(basisdata::cadastre_fetch(&s, labels, p)?) } else { None };
                     let preview = bgt_preview(&s, &data, cad.as_ref())?;
@@ -2035,7 +2108,7 @@ impl App {
         if let Some(r) = poll(&mut self.ahn.test) {
             match r {
                 Ok(p) => {
-                    self.message = Some((true, format!("AHN: {} – {} m NAP, {} hoogtelijnen — zie de kaart.", hoogte::nap(p.1 .0, 2), hoogte::nap(p.1 .1, 2), p.0.len())));
+                    self.message = Some((true, tr_format!("AHN: {} – {} m NAP, {} hoogtelijnen — zie de kaart.", "AHN: {} – {} m NAP, {} contours — see the map.", hoogte::nap(p.1 .0, 2), hoogte::nap(p.1 .1, 2), p.0.len())));
                     self.ahn.preview = Some(p);
                 }
                 Err(e) => self.err(e),
@@ -2047,56 +2120,56 @@ impl App {
                 Err(e) => self.err(e),
             }
         }
-        page_header(ui, "ahn", "AHN-hoogtes, profielen en puntenwolk", "Actueel Hoogtebestand Nederland: hoogtepunten, hoogtelijnen en lengteprofielen uit AHN4, de puntenwolk uit AHN5.");
+        page_header(ui, "ahn", tr("AHN-hoogtes, profielen en puntenwolk", "AHN elevations, profiles and point cloud"), tr("Actueel Hoogtebestand Nederland: hoogtepunten, hoogtelijnen en lengteprofielen uit AHN4, de puntenwolk uit AHN5.", "Dutch elevation data: spot heights, contours and longitudinal profiles from AHN4, and point clouds from AHN5."));
         let Some(site) = self.saved_site(ui) else { return };
         let lines = self.ahn.preview.as_ref().map(|p| p.0.clone()).unwrap_or_default();
         self.map_section(ui, Some(&site), None, None, &lines);
         if !(site.lon > 3.2 && site.lon < 7.3 && site.lat > 50.7 && site.lat < 53.7) {
-            ui.colored_label(WARN, "Let op: AHN bestaat alleen voor Nederland.");
+            ui.colored_label(WARN, tr("Let op: AHN bestaat alleen voor Nederland.", "AHN covers the Netherlands only."));
         }
         let mut o = hoogte::settings();
         let mut class_on: Vec<bool> = pointcloud::CLASSES.iter()
             .map(|c| o.cloud.classes.is_empty() || o.cloud.classes.contains(&c.0))
             .collect();
-        group(ui, "Tekenen", |ui| {
+        group(ui, tr("Tekenen", "Drawing"), |ui| {
             ui.horizontal(|ui| {
-                ui.label("Schaal");
+                ui.label(tr("Schaal", "Scale"));
                 egui::ComboBox::from_id_salt("ahn_scale").selected_text(format!("1:{}", o.nlcs.scale)).show_ui(ui, |ui| {
                     for sc in [100.0, 200.0, 250.0, 500.0, 1000.0, 2000.0, 5000.0] {
                         ui.selectable_value(&mut o.nlcs.scale, sc, format!("1:{sc}"));
                     }
                 });
-                ui.label("Tekenstatus");
-                egui::ComboBox::from_id_salt("ahn_status").selected_text(o.nlcs.status.label()).show_ui(ui, |ui| {
+                ui.label(tr("Tekenstatus", "Drawing status"));
+                egui::ComboBox::from_id_salt("ahn_status").selected_text(drawing_status(o.nlcs.status)).show_ui(ui, |ui| {
                     for st in nlcs::Status::ALL {
-                        ui.selectable_value(&mut o.nlcs.status, st, st.label());
+                        ui.selectable_value(&mut o.nlcs.status, st, drawing_status(st));
                     }
                 });
-                ui.checkbox(&mut o.nlcs.labels, "Hoogtes als tekst");
-                ui.checkbox(&mut o.nlcs.clip, "Bijsnijden op het importgebied");
+                ui.checkbox(&mut o.nlcs.labels, tr("Hoogtes als tekst", "Elevation labels"));
+                ui.checkbox(&mut o.nlcs.clip, tr("Bijsnijden op het importgebied", "Clip to the import area"));
             });
-            ui.label(RichText::new("Hoogtes in m NAP; lijnen en punten liggen op hun hoogte (Z). Lagen: OG-HOOGTEPUNT, OG-HOOGTELIJN_MINOR/MAJOR, GW-MAAIVELD, AL-PROFIELBALK.").small().weak());
+            ui.label(RichText::new(tr("Hoogtes in m NAP; lijnen en punten liggen op hun hoogte (Z). Lagen: OG-HOOGTEPUNT, OG-HOOGTELIJN_MINOR/MAJOR, GW-MAAIVELD, AL-PROFIELBALK.", "Elevations in metres NAP. Lines and points use their true elevation (Z). Layers: OG-HOOGTEPUNT, OG-HOOGTELIJN_MINOR/MAJOR, GW-MAAIVELD, AL-PROFIELBALK.")).small().weak());
         });
         ui.columns(2, |cols| {
-            group(&mut cols[0], "Hoogtepunten", |ui| {
-                ui.checkbox(&mut self.ahn.spots, "Hoogtepunten in een raster");
+            group(&mut cols[0], tr("Hoogtepunten", "Spot heights"), |ui| {
+                ui.checkbox(&mut self.ahn.spots, tr("Hoogtepunten in een raster", "Spot heights on a grid"));
                 ui.horizontal(|ui| {
-                    ui.label("Raster");
+                    ui.label(tr("Raster", "Grid"));
                     egui::ComboBox::from_id_salt("ahn_spacing").selected_text(format!("{} m", o.spot_spacing)).show_ui(ui, |ui| {
                         for v in [2.0, 5.0, 10.0, 20.0, 25.0, 50.0, 100.0] {
                             ui.selectable_value(&mut o.spot_spacing, v, format!("{v} m"));
                         }
                     });
                     ui.label("Model");
-                    egui::ComboBox::from_id_salt("ahn_model").selected_text(o.model.label()).show_ui(ui, |ui| {
+                    egui::ComboBox::from_id_salt("ahn_model").selected_text(elevation_model(o.model)).show_ui(ui, |ui| {
                         for m in [Model::Dtm, Model::Dsm] {
-                            ui.selectable_value(&mut o.model, m, m.label());
+                            ui.selectable_value(&mut o.model, m, elevation_model(m));
                         }
                     });
                 });
             });
-            group(&mut cols[0], "Hoogtelijnen (maaiveld)", |ui| {
-                ui.checkbox(&mut self.ahn.contours, "Hoogtelijnen");
+            group(&mut cols[0], tr("Hoogtelijnen (maaiveld)", "Contours (ground surface)"), |ui| {
+                ui.checkbox(&mut self.ahn.contours, tr("Hoogtelijnen", "Contours"));
                 ui.horizontal(|ui| {
                     ui.label("Interval");
                     egui::ComboBox::from_id_salt("ahn_interval").selected_text(format!("{} m", o.interval)).show_ui(ui, |ui| {
@@ -2104,55 +2177,64 @@ impl App {
                             ui.selectable_value(&mut o.interval, v, format!("{v} m"));
                         }
                     });
-                    ui.label("hoofdlijn elke");
+                    ui.label(tr("hoofdlijn elke", "major contour every"));
                     ui.add(egui::DragValue::new(&mut o.major_every).range(1..=20));
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Rastercel");
+                    ui.label(tr("Rastercel", "Grid cell"));
                     egui::ComboBox::from_id_salt("ahn_cell").selected_text(format!("{} m", o.contour_cell)).show_ui(ui, |ui| {
                         for v in [0.5, 1.0, 2.0, 5.0] {
                             ui.selectable_value(&mut o.contour_cell, v, format!("{v} m"));
                         }
                     });
-                    ui.checkbox(&mut o.smooth, "Gladstrijken");
+                    ui.checkbox(&mut o.smooth, tr("Gladstrijken", "Smooth"));
                 });
             });
-            group(&mut cols[1], "Lengteprofiel", |ui| {
+            group(&mut cols[1], tr("Lengteprofiel", "Longitudinal profile"), |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Stations om de");
+                    ui.label(tr("Stations om de", "Stations every"));
                     ui.add(egui::DragValue::new(&mut o.step).range(0.25..=50.0).speed(0.25).suffix(" m"));
-                    ui.label("overhoging");
+                    ui.label(tr("overhoging", "vertical exaggeration"));
                     ui.add(egui::DragValue::new(&mut o.exaggeration).range(1.0..=50.0).speed(0.5).suffix("×"));
                 });
-                ui.checkbox(&mut o.surface, "Ook het oppervlak (DSM: gebouwen, bomen)");
-                ui.label(RichText::new("Kies in Open CAD Studio Profiel in het lint (of GIS_PROFILE): selecteer eerst een polyline of wijs de punten aan, Enter, en wijs dan de linkeronderhoek van het profiel aan.").small().weak());
+                ui.checkbox(&mut o.surface, tr("Ook het oppervlak (DSM: gebouwen, bomen)", "Also include the surface (DSM: buildings, trees)"));
+                ui.label(RichText::new(tr("Kies in Open CAD Studio Profiel in het lint (of GIS_PROFILE): selecteer eerst een polyline of wijs de punten aan, Enter, en wijs dan de linkeronderhoek van het profiel aan.", "Choose Profile on the Open CAD Studio ribbon or run GIS_PROFILE. Select a polyline or pick points, press Enter, then pick the lower-left corner of the profile.")).small().weak());
             });
-            group(&mut cols[1], "Puntenwolk (COPC)", |ui| {
-                ui.checkbox(&mut self.ahn.cloud, "AHN-puntenwolk koppelen (.rcs naast de tekening)");
+            group(&mut cols[1], tr("Puntenwolk (COPC)", "Point cloud (COPC)"), |ui| {
+                ui.checkbox(&mut self.ahn.cloud, tr("AHN-puntenwolk koppelen (.rcs naast de tekening)", "Attach AHN point cloud (.rcs beside the drawing)"));
                 ui.horizontal(|ui| {
                     egui::ComboBox::from_id_salt("ahn_ed").selected_text(o.cloud.edition.label()).show_ui(ui, |ui| {
                         for e in Edition::ALL {
                             ui.selectable_value(&mut o.cloud.edition, e, e.label());
                         }
                     });
-                    ui.label("puntafstand");
+                    ui.label(tr("puntafstand", "point spacing"));
                     egui::ComboBox::from_id_salt("ahn_spacing_pc").selected_text(format!("{} m", o.cloud.spacing)).show_ui(ui, |ui| {
                         for v in [0.1, 0.25, 0.5, 1.0, 2.0] {
                             ui.selectable_value(&mut o.cloud.spacing, v, format!("{v} m"));
                         }
                     });
-                    ui.label("kleur");
-                    egui::ComboBox::from_id_salt("ahn_col").selected_text(o.cloud.colouring.label()).show_ui(ui, |ui| {
+                    ui.label(tr("kleur", "colour"));
+                    egui::ComboBox::from_id_salt("ahn_col").selected_text(point_colouring(o.cloud.colouring)).show_ui(ui, |ui| {
                         for c in Colouring::ALL {
-                            ui.selectable_value(&mut o.cloud.colouring, c, c.label());
+                            ui.selectable_value(&mut o.cloud.colouring, c, point_colouring(c));
                         }
                     });
                 });
                 egui::Grid::new("ahn_classes").num_columns(3).spacing([10.0, 3.0]).show(ui, |ui| {
-                    for (i, (_, label, rgb)) in pointcloud::CLASSES.iter().enumerate() {
+                    for (i, (class, label, rgb)) in pointcloud::CLASSES.iter().enumerate() {
+                        let label = match class {
+                            2 => tr(label, "Ground"),
+                            6 => tr(label, "Buildings"),
+                            9 => tr(label, "Water"),
+                            26 => tr(label, "Structures"),
+                            1 => tr(label, "Other (including vegetation)"),
+                            14 => tr(label, "Power lines"),
+                            _ => label,
+                        };
                         let (rect, _) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
                         ui.painter().rect_filled(rect, 2.0, Color32::from_rgb(rgb[0], rgb[1], rgb[2]));
-                        ui.checkbox(&mut class_on[i], *label);
+                        ui.checkbox(&mut class_on[i], label);
                         if i % 2 == 1 {
                             ui.end_row();
                         }
@@ -2160,7 +2242,7 @@ impl App {
                 });
                 let area = site.width * site.height;
                 let estimate = area * (1.0 / (o.cloud.spacing * o.cloud.spacing)).min(20.0);
-                ui.label(RichText::new(format!("Ongeveer {:.1} miljoen punten voor {:.0} × {:.0} m; alleen de nodige delen van de 1 km-tegels worden gedownload.", estimate / 1e6, site.width, site.height)).small().weak());
+                ui.label(RichText::new(tr_format!("Ongeveer {:.1} miljoen punten voor {:.0} × {:.0} m; alleen de nodige delen van de 1 km-tegels worden gedownload.", "About {:.1} million points for {:.0} × {:.0} m. Only the relevant parts of the 1 km tiles are downloaded.", estimate / 1e6, site.width, site.height)).small().weak());
             });
         });
         // Keep the shared settings in step: the ribbon buttons use them too.
@@ -2177,7 +2259,7 @@ impl App {
         let busy = self.ahn.test.is_some() || self.ahn.run.is_some();
         let any = self.ahn.spots || self.ahn.contours || self.ahn.cloud;
         button_bar(ui, |ui| {
-            if ui.add_enabled(any && !busy, primary_button("OK en importeren")).clicked() {
+            if ui.add_enabled(any && !busy, primary_button(tr("OK en importeren", "OK and import"))).clicked() {
                 let (s, opt, spots, contours, cloud) = (site.clone(), hoogte::settings(), self.ahn.spots, self.ahn.contours, self.ahn.cloud);
                 self.ahn.run = Some(Job::spawn("AHN…", move |p| {
                     let mut done = Vec::new();
@@ -2193,15 +2275,15 @@ impl App {
                     Ok(done.join(" "))
                 }));
             }
-            if ui.add_enabled(!busy, egui::Button::new("Test — hoogtelijnen op de kaart")).clicked() {
+            if ui.add_enabled(!busy, egui::Button::new(tr("Test — hoogtelijnen op de kaart", "Test — contours on map"))).clicked() {
                 let (s, opt) = (site.clone(), hoogte::settings());
-                self.ahn.test = Some(Job::spawn("AHN ophalen…", move |p| {
+                self.ahn.test = Some(Job::spawn(tr("AHN ophalen…", "Fetching AHN data…"), move |p| {
                     let b = crate::basisdata::rd_bbox(&s)?;
                     let mut grid = ahn::fetch(b, Model::Dtm, opt.contour_cell, p)?;
                     if opt.smooth {
                         grid = grid.smoothed();
                     }
-                    let range = grid.range().ok_or("AHN heeft hier geen hoogtes")?;
+                    let range = grid.range().ok_or(tr("AHN heeft hier geen hoogtes", "AHN has no elevations here"))?;
                     let lines = ahn::contours(&grid, &ahn::levels(range, opt.interval), (8.0 * opt.contour_cell).max(10.0));
                     let to = vector::data_to(&s, "EPSG:28992", "EPSG:4326", &[])?;
                     let mut out = Vec::new();
@@ -2237,7 +2319,7 @@ impl App {
             empty_layers: self.controle.empty_layers,
             layer_props: true,
         };
-        self.controle.job = Some(Job::spawn("Tekening controleren…", move |_| {
+        self.controle.job = Some(Job::spawn(tr("Tekening controleren…", "Checking drawing…"), move |_| {
             let doc = bridge::snapshot()?;
             let opt = nlcs_check::Options { layer_props: !bridge::partial(), ..opt };
             Ok(nlcs_check::check(&doc, &opt))
@@ -2248,7 +2330,7 @@ impl App {
         if let Some(r) = poll(&mut self.controle.job) {
             match r {
                 Ok(rep) => {
-                    self.message = Some((true, format!("NLCS-controle: {} conform — {}, {}.", rep.score_label(), nlcs_check::counted(rep.count(Severity::Fout), "fout", "fouten"), nlcs_check::counted(rep.count(Severity::Waarschuwing), "waarschuwing", "waarschuwingen"))));
+                    self.message = Some((true, tr_format!("NLCS-controle: {} conform — {}, {}.", "NLCS check: {} compliant — {}, {}.", rep.score_label(), nlcs_check::counted(rep.count(Severity::Fout), tr("fout", "error"), tr("fouten", "errors")), nlcs_check::counted(rep.count(Severity::Waarschuwing), tr("waarschuwing", "warning"), tr("waarschuwingen", "warnings")))));
                     self.controle.report = Some(rep);
                 }
                 Err(e) => self.err(e),
@@ -2269,71 +2351,71 @@ impl App {
                 Err(e) => self.err(e),
             }
         }
-        page_header(ui, "check", "NLCS-controle", "Toetst de tekening aan NLCS 5.02: laagnamen, laagkleur, -lijndikte en -lijntype per tekenstatus, elementen op DuLaag, teksthoogtes.");
-        group(ui, "Instellingen", |ui| {
+        page_header(ui, "check", tr("NLCS-controle", "NLCS check"), tr("Toetst de tekening aan NLCS 5.02: laagnamen, laagkleur, -lijndikte en -lijntype per tekenstatus, elementen op DuLaag, teksthoogtes.", "Checks the drawing against NLCS 5.02: layer names, colour, lineweight and linetype by status, ByLayer properties and text heights."));
+        group(ui, tr("Instellingen", "Settings"), |ui| {
             ui.horizontal(|ui| {
-                ui.label("Tekenschaal (voor teksthoogtes)");
+                ui.label(tr("Tekenschaal (voor teksthoogtes)", "Drawing scale (for text heights)"));
                 egui::ComboBox::from_id_salt("chk_scale").selected_text(format!("1:{}", self.controle.scale)).show_ui(ui, |ui| {
                     for sc in [100.0, 200.0, 250.0, 500.0, 1000.0, 2000.0] {
                         ui.selectable_value(&mut self.controle.scale, sc, format!("1:{sc}"));
                     }
                 });
-                ui.checkbox(&mut self.controle.text_heights, "Teksthoogtes");
-                ui.checkbox(&mut self.controle.empty_layers, "Lege lagen melden");
+                ui.checkbox(&mut self.controle.text_heights, tr("Teksthoogtes", "Text heights"));
+                ui.checkbox(&mut self.controle.empty_layers, tr("Lege lagen melden", "Report empty layers"));
             });
         });
-        group(ui, "BGT-mutatie", |ui| {
+        group(ui, tr("BGT-mutatie", "BGT change"), |ui| {
             ui.horizontal(|ui| {
-                ui.label("Bronhouder");
+                ui.label(tr("Bronhouder", "Data authority"));
                 ui.add(egui::TextEdit::singleline(&mut self.controle.bronhouder).desired_width(70.0).hint_text("G0505"))
-                    .on_hover_text("Code van de gemeente (G + CBS-code). Leeg: die van de BGT-objecten in de tekening.");
-                ui.checkbox(&mut self.controle.as_built, "Gerealiseerd: lagen N als revisie (geen plantopografie)");
+                    .on_hover_text(tr("Code van de gemeente (G + CBS-code). Leeg: die van de BGT-objecten in de tekening.", "Municipality code (G + CBS code). Leave empty to use the authority from the BGT features in the drawing."));
+                ui.checkbox(&mut self.controle.as_built, tr("Gerealiseerd: lagen N als revisie (geen plantopografie)", "As built: treat N layers as revisions (no planned topography)"));
             });
-            ui.label(RichText::new("Nieuw (N) wordt plantopografie, revisie (R) gerealiseerd, V beëindigt het BGT-object. Type en functie komen uit de BGT-gegevens, het BGT-object eronder of de NLCS-laag; wat niet eenduidig is, staat in het rapport.").small().weak());
+            ui.label(RichText::new(tr("Nieuw (N) wordt plantopografie, revisie (R) gerealiseerd, V beëindigt het BGT-object. Type en functie komen uit de BGT-gegevens, het BGT-object eronder of de NLCS-laag; wat niet eenduidig is, staat in het rapport.", "New (N) is planned topography, revision (R) is as built, and V retires the BGT feature. Type and function come from BGT attributes, the underlying BGT feature or the NLCS layer. See the report for ambiguous cases.")).small().weak());
         });
         let Some(rep) = self.controle.report.clone() else {
-            group(ui, "Resultaat", |ui| {
+            group(ui, tr("Resultaat", "Result"), |ui| {
                 job_status(ui, &self.controle.job);
                 if self.controle.job.is_none() {
-                    ui.label(RichText::new("Klik op Controleren.").weak());
+                    ui.label(RichText::new(tr("Klik op Controleren.", "Click Check.")).weak());
                 }
             });
             return;
         };
-        group(ui, "Resultaat", |ui| {
+        group(ui, tr("Resultaat", "Result"), |ui| {
             ui.horizontal(|ui| {
                 let score = rep.score();
                 let colour = if score >= 95.0 { OK_GREEN } else if score >= 70.0 { WARN } else { ERR_RED };
                 ui.label(RichText::new(rep.score_label()).size(30.0).strong().color(colour));
                 ui.vertical(|ui| {
-                    ui.label(RichText::new("conform NLCS").strong());
-                    ui.label(RichText::new(format!("{} van {} elementen · {} lagen, waarvan {} NLCS", rep.conform_entities, rep.entities, rep.layers, rep.nlcs_layers)).small().weak());
+                    ui.label(RichText::new(tr("conform NLCS", "NLCS compliant")).strong());
+                    ui.label(RichText::new(tr_format!("{} van {} elementen · {} lagen, waarvan {} NLCS", "{} of {} entities · {} layers, {} of them NLCS", rep.conform_entities, rep.entities, rep.layers, rep.nlcs_layers)).small().weak());
                 });
                 ui.add_space(24.0);
                 for s in [Severity::Fout, Severity::Waarschuwing, Severity::Info] {
-                    badge(ui, &format!("{} {}", rep.count(s), s.label()), severity_colour(s));
+                    badge(ui, &format!("{} {}", rep.count(s), severity_label(s)), severity_colour(s));
                 }
             });
             let bar = egui::ProgressBar::new((rep.score() / 100.0) as f32).desired_height(6.0);
             ui.add(bar);
         });
-        group(ui, "Bevindingen", |ui| {
+        group(ui, tr("Bevindingen", "Findings"), |ui| {
             if rep.findings.is_empty() {
-                ui.label(RichText::new("Geen bevindingen: de tekening volgt NLCS.").color(OK_GREEN));
+                ui.label(RichText::new(tr("Geen bevindingen: de tekening volgt NLCS.", "No findings: the drawing follows NLCS.")).color(OK_GREEN));
                 return;
             }
             for (rule, list) in rep.by_rule() {
                 let open = self.controle.open == Some(rule);
                 ui.horizontal(|ui| {
-                    badge(ui, rule.severity().label(), severity_colour(rule.severity()));
-                    let title = format!("{}  {}  ({}×)", rule.code(), rule.title(), list.len());
+                    badge(ui, severity_label(rule.severity()), severity_colour(rule.severity()));
+                    let title = format!("{}  {}  ({}×)", rule.code(), rule_title(rule), list.len());
                     if ui.selectable_label(open, RichText::new(title).strong()).clicked() {
                         self.controle.open = if open { None } else { Some(rule) };
                     }
                     let handles: Vec<_> = list.iter().flat_map(|f| f.handles.iter().copied()).collect();
-                    if !handles.is_empty() && ui.small_button(format!("Selecteer {}", handles.len())).on_hover_text("Selecteer deze elementen in de tekening").clicked() {
+                    if !handles.is_empty() && ui.small_button(tr_format!("Selecteer {}", "Select {}", handles.len())).on_hover_text(tr("Selecteer deze elementen in de tekening", "Select these entities in the drawing")).clicked() {
                         match bridge::select(&handles) {
-                            Ok(()) => self.message = Some((true, format!("{} element(en) geselecteerd in de tekening.", handles.len()))),
+                            Ok(()) => self.message = Some((true, tr_format!("{} element(en) geselecteerd in de tekening.", "Selected {} entities in the drawing.", handles.len()))),
                             Err(e) => self.message = Some((false, e)),
                         }
                     }
@@ -2344,7 +2426,7 @@ impl App {
                             for f in &list {
                                 ui.label(RichText::new(&f.layer).monospace().small());
                                 ui.label(RichText::new(&f.message).small());
-                                if !f.handles.is_empty() && ui.small_button("Selecteer").clicked() {
+                                if !f.handles.is_empty() && ui.small_button(tr("Selecteer", "Select")).clicked() {
                                     let _ = bridge::select(&f.handles);
                                 }
                                 ui.end_row();
@@ -2360,35 +2442,35 @@ impl App {
         let busy = self.controle.job.is_some() || self.controle.repair.is_some();
         let repairs = self.controle.report.as_ref().map(|r| r.repairs().len()).unwrap_or(0);
         button_bar(ui, |ui| {
-            if ui.add_enabled(!busy, primary_button("Controleren")).clicked() {
+            if ui.add_enabled(!busy, primary_button(tr("Controleren", "Check"))).clicked() {
                 self.start_check();
             }
-            let label = if repairs > 0 { format!("Herstellen ({repairs})") } else { "Herstellen".into() };
-            if ui.add_enabled(!busy && repairs > 0, egui::Button::new(label)).on_hover_text("Laagkleur, -lijndikte en -lijntype volgens NLCS; elementen op DuLaag. Laagnamen en teksthoogtes blijven zoals ze zijn.").clicked() {
+            let label = if repairs > 0 { tr_format!("Herstellen ({repairs})", "Repair ({repairs})") } else { tr("Herstellen", "Repair").into() };
+            if ui.add_enabled(!busy && repairs > 0, egui::Button::new(label)).on_hover_text(tr("Laagkleur, -lijndikte en -lijntype volgens NLCS; elementen op DuLaag. Laagnamen en teksthoogtes blijven zoals ze zijn.", "Set layer colour, lineweight and linetype according to NLCS and entity properties to ByLayer. Keep layer names and text heights.")).clicked() {
                 if let Some(rep) = self.controle.report.clone() {
-                    self.controle.repair = Some(Job::spawn("Herstellen…", move |_| {
+                    self.controle.repair = Some(Job::spawn(tr("Herstellen…", "Repairing…"), move |_| {
                         let doc = bridge::snapshot()?;
                         nlcs_check::repair(&doc, &rep.repairs())
                     }));
                 }
             }
-            if ui.add_enabled(self.controle.report.is_some(), egui::Button::new("Rapport opslaan")).clicked() {
+            if ui.add_enabled(self.controle.report.is_some(), egui::Button::new(tr("Rapport opslaan", "Save report"))).clicked() {
                 if let Some(rep) = &self.controle.report {
                     let opt = nlcs_check::Options { scale: self.controle.scale, ..Default::default() };
                     let path = bridge::beside_drawing("nlcs-controle.md");
                     match std::fs::write(&path, nlcs_check::markdown(rep, &bridge::drawing_name(), &opt)) {
-                        Ok(()) => self.ok(format!("Rapport opgeslagen: {}", path.display())),
+                        Ok(()) => self.ok(tr_format!("Rapport opgeslagen: {}", "Report saved: {}", path.display())),
                         Err(e) => self.err(format!("{}: {e}", path.display())),
                     }
                 }
             }
             let (bronhouder, as_built) = (self.controle.bronhouder.clone(), self.controle.as_built);
             if ui
-                .add_enabled(!busy && self.controle.mutation.is_none(), egui::Button::new("BGT-mutatie"))
-                .on_hover_text("Het ontwerp op NLCS-lagen als BGT-mutatie (IMGeo-GML 2.1.1) met een rapport, naast de tekening. N = plantopografie, R = gerealiseerd, V = beëindigen.")
+                .add_enabled(!busy && self.controle.mutation.is_none(), egui::Button::new(tr("BGT-mutatie", "BGT change")))
+                .on_hover_text(tr("Het ontwerp op NLCS-lagen als BGT-mutatie (IMGeo-GML 2.1.1) met een rapport, naast de tekening. N = plantopografie, R = gerealiseerd, V = beëindigen.", "Export the design on NLCS layers as a BGT change (IMGeo-GML 2.1.1) with a report beside the drawing. N = planned, R = as built, V = retired."))
                 .clicked()
             {
-                self.controle.mutation = Some(Job::spawn("BGT-mutatie maken…", move |_| crate::bgt_mutatie::export(&bronhouder, as_built, None)));
+                self.controle.mutation = Some(Job::spawn(tr("BGT-mutatie maken…", "Creating BGT change…"), move |_| crate::bgt_mutatie::export(&bronhouder, as_built, None)));
             }
             job_status(ui, &self.controle.job);
             job_status(ui, &self.controle.repair);
@@ -2403,11 +2485,11 @@ impl App {
         }
         let only_selection = self.hoev.selection;
         let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
-        self.hoev.job = Some(Job::spawn("Hoeveelheden berekenen…", move |_| {
+        self.hoev.job = Some(Job::spawn(tr("Hoeveelheden berekenen…", "Calculating quantities…"), move |_| {
             let doc = bridge::snapshot()?;
             let sel: std::collections::HashSet<_> = if only_selection { bridge::selection()?.into_iter().collect() } else { Default::default() };
             if only_selection && sel.is_empty() {
-                return Err("niets geselecteerd in de tekening".into());
+                return Err(tr("niets geselecteerd in de tekening", "nothing selected in the drawing").into());
             }
             Ok(hoeveelheden::compute(&doc, unit, if only_selection { Some(&sel) } else { None }))
         }));
@@ -2417,7 +2499,7 @@ impl App {
         if let Some(r) = poll(&mut self.hoev.job) {
             match r {
                 Ok(q) => {
-                    let mut m = format!("Hoeveelheden van {} elementen op {} lagen.", q.entities, q.rows.len());
+                    let mut m = tr_format!("Hoeveelheden van {} elementen op {} lagen.", "Quantities for {} entities on {} layers.", q.entities, q.rows.len());
                     if let Some(note) = q.duplicates_note() {
                         m.push_str(&format!(" {note}."));
                     }
@@ -2427,20 +2509,20 @@ impl App {
                 Err(e) => self.err(e),
             }
         }
-        page_header(ui, "quantities", "Hoeveelheden", "Aantal, lengte en oppervlakte per NLCS-laag of per object, uit de geometrie van de tekening.");
-        group(ui, "Instellingen", |ui| {
+        page_header(ui, "quantities", tr("Hoeveelheden", "Quantities"), tr("Aantal, lengte en oppervlakte per NLCS-laag of per object, uit de geometrie van de tekening.", "Count, length and area by NLCS layer or object, calculated from the drawing geometry."));
+        group(ui, tr("Instellingen", "Settings"), |ui| {
             ui.horizontal(|ui| {
-                ui.checkbox(&mut self.hoev.selection, "Alleen de selectie in de tekening");
-                ui.checkbox(&mut self.hoev.per_object, "Per object (G, S en A samen; zonder teksten)");
-                ui.add_enabled(!self.hoev.per_object, egui::Checkbox::new(&mut self.hoev.annotation, "Ook tekenblad en annotatie (AL, ZZ)"));
-                ui.add(egui::TextEdit::singleline(&mut self.hoev.filter).hint_text("filter, bijv. VH of asfalt").desired_width(200.0));
+                ui.checkbox(&mut self.hoev.selection, tr("Alleen de selectie in de tekening", "Selected entities only"));
+                ui.checkbox(&mut self.hoev.per_object, tr("Per object (G, S en A samen; zonder teksten)", "By object (combine G, S and A, exclude text)"));
+                ui.add_enabled(!self.hoev.per_object, egui::Checkbox::new(&mut self.hoev.annotation, tr("Ook tekenblad en annotatie (AL, ZZ)", "Include drawing sheet and annotations (AL, ZZ)")));
+                ui.add(egui::TextEdit::singleline(&mut self.hoev.filter).hint_text(tr("filter, bijv. VH of asfalt", "filter, e.g. VH or asfalt")).desired_width(200.0));
             });
         });
         let Some(q) = self.hoev.result.clone() else {
-            group(ui, "Resultaat", |ui| {
+            group(ui, tr("Resultaat", "Result"), |ui| {
                 job_status(ui, &self.hoev.job);
                 if self.hoev.job.is_none() {
-                    ui.label(RichText::new("Klik op Berekenen.").weak());
+                    ui.label(RichText::new(tr("Klik op Berekenen.", "Click Calculate.")).weak());
                 }
             });
             return;
@@ -2449,10 +2531,10 @@ impl App {
         let filter = self.hoev.filter.trim().to_lowercase();
         let annotation = self.hoev.annotation;
         let rows: Vec<_> = rows.into_iter().filter(|r| annotation || !r.annotation()).filter(|r| filter.is_empty() || r.layer.to_lowercase().contains(&filter) || r.object_label().to_lowercase().contains(&filter)).collect();
-        group(ui, &format!("Resultaat — {} regels{}", rows.len(), if q.from_selection { " (selectie)" } else { "" }), |ui| {
+        group(ui, &tr_format!("Resultaat — {} regels{}", "Result — {} rows{}", rows.len(), if q.from_selection { tr(" (selectie)", " (selection)") } else { "" }), |ui| {
             list_frame(ui, 520.0, "quantities", |ui| {
                 egui::Grid::new("q").num_columns(7).striped(true).spacing([14.0, 5.0]).show(ui, |ui| {
-                    for h in ["Object", "Status", "Laag", "Aantal", "Lengte (m)", "Opp. (m²)", "Hoofdmaat"] {
+                    for h in ["Object", "Status", tr("Laag", "Layer"), tr("Aantal", "Count"), tr("Lengte (m)", "Length (m)"), tr("Opp. (m²)", "Area (m²)"), tr("Hoofdmaat", "Main dimension")] {
                         ui.label(RichText::new(h).small().strong().color(ACCENT));
                     }
                     ui.end_row();
@@ -2464,13 +2546,15 @@ impl App {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(r.count.to_string()));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(if r.length > 0.0 { nl(r.length, 2) } else { "–".into() }));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(if r.area > 0.0 { nl(r.area, 2) } else { "–".into() }));
-                        let (v, u) = r.main();
-                        ui.label(RichText::new(format!("{} {u}", nl(v, if u == "st" { 0 } else { 1 }))).strong());
+                        let (v, unit) = r.main();
+                        let count = unit == "st";
+                        let unit = if count { tr("st", "pcs") } else { unit };
+                        ui.label(RichText::new(format!("{} {unit}", nl(v, if count { 0 } else { 1 }))).strong());
                         ui.end_row();
                         tl += r.length;
                         ta += r.area;
                     }
-                    ui.label(RichText::new("Totaal").strong());
+                    ui.label(RichText::new(tr("Totaal", "Total")).strong());
                     ui.label("");
                     ui.label("");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(RichText::new(rows.iter().map(|r| r.count).sum::<usize>().to_string()).strong()));
@@ -2482,7 +2566,7 @@ impl App {
             if let Some(note) = q.duplicates_note() {
                 ui.horizontal(|ui| {
                     ui.colored_label(WARN, format!("⚠ {note}."));
-                    if ui.small_button("Kopieën selecteren").on_hover_text("Selecteer de dubbel getekende kopieën in de tekening, om ze te controleren of te verwijderen").clicked() {
+                    if ui.small_button(tr("Kopieën selecteren", "Select duplicates")).on_hover_text(tr("Selecteer de dubbel getekende kopieën in de tekening, om ze te controleren of te verwijderen", "Select duplicate entities in the drawing to review or delete them")).clicked() {
                         let copies: Vec<_> = q.duplicates.iter().map(|d| d.2).collect();
                         bridge::spawn_command(move || {
                             if let Err(e) = crate::bridge::select(&copies) {
@@ -2492,20 +2576,20 @@ impl App {
                     }
                 });
             }
-            ui.label(RichText::new("Oppervlakte: gesloten polylijnen (met bogen), cirkels, ellipsen en arceringen (met eilanden). Lengte: lijnen, bogen, polylijnen, splines. Een element dat op dezelfde laag dubbel getekend is (zelfde vorm op de millimeter, ook omgekeerd), telt één keer. Een hoeveelhedenstaat in de tekening: lintknop Hoeveelhedenstaat of GIS_QUANTITIES_TABLE.").small().weak());
+            ui.label(RichText::new(tr("Oppervlakte: gesloten polylijnen (met bogen), cirkels, ellipsen en arceringen (met eilanden). Lengte: lijnen, bogen, polylijnen, splines. Een element dat op dezelfde laag dubbel getekend is (zelfde vorm op de millimeter, ook omgekeerd), telt één keer. Een hoeveelhedenstaat in de tekening: lintknop Hoeveelhedenstaat of GIS_QUANTITIES_TABLE.", "Area covers closed polylines (including arcs), circles, ellipses and hatches (including islands). Length covers lines, arcs, polylines and splines. Duplicate geometry on the same layer counts once if shapes match to the millimetre, including in reverse. Use Quantities table on the ribbon or GIS_QUANTITIES_TABLE to add a table to the drawing.")).small().weak());
         });
     }
 
     fn hoeveelheden_actions(&mut self, ui: &mut egui::Ui) {
         button_bar(ui, |ui| {
-            if ui.add_enabled(self.hoev.job.is_none(), primary_button("Berekenen")).clicked() {
+            if ui.add_enabled(self.hoev.job.is_none(), primary_button(tr("Berekenen", "Calculate"))).clicked() {
                 self.start_quantities();
             }
-            if ui.add_enabled(self.hoev.result.is_some(), egui::Button::new("CSV opslaan")).on_hover_text("Puntkomma's en decimale komma's, voor Excel en LibreOffice").clicked() {
+            if ui.add_enabled(self.hoev.result.is_some(), egui::Button::new(tr("CSV opslaan", "Save CSV"))).on_hover_text(tr("Puntkomma's en decimale komma's, voor Excel en LibreOffice", "Semicolon delimiters and decimal commas for Excel and LibreOffice")).clicked() {
                 if let Some(q) = &self.hoev.result {
                     let path = bridge::beside_drawing("hoeveelheden.csv");
                     match std::fs::write(&path, hoeveelheden::csv(q)) {
-                        Ok(()) => self.ok(format!("Hoeveelheden opgeslagen: {}", path.display())),
+                        Ok(()) => self.ok(tr_format!("Hoeveelheden opgeslagen: {}", "Quantities saved: {}", path.display())),
                         Err(e) => self.err(format!("{}: {e}", path.display())),
                     }
                 }
@@ -2522,114 +2606,114 @@ impl App {
                 Err(e) => self.err(e),
             }
         }
-        page_header(ui, "axis", "Civiel — instellingen", "Civiele ontwerptools op het tabblad Civiel: meetpunten, terrein (TIN), assen, profielen en grondverzet. De instellingen gelden ook voor de knoppen in het lint.");
+        page_header(ui, "axis", tr("Civiel — instellingen", "Civil — settings"), tr("Civiele ontwerptools op het tabblad Civiel: meetpunten, terrein (TIN), assen, profielen en grondverzet. De instellingen gelden ook voor de knoppen in het lint.", "Civil design tools on the Civil tab: survey points, terrain (TIN), alignments, profiles and earthworks. These settings also apply to the ribbon tools."));
         let mut o = civiel::settings();
         let offsets = offsets.get_or_insert_with(|| offsets_text(&o.offsets));
         let num = |ui: &mut egui::Ui, v: &mut f64, lo: f64, hi: f64, speed: f64, suffix: &str| {
             ui.add(egui::DragValue::new(v).range(lo..=hi).speed(speed).suffix(suffix));
         };
-        group(ui, "Tekenen", |ui| {
+        group(ui, tr("Tekenen", "Drawing"), |ui| {
             ui.horizontal(|ui| {
-                ui.label("Schaal");
+                ui.label(tr("Schaal", "Scale"));
                 egui::ComboBox::from_id_salt("civ_scale").selected_text(format!("1:{}", o.nlcs.scale)).show_ui(ui, |ui| {
                     for sc in [100.0, 200.0, 250.0, 500.0, 1000.0, 2000.0] {
                         ui.selectable_value(&mut o.nlcs.scale, sc, format!("1:{sc}"));
                     }
                 });
-                ui.label("Tekenstatus");
-                egui::ComboBox::from_id_salt("civ_status").selected_text(o.nlcs.status.label()).show_ui(ui, |ui| {
+                ui.label(tr("Tekenstatus", "Drawing status"));
+                egui::ComboBox::from_id_salt("civ_status").selected_text(drawing_status(o.nlcs.status)).show_ui(ui, |ui| {
                     for st in nlcs::Status::ALL {
-                        ui.selectable_value(&mut o.nlcs.status, st, st.label());
+                        ui.selectable_value(&mut o.nlcs.status, st, drawing_status(st));
                     }
                 });
-                ui.checkbox(&mut o.nlcs.labels, "Teksten");
+                ui.checkbox(&mut o.nlcs.labels, tr("Teksten", "Labels"));
             });
-            ui.label(RichText::new("Alles op NLCS-lagen: OG-HOOGTEPUNT, OG-TRIANGULATIE, OG-HOOGTELIJN, AM-AS, AM-KILOMETRERING, AM-TANGENTPUNT, AL-PROFIELBALK, GW-MAAIVELD.").small().weak());
+            ui.label(RichText::new(tr("Alles op NLCS-lagen: OG-HOOGTEPUNT, OG-TRIANGULATIE, OG-HOOGTELIJN, AM-AS, AM-KILOMETRERING, AM-TANGENTPUNT, AL-PROFIELBALK, GW-MAAIVELD.", "All features use NLCS layers: OG-HOOGTEPUNT, OG-TRIANGULATIE, OG-HOOGTELIJN, AM-AS, AM-KILOMETRERING, AM-TANGENTPUNT, AL-PROFIELBALK, GW-MAAIVELD.")).small().weak());
         });
         ui.columns(2, |cols| {
-            group(&mut cols[0], "Punten", |ui| {
+            group(&mut cols[0], tr("Punten", "Points"), |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Bestandsformaat");
-                    egui::ComboBox::from_id_salt("civ_format").selected_text(o.format.label()).show_ui(ui, |ui| {
+                    ui.label(tr("Bestandsformaat", "File format"));
+                    egui::ComboBox::from_id_salt("civ_format").selected_text(survey_format(o.format)).show_ui(ui, |ui| {
                         for f in Format::ALL {
-                            ui.selectable_value(&mut o.format, f, f.label());
+                            ui.selectable_value(&mut o.format, f, survey_format(f));
                         }
                     });
                 });
-                ui.checkbox(&mut o.point_labels, "Puntnummer, hoogte en code bij elk punt");
-                ui.label(RichText::new("Scheidingsteken (; , tab spatie) en decimale komma worden herkend. Automatisch: noord/oost uit de getallen.").small().weak());
+                ui.checkbox(&mut o.point_labels, tr("Puntnummer, hoogte en code bij elk punt", "Point number, elevation and code at each point"));
+                ui.label(RichText::new(tr("Scheidingsteken (; , tab spatie) en decimale komma worden herkend. Automatisch: noord/oost uit de getallen.", "Recognises semicolons, commas, tabs and spaces as separators, and decimal commas. Auto detects northing and easting from the numbers.")).small().weak());
             });
-            group(&mut cols[0], "Oppervlak", |ui| {
+            group(&mut cols[0], tr("Oppervlak", "Surface"), |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Langste driehoekszijde");
+                    ui.label(tr("Langste driehoekszijde", "Longest triangle edge"));
                     num(ui, &mut o.max_edge, 1.0, 10_000.0, 1.0, " m");
                 });
                 ui.horizontal(|ui| {
-                    ui.label("TIN uit AHN: puntafstand");
+                    ui.label(tr("TIN uit AHN: puntafstand", "TIN from AHN: point spacing"));
                     num(ui, &mut o.ahn_spacing, 0.5, 100.0, 0.5, " m");
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Hoogtelijnen om de");
+                    ui.label(tr("Hoogtelijnen om de", "Contours every"));
                     egui::ComboBox::from_id_salt("civ_interval").selected_text(format!("{} m", o.interval)).show_ui(ui, |ui| {
                         for v in [0.1, 0.2, 0.25, 0.5, 1.0, 2.0, 5.0] {
                             ui.selectable_value(&mut o.interval, v, format!("{v} m"));
                         }
                     });
-                    ui.label("hoofdlijn elke");
+                    ui.label(tr("hoofdlijn elke", "major contour every"));
                     ui.add(egui::DragValue::new(&mut o.major_every).range(1..=20));
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Hoogteanalyse");
-                    ui.add(egui::DragValue::new(&mut o.bands).range(2..=9).suffix(" banden"));
+                    ui.label(tr("Hoogteanalyse", "Elevation analysis"));
+                    ui.add(egui::DragValue::new(&mut o.bands).range(2..=9).suffix(tr(" banden", " bands")));
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Grondverzet: raster");
+                    ui.label(tr("Grondverzet: raster", "Earthworks: grid"));
                     num(ui, &mut o.volume_cell, 0.1, 50.0, 0.1, " m");
-                    ui.label("peil");
+                    ui.label(tr("peil", "reference level"));
                     num(ui, &mut o.level, -100.0, 1000.0, 0.05, " m");
                 });
-                ui.label(RichText::new("TIN: selecteer punten, 3D-lijnen of hoogtelijnen; zonder selectie uit AHN in het importgebied. Grondverzet: selecteer de 3D-vlakken van het ontwerp; zonder selectie t.o.v. het peil.").small().weak());
+                ui.label(RichText::new(tr("TIN: selecteer punten, 3D-lijnen of hoogtelijnen; zonder selectie uit AHN in het importgebied. Grondverzet: selecteer de 3D-vlakken van het ontwerp; zonder selectie t.o.v. het peil.", "For a TIN, select points, 3D lines or contours. With no selection, use AHN in the import area. For earthworks, select the design 3D faces. With no selection, compare to the reference level.")).small().weak());
             });
-            group(&mut cols[1], "As", |ui| {
+            group(&mut cols[1], tr("As", "Alignment"), |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Streepjes om de");
+                    ui.label(tr("Streepjes om de", "Ticks every"));
                     num(ui, &mut o.tick, 1.0, 1000.0, 1.0, " m");
-                    ui.label("stationering om de");
+                    ui.label(tr("stationering om de", "station labels every"));
                     num(ui, &mut o.label_every, 1.0, 5000.0, 10.0, " m");
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Verschuivingen (m, links < 0)");
+                    ui.label(tr("Verschuivingen (m, links < 0)", "Offsets (m, left < 0)"));
                     if ui.add(egui::TextEdit::singleline(offsets).desired_width(140.0)).changed() {
                         o.offsets = parse_offsets(offsets);
                     }
                 });
             });
-            group(&mut cols[1], "Profielen", |ui| {
+            group(&mut cols[1], tr("Profielen", "Profiles"), |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Lengteprofiel: stap");
+                    ui.label(tr("Lengteprofiel: stap", "Longitudinal profile: step"));
                     num(ui, &mut o.step, 0.1, 50.0, 0.1, " m");
-                    ui.label("overhoging");
+                    ui.label(tr("overhoging", "vertical exaggeration"));
                     num(ui, &mut o.exaggeration, 1.0, 50.0, 0.5, "×");
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Ontwerpprofiel: boog");
+                    ui.label(tr("Ontwerpprofiel: boog", "Design profile: curve"));
                     num(ui, &mut o.vertical_curve, 0.0, 2000.0, 5.0, " m");
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Dwarsprofielen om de");
+                    ui.label(tr("Dwarsprofielen om de", "Cross sections every"));
                     num(ui, &mut o.section_every, 1.0, 1000.0, 1.0, " m");
-                    ui.label("links");
+                    ui.label(tr("links", "left"));
                     num(ui, &mut o.left, 1.0, 500.0, 1.0, " m");
-                    ui.label("rechts");
+                    ui.label(tr("rechts", "right"));
                     num(ui, &mut o.right, 1.0, 500.0, 1.0, " m");
                 });
                 ui.horizontal(|ui| {
-                    ui.label("overhoging");
+                    ui.label(tr("overhoging", "vertical exaggeration"));
                     num(ui, &mut o.section_exaggeration, 1.0, 20.0, 0.5, "×");
-                    ui.label("per rij");
+                    ui.label(tr("per rij", "per row"));
                     ui.add(egui::DragValue::new(&mut o.per_row).range(1..=20));
                 });
-                ui.label(RichText::new("Selecteer de as in de tekening en kies Lengteprofiel of Dwarsprofielen in het lint; klik dan waar ze komen. Ontwerpprofiel: teken een polylijn in het lengteprofiel en selecteer die.").small().weak());
+                ui.label(RichText::new(tr("Selecteer de as in de tekening en kies Lengteprofiel of Dwarsprofielen in het lint; klik dan waar ze komen. Ontwerpprofiel: teken een polylijn in het lengteprofiel en selecteer die.", "Select the alignment in the drawing and choose Longitudinal profile or Cross sections on the ribbon. Click to place the result. For a design profile, draw a polyline in the longitudinal profile and select it.")).small().weak());
             });
         });
         civiel::set_settings(o);
@@ -2641,14 +2725,14 @@ impl App {
         button_bar(ui, |ui| {
             use civiel::{as_profiel, landmeten, terrein};
             for (label, f) in [
-                ("TIN maken", (|opt, p| terrein::create(opt, terrein::TinSource::Auto, p)) as fn(&CivielOptions, &dyn Fn(String)) -> Result<String, String>),
-                ("Hoogtelijnen", |opt, p| terrein::contours(opt, terrein::Surface::Auto, p)),
-                ("Hoogteanalyse", |opt, _| terrein::analysis(opt, terrein::Surface::Auto)),
-                ("Grondverzet", |opt, p| terrein::volume(opt, terrein::Design::Auto, p)),
-                ("As maken", |opt, _| as_profiel::create(opt, as_profiel::AxisInput::Line(None), None, None)),
-                ("As verschuiven", |opt, _| as_profiel::offsets(opt, None)),
-                ("Ontwerpprofiel", |opt, _| as_profiel::design_profile(opt, None, None, None)),
-                ("Punten exporteren", |opt, _| landmeten::export(opt, None)),
+                (tr("TIN maken", "Create TIN"), (|opt, p| terrein::create(opt, terrein::TinSource::Auto, p)) as fn(&CivielOptions, &dyn Fn(String)) -> Result<String, String>),
+                (tr("Hoogtelijnen", "Contours"), |opt, p| terrein::contours(opt, terrein::Surface::Auto, p)),
+                (tr("Hoogteanalyse", "Elevation analysis"), |opt, _| terrein::analysis(opt, terrein::Surface::Auto)),
+                (tr("Grondverzet", "Earthworks"), |opt, p| terrein::volume(opt, terrein::Design::Auto, p)),
+                (tr("As maken", "Create alignment"), |opt, _| as_profiel::create(opt, as_profiel::AxisInput::Line(None), None, None)),
+                (tr("As verschuiven", "Offset alignment"), |opt, _| as_profiel::offsets(opt, None)),
+                (tr("Ontwerpprofiel", "Design profile"), |opt, _| as_profiel::design_profile(opt, None, None, None)),
+                (tr("Punten exporteren", "Export points"), |opt, _| landmeten::export(opt, None)),
             ] {
                 if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
                     start = Some((label, f));
@@ -2688,16 +2772,16 @@ impl App {
                             self.svc.refresh();
                             self.srv.url.clear();
                             self.srv.name.clear();
-                            self.ok(format!("Server \"{name}\" toegevoegd."));
+                            self.ok(tr_format!("Server \"{name}\" toegevoegd.", "Server \"{name}\" added."));
                         }
                         Err(e) => self.err(e),
                     }
                 }
-                Err(e) => self.err(format!("Server niet toegevoegd: {e}")),
+                Err(e) => self.err(tr_format!("Server niet toegevoegd: {e}", "Server not added: {e}")),
             }
         }
-        page_header(ui, "server", "Serverbeheer", "Voorgedefinieerde servers (Nederland, Vlaanderen, wereld) en uw eigen WMS-, WFS- en tegelservers.");
-        group(ui, "Server toevoegen", |ui| {
+        page_header(ui, "server", tr("Serverbeheer", "Manage servers"), tr("Voorgedefinieerde servers (Nederland, Vlaanderen, wereld) en uw eigen WMS-, WFS- en tegelservers.", "Predefined servers for the Netherlands, Flanders and worldwide, plus your own WMS, WFS and tile servers."));
+        group(ui, tr("Server toevoegen", "Add server"), |ui| {
             ui.horizontal(|ui| {
                 let kind = self.srv.kind.get_or_insert(ServerKind::Wms);
                 for k in [ServerKind::Wms, ServerKind::Wfs, ServerKind::Xyz] {
@@ -2705,18 +2789,18 @@ impl App {
                 }
             });
             let xyz = self.srv.kind == Some(ServerKind::Xyz);
-            ui.add(egui::TextEdit::singleline(&mut self.srv.url).hint_text(if xyz { "https://…/{z}/{x}/{y}.png" } else { "https://…/wms of …/wfs (GetCapabilities wordt getest)" }).desired_width(f32::INFINITY));
+            ui.add(egui::TextEdit::singleline(&mut self.srv.url).hint_text(if xyz { "https://…/{z}/{x}/{y}.png" } else { tr("https://…/wms of …/wfs (GetCapabilities wordt getest)", "https://…/wms or …/wfs (tests GetCapabilities)") }).desired_width(f32::INFINITY));
             ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut self.srv.name).hint_text("naam (leeg = titel van de server)"));
-                ui.add(egui::TextEdit::singleline(&mut self.srv.region).hint_text("groep"));
-                if ui.add_enabled(self.srv.test.is_none() && !self.srv.url.trim().is_empty(), primary_button("Testen en toevoegen")).clicked() {
+                ui.add(egui::TextEdit::singleline(&mut self.srv.name).hint_text(tr("naam (leeg = titel van de server)", "name (leave empty to use the server title)")));
+                ui.add(egui::TextEdit::singleline(&mut self.srv.region).hint_text(tr("groep (leeg = eigen servers)", "group (leave empty for custom servers)")));
+                if ui.add_enabled(self.srv.test.is_none() && !self.srv.url.trim().is_empty(), primary_button(tr("Testen en toevoegen", "Test and add"))).clicked() {
                     let (kind, url) = (self.srv.kind.unwrap_or(ServerKind::Wms), self.srv.url.trim().to_string());
-                    self.srv.test = Some(Job::spawn("Server testen…", move |_| match kind {
+                    self.srv.test = Some(Job::spawn(tr("Server testen…", "Testing server…"), move |_| match kind {
                         ServerKind::Wms => caps::fetch_wms(&crate::gis::http::clean_service_url(&url)).map(|c| c.title),
                         ServerKind::Wfs => caps::fetch_wfs(&crate::gis::http::clean_service_url(&url)).map(|c| c.title),
                         ServerKind::Xyz => {
                             if !(url.contains("{z}") && url.contains("{x}") && url.contains("{y}")) {
-                                return Err("tegel-URL moet {z}, {x} en {y} bevatten".into());
+                                return Err(tr("tegel-URL moet {z}, {x} en {y} bevatten", "tile URL must contain {z}, {x} and {y}").into());
                             }
                             crate::gis::http::get_image(&url.replace("{z}", "0").replace("{x}", "0").replace("{y}", "0")).map(|_| "Tegelserver".to_string())
                         }
@@ -2730,7 +2814,7 @@ impl App {
         });
         self.qgis_import(ui);
         let mut remove = None;
-        group(ui, "Servers", |ui| {
+        group(ui, tr("Servers", "Servers"), |ui| {
             let mut regions: Vec<String> = Vec::new();
             for s in &self.servers {
                 if !regions.contains(&s.region) {
@@ -2739,15 +2823,15 @@ impl App {
             }
             egui::Grid::new("srv_list").num_columns(4).striped(true).spacing([12.0, 4.0]).show(ui, |ui| {
                 for r in regions {
-                    ui.label(RichText::new(r.to_uppercase()).small().strong().color(ACCENT));
+                    ui.label(RichText::new(server_region_label(&r).to_uppercase()).small().strong().color(ACCENT));
                     ui.end_row();
                     for s in self.servers.iter().filter(|s| s.region == r) {
                         ui.label(RichText::new(s.kind.label()).monospace().small());
                         ui.label(&s.name);
                         ui.label(RichText::new(&s.url).small().weak());
                         if s.builtin {
-                            ui.label(RichText::new("standaard").small().weak());
-                        } else if ui.small_button("Verwijderen").clicked() {
+                            ui.label(RichText::new(tr("standaard", "predefined")).small().weak());
+                        } else if ui.small_button(tr("Verwijderen", "Remove")).clicked() {
                             remove = Some(s.id.clone());
                         }
                         ui.end_row();
@@ -2772,7 +2856,6 @@ impl App {
     /// add the chosen ones in one save.
     fn qgis_import(&mut self, ui: &mut egui::Ui) {
         use crate::gis::qgis;
-        use crate::lang::tr;
         let mut read = ui.ctx().input(|i| {
             i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).find(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("xml")))
         });
@@ -2870,19 +2953,37 @@ fn kind_colour(kind: &str) -> Color32 {
     }
 }
 
+fn hit_kind_label(kind: &str) -> &str {
+    match kind {
+        "adres" => tr("adres", "address"),
+        "straat" => tr("straat", "street"),
+        "postcode" => tr("postcode", "postcode"),
+        "plaats" => tr("plaats", "place"),
+        "gemeente" => tr("gemeente", "municipality"),
+        "provincie" => tr("provincie", "province"),
+        "land" => tr("land", "country"),
+        "waterschap" => tr("waterschap", "water authority"),
+        "perceel" => tr("perceel", "parcel"),
+        "appartement" => tr("appartement", "apartment"),
+        "coördinaat" => tr("coördinaat", "coordinate"),
+        "hectometer" => tr("hectometer", "hectometre"),
+        _ => kind,
+    }
+}
+
 /// One search hit: a coloured kind badge, the name and below it the place,
 /// the source on the right. Long texts end in "…".
 fn hit_row(ui: &mut egui::Ui, h: &Hit, highlighted: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 40.0), egui::Sense::click());
     // Painted by hand: give screen readers (and the UI test) its text.
-    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} — {} ({})", h.name, h.place, h.kind)));
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} — {} ({})", h.name, h.place, hit_kind_label(&h.kind))));
     let painter = ui.painter_at(rect);
     let visuals = ui.visuals();
     if highlighted || resp.hovered() {
         painter.rect_filled(rect, 4.0, if highlighted { ACCENT.gamma_multiply(0.35) } else { visuals.widgets.hovered.weak_bg_fill });
     }
     let badge_font = egui::FontId::proportional(10.5);
-    let badge = painter.layout_no_wrap(h.kind.clone(), badge_font, Color32::WHITE);
+    let badge = painter.layout_no_wrap(hit_kind_label(&h.kind).to_owned(), badge_font, Color32::WHITE);
     let badge_rect = egui::Rect::from_min_size(egui::pos2(rect.left() + 8.0, rect.center().y - 9.0), Vec2::new((badge.size().x + 12.0).max(58.0), 18.0));
     painter.rect_filled(badge_rect, 9.0, kind_colour(&h.kind));
     painter.galley(badge_rect.center() - badge.size() / 2.0, badge, Color32::WHITE);
@@ -2946,6 +3047,13 @@ fn primary_button(text: &str) -> egui::Button<'static> {
     egui::Button::new(RichText::new(text.to_string()).strong().color(Color32::WHITE)).fill(ACCENT).min_size(Vec2::new(130.0, 28.0))
 }
 
+fn server_region_label(region: &str) -> &str {
+    match region {
+        "Eigen servers" => tr("Eigen servers", "Custom servers"),
+        _ => region,
+    }
+}
+
 fn server_combo(ui: &mut egui::Ui, id: &str, all: &[MapServer], kinds: &[ServerKind], current: Option<&MapServer>) -> Option<MapServer> {
     let mut picked = None;
     egui::ComboBox::from_id_salt(id)
@@ -2963,14 +3071,14 @@ fn server_combo(ui: &mut egui::Ui, id: &str, all: &[MapServer], kinds: &[ServerK
             ui.data_mut(|d| d.insert_temp(fid, filter.clone()));
             let words: Vec<String> = filter.to_lowercase().split_whitespace().map(str::to_string).collect();
             let hit = |s: &MapServer| {
-                let hay = format!("{} {} {} {}", s.name, s.region, s.url, s.id).to_lowercase();
+                let hay = format!("{} {} {} {} {}", s.name, s.region, server_region_label(&s.region), s.url, s.id).to_lowercase();
                 words.iter().all(|w| hay.contains(w.as_str()))
             };
             let mut region = "";
             for s in all.iter().filter(|s| kinds.contains(&s.kind) && hit(s)) {
                 if s.region != region {
                     region = &s.region;
-                    ui.label(RichText::new(region.to_uppercase()).small().color(ACCENT));
+                    ui.label(RichText::new(server_region_label(region).to_uppercase()).small().color(ACCENT));
                 }
                 let label = if s.kind == ServerKind::Xyz { format!("{}   [{}]", s.name, crate::lang::tr("tegels", "tiles")) } else { s.name.clone() };
                 if ui.selectable_label(current.is_some_and(|c| c.id == s.id), label).clicked() {
@@ -2984,10 +3092,10 @@ fn server_combo(ui: &mut egui::Ui, id: &str, all: &[MapServer], kinds: &[ServerK
 /// Returns true when the colour changed.
 fn aci_combo(ui: &mut egui::Ui, id: &str, aci: &mut i16) -> bool {
     let before = *aci;
-    let name = ACI_CHOICES.iter().find(|(a, _)| a == aci).map(|(_, n)| *n).unwrap_or("?");
+    let name = ACI_CHOICES.iter().find(|(a, _, _)| a == aci).map(|(_, nl, en)| tr(nl, en)).unwrap_or("?");
     egui::ComboBox::from_id_salt(id).selected_text(RichText::new(name).color(aci_color(*aci))).show_ui(ui, |ui| {
-        for (a, n) in ACI_CHOICES {
-            ui.selectable_value(aci, *a, RichText::new(*n).color(aci_color(*a)));
+        for (a, nl, en) in ACI_CHOICES {
+            ui.selectable_value(aci, *a, RichText::new(tr(nl, en)).color(aci_color(*a)));
         }
     });
     before != *aci
@@ -3000,7 +3108,7 @@ impl App {
             let civil = super::product() == Product::Civiel;
             ui.horizontal(|ui| {
                 ui.add(icon(if civil { "axis" } else { "location" }).fit_to_exact_size(Vec2::splat(22.0)));
-                ui.label(RichText::new(if civil { "Open Infra · Civiel" } else { "Open Infra · GIS" }).size(15.0).strong());
+                ui.label(RichText::new(if civil { tr("Open Infra · Civiel", "Open Infra · Civil") } else { "Open Infra · GIS" }).size(15.0).strong());
             });
             ui.add_space(10.0);
             let mut nav = |ui: &mut egui::Ui, tab: Tab, ic: &str, label: &str| {
@@ -3011,7 +3119,7 @@ impl App {
                 }
             };
             if civil {
-                ui.label(RichText::new("CIVIEL").small().weak());
+                ui.label(RichText::new(tr("CIVIEL", "CIVIL")).small().weak());
                 nav(ui, Tab::Civiel, "axis", crate::lang::tr("Instellingen en acties", "Settings and actions"));
                 ui.add_space(8.0);
                 ui.label(RichText::new(crate::lang::tr("ALGEMEEN","GENERAL")).small().weak());
@@ -3065,14 +3173,14 @@ impl App {
                 if let Some(s) = bridge::site() {
                     ui.label(RichText::new(&s.label).small());
                     ui.label(RichText::new(s.region.label()).small().strong());
-                    ui.label(RichText::new(format!("{}\nX {:.1}\nY {:.1}\n{} × {} m · {}", s.crs, s.origin_e, s.origin_n, s.width, s.height, if s.absolute { "absoluut" } else { "relatief" })).small().monospace().weak());
+                    ui.label(RichText::new(format!("{}\nX {:.1}\nY {:.1}\n{} × {} m · {}", s.crs, s.origin_e, s.origin_n, s.width, s.height, if s.absolute { tr("absoluut", "absolute") } else { tr("relatief", "relative") })).small().monospace().weak());
                 } else {
-                    ui.label(RichText::new("Nog niet ingesteld").small().color(WARN));
+                    ui.label(RichText::new(tr("Nog niet ingesteld", "Not set")).small().color(WARN));
                 }
                 if let Some(t) = bridge::target() {
-                    let doc = t.doc_path.and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).unwrap_or_else(|| "(niet opgeslagen tekening)".into());
+                    let doc = t.doc_path.and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned())).unwrap_or_else(|| tr("(niet opgeslagen tekening)", "(unsaved drawing)").into());
                     ui.add_space(4.0);
-                    ui.label(RichText::new(format!("Tekening: {doc}")).small().weak());
+                    ui.label(RichText::new(tr_format!("Tekening: {doc}", "Drawing: {doc}")).small().weak());
                 }
             });
         });
@@ -3081,7 +3189,7 @@ impl App {
                 match &self.message {
                     Some((true, m)) => ui.label(RichText::new(m).color(OK_GREEN)),
                     Some((false, m)) => ui.label(RichText::new(m).color(ERR_RED)),
-                    None => ui.label(RichText::new("Klaar.").weak()),
+                    None => ui.label(RichText::new(tr("Klaar.", "Ready.")).weak()),
                 };
             });
         });

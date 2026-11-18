@@ -1,5 +1,6 @@
 //! Background work for the window: network calls never block the UI thread.
 
+use crate::lang::tr;
 use std::sync::{Arc, Mutex};
 
 type Slot<T> = Arc<Mutex<Option<Result<T, String>>>>;
@@ -25,7 +26,7 @@ impl<T: Send + 'static> Job<T> {
                 Some((target, site)) => crate::bridge::with_command_context(target, site, None, || f(&progress)),
                 None => f(&progress),
             }))
-                .unwrap_or_else(|_| Err("interne fout in de import".into()));
+                .unwrap_or_else(|_| Err(tr("interne fout in de import", "internal import error").into()));
             *r.lock().unwrap() = Some(out);
             super::repaint();
         });

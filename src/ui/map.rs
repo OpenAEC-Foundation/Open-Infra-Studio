@@ -5,6 +5,7 @@
 //! Drag pans, the wheel zooms around the cursor, a click picks a location and
 //! a drag in "area" mode draws a new bounding box.
 
+use crate::lang::tr;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -16,19 +17,19 @@ use crate::gis::http;
 pub type LonLat = [f64; 2];
 
 pub struct Basemap {
-    pub name: &'static str,
+    pub name: (&'static str, &'static str),
     /// Tile template with {z}, {x}, {y}.
     pub url: &'static str,
     pub max_zoom: u8,
-    pub attribution: &'static str,
+    pub attribution: (&'static str, &'static str),
 }
 
 pub const BASEMAPS: &[Basemap] = &[
-    Basemap { name: "OpenStreetMap", url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", max_zoom: 19, attribution: "© OpenStreetMap-bijdragers" },
-    Basemap { name: "PDOK BRT-achtergrondkaart (NL)", url: "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png", max_zoom: 19, attribution: "Kadaster / PDOK" },
-    Basemap { name: "PDOK BRT grijs (NL)", url: "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/grijs/EPSG:3857/{z}/{x}/{y}.png", max_zoom: 19, attribution: "Kadaster / PDOK" },
-    Basemap { name: "PDOK luchtfoto (NL)", url: "https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg", max_zoom: 21, attribution: "Beeldmateriaal.nl / PDOK" },
-    Basemap { name: "Sentinel-2 satelliet (wereld)", url: "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg", max_zoom: 16, attribution: "Sentinel-2 cloudless by EOX" },
+    Basemap { name: ("OpenStreetMap", "OpenStreetMap"), url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", max_zoom: 19, attribution: ("© OpenStreetMap-bijdragers", "© OpenStreetMap contributors") },
+    Basemap { name: ("PDOK BRT-achtergrondkaart (NL)", "PDOK BRT reference map (NL)"), url: "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png", max_zoom: 19, attribution: ("Kadaster / PDOK", "Kadaster / PDOK") },
+    Basemap { name: ("PDOK BRT grijs (NL)", "PDOK BRT greyscale (NL)"), url: "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/grijs/EPSG:3857/{z}/{x}/{y}.png", max_zoom: 19, attribution: ("Kadaster / PDOK", "Kadaster / PDOK") },
+    Basemap { name: ("PDOK luchtfoto (NL)", "PDOK aerial imagery (NL)"), url: "https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg", max_zoom: 21, attribution: ("Beeldmateriaal.nl / PDOK", "Beeldmateriaal.nl / PDOK") },
+    Basemap { name: ("Sentinel-2 satelliet (wereld)", "Sentinel-2 satellite (worldwide)"), url: "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg", max_zoom: 16, attribution: ("Sentinel-2 cloudless by EOX", "Sentinel-2 cloudless by EOX") },
 ];
 
 const TILE: f64 = 256.0;
@@ -228,7 +229,7 @@ impl MapView {
         }
 
         const ROW: f32 = 23.0;
-        let overlays: [(&str, bool); 2] = [("Importgebied (begrenzing)", self.show_bbox), ("Voorbeeld van de import", self.show_preview)];
+        let overlays: [(&str, bool); 2] = [(tr("Importgebied (begrenzing)", "Import area (bounds)"), self.show_bbox), (tr("Voorbeeld van de import", "Import preview"), self.show_preview)];
         let width = 262.0;
         let height = 14.0 + BASEMAPS.len() as f32 * ROW + 13.0 + overlays.len() as f32 * ROW + 6.0;
         let panel = Rect::from_min_size(egui::pos2(rect.right() - 10.0 - width, rect.top() + 10.0), Vec2::new(width, height));
@@ -250,7 +251,7 @@ impl MapView {
             if self.basemap == i {
                 painter.circle_filled(dot, 3.8, Color32::from_rgb(0, 120, 168));
             }
-            painter.text(egui::pos2(row.left() + 26.0, row.center().y), egui::Align2::LEFT_CENTER, b.name, font.clone(), ink);
+            painter.text(egui::pos2(row.left() + 26.0, row.center().y), egui::Align2::LEFT_CENTER, tr(b.name.0, b.name.1), font.clone(), ink);
             if resp.clicked() {
                 self.basemap = i;
             }
@@ -396,7 +397,7 @@ impl MapView {
         // Leaflet-style controls: zoom bar top-left, layer switcher top-right.
         self.zoom_control(ui, &painter, rect, bm.max_zoom as f64);
         self.layer_control(ui, &painter, rect);
-        let attr = format!("{} · {}", bm.attribution, if area { "sleep om het gebied te tekenen" } else { "klik = locatie · shift+sleep = gebied" });
+        let attr = format!("{} · {}", tr(bm.attribution.0, bm.attribution.1), if area { tr("sleep om het gebied te tekenen", "drag to draw the area") } else { tr("klik = locatie · shift+sleep = gebied", "click for location · Shift+drag for area") });
         let galley = painter.layout_no_wrap(attr, egui::FontId::proportional(11.0), Color32::from_gray(30));
         let at = rect.right_bottom() - galley.size() - Vec2::new(6.0, 4.0);
         painter.rect_filled(Rect::from_min_size(at - Vec2::new(4.0, 2.0), galley.size() + Vec2::new(8.0, 4.0)), 3.0, Color32::from_white_alpha(200));

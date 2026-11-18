@@ -228,7 +228,7 @@ impl App {
                         let url = ms.url.clone();
                         self.wfs.caps = None;
                         self.wfs.ft = None;
-                        self.wfs.caps_job = Some(Job::spawn("Capabilities ophalen…", move |_| caps::fetch_wfs(&url)));
+                        self.wfs.caps_job = Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wfs(&url)));
                     }
                 }
                 self.wfs.server = Some(ms);
@@ -250,7 +250,7 @@ impl App {
                     }
                     _ if kind == ServerKind::Wms => {
                         let url = ms.url.clone();
-                        self.raster.caps_job = Some(Job::spawn("Capabilities ophalen…", move |_| caps::fetch_wms(&url)));
+                        self.raster.caps_job = Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wms(&url)));
                     }
                     _ => {}
                 }
