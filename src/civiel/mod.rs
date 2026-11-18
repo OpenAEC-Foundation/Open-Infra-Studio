@@ -246,6 +246,12 @@ pub struct Out {
     layers: Vec<(LayerSpec, Vec<EntityType>)>,
 }
 
+enum LayerWrite<'a> {
+    Draw,
+    Import,
+    Append(&'a [(ocs_plugin_api::host::codec::Handle, String)]),
+}
+
 impl Out {
     pub fn put(&mut self, spec: &LayerSpec, e: impl IntoIterator<Item = EntityType>) {
         match self.layers.iter_mut().find(|(s, _)| s.name == spec.name) {
@@ -265,22 +271,42 @@ impl Out {
     /// Write and return the new handles, in the order the entities were put
     /// (layer by layer, as first used).
     pub fn write_handles(self, label: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
-        let mut all = Vec::new();
-        let mut first_data = None;
-        for (spec, e) in self.layers {
-            bridge::ensure_nlcs_layer(&spec);
-            if first_data.is_none() {
-                first_data = e.iter().find_map(|x| x.common().extended_data.get_record(bridge::XDATA_APP).cloned());
-            }
-            all.extend(e);
-        }
-        let handles = bridge::add_entities_handles(label, all)?;
+        self.write_to(label, LayerWrite::Draw)
+    }
+
+    pub(crate) fn write_import(self, label: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
+        self.write_to(label, LayerWrite::Import)
+    }
+
+    fn append(self, label: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
+        self.write_to(label, LayerWrite::Append(&[]))
+    }
+
+    fn write_to(self, label: &str, mode: LayerWrite<'_>) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
+        let all = self.into_entities();
+        let first_data = if matches!(mode, LayerWrite::Draw) {
+            all.iter().find_map(|e| e.common().extended_data.get_record(bridge::XDATA_APP).cloned())
+        } else {
+            None
+        };
+        let handles = match mode {
+            LayerWrite::Draw => bridge::add_entities_handles(label, all)?,
+            LayerWrite::Import => bridge::add_imported_entities(label, all)?,
+            LayerWrite::Append(originals) => bridge::append_entities(label, all, originals)?,
+        };
         // The host registers the XDATA application only through a record write.
         if let (Some(h), Some(r)) = (handles.first(), first_data) {
             bridge::register_object_data(*h, r);
         }
         api::note("elementen", handles.len());
         Ok(handles)
+    }
+
+    fn into_entities(self) -> Vec<EntityType> {
+        self.layers.into_iter().flat_map(|(spec, entities)| {
+            bridge::ensure_nlcs_layer(&spec);
+            entities
+        }).collect()
     }
 }
 

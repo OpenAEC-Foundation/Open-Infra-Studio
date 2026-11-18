@@ -96,11 +96,8 @@ pub fn from_settings(v: &Value) -> Region {
         Region::Netherlands
     }
 }
-fn path() -> std::path::PathBuf {
-    crate::gis::servers::config_dir().join("settings.json")
-}
 pub fn configured() -> Region {
-    std::fs::read_to_string(path())
+    std::fs::read_to_string(crate::settings::path())
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .map(|v| from_settings(&v))
@@ -111,25 +108,11 @@ pub fn current() -> Region {
     *R.get_or_init(configured)
 }
 pub fn save(region: Region) -> Result<(), String> {
-    let path = path();
-    let mut value = match std::fs::read_to_string(&path) {
-        Ok(s) => serde_json::from_str::<Value>(&s).map_err(|e| e.to_string())?,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => serde_json::json!({}),
-        Err(e) => return Err(e.to_string()),
-    };
-    if !value.is_object() {
-        return Err("Settings must be a JSON object".into());
-    }
-    value["region"] = serde_json::to_value(region).map_err(|e| e.to_string())?;
-    value["netherlands"] = (region == Region::Netherlands).into();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(
-        path,
-        serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())
+    let region_value = serde_json::to_value(region).map_err(|e| e.to_string())?;
+    crate::settings::update(&crate::settings::path(), |settings| {
+        settings.insert("region".into(), region_value);
+        settings.insert("netherlands".into(), (region == Region::Netherlands).into());
+    })
 }
 
 #[cfg(test)]

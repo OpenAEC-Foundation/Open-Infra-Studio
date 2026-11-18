@@ -82,6 +82,18 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 
 50. **De Civiel-knoppentest herkent de Engelse vensterkop niet** (#131, Sol ronde 2, [BEVESTIGD] VERVOLG). De toegankelijkheidsproef zoekt uitsluitend `Open Infra · Civiel`. Richting: accepteer ook `Open Infra · Civil` in die herkenningsstap.
 
+71. **Een kaartimport heeft een aparte stap voor de laagsloten** (#136, [BEVESTIGD] VERVOLG, besluit Trias). OCS 2026.46 opent voor `DRAWORDER` zijn eigen ongedaanmaakstap en sluit daarmee de lopende importstap. De lagen moeten tijdens `DRAWORDER` schrijfbaar zijn. In de native WMS-proef waren drie acties nodig om de herimport ongedaan te maken. De eerste opent het slot, de tweede herstelt de tekenvolgorde, de derde verwijdert het tweede kaartbeeld en herstelt het eerdere slot. Bij de eerste import kan een lege laag achterblijven omdat de laag vóór de importopname wordt gemaakt.
+
+72. **Opnieuw importeren kan een handmatig ontgrendelde laag weer sluiten** (#136, [BEVESTIGD] VERVOLG, besluit Trias). Staat **Geïmporteerde lagen vergrendelen** aan, dan vergrendelt OIS iedere doel­laag die de import heeft gevuld. Dit geldt ook als iemand het OCS-slot vóór de import bewust had geopend. Open het slot opnieuw in OCS als die laag bewerkbaar moet blijven.
+
+73. **Een gelijktijdige laagvergrendeling kan een proefpunt achterlaten** (#136, Sol ronde 2, [BEVESTIGD] VERVOLG). Als een laag wordt vergrendeld tussen het plaatsen en wissen van het tijdelijke punt, weigert OCS het wissen en meldt OIS de fout. Richting: oefen deze situatie in de native host en behoud het handle voor herstel bij een geweigerde opruiming.
+
+74. **BGT bijwerken heeft nog schaalgrenzen voor bestaande tekeningen** (#136, Sol ronde 2, [BEVESTIGD] VERVOLG). De vergelijking leest de tekening als geheel. De bewerking voor objecten die uit de BGT zijn verdwenen verstuurt één transactie voor alle verplaatsingen. Richting: lees alleen de bronobjecten en behoud de geldende transactiesemantiek bij begrensde berichten.
+
+75. **GWSW-overname mist bronobjecten zonder volledige documentweergave** (#136, Sol ronde 2, [BEVESTIGD] VERVOLG). De terugvalroute leest selectie en index, maar de GWSW-import indexeert de bronobjecten niet. Zonder volledige documentweergave is de overname daardoor afhankelijk van de selectie. Richting: haal de bronobjecten op via begrensde opvragen of indexeer ze bij import.
+
+76. **Riool bijwerken kan aparte ongedaanmaakstappen voor de index geven** (#136, Sol ronde 4, [BEVESTIGD] VERVOLG). OIS schrijft de index van de plattegrond en die van het lengteprofiel na de geometrie, in twee verzoeken. OCS kan voor elk verzoek een undo-stap maken. Na één keer Ongedaan maken kan de terugvalroute daardoor nieuwe planhandles en oude profielhandles lezen. Richting: schrijf beide indexvermeldingen samen binnen dezelfde undo-groep als de geometrie.
+
 81. **WFS en GIS-bestanden herschrijven een objectrecord na plaatsing** (#139, Sol ronde 1, [BEVESTIGD] VERVOLG). De gepinde CAD-host registreert `OPENINFRA` al bij `AddEntities`. De extra `WriteRecord` schrijft de gegevens opnieuw en laat de host de geometriecaches opnieuw opbouwen en een documentwijziging publiceren. Richting: gebruik de gewone batchfuncties en controleer de meegestuurde records in de tests.
 
 82. **De WFS-uitleg vermeldt de lengtebeperking per attribuut niet** (#139, Sol ronde 1, [BEVESTIGD] VERVOLG). De README noemt maximaal 40 niet-lege attributen per feature. De gedeelde encoder kort elke combinatie `key=value` ook af op 255 UTF-8-bytes. Het BAG-id en bouwjaar passen ruim. Richting: verwijs vanuit de WFS-uitleg naar de lengtebeperking.

@@ -19,7 +19,7 @@ impl PluginRequestSender for Drawing {
                 PluginResponse::OptHandle(Some(Handle::from(1000u64)))
             }
             PluginRequest::TableOperation { operation: TableOperation::LinetypeCreate { .. } } => PluginResponse::TableResult(Ok(Handle::from(1001u64))),
-            PluginRequest::PushUndo { label } => {
+            PluginRequest::PushUndo { label } | PluginRequest::BeginUndoGroup { label } => {
                 self.undo.lock().unwrap().push(label);
                 PluginResponse::Ok
             }
@@ -29,7 +29,11 @@ impl PluginRequestSender for Drawing {
                 stored.extend(entities);
                 PluginResponse::Handles(handles)
             }
-            PluginRequest::WriteRecord { .. } | PluginRequest::SetDirty | PluginRequest::BumpGeometry => PluginResponse::Ok,
+            PluginRequest::ModifyLayer(config) if self.layers.lock().unwrap().contains(&config.name) => PluginResponse::Bool(true),
+            PluginRequest::WriteRecord { .. } => PluginResponse::Bool(true),
+            PluginRequest::ReadXRecord { .. } => PluginResponse::XRecordEntries(Ok(Vec::new())),
+            PluginRequest::UpdateXRecord { .. } => PluginResponse::XRecordUpdateResult(Ok(Handle::from(1002u64))),
+            PluginRequest::EndUndoGroup | PluginRequest::SetDirty | PluginRequest::BumpGeometry => PluginResponse::Ok,
             PluginRequest::ExecuteCommand(command) if command == "ZOOMEXTENTS" => PluginResponse::Bool(true),
             other => {
                 let error = format!("onverwacht hostverzoek: {other:?}");
