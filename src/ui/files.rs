@@ -117,7 +117,13 @@ impl FilesPage {
             });
             ui.end_row();
             ui.label(RichText::new(tr("Laag", "Layer")).weak());
-            ui.add(egui::TextEdit::singleline(&mut opt.layer).desired_width(260.0));
+            // The name the import draws on, shown as typed: a space becomes
+            // `_`, as a layer group cannot hold a layer with one (#143).
+            let typed = ui.add(egui::TextEdit::singleline(&mut opt.layer).desired_width(260.0))
+                .on_hover_text(tr("Zonder spaties, zodat de laag in de laaggroep van dit bestand past.", "Without spaces, so the layer fits in this file's layer group."));
+            if typed.changed() {
+                opt.layer = crate::emit::clean_name(&opt.layer);
+            }
             ui.end_row();
             let fields = data.fields();
             let field_combo = |ui: &mut egui::Ui, id: &str, value: &mut Option<String>| {

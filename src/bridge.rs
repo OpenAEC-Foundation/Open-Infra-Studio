@@ -1351,22 +1351,29 @@ struct WaitingGroup {
     deferred: bool,
 }
 
-/// The layer of a GIS import ([`emit::layer_name`]). Drawings from before
-/// #143 have it with spaces, which `LAYERGROUP` cannot name: such a layer
-/// gets the new name, so a re-import draws on it and its group holds it.
+/// The layer of a GIS import ([`emit::layer_name`]), taken over from a
+/// drawing from before #143 ([`take_over_layer`]).
 pub(crate) fn gis_layer(prefix: &str, raw: &str) -> String {
     let name = crate::emit::layer_name(prefix, raw);
-    let spaced = crate::emit::spaced_layer_name(prefix, raw);
-    if spaced != name {
-        // Asked on every import, as undo can bring the old name back; OCS
-        // refuses it without a change when there is no such layer.
-        let _ = request(PluginRequest::TableOperation { operation: TableOperation::LayerRename { from: spaced, to: name.clone() } });
-    }
+    take_over_layer(&crate::emit::spaced_layer_name(prefix, raw), &name);
     name
 }
 
-/// A layer group's name: cleaned as a layer name ([`emit::clean_name`]), so
-/// two sources share a group only where their layers share a name.
+/// Drawings from before #143 have an import's layer with spaces (`old`),
+/// which `LAYERGROUP` cannot name: it gets the new name, so a re-import
+/// draws on it and its group holds it. Asked on every import, as undo can
+/// bring the old name back; OCS refuses it without a change when there is
+/// no such layer.
+pub(crate) fn take_over_layer(old: &str, new: &str) {
+    if old != new {
+        let _ = request(PluginRequest::TableOperation { operation: TableOperation::LayerRename { from: old.into(), to: new.into() } });
+    }
+}
+
+/// A layer group's name: cleaned as a layer name ([`emit::clean_name`]).
+/// OCS compares group names without case, so a source named by its data
+/// has its kind in front (`Bestand-bgt`, `WMS-Luchtfoto_2025`, `XYZ-…`,
+/// `WFS-pand`) and never takes the group of a fixed source (`BGT`).
 pub(crate) fn layer_group_name(raw: &str) -> String {
     crate::emit::clean_name(raw.trim()).chars().take(60).collect()
 }
@@ -2163,6 +2170,9 @@ pub(crate) mod replacement_test_host {
                     self.log.lock().unwrap().push("record".into());
                     *self.index.lock().unwrap() = entries;
                     A::XRecordUpdateResult(Ok(Handle::new(1002)))
+                }
+                Q::RunCommand { request: ocs_plugin_api::host::CommandRequest::Run { line } } if line == "ZOOMEXTENTS" => {
+                    A::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() }))
                 }
                 Q::RunCommand { request: ocs_plugin_api::host::CommandRequest::RunQuiet { line } } => {
                     let mut busy = self.busy.lock().unwrap();

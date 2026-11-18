@@ -84,7 +84,7 @@ impl Invoer {
     pub fn group(&self) -> String {
         match self {
             Invoer::Ahn(_) => "AHN".into(),
-            Invoer::Bestand(p) => p.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            Invoer::Bestand(p) => format!("Bestand-{}", p.file_stem().map(|n| n.to_string_lossy()).unwrap_or_default()),
         }
     }
 
