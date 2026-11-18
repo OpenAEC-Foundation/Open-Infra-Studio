@@ -75,7 +75,8 @@ fn styled(mut e: EntityType, layer: &str, ltscale: f64, data: Option<&ExtendedDa
     c.layer = layer.to_string();
     c.color = Color::ByLayer;
     c.linetype_scale = ltscale;
-    if let Some(r) = data {
+    // An empty record makes the DWG unreadable (#153).
+    if let Some(r) = data.filter(|r| !r.is_empty()) {
         c.extended_data.add_record(r.clone());
     }
     e
@@ -140,4 +141,38 @@ pub fn label_spot(pts: &[XY]) -> Option<(XY, f64)> {
         .max_by(|a, b| a.2.total_cmp(&b.2))
         .filter(|s| s.2 > 0.0)
         .map(|(a, b, _)| ([(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0], (b[1] - a[1]).atan2(b[0] - a[0])))
+}
+
+#[cfg(test)]
+mod tests {
+    use ocs_plugin_api::host::codec::{tables::AppId, CadDocument, DwgReader, DwgWriter};
+    use serde_json::Value;
+
+    use super::*;
+    use crate::bridge::XDATA_APP;
+
+    /// A feature without attributes (a CSV of only x,y) is drawn without
+    /// object data: an empty OPENINFRA record does not come back out of a
+    /// DWG (#153). A feature with attributes keeps its record.
+    #[test]
+    fn a_feature_without_attributes_is_drawn_without_object_data() {
+        let named = Feature { props: [("naam".to_string(), Value::String("put 1".into()))].into_iter().collect(), ..Default::default() };
+        let mut doc = CadDocument::new();
+        // As OCS registers it with the first record (`bridge::register_object_data`).
+        let mut app = AppId::new(XDATA_APP);
+        app.handle = doc.allocate_handle();
+        doc.app_ids.add(app).unwrap();
+        for feature in [Feature::default(), named] {
+            for e in markers(&[[1.0, 2.0]], "0", 0.25, Some(&feature_data(&feature))) {
+                doc.add_entity(e).unwrap();
+            }
+        }
+        let path = std::env::temp_dir().join(format!("oi-object-data-{}.dwg", std::process::id()));
+        DwgWriter::write_to_file(&path, &doc).unwrap();
+        let back = DwgReader::from_file(&path).unwrap().read();
+        let _ = std::fs::remove_file(&path);
+        let back = back.unwrap();
+        let with_data: Vec<bool> = back.model_space_entities().map(|e| e.common().extended_data.get_record(XDATA_APP).is_some()).collect();
+        assert_eq!(with_data, [false, true]);
+    }
 }

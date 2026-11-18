@@ -81,7 +81,7 @@ fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str
         if lines.is_empty() && points.is_empty() {
             continue;
         }
-        let data = with_data.then(|| emit::feature_data(feature)).filter(|record| !record.is_empty());
+        let data = with_data.then(|| emit::feature_data(feature));
         let data = data.as_ref();
         polylines.extend(lines.iter().map(|(pts, closed)| emit::polyline(pts, *closed, false, layer, 1.0, data)));
         markers.extend(points.iter().map(|&point| emit::marker(point, layer, text_h * 0.25, data)));
