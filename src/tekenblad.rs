@@ -126,7 +126,10 @@ impl Sheet {
         };
         let c = e.common_mut();
         c.color = of.color;
-        c.line_weight = of.line_weight;
+        c.line_weight = match of.line_weight {
+            LineWeight::ByLayer | LineWeight::ByBlock | LineWeight::Default => DEFAULT_WEIGHT,
+            weight => weight,
+        };
         c.linetype = of.line_type.clone();
         self.put(spec, vec![e]);
     }
@@ -156,13 +159,38 @@ pub fn is_legend_sample(e: &EntityType) -> bool {
     })
 }
 
-/// The NLCS layers drawn in this session, each as it is in the drawing now:
-/// a user or a template may have given it another pen than the plug-in did.
-pub fn drawn_layers() -> Vec<Layer> {
-    // Only a full snapshot has the layer table: a larger drawing keeps the
-    // plug-in's pens (knownbugs.md 143).
-    let table = bridge::snapshot().ok().filter(|_| !bridge::partial());
-    bridge::nlcs_layers().into_iter().map(|spec| as_drawn(spec, table.as_ref())).collect()
+/// The weight of a layer on the default lineweight ("Standaard" in Layer
+/// management): OCS draws it as one screen pixel (0.26 mm), AutoCAD as
+/// LWDEFAULT (0.25 mm unless set). A legend sample cannot keep "Default"
+/// itself: on an element it means the weight of the legend layer.
+pub(crate) const DEFAULT_WEIGHT: LineWeight = LineWeight::Value(25);
+
+/// Whether a legend shows NLCS layer `name`: not the sheet's own layers,
+/// not text layers.
+fn in_legend(name: &str) -> bool {
+    !name.contains("-AL-") && !name.ends_with("-T")
+}
+
+/// The drawing's layers with their pens, for the legend of a sheet: read
+/// before the sheet changes the drawing. A drawing too large to read whole
+/// gives `None`, and its legend shows the plug-in's pens (knownbugs.md
+/// 143); a note says so.
+pub fn layer_pens() -> Option<CadDocument> {
+    let table = bridge::layer_table();
+    if table.is_none() {
+        bridge::push_info(crate::lang::tr(
+            "De legenda toont de NLCS-pennen: de pennen van de lagen in deze tekening zijn niet te lezen.",
+            "The legend shows the NLCS pens: the pens of the layers in this drawing cannot be read.",
+        ));
+    }
+    table
+}
+
+/// The NLCS layers drawn in this session that a legend shows, each with
+/// its pen in `table` (see [`layer_pens`]): a user or a template may have
+/// given it another pen than the plug-in did.
+pub fn drawn_layers(table: Option<&CadDocument>) -> Vec<Layer> {
+    bridge::nlcs_layers().into_iter().filter(|spec| in_legend(&spec.name)).map(|spec| as_drawn(spec, table)).collect()
 }
 
 /// Layer `spec` as `table` has it, else with the pen the plug-in gives it.
@@ -216,16 +244,21 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
     north_arrow(&mut s, ma.x1 - 18.0, ma.y1 - 26.0);
     scale_bar(&mut s, ma.x0 + 10.0, ma.y0 + 10.0, opt.scale);
     title_block(&mut s, sx, pw - 10.0, info, opt, paper, &site.crs, &site.label);
-    let shown = legend(&mut s, &drawn_layers(), sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
+    let table = bridge::nlcs_layers().iter().any(|spec| in_legend(&spec.name)).then(layer_pens).flatten();
+    let shown = legend(&mut s, &drawn_layers(table.as_ref()), sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
 
-    let mut ents = Vec::new();
-    for (spec, e) in s.out {
-        bridge::ensure_nlcs_layer(&spec);
-        ents.extend(e);
-    }
-    // In its own layer group, so a sheet is turned off or removed in one go
-    // (#143); not locked, as a sheet is edited after it is drawn.
-    let n = bridge::append_entities("NLCS-tekenblad", Some("Tekenblad"), ents, &[])?.len();
+    let label = "NLCS-tekenblad";
+    let n = bridge::with_import_undo(label, || {
+        let mut entities = Vec::new();
+        for (spec, parts) in s.out {
+            bridge::ensure_nlcs_layer(&spec);
+            entities.extend(parts);
+        }
+        // In its own layer group, so a sheet is turned off or removed in one
+        // go (#143). Not locked, as a sheet is edited after it is drawn;
+        // existing locks are restored.
+        bridge::append_entities(label, Some("Tekenblad"), entities, &[]).map(|handles| handles.len())
+    })?;
     Ok(format!("Tekenblad {paper} liggend, schaal 1:{} — {n} elementen, legenda met {shown} lagen.", opt.scale))
 }
 
@@ -358,7 +391,7 @@ fn title_block(s: &mut Sheet, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOpti
 /// Legend of the NLCS `drawn` layers (see [`drawn_layers`]), grouped by
 /// main group. Returns the number of layers shown.
 fn legend(s: &mut Sheet, drawn: &[Layer], x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
-    let mut layers: Vec<&Layer> = drawn.iter().filter(|l| !l.name.contains("-AL-") && !l.name.ends_with("-T")).collect();
+    let mut layers: Vec<&Layer> = drawn.iter().filter(|l| in_legend(&l.name)).collect();
     let key = |l: &Layer| {
         let parts: Vec<&str> = l.name.splitn(5, '-').collect();
         (parts.get(2).copied().unwrap_or("").to_string(), parts.get(3).copied().unwrap_or("").to_string(), l.name.clone())
@@ -523,5 +556,20 @@ mod tests {
         // AM before VH; the axis layer is not in this table: its NLCS pen.
         assert_eq!(look(&samples[0]), (Color::Index(axis.color), LineWeight::from_value(axis.lineweight.unwrap()), "AM-AS-SO".to_string()));
         assert_eq!(look(&samples[1]), (Color::Index(5), LineWeight::Value(35), "DASHED".to_string()));
+    }
+
+    /// A layer on the default lineweight ("Standaard" in Layer management):
+    /// a sample with that weight would take the 0.18 mm of the legend layer
+    /// it sits on. It gets the weight the layer draws with (#142).
+    #[test]
+    fn a_legend_sample_of_a_layer_on_the_default_lineweight_keeps_that_weight() {
+        let asphalt = drawn("VH", "GESLOTENVERHARDING_ASFALT", Element::G);
+        let mut doc = CadDocument::new();
+        let mut layer = Layer::new(&asphalt.name);
+        layer.line_weight = LineWeight::Default;
+        let _ = doc.layers.add(layer);
+        let samples = samples(&[as_drawn(asphalt, Some(&doc))]);
+        assert_eq!(samples[0].common().line_weight, DEFAULT_WEIGHT);
+        assert_eq!(DEFAULT_WEIGHT, LineWeight::Value(25));
     }
 }

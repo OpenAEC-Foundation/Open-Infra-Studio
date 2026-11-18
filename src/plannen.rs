@@ -479,8 +479,23 @@ pub(crate) fn place_with_text(
     if rendered.entities.is_empty() {
         return Err("Geen tekenbare IMRO-objecten gevonden".into());
     }
-    if rendered
-        .entities
+    let count = bridge::with_import_undo("IMRO-plangegevens", || write_plan(&target, &rendered.layers, rendered.entities))?;
+    bridge::note_source(source);
+    bridge::zoom_extents();
+    for warning in &data.warnings {
+        progress(warning.clone());
+    }
+    Ok(files::report(
+        format!("IMRO: {} {}, {count} {} {} {} {}. {}",
+            rendered.objects, tr("objecten", "features"), tr("elementen", "entities"),
+            tr("op", "on"), rendered.layers.len(), tr("lagen", "layers"),
+            tr("Kaartgegevens; controleer actuele regels en rechtsgeldigheid.", "Map data; check current rules and legal validity.")),
+        &data.warnings,
+    ))
+}
+
+fn write_plan(target: &bridge::Target, layers: &BTreeMap<String, [u8; 3]>, entities: Vec<EntityType>) -> Result<usize, String> {
+    if entities
         .iter()
         .any(|e| e.common().linetype == DASH)
     {
@@ -501,7 +516,7 @@ pub(crate) fn place_with_text(
             }
         }
     }
-    for (name, [r, g, b]) in &rendered.layers {
+    for (name, [r, g, b]) in layers {
         bridge::ensure_layer(
             name,
             Color::Rgb {
@@ -511,17 +526,5 @@ pub(crate) fn place_with_text(
             },
         );
     }
-    let count = bridge::add_imported_entities("IMRO-plangegevens", "Ruimtelijke plannen", rendered.entities)?.len();
-    bridge::note_source(source);
-    bridge::zoom_extents();
-    for warning in &data.warnings {
-        progress(warning.clone());
-    }
-    Ok(files::report(
-        format!("IMRO: {} {}, {count} {} {} {} {}. {}",
-            rendered.objects, tr("objecten", "features"), tr("elementen", "entities"),
-            tr("op", "on"), rendered.layers.len(), tr("lagen", "layers"),
-            tr("Kaartgegevens; controleer actuele regels en rechtsgeldigheid.", "Map data; check current rules and legal validity.")),
-        &data.warnings,
-    ))
+    Ok(bridge::add_imported_entities("IMRO-plangegevens", "Ruimtelijke plannen", entities)?.len())
 }

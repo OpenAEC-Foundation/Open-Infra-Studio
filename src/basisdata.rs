@@ -51,7 +51,7 @@ fn target() -> Result<Target, String> {
 /// Collects entities per layer and writes them as one undo step.
 pub(crate) struct Batch {
     entities: Vec<EntityType>,
-    layers: BTreeMap<String, usize>,
+    layers: BTreeMap<String, LayerSpec>,
 }
 
 impl Batch {
@@ -63,21 +63,23 @@ impl Batch {
         if ents.is_empty() {
             return;
         }
-        if !self.layers.contains_key(&spec.name) {
-            bridge::ensure_nlcs_layer(spec);
-        }
-        *self.layers.entry(spec.name.clone()).or_insert(0) += ents.len();
+        self.layers.entry(spec.name.clone()).or_insert_with(|| spec.clone());
         self.entities.extend(ents);
     }
 
     /// Write as one import; its layers go into layer group `group`.
     pub(crate) fn write(self, label: &str, group: &str) -> Result<(usize, usize), String> {
-        let handles = bridge::add_imported_entities(label, group, self.entities)?;
-        Ok((handles.len(), self.layers.len()))
+        if self.entities.is_empty() {
+            return Ok((0, 0));
+        }
+        self.write_with(label, group, |_| Ok(()))
     }
 
     pub(crate) fn write_with(self, label: &str, group: &str, finish: impl FnOnce(&mut bridge::ImportLayers) -> Result<(), String>) -> Result<(usize, usize), String> {
         bridge::with_import_layers(label, Some(group), |layers| {
+            for spec in self.layers.values() {
+                bridge::ensure_nlcs_layer(spec);
+            }
             let handles = layers.write_entities(self.entities)?;
             finish(layers)?;
             Ok((handles.len(), self.layers.len()))

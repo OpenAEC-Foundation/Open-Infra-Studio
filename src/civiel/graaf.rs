@@ -246,8 +246,7 @@ pub fn update(opt: &CivielOptions, only_check: bool, progress: &dyn Fn(String)) 
     }
 
     use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
-    bridge::request(PluginRequest::BeginUndoGroup { label: tr("Profielen bijwerken", "Update profiles").into() })?;
-    let result = (|| {
+    bridge::with_import_undo(tr("Profielen bijwerken", "Update profiles"), || {
         let mut done = Vec::new();
         // Add all replacements before removing any old geometry. Failed
         // host writes are errors too; the old geometry remains available.
@@ -281,13 +280,7 @@ pub fn update(opt: &CivielOptions, only_check: bool, progress: &dyn Fn(String)) 
             tr(" producten opnieuw gemaakt", " products made again"),
             if gone > 0 { format!("{gone} {}", tr("met een verwijderde as weggehaald.", "with a removed axis taken out.")) } else { String::new() }
         ) + &format!(" {}", done.join(" | ")))
-    })();
-    // Close the group on both success and error, including all graph and
-    // index writes in the same undo step as the geometry.
-    let closed = bridge::request(PluginRequest::EndUndoGroup);
-    let summary = result?;
-    closed?;
-    Ok(summary)
+    })
 }
 
 #[cfg(test)]

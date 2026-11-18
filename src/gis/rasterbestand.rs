@@ -270,8 +270,11 @@ pub fn import_path(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Resul
             img.save(&file).map_err(|e| format!("{}: {e}", file.display()))?;
             let placed = PlacedImage { path: file.clone(), bbox, px: [img.width(), img.height()] };
             let layer = bridge::gis_layer("GIS", &name);
-            bridge::ensure_layer(&layer, ocs_plugin_api::host::codec::Color::ByLayer);
-            let n = bridge::add_imported_entities(&format!("Raster {name}"), &name, emit::images(site, &[placed], &layer, f, 0))?.len();
+            let label = format!("Raster {name}");
+            let n = bridge::with_import_undo(&label, || {
+                bridge::ensure_layer(&layer, ocs_plugin_api::host::codec::Color::ByLayer);
+                Ok(bridge::add_imported_entities(&label, &name, emit::images(site, &[placed], &layer, f, 0))?.len())
+            })?;
             Ok(format!("{name}: {}×{} px geplaatst ({crs}) — {n} element op {layer}.", img.width(), img.height()))
         }
         Raster::Heights { grid, crs } => heights(site, &grid, &crs.unwrap_or_else(|| site.crs.clone()), &name, &dir, f, progress),
@@ -299,7 +302,6 @@ fn heights(site: &Site, grid: &Grid, crs: &str, name: &str, dir: &Path, f: f64, 
     let file = dir.join(format!("{name}_relief.png"));
     shade.save(&file).map_err(|e| format!("{}: {e}", file.display()))?;
     let relief_layer = bridge::gis_layer("GIS", &format!("{name} relief"));
-    bridge::ensure_layer(&relief_layer, ocs_plugin_api::host::codec::Color::ByLayer);
     let mut ents = emit::images(site, &[PlacedImage { path: file, bbox: sbbox, px: [shade.width(), shade.height()] }], &relief_layer, f, 0);
     // Contours: about twenty levels over the range.
     let interval = crate::civiel::nice_step(((hi - lo) / 20.0).max(0.01));
@@ -308,7 +310,6 @@ fn heights(site: &Site, grid: &Grid, crs: &str, name: &str, dir: &Path, f: f64, 
     let to = super::vector::data_to_site(site, crs, &[])?;
     let opt = crate::basisdata::NlcsOptions::default();
     let spec = nlcs::layer(nlcs::object_by_name("OG", "HOOGTELIJN").ok_or("NLCS OG-HOOGTELIJN ontbreekt")?, opt.status, &opt.discipline, Element::G);
-    bridge::ensure_nlcs_layer(&spec);
     let k = opt.scale / 1000.0 * f;
     let mut count = 0;
     for (level, polys) in &lines {
@@ -326,7 +327,12 @@ fn heights(site: &Site, grid: &Grid, crs: &str, name: &str, dir: &Path, f: f64, 
             }
         }
     }
-    let n = bridge::add_imported_entities(&format!("Hoogtemodel {name}"), name, ents)?.len();
+    let label = format!("Hoogtemodel {name}");
+    let n = bridge::with_import_undo(&label, || {
+        bridge::ensure_layer(&relief_layer, ocs_plugin_api::host::codec::Color::ByLayer);
+        bridge::ensure_nlcs_layer(&spec);
+        Ok(bridge::add_imported_entities(&label, name, ents)?.len())
+    })?;
     Ok(format!(
         "{name}: hoogtemodel {}×{} cellen van {} m, {} tot {} m — reliëf en {count} hoogtelijnen om de {} m ({n} elementen).",
         grid.w,

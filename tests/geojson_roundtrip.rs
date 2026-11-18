@@ -31,7 +31,10 @@ impl PluginRequestSender for Drawing {
                 assert!(self.0.lock().unwrap().iter().any(|e| e.common().handle == handle));
                 A::Bool(true)
             }
-            Q::ExecuteCommand(cmd) => { assert_eq!(cmd, "ZOOMEXTENTS"); A::Ok }
+            Q::RunCommand { request: ocs_plugin_api::host::CommandRequest::Run { line } } => {
+                assert_eq!(line, "ZOOMEXTENTS");
+                A::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() }))
+            }
             other => return Err(PluginRequestError(format!("onverwacht verzoek: {other:?}"))),
         })
     }

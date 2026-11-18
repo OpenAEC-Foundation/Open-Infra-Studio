@@ -114,11 +114,14 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
             tr("geen tekenbare objecten in het bestand", "no drawable features in the file").into()
         }));
     }
-    for l in &layers {
-        bridge::ensure_layer(l, Color::from_index(opt.aci));
-    }
-    // A file is its own source: its layers are named after it, so is its group.
-    let handles = bridge::add_imported_entities(&format!("GIS {}", source), stem, out)?;
+    let label = format!("GIS {source}");
+    let handles = bridge::with_import_undo(&label, || {
+        for l in &layers {
+            bridge::ensure_layer(l, Color::from_index(opt.aci));
+        }
+        // A file is its own source: its layers are named after it, so is its group.
+        bridge::add_imported_entities(&label, stem, out)
+    })?;
     bridge::note_source(source);
     bridge::zoom_extents();
     Ok(data.report(format!(

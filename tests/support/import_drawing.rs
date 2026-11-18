@@ -23,6 +23,7 @@ impl PluginRequestSender for Drawing {
                 self.undo.lock().unwrap().push(label);
                 PluginResponse::Ok
             }
+            PluginRequest::EndUndoGroup => PluginResponse::Ok,
             PluginRequest::AddEntities(entities) => {
                 let mut stored = self.entities.lock().unwrap();
                 let handles = (stored.len()..stored.len() + entities.len()).map(|i| Handle::from(i as u64 + 1)).collect();
@@ -33,9 +34,14 @@ impl PluginRequestSender for Drawing {
             PluginRequest::WriteRecord { .. } => PluginResponse::Bool(true),
             PluginRequest::ReadXRecord { .. } => PluginResponse::XRecordEntries(Ok(Vec::new())),
             PluginRequest::UpdateXRecord { .. } => PluginResponse::XRecordUpdateResult(Ok(Handle::from(1002u64))),
-            PluginRequest::EndUndoGroup | PluginRequest::SetDirty | PluginRequest::BumpGeometry => PluginResponse::Ok,
-            PluginRequest::RunCommand { .. } => PluginResponse::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() })),
-            PluginRequest::ExecuteCommand(command) if command == "ZOOMEXTENTS" => PluginResponse::Bool(true),
+            PluginRequest::SetDirty | PluginRequest::BumpGeometry => PluginResponse::Ok,
+            PluginRequest::RunCommand { request: ocs_plugin_api::host::CommandRequest::Run { line } } if line == "ZOOMEXTENTS" => {
+                PluginResponse::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() }))
+            }
+            // The layer group of an import (#143).
+            PluginRequest::RunCommand { request: ocs_plugin_api::host::CommandRequest::RunQuiet { .. } } => {
+                PluginResponse::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() }))
+            }
             other => {
                 let error = format!("onverwacht hostverzoek: {other:?}");
                 self.unexpected.lock().unwrap().push(error.clone());

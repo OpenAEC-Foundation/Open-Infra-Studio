@@ -292,24 +292,26 @@ impl Out {
     }
 
     fn write_to(self, label: &str, mode: LayerWrite<'_>) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
-        let all = self.into_entities();
-        let first_data = if matches!(mode, LayerWrite::Draw) {
-            all.iter().find_map(|e| e.common().extended_data.get_record(bridge::XDATA_APP).cloned())
-        } else {
-            None
-        };
-        let handles = match mode {
-            LayerWrite::Draw => bridge::add_entities_handles(label, all)?,
-            LayerWrite::Import(group) => bridge::add_imported_entities(label, group, all)?,
-            LayerWrite::From(group) => bridge::append_entities(label, Some(group), all, &[])?,
-            LayerWrite::Append(originals) => bridge::append_entities(label, None, all, originals)?,
-        };
-        // The host registers the XDATA application only through a record write.
-        if let (Some(h), Some(r)) = (handles.first(), first_data) {
-            bridge::register_object_data(*h, r);
-        }
-        api::note("elementen", handles.len());
-        Ok(handles)
+        bridge::with_import_undo(label, || {
+            let all = self.into_entities();
+            let first_data = if matches!(mode, LayerWrite::Draw) {
+                all.iter().find_map(|e| e.common().extended_data.get_record(bridge::XDATA_APP).cloned())
+            } else {
+                None
+            };
+            let handles = match mode {
+                LayerWrite::Draw => bridge::add_entities_handles(label, all)?,
+                LayerWrite::Import(group) => bridge::add_imported_entities(label, group, all)?,
+                LayerWrite::From(group) => bridge::append_entities(label, Some(group), all, &[])?,
+                LayerWrite::Append(originals) => bridge::append_entities(label, None, all, originals)?,
+            };
+            // The host registers the XDATA application only through a record write.
+            if let (Some(h), Some(r)) = (handles.first(), first_data) {
+                bridge::register_object_data(*h, r);
+            }
+            api::note("elementen", handles.len());
+            Ok(handles)
+        })
     }
 
     fn into_entities(self) -> Vec<EntityType> {
