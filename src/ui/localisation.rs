@@ -17,6 +17,18 @@ impl App {
         );
         group(ui, tr("Toepassing", "Application"), |ui| {
             super::super::library::language_switch(ui);
+            let mut lock = crate::settings::lock_imported_layers();
+            if ui.checkbox(&mut lock, tr(
+                "Geïmporteerde lagen vergrendelen",
+                "Lock imported layers",
+            )).changed() {
+                if let Err(error) = crate::settings::save_lock_imported_layers(lock) {
+                    self.err(format!("{} {error}", tr(
+                        "De instelling kon niet worden opgeslagen.",
+                        "The setting could not be saved.",
+                    )));
+                }
+            }
             ui.label(tr("De standaardregio bepaalt het lint na herstart. Taal en regio zijn onafhankelijk.","The default region sets the ribbon after restart. Language and region are independent."));
         });
         let site = bridge::site();

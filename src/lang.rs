@@ -15,12 +15,8 @@ pub enum Lang {
     En,
 }
 
-fn settings_file() -> std::path::PathBuf {
-    crate::gis::servers::config_dir().join("settings.json")
-}
-
 fn from_settings() -> Option<Lang> {
-    let text = std::fs::read_to_string(settings_file()).ok()?;
+    let text = std::fs::read_to_string(crate::settings::path()).ok()?;
     let v: serde_json::Value = serde_json::from_str(&text).ok()?;
     parse(v.get("language")?.as_str()?)
 }
@@ -71,13 +67,9 @@ pub fn current() -> Lang {
 
 /// Store the language for the next session (the ribbon is built at load).
 pub fn save(lang: Lang) -> Result<(), String> {
-    let path = settings_file();
-    let mut v: serde_json::Value = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
-    v["language"] = serde_json::Value::String(if lang == Lang::Nl { "nl" } else { "en" }.into());
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(&path, serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+    crate::settings::update(&crate::settings::path(), |settings| {
+        settings.insert("language".into(), if lang == Lang::Nl { "nl" } else { "en" }.into());
+    })
 }
 
 /// Compatibility check for the application's regional ribbon profile.
@@ -98,6 +90,18 @@ pub fn tr<'a>(nl: &'a str, en: &'a str) -> &'a str {
         Lang::En => en,
     }
 }
+
+/// Format a message using the same language choice as `tr`.
+macro_rules! tr_format {
+    ($nl:literal, $en:literal $(, $args:expr)* $(,)?) => {
+        match $crate::lang::current() {
+            $crate::lang::Lang::Nl => format!($nl $(, $args)*),
+            $crate::lang::Lang::En => format!($en $(, $args)*),
+        }
+    };
+}
+
+pub(crate) use tr_format;
 
 #[cfg(test)]
 mod tests {

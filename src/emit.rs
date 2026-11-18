@@ -9,7 +9,7 @@ use ocs_plugin_api::host::ExtendedDataRecord;
 use crate::gis::raster::PlacedImage;
 use crate::gis::site::Site;
 use crate::gis::crs::XY;
-use crate::gis::vector::Geometry;
+use crate::gis::vector::Feature;
 
 fn on_layer(mut e: EntityType, layer: &str) -> EntityType {
     let c = e.common_mut();
@@ -18,29 +18,19 @@ fn on_layer(mut e: EntityType, layer: &str) -> EntityType {
     e
 }
 
-/// Polylines, point markers and centred labels. `text_h` is in drawing units.
-pub fn geometry(g: &Geometry, layer: &str, text_h: f64) -> Vec<EntityType> {
-    let mut out = Vec::with_capacity(g.polylines.len() + g.points.len() + g.labels.len());
-    for (pts, closed) in &g.polylines {
-        let mut lw = LwPolyline::new();
-        for p in pts {
-            lw.add_point_with_bulge(Vector2::new(p[0], p[1]), 0.0);
-        }
-        lw.is_closed = *closed;
-        out.push(on_layer(EntityType::LwPolyline(lw), layer));
+pub(crate) fn attribute_text(v: &serde_json::Value) -> Option<String> {
+    match v {
+        serde_json::Value::Null => None,
+        serde_json::Value::String(s) if s.trim().is_empty() => None,
+        serde_json::Value::String(s) => Some(s.trim().to_string()),
+        other => Some(other.to_string()),
     }
-    for p in &g.points {
-        out.push(on_layer(EntityType::Circle(Circle::from_center_radius(Vector3::new(p[0], p[1], 0.0), text_h * 0.25)), layer));
-    }
-    for (p, s) in &g.labels {
-        let at = Vector3::new(p[0], p[1], 0.0);
-        let mut t = Text::with_value(s.clone(), at).with_height(text_h);
-        t.horizontal_alignment = TextHorizontalAlignment::Center;
-        t.vertical_alignment = TextVerticalAlignment::Middle;
-        t.alignment_point = Some(at);
-        out.push(on_layer(EntityType::Text(t), layer));
-    }
-    out
+}
+
+/// Use the same bounded `key=value` XDATA for web features and local files.
+pub(crate) fn feature_data(feature: &Feature) -> ExtendedDataRecord {
+    let pairs = feature.props.iter().filter_map(|(k, v)| attribute_text(v).map(|s| (k.as_str(), s)));
+    crate::bridge::object_data(pairs.take(40))
 }
 
 /// IMAGE entities for downloaded map tiles (lower-left insertion, Y north).
@@ -96,24 +86,30 @@ fn styled(mut e: EntityType, layer: &str, ltscale: f64, data: Option<&ExtendedDa
 pub fn polylines(lines: &[(Vec<XY>, bool)], layer: &str, ltscale: f64, data: Option<&ExtendedDataRecord>) -> Vec<EntityType> {
     lines
         .iter()
-        .map(|(pts, closed)| {
-            let mut lw = LwPolyline::new();
-            for p in pts {
-                lw.add_point_with_bulge(Vector2::new(p[0], p[1]), 0.0);
-            }
-            lw.is_closed = *closed;
-            lw.plinegen = !*closed;
-            styled(EntityType::LwPolyline(lw), layer, ltscale, data)
-        })
+        .map(|(pts, closed)| polyline(pts, *closed, !*closed, layer, ltscale, data))
         .collect()
+}
+
+pub(crate) fn polyline(pts: &[XY], closed: bool, plinegen: bool, layer: &str, ltscale: f64, data: Option<&ExtendedDataRecord>) -> EntityType {
+    let mut lw = LwPolyline::new();
+    for p in pts {
+        lw.add_point_with_bulge(Vector2::new(p[0], p[1]), 0.0);
+    }
+    lw.is_closed = closed;
+    lw.plinegen = plinegen;
+    styled(EntityType::LwPolyline(lw), layer, ltscale, data)
 }
 
 /// Point objects as small circles (NLCS element S without its block).
 pub fn markers(points: &[XY], layer: &str, radius: f64, data: Option<&ExtendedDataRecord>) -> Vec<EntityType> {
     points
         .iter()
-        .map(|p| styled(EntityType::Circle(Circle::from_center_radius(Vector3::new(p[0], p[1], 0.0), radius)), layer, 1.0, data))
+        .map(|&p| marker(p, layer, radius, data))
         .collect()
+}
+
+pub(crate) fn marker(p: XY, layer: &str, radius: f64, data: Option<&ExtendedDataRecord>) -> EntityType {
+    styled(EntityType::Circle(Circle::from_center_radius(Vector3::new(p[0], p[1], 0.0), radius)), layer, 1.0, data)
 }
 
 /// A centred, rotated text (`rotation` in radians, counter-clockwise).

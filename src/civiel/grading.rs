@@ -22,17 +22,7 @@ use crate::bridge;
 use crate::gis::crs::XY;
 use crate::nlcs::{Element, LayerSpec, Status};
 
-/// A text in the interface language: a Dutch and an English format string
-/// with the same arguments.
-macro_rules! tf {
-    ($nl:literal, $en:literal $(, $a:expr)* $(,)?) => {
-        match crate::lang::current() {
-            crate::lang::Lang::Nl => format!($nl $(, $a)*),
-            crate::lang::Lang::En => format!($en $(, $a)*),
-        }
-    };
-}
-pub(crate) use tf;
+pub(crate) use crate::lang::tr_format as tf;
 
 fn tr(nl: &'static str, en: &'static str) -> &'static str {
     crate::lang::tr(nl, en)

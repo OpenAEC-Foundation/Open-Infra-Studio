@@ -1,5 +1,5 @@
-//! Vector data: GeoJSON features → drawing geometry (polylines, points,
-//! labels) in the project CRS, clipped to the import extent.
+//! Vector data: GeoJSON features → drawing geometry in the project CRS,
+//! clipped to the import extent.
 
 use serde_json::Value;
 
@@ -11,20 +11,6 @@ pub struct Feature {
     pub lines: Vec<(Vec<XY>, bool)>,
     pub points: Vec<XY>,
     pub props: serde_json::Map<String, Value>,
-}
-
-/// Drawing-space output, ready to be turned into entities.
-#[derive(Clone, Debug, Default)]
-pub struct Geometry {
-    pub polylines: Vec<(Vec<XY>, bool)>,
-    pub points: Vec<XY>,
-    pub labels: Vec<(XY, String)>,
-}
-
-impl Geometry {
-    pub fn is_empty(&self) -> bool {
-        self.polylines.is_empty() && self.points.is_empty() && self.labels.is_empty()
-    }
 }
 
 fn xy(v: &Value) -> Option<XY> {
@@ -222,39 +208,13 @@ pub fn clip_ring(pts: &[XY], r: Rect) -> Vec<XY> {
     ring
 }
 
-pub struct Options {
-    pub unit_factor: f64,
-    pub clip: bool,
-    pub label_field: Option<String>,
-}
-
-fn prop_text(v: &Value) -> Option<String> {
+pub(crate) fn prop_text(v: &Value) -> Option<String> {
     match v {
         Value::Null => None,
         Value::String(s) if s.is_empty() => None,
         Value::String(s) => Some(s.clone()),
         other => Some(other.to_string()),
     }
-}
-
-/// Features (in the data CRS) → drawing geometry.
-pub fn to_drawing(site: &Site, features: &[Feature], to_site: &dyn Fn(XY) -> Option<XY>, opt: &Options) -> Geometry {
-    let mut g = Geometry::default();
-    for f in features {
-        let (lines, points) = feature_to_drawing(site, f, to_site, opt.unit_factor, opt.clip);
-        let mut anchor: Vec<XY> = lines.first().map(|(l, _)| l.clone()).unwrap_or_default();
-        anchor.extend(points.iter().copied());
-        g.polylines.extend(lines);
-        g.points.extend(points);
-        if let (Some(field), false) = (&opt.label_field, anchor.is_empty()) {
-            if let Some(text) = f.props.get(field).and_then(prop_text) {
-                let n = anchor.len() as f64;
-                let c = [anchor.iter().map(|p| p[0]).sum::<f64>() / n, anchor.iter().map(|p| p[1]).sum::<f64>() / n];
-                g.labels.push((c, text));
-            }
-        }
-    }
-    g
 }
 
 /// One feature in drawing coordinates: its (clipped) lines and rings, and
