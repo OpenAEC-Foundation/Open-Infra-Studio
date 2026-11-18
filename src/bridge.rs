@@ -1340,7 +1340,10 @@ impl ImportLayers {
     }
 }
 
-fn send_to_back(handles: &[Handle]) -> Result<bool, String> {
+const SCRIPT_COMMANDS_OFF: &str = "running commands from a script is turned off (SCRIPTCOMMANDS = 0); turn it on at the command line with SCRIPTCOMMANDS 1";
+
+/// Return a notice if the host refuses draw order before running the command.
+fn send_to_back(handles: &[Handle]) -> Result<Option<&'static str>, String> {
     let select = |handles| {
         match request(PluginRequest::SetSelection { handles })? {
             PluginResponse::SelectionResult(result) => result,
@@ -1351,12 +1354,27 @@ fn send_to_back(handles: &[Handle]) -> Result<bool, String> {
     select(handles.to_vec())?;
     let moved = run_on_target("DRAWORDER_BACK");
     let restored = select(previous);
-    match moved {
-        // API 23 returns a string for this refusal before running the
-        // command. The actual import has already written its geometry.
-        Err(error) if error == "commands act on the active document; switch to it first" => restored.map(|()| false),
-        result => result.and(restored).map(|()| true),
-    }
+    let notice = match moved {
+        Ok(()) => None,
+        // API 23 returns these strings before running the command. The
+        // actual import has already written its geometry.
+        Err(error) => Some(match error.as_str() {
+            "commands act on the active document; switch to it first" => crate::lang::tr(
+                "Kaartbeelden geplaatst. De tekenvolgorde is overgeslagen omdat de tekening niet meer actief is.",
+                "Map images were placed. Draw order was skipped because the drawing is no longer active.",
+            ),
+            "a command is already active; cancel it first" => crate::lang::tr(
+                "Kaartbeelden geplaatst. De tekenvolgorde is overgeslagen omdat er al een tekenopdracht actief is.",
+                "Map images were placed. Draw order was skipped because another drawing command is active.",
+            ),
+            SCRIPT_COMMANDS_OFF => crate::lang::tr(
+                "Kaartbeelden geplaatst. De tekenvolgorde is overgeslagen omdat SCRIPTCOMMANDS uitstaat.",
+                "Map images were placed. Draw order was skipped because SCRIPTCOMMANDS is off.",
+            ),
+            _ => return Err(error),
+        }),
+    };
+    restored.map(|()| notice)
 }
 
 /// Keep the new map below vector data and above older images. The host
@@ -1391,11 +1409,7 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
         let scope = begin_layer_undo(crate::lang::tr("Kaartlagen vergrendelen", "Lock map layers"));
         scope?;
     }
-    if !moved? {
-        let message = crate::lang::tr(
-            "Kaartbeelden geplaatst. De tekenvolgorde is overgeslagen omdat de tekening niet meer actief is.",
-            "Map images were placed. Draw order was skipped because the drawing is no longer active.",
-        );
+    if let Some(message) = moved? {
         crate::civiel::api::note("tekenvolgorde_overgeslagen", message);
         let _ = request(PluginRequest::PushInfo(format!("[Open Infra] {message}")));
     }
@@ -1547,34 +1561,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn draw_order_refusal_restores_selection() {
+    fn draw_order_restores_selection_and_reports_refusals() {
         use ocs_plugin_api::host::PluginRequestError;
 
-        #[derive(Default)]
-        struct Sender(Mutex<Vec<Vec<Handle>>>);
+        struct Sender {
+            command: Result<(), &'static str>,
+            restore: Result<(), &'static str>,
+            selections: Mutex<Vec<Vec<Handle>>>,
+        }
         impl PluginRequestSender for Sender {
             fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
                 Ok(match req {
                     PluginRequest::GetSelection => PluginResponse::Selection(vec![Handle::new(1)]),
                     PluginRequest::SetSelection { handles } => {
-                        self.0.lock().unwrap().push(handles);
-                        PluginResponse::SelectionResult(Ok(()))
+                        let mut selections = self.selections.lock().unwrap();
+                        selections.push(handles);
+                        let result = if selections.len() == 1 { Ok(()) } else { self.restore };
+                        PluginResponse::SelectionResult(result.map_err(str::to_string))
                     }
                     PluginRequest::RunCommand { request: CommandRequest::Run { line } } => {
                         assert_eq!(line, "DRAWORDER_BACK");
-                        assert_eq!(*self.0.lock().unwrap(), [vec![Handle::new(2)]]);
-                        PluginResponse::CommandResult(Err("commands act on the active document; switch to it first".into()))
+                        assert_eq!(*self.selections.lock().unwrap(), [vec![Handle::new(2)]]);
+                        PluginResponse::CommandResult(self.command.map_err(str::to_string))
                     }
                     other => panic!("unexpected request: {other:?}"),
                 })
             }
         }
 
-        let sender = Arc::new(Sender::default());
-        let target = Target { sender: sender.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
-        let result = with_command_context(target, None, None, || send_to_back(&[Handle::new(2)]));
-        assert!(!result.unwrap(), "an inactive drawing skips draw order");
-        assert_eq!(*sender.0.lock().unwrap(), [vec![Handle::new(2)], vec![Handle::new(1)]]);
+        let run = |command, restore| {
+            let sender = Arc::new(Sender { command, restore, selections: Mutex::default() });
+            let target = Target { sender: sender.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
+            let result = with_command_context(target, None, None, || send_to_back(&[Handle::new(2)]));
+            assert_eq!(*sender.selections.lock().unwrap(), [vec![Handle::new(2)], vec![Handle::new(1)]]);
+            result
+        };
+        let inactive_tab = Err("commands act on the active document; switch to it first");
+        let active_command = Err("a command is already active; cancel it first");
+        assert_eq!(run(Ok(()), Ok(())), Ok(None));
+        assert!(run(inactive_tab, Ok(())).unwrap().is_some());
+        assert!(run(active_command, Ok(())).unwrap().is_some());
+        assert!(run(Err(SCRIPT_COMMANDS_OFF), Ok(())).unwrap().is_some());
+        assert_eq!(run(active_command, Err("restore failed")), Err("restore failed".into()));
+        assert_eq!(run(Err("DRAWORDER failed"), Ok(())), Err("DRAWORDER failed".into()));
     }
 
     #[test]
