@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use ocs_plugin_api::host::{
     codec::{Color, EntityType, Handle, LineWeight},
-    CommandStep, ExtendedDataRecord, HostApi, InteractiveCommand, LayerConfig, PluginRequestError, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
+    CommandStep, ExtendedDataRecord, HostApi, HostNotification, InteractiveCommand, LayerConfig, PluginRequestError, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
 };
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 use ocs_plugin_api::host::codec::tables::normalize_name;
@@ -176,6 +176,12 @@ pub fn attach(host: &mut dyn HostApi) {
             })
         });
     let doc_path = host.document_path(tab_id);
+    // The V4 runner can wake for dispatch with earlier notifications still
+    // queued separately. Apply drawing changes before registering this
+    // sender, since DocumentOpened can replace the contents of the same tab.
+    while let Some((_, notification)) = host.try_recv_notification() {
+        handle_document_notification(notification);
+    }
     {
         let mut s = shared().lock().unwrap();
         let same_tab = s.target.as_ref().is_some_and(|t| t.tab_id == tab_id);
@@ -203,6 +209,13 @@ pub fn attach(host: &mut dyn HostApi) {
     let f = units(host, tab_id, false);
     if let Some(t) = shared().lock().unwrap().target.as_mut() {
         t.unit_factor = f;
+    }
+}
+
+/// Handle drawing lifecycle notifications for both the GIS and Civiel runners.
+pub fn handle_document_notification(notification: HostNotification) {
+    if let HostNotification::DocumentTabClosed { tab_id } | HostNotification::DocumentOpened { tab_id } = notification {
+        drawing_closed(tab_id);
     }
 }
 
