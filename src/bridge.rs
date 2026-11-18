@@ -1321,6 +1321,39 @@ pub(crate) fn append_entities(label: &str, entities: Vec<EntityType>, originals:
     })
 }
 
+/// [`append_entities`] for elements that belong in `space` (the block record
+/// of model space, say). With the block editor open OCS adds to the block
+/// being edited: what it put elsewhere is taken back while its layers are
+/// still open, and the write fails with `elsewhere`.
+pub(crate) fn append_in(label: &str, new: Vec<EntityType>, space: Handle, elsewhere: &str) -> Result<Vec<Handle>, String> {
+    with_layer_writes(label, false, |layers| {
+        let handles = layers.write_entities_inner(new, Some(label))?;
+        let Some(&first) = handles.first() else { return Ok(handles) };
+        match owner(first) {
+            Ok(owner) if owner == space => Ok(handles),
+            Ok(_) => Err(take_back(label, &handles, elsewhere.into())),
+            Err(error) => Err(take_back(label, &handles, error)),
+        }
+    })
+}
+
+/// The block record that owns element `handle`.
+pub(crate) fn owner(handle: Handle) -> Result<Handle, String> {
+    entities(&[handle])?.into_iter().flatten().next().map(|e| e.common().owner_handle).ok_or_else(|| format!("{handle:?}?"))
+}
+
+/// Remove what a failed write added; `error` says why the write failed,
+/// with a request to undo when OCS kept part of it.
+fn take_back(label: &str, handles: &[Handle], error: String) -> String {
+    match remove_entities(label, handles) {
+        Ok(count) if count == handles.len() => error,
+        _ => format!("{error}\n{}", crate::lang::tr(
+            "OCS kon de reeds geplaatste kopieën niet allemaal opruimen. Gebruik Ongedaan maken.",
+            "OCS could not clean up all newly added copies. Use Undo.",
+        )),
+    }
+}
+
 /// Remove `originals` (handle, layer) in one undo step, also from a locked
 /// layer, which is locked again after it.
 pub(crate) fn remove_replaced(label: &str, originals: &[(Handle, String)]) -> Result<(), String> {
@@ -1394,16 +1427,10 @@ impl ImportLayers {
     fn write_entities_inner(&mut self, entities: Vec<EntityType>, rollback_label: Option<&str>) -> Result<Vec<Handle>, String> {
         let mut handles = Vec::with_capacity(entities.len());
         if let Err(error) = entity_batches(entities, |chunk| self.add(chunk, &mut handles)) {
-            if let Some(label) = rollback_label {
-                match remove_entities(label, &handles) {
-                    Ok(count) if count == handles.len() => {}
-                    _ => return Err(format!("{error}\n{}", crate::lang::tr(
-                        "OCS kon de reeds geplaatste kopieën niet allemaal opruimen. Gebruik Ongedaan maken.",
-                        "OCS could not clean up all newly added copies. Use Undo.",
-                    ))),
-                }
-            }
-            return Err(error);
+            return Err(match rollback_label {
+                Some(label) => take_back(label, &handles, error),
+                None => error,
+            });
         }
         let _ = request(PluginRequest::SetDirty);
         // Force a rebuild after a batch (an image can hide newer lines).
@@ -1854,6 +1881,11 @@ pub(crate) mod replacement_test_host {
         pub meet: Option<(Mutex<u32>, std::sync::Condvar)>,
         /// Elements OCS refuses to remove (as on a layer locked meanwhile).
         pub refuse: Mutex<Vec<Handle>>,
+        /// A sheet's layout, once current, stays a moment (at most 300 ms)
+        /// before the next request, so another command can switch away
+        /// from it meanwhile.
+        pub hold_sheet: bool,
+        switched: std::sync::Condvar,
     }
 
     impl Drawing {
@@ -1861,6 +1893,7 @@ pub(crate) mod replacement_test_host {
             Self {
                 doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()), log: Mutex::new(Vec::new()),
                 layout: Mutex::new("Model".into()), outside: Mutex::new(Vec::new()), block_edit: false, meet: None, refuse: Mutex::new(Vec::new()),
+                hold_sheet: false, switched: std::sync::Condvar::new(),
             }
         }
 
@@ -1894,6 +1927,17 @@ pub(crate) mod replacement_test_host {
 
             if matches!(req, Q::ReadXRecord { .. }) {
                 self.meet();
+            }
+            if let Q::TableOperation { operation: TableOperation::LayoutSetCurrent { name } } = &req {
+                if !self.block_edit {
+                    let mut layout = self.layout.lock().unwrap();
+                    layout.clone_from(name);
+                    self.switched.notify_all();
+                    if self.hold_sheet && name != "Model" {
+                        let _ = self.switched.wait_timeout_while(layout, std::time::Duration::from_millis(300), |now| now == name).unwrap();
+                    }
+                }
+                return Ok(A::TableResult(Ok(Handle::NULL)));
             }
             let mut doc = self.doc.lock().unwrap();
             let locked = |doc: &CadDocument, entity: &EntityType| {
@@ -1930,12 +1974,6 @@ pub(crate) mod replacement_test_host {
                     A::Bool(writable && doc.remove_entity(handle).is_some())
                 }
                 Q::WriteRecord { handle, .. } => A::Bool(doc.get_entity(handle).is_some_and(|e| !locked(&doc, e))),
-                Q::TableOperation { operation: TableOperation::LayoutSetCurrent { name } } => {
-                    if !self.block_edit {
-                        *self.layout.lock().unwrap() = name;
-                    }
-                    A::TableResult(Ok(Handle::NULL))
-                }
                 Q::TableOperation { .. } => A::TableResult(Ok(Handle::new(1001))),
                 Q::OpenDocumentViewV4 { .. } => A::Error("no shared view in the test host".into()),
                 Q::GetSelection => A::Selection(doc.model_space_entities().map(|e| e.common().handle).collect()),
