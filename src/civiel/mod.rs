@@ -246,10 +246,10 @@ pub struct Out {
     layers: Vec<(LayerSpec, Vec<EntityType>)>,
 }
 
-enum LayerWrite {
+enum LayerWrite<'a> {
     Draw,
     Import,
-    Append,
+    Append(&'a [(ocs_plugin_api::host::codec::Handle, String)]),
 }
 
 impl Out {
@@ -279,10 +279,10 @@ impl Out {
     }
 
     fn append(self, label: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
-        self.write_to(label, LayerWrite::Append)
+        self.write_to(label, LayerWrite::Append(&[]))
     }
 
-    fn write_to(self, label: &str, mode: LayerWrite) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
+    fn write_to(self, label: &str, mode: LayerWrite<'_>) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
         let mut all = Vec::new();
         let mut first_data = None;
         for (spec, e) in self.layers {
@@ -295,7 +295,7 @@ impl Out {
         let handles = match mode {
             LayerWrite::Draw => bridge::add_entities_handles(label, all)?,
             LayerWrite::Import => bridge::add_imported_entities(label, all)?,
-            LayerWrite::Append => bridge::append_entities(label, all)?,
+            LayerWrite::Append(originals) => bridge::append_entities(label, all, originals)?,
         };
         // The host registers the XDATA application only through a record write.
         if let (Some(h), Some(r)) = (handles.first(), first_data) {

@@ -75,10 +75,10 @@ impl Batch {
         Ok((handles.len(), self.layers.len()))
     }
 
-    pub(crate) fn write_with(self, label: &str, finish: impl FnOnce() -> Result<(), String>) -> Result<(usize, usize), String> {
+    pub(crate) fn write_with(self, label: &str, finish: impl FnOnce(&mut bridge::ImportLayers) -> Result<(), String>) -> Result<(usize, usize), String> {
         bridge::with_import_layers(label, |layers| {
             let handles = layers.write_entities(self.entities)?;
-            finish()?;
+            finish(layers)?;
             Ok((handles.len(), self.layers.len()))
         })
     }
@@ -115,14 +115,25 @@ pub fn bgt(site: &Site, collections: &[&str], opt: &NlcsOptions, progress: &dyn 
 }
 
 pub fn bgt_place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) -> Result<String, String> {
+    bgt_place_with(site, data, opt, |_, _| Ok(()))
+}
+
+pub(crate) fn bgt_place_with(
+    site: &Site,
+    data: &[(String, Vec<Feature>)],
+    opt: &NlcsOptions,
+    finish: impl FnOnce(&mut bridge::ImportLayers, &std::collections::HashSet<&str>) -> Result<(), String>,
+) -> Result<String, String> {
     let t = target()?;
     let f = t.unit_factor;
     let to_site = vector::data_to_site(site, "EPSG:28992", &[])?;
     let ltscale = opt.scale / 1000.0 * f;
     let mut batch = Batch::new();
+    let mut prepared = std::collections::HashSet::new();
     let mut unmapped = 0usize;
     for (collection, features) in data {
         for feat in features {
+            let before = batch.entities.len();
             let mut pairs: Vec<(&str, String)> = vec![("bron", "BGT".into()), ("objecttype", collection.clone())];
             for (k, v) in &feat.props {
                 if !bgt_skip(k) {
@@ -161,10 +172,19 @@ pub fn bgt_place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions
                 let spec = nlcs::layer(obj, opt.status, &opt.discipline, Element::S);
                 batch.push(&spec, emit::markers(&points, &spec.name, opt.paper(0.5, f), d.as_ref()));
             }
+            if batch.entities.len() > before {
+                if let Some(id) = feat.props.get("lokaal_id").and_then(|v| v.as_str()) {
+                    prepared.insert(id);
+                }
+            }
         }
     }
     let total: usize = data.iter().map(|(_, v)| v.len()).sum();
-    let (n, layers) = batch.write("BGT (NLCS)")?;
+    let (n, layers) = if batch.entities.is_empty() {
+        (0, 0)
+    } else {
+        batch.write_with("BGT (NLCS)", |layers| finish(layers, &prepared))?
+    };
     bridge::note_source("BGT (PDOK, CC0)");
     let mut msg = format!("BGT: {total} objecten → {n} elementen op {layers} NLCS-lagen.");
     if unmapped > 0 {

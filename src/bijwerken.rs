@@ -9,7 +9,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use ocs_plugin_api::host::codec::{Color, EntityType, Handle};
+use ocs_plugin_api::host::codec::{CadDocument, Color, EntityType, Handle};
 
 use crate::basisdata::{self, NlcsOptions};
 use crate::bridge;
@@ -67,6 +67,17 @@ pub fn bgt_update(site: &Site, opt: &NlcsOptions, progress: &dyn Fn(String)) -> 
     let f = t.unit_factor;
     progress(tr("Tekening lezen…", "Reading the drawing…").into());
     let doc = bridge::snapshot()?;
+    update_drawing(site, opt, f, &doc, |cols| bgt::fetch(site, cols, progress), progress)
+}
+
+fn update_drawing(
+    site: &Site,
+    opt: &NlcsOptions,
+    f: f64,
+    doc: &CadDocument,
+    fetch: impl FnOnce(&[&str]) -> Result<Vec<(String, Vec<Feature>)>, String>,
+    progress: &dyn Fn(String),
+) -> Result<String, String> {
     let mut drawn: BTreeMap<String, Drawn> = BTreeMap::new();
     let mut entities: HashMap<Handle, EntityType> = HashMap::new();
     for e in doc.entities() {
@@ -86,13 +97,13 @@ pub fn bgt_update(site: &Site, opt: &NlcsOptions, progress: &dyn Fn(String)) -> 
     }
     let collections: Vec<String> = drawn.values().map(|d| d.collection.clone()).filter(|c| !c.is_empty()).collect::<HashSet<_>>().into_iter().collect();
     let cols: Vec<&str> = collections.iter().map(String::as_str).collect();
-    let fresh = bgt::fetch(site, &cols, progress)?;
+    let fresh = fetch(&cols)?;
     progress(tr("Vergelijken…", "Comparing…").into());
     let to_site = vector::data_to_site(site, "EPSG:28992", &[])?;
     let mut seen: HashSet<String> = HashSet::new();
     let mut redraw: Vec<(String, Vec<Feature>)> = Vec::new();
-    let mut remove: Vec<Handle> = Vec::new();
-    let (mut added, mut changed, mut same) = (0, 0, 0);
+    let mut replacements = BTreeMap::new();
+    let (mut added, mut same) = (0, 0);
     for (collection, features) in &fresh {
         let mut todo = Vec::new();
         for feat in features {
@@ -112,8 +123,7 @@ pub fn bgt_update(site: &Site, opt: &NlcsOptions, progress: &dyn Fn(String)) -> 
                     if bgt::is_label(collection) || new_fp == fingerprint(d.points.iter().copied(), f) {
                         same += 1;
                     } else {
-                        changed += 1;
-                        remove.extend(d.handles.iter().copied());
+                        replacements.insert(id, &d.handles);
                         todo.push(feat.clone());
                     }
                 }
@@ -126,18 +136,20 @@ pub fn bgt_update(site: &Site, opt: &NlcsOptions, progress: &dyn Fn(String)) -> 
     // Objects of the fetched collections that the BGT no longer has.
     let vanished: Vec<Handle> = drawn.iter().filter(|(id, d)| !seen.contains(*id) && collections.contains(&d.collection)).flat_map(|(_, d)| d.handles.iter().copied()).collect();
     let n_vanished = drawn.iter().filter(|(id, d)| !seen.contains(*id) && collections.contains(&d.collection)).count();
-    if !remove.is_empty() {
-        let label = tr("BGT bijwerken: gewijzigde objecten", "BGT update: changed objects");
-        bridge::with_import_layers(label, |layers| {
-            layers.unlock(remove.iter().map(|h| entities[h].common().layer.clone()))?;
-            let removed = bridge::remove_entities(label, &remove)?;
-            if removed != remove.len() {
-                return Err(tr("OCS kon de oude BGT-objecten niet allemaal verwijderen", "OCS could not remove all old BGT entities").into());
-            }
-            Ok(())
-        })?;
-    }
-    let placed = if redraw.is_empty() { String::new() } else { basisdata::bgt_place(site, &redraw, opt)? };
+    let mut changed = 0;
+    let placed = if redraw.is_empty() {
+        String::new()
+    } else {
+        basisdata::bgt_place_with(site, &redraw, opt, |layers, confirmed| {
+            let originals: Vec<_> = replacements.iter()
+                .filter(|(id, _)| confirmed.contains(*id))
+                .flat_map(|(_, handles)| {
+                    changed += 1;
+                    handles.iter().map(|h| (*h, entities[h].common().layer.clone()))
+                }).collect();
+            layers.remove_originals(&originals)
+        })?
+    };
     if !vanished.is_empty() {
         bridge::ensure_layer(vanished_layer(), Color::from_index(1));
         let moved: Vec<EntityType> = vanished
@@ -171,12 +183,59 @@ pub fn bgt_update(site: &Site, opt: &NlcsOptions, progress: &dyn Fn(String)) -> 
         msg.push(' ');
         msg.push_str(&placed);
     }
+    let kept = replacements.len() - changed;
+    if kept != 0 {
+        msg.push_str(&format!(" {kept} {}", tr(
+            "oorspronkelijke objecten behouden omdat geen vervanging kon worden getekend.",
+            "original entities kept because no replacement could be drawn.",
+        )));
+    }
     Ok(msg)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{bridge::replacement_test_host::Drawing, emit, nlcs};
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn replacement_bgt_preserves_refused_and_unmapped_originals() {
+        for reject_batch in [true, false] {
+            let site = Site::default();
+            let opt = NlcsOptions { object_data: false, clip: false, ..NlcsOptions::default() };
+            let layer = nlcs::layer(nlcs::object(nlcs::bgt_default("wegdeel").unwrap()).unwrap(),
+                opt.status, &opt.discipline, nlcs::Element::G).name;
+            let mut doc = CadDocument::new();
+            let mut entry = ocs_plugin_api::host::codec::tables::Layer::new(&layer);
+            entry.flags.locked = true;
+            doc.layers.add(entry).unwrap();
+            let coords = [[site.origin_e, site.origin_n], [site.origin_e + 20.0, site.origin_n]];
+            let mut data = Vec::new();
+            let mut originals = Vec::new();
+            for (id, collection) in [("road", "wegdeel"), ("unknown", "unknown-feature")] {
+                let record = bridge::object_data([("bron", "BGT".into()), ("objecttype", collection.into()), ("lokaal_id", id.into())]);
+                let original = emit::polylines(&[(coords.to_vec(), false)], &layer, 1.0, Some(&record)).pop().unwrap();
+                originals.push(doc.add_entity(original).unwrap());
+                let mut props = serde_json::Map::new();
+                props.insert("lokaal_id".into(), id.into());
+                let mut moved = coords;
+                moved[1][1] += 1.0;
+                data.push((collection.into(), vec![Feature { lines: vec![(moved.to_vec(), false)], props, ..Feature::default() }]));
+            }
+            let drawing = Arc::new(Drawing { doc: Mutex::new(doc.clone()), reject_batch });
+            let target = bridge::Target { sender: drawing.clone(), tab_id: 13620 + u64::from(reject_batch), unit_factor: 1.0, doc_path: None };
+            let result = bridge::with_command_context(target, None, None, || {
+                update_drawing(&site, &opt, 1.0, &doc, |_| Ok(data), &|_| {})
+            });
+            let doc = drawing.doc.lock().unwrap();
+            assert_eq!(doc.model_space_entities().count(), 2);
+            assert!(doc.layers.get(&layer).unwrap().is_locked());
+            assert!(doc.get_entity(originals[1]).is_some(), "unmapped feature must keep its original");
+            assert_eq!(doc.get_entity(originals[0]).is_some(), reject_batch);
+            assert_eq!(result.is_err(), reject_batch, "{result:?}");
+        }
+    }
 
     #[test]
     fn fingerprints_ignore_order_and_sub_millimetre_noise() {

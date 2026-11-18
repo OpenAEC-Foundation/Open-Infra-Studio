@@ -1132,8 +1132,12 @@ pub(crate) fn add_imported_entities(label: &str, entities: Vec<EntityType>) -> R
     write_import(label, entities, false)
 }
 
-pub(crate) fn append_entities(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
-    with_layer_writes(label, false, |layers| layers.write_entities(entities))
+pub(crate) fn append_entities(label: &str, entities: Vec<EntityType>, originals: &[(Handle, String)]) -> Result<Vec<Handle>, String> {
+    with_layer_writes(label, false, |layers| {
+        let handles = layers.write_entities(entities)?;
+        layers.remove_originals(originals)?;
+        Ok(handles)
+    })
 }
 
 fn send_entities(entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
@@ -1180,6 +1184,25 @@ fn write_import(label: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec
 }
 
 impl ImportLayers {
+    /// Call only after all replacements have been acknowledged by OCS.
+    pub(crate) fn remove_originals(&mut self, originals: &[(Handle, String)]) -> Result<(), String> {
+        self.unlock(originals.iter().map(|(_, layer)| layer.clone()))?;
+        for (handle, _) in originals {
+            match request(PluginRequest::RemoveEntity { handle: *handle })? {
+                PluginResponse::Bool(true) => {}
+                _ => return Err(crate::lang::tr(
+                    "OCS kon een origineel object niet verwijderen.",
+                    "OCS could not remove an original entity.",
+                ).into()),
+            }
+        }
+        if !originals.is_empty() {
+            let _ = request(PluginRequest::SetDirty);
+            let _ = request(PluginRequest::BumpGeometry);
+        }
+        Ok(())
+    }
+
     pub(crate) fn write_entities(&mut self, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
         let mut handles = Vec::with_capacity(entities.len());
         entity_batches(entities, |chunk| {
@@ -1344,6 +1367,65 @@ mod tests {
 
 #[cfg(test)]
 pub(crate) static COMMAND_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+#[cfg(test)]
+pub(crate) mod replacement_test_host {
+    use super::*;
+    use ocs_plugin_api::host::codec::{tables::Layer, CadDocument};
+
+    pub(crate) struct Drawing {
+        pub doc: Mutex<CadDocument>,
+        pub reject_batch: bool,
+    }
+
+    impl PluginRequestSender for Drawing {
+        fn request(&self, req: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+            use PluginRequest as Q;
+            use PluginResponse as A;
+
+            let mut doc = self.doc.lock().unwrap();
+            let locked = |doc: &CadDocument, entity: &EntityType| {
+                doc.layers.get(&entity.common().layer).is_some_and(|layer| layer.is_locked())
+            };
+            Ok(match req {
+                Q::AddLayer(config) if doc.layers.contains(&config.name) => A::OptHandle(None),
+                Q::AddLayer(config) => {
+                    let mut layer = Layer::new(&config.name);
+                    layer.handle = doc.allocate_handle();
+                    let handle = layer.handle;
+                    doc.layers.add(layer).unwrap();
+                    A::OptHandle(Some(handle))
+                }
+                Q::ModifyLayer(config) => {
+                    doc.layers.get_mut(&config.name).unwrap().flags.locked = config.locked.unwrap();
+                    A::Bool(true)
+                }
+                Q::AddEntity(entity) => A::Handle(if locked(&doc, &entity) {
+                    Handle::NULL
+                } else {
+                    doc.add_entity(entity).unwrap()
+                }),
+                Q::AddEntities(entities) => A::Handles(entities.into_iter().map(|entity| {
+                    if self.reject_batch || locked(&doc, &entity) {
+                        Handle::NULL
+                    } else {
+                        doc.add_entity(entity).unwrap()
+                    }
+                }).collect()),
+                Q::RemoveEntity { handle } => {
+                    let writable = doc.get_entity(handle).is_some_and(|e| !locked(&doc, e));
+                    A::Bool(writable && doc.remove_entity(handle).is_some())
+                }
+                Q::WriteRecord { handle, .. } => A::Bool(doc.get_entity(handle).is_some_and(|e| !locked(&doc, e))),
+                Q::TableOperation { .. } => A::TableResult(Ok(Handle::new(1001))),
+                Q::ReadXRecord { .. } => A::XRecordEntries(Ok(Vec::new())),
+                Q::UpdateXRecord { .. } => A::XRecordUpdateResult(Ok(Handle::new(1002))),
+                Q::SetDirty | Q::BumpGeometry | Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup => A::Ok,
+                other => panic!("unexpected host request: {other:?}"),
+            })
+        }
+    }
+}
 
 #[cfg(test)]
 mod command_worker_tests {
