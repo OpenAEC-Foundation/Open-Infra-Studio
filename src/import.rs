@@ -286,7 +286,6 @@ mod import_layer_tests {
         fn request(&self, req: Q) -> Result<A, PluginRequestError> {
             let mut doc = self.0.lock().unwrap();
             Ok(match req {
-                Q::DocumentSnapshot => A::Document(Box::new(doc.clone().into())),
                 Q::AddLayer(config) => {
                     let mut layer = ocs_plugin_api::host::codec::tables::Layer::new(&config.name);
                     layer.flags.locked = config.locked.unwrap_or_default();
@@ -306,6 +305,14 @@ mod import_layer_tests {
                         doc.add_entity(e).unwrap()
                     }
                 }).collect()),
+                Q::AddEntity(entity) => {
+                    if doc.layers.get(&entity.common().layer).is_some_and(|layer| layer.is_locked()) {
+                        A::Handle(Handle::NULL)
+                    } else {
+                        A::Handle(doc.add_entity(entity).unwrap())
+                    }
+                }
+                Q::RemoveEntity { handle } => A::Bool(doc.remove_entity(handle).is_some()),
                 Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup | Q::SetDirty | Q::BumpGeometry => A::Ok,
                 other => panic!("unexpected host request: {other:?}"),
             })
@@ -331,6 +338,9 @@ mod import_layer_tests {
                     assert!(doc.layers.get("GIS-TEST").unwrap().is_locked(), "the GIS layer must be locked after import");
                     assert_eq!(doc.model_space_entities().count(), expected);
                 }
+                drawing.0.lock().unwrap().layers.get_mut("GIS-TEST").unwrap().flags.locked = false;
+                assert_eq!(import_point("GIS-TEST").unwrap(), 1);
+                assert!(drawing.0.lock().unwrap().layers.get("GIS-TEST").unwrap().is_locked());
             });
         });
     }
@@ -373,6 +383,23 @@ mod import_layer_tests {
                 let doc = drawing.0.lock().unwrap();
                 assert!(doc.layers.get("GIS-REFUSED").unwrap().is_locked());
                 assert_eq!(doc.model_space_entities().count(), 0);
+            });
+        });
+    }
+
+    #[test]
+    fn lock_changes_keep_distinct_cad_layer_names() {
+        crate::settings::with_test_file(|| {
+            let drawing = Arc::new(Drawing(Mutex::new(CadDocument::new())));
+            let target = Target { sender: drawing.clone(), tab_id: 139, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                bridge::ensure_layer("STRASSE", Color::from_index(7));
+                assert_eq!(import_point("Straße").unwrap(), 1);
+                assert_eq!(import_point("Straße").unwrap(), 1);
+                let doc = drawing.0.lock().unwrap();
+                assert!(doc.layers.get("Straße").unwrap().is_locked());
+                assert!(!doc.layers.get("STRASSE").unwrap().is_locked());
+                assert_eq!(doc.model_space_entities().count(), 2);
             });
         });
     }

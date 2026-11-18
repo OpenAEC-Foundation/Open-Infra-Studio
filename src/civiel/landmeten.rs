@@ -361,7 +361,7 @@ impl Placer {
         let p = SurveyPoint { name: name.unwrap_or_else(|| self.next.to_string()), e: q[0], n: q[1], z, code };
         let mut out = Out::default();
         draw(&self.ctx, std::slice::from_ref(&p), &self.maaiveld.label(), &mut out)?;
-        let handles = out.write_handles(&format!("Punt {}", p.name))?;
+        let handles = out.append(&format!("Punt {}", p.name))?;
         index_points(&handles, 1);
         self.maaiveld.note_source();
         self.next += 1;

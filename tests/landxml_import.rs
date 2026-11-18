@@ -1,47 +1,12 @@
 //! Volledige importuitvoer bij deels leesbare LandXML, zonder echte host.
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-
-use ocs_plugin_api::host::{
-    codec::{EntityType, Handle}, PluginRequestError, PluginRequestSender,
-};
-use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
+use std::sync::Arc;
+use ocs_plugin_api::host::codec::EntityType;
 use open_infra::{bridge, civiel::{landxml, CivielOptions}};
 
-#[derive(Default)]
-struct Drawing {
-    entities: Mutex<Vec<EntityType>>,
-    undo: Mutex<Vec<String>>,
-    unexpected: Mutex<Vec<String>>,
-}
-
-impl PluginRequestSender for Drawing {
-    fn request(&self, request: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
-        Ok(match request {
-            PluginRequest::AddLayer(_) => PluginResponse::OptHandle(Some(Handle::from(1000u64))),
-            PluginRequest::TableOperation { .. } => PluginResponse::TableResult(Ok(Handle::from(1001u64))),
-            PluginRequest::PushUndo { label } => {
-                self.undo.lock().unwrap().push(label);
-                PluginResponse::Ok
-            }
-            PluginRequest::AddEntities(entities) => {
-                let mut stored = self.entities.lock().unwrap();
-                let handles = (stored.len()..stored.len() + entities.len()).map(|i| Handle::from(i as u64 + 1)).collect();
-                stored.extend(entities);
-                PluginResponse::Handles(handles)
-            }
-            PluginRequest::ReadXRecord { .. } => PluginResponse::XRecordEntries(Ok(Vec::new())),
-            PluginRequest::UpdateXRecord { .. } => PluginResponse::XRecordUpdateResult(Ok(Handle::from(1002u64))),
-            PluginRequest::CreateXRecord { .. } => PluginResponse::XRecordCreateResult(Ok(Handle::from(1002u64))),
-            PluginRequest::WriteRecord { .. } | PluginRequest::SetDirty | PluginRequest::BumpGeometry => PluginResponse::Ok,
-            other => {
-                let error = format!("onverwacht hostverzoek: {other:?}");
-                self.unexpected.lock().unwrap().push(error.clone());
-                return Err(PluginRequestError(error));
-            }
-        })
-    }
-}
+#[path = "support/import_drawing.rs"]
+mod import_drawing;
+use import_drawing::Drawing;
 
 #[test]
 fn partially_readable_landxml_keeps_the_complete_original_success_message() {

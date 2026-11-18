@@ -81,3 +81,7 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 49. **Een lange zoekbadge kan de resultaatnaam overlappen** (#131, Sol ronde 2, [BEVESTIGD] VERVOLG). De Engelse badge `water authority` is breder dan de ruimte vóór de vaste inspringing van de resultaatnaam. Richting: laat de naam beginnen na de rechterrand van de badge.
 
 50. **De Civiel-knoppentest herkent de Engelse vensterkop niet** (#131, Sol ronde 2, [BEVESTIGD] VERVOLG). De toegankelijkheidsproef zoekt uitsluitend `Open Infra · Civiel`. Richting: accepteer ook `Open Infra · Civil` in die herkenningsstap.
+
+71. **Een kaartimport heeft een aparte stap voor de laagsloten** (#136, [BEVESTIGD] VERVOLG, besluit Trias). OCS 2026.46 opent voor `DRAWORDER` zijn eigen ongedaanmaakstap en sluit daarmee de lopende importstap. De lagen moeten tijdens `DRAWORDER` schrijfbaar zijn. Eén keer Ongedaan maken kan daardoor de kaartlagen heropenen terwijl de afbeeldingen blijven staan. Ga verder met Ongedaan maken tot de import zelf is verwijderd en de vorige laagsloten terug zijn.
+
+72. **Opnieuw importeren kan een handmatig ontgrendelde laag weer sluiten** (#136, [BEVESTIGD] VERVOLG, besluit Trias). Staat **Geïmporteerde lagen vergrendelen** aan, dan vergrendelt OIS iedere doel­laag die de import heeft gevuld. Dit geldt ook als iemand het OCS-slot vóór de import bewust had geopend. Open het slot opnieuw in OCS als die laag bewerkbaar moet blijven.

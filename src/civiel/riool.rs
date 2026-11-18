@@ -1104,7 +1104,7 @@ impl Uit {
     }
 
     /// Write as one undo step: all handles, and the handle per tag.
-    fn write(self, label: &str) -> Result<Written, String> {
+    fn write(self, label: &str, append: bool) -> Result<Written, String> {
         // Out writes layer by layer, in the order the layers were first used.
         let mut order: Vec<&str> = Vec::new();
         for (l, _) in &self.tags {
@@ -1114,7 +1114,7 @@ impl Uit {
         }
         let mut tagged: Vec<(usize, Tag)> = self.tags.iter().map(|(l, t)| (order.iter().position(|o| o == l).unwrap_or(0), *t)).collect();
         tagged.sort_by_key(|(i, _)| *i);
-        let handles = self.out.write_handles(label)?;
+        let handles = if append { self.out.append(label)? } else { self.out.write_handles(label)? };
         let pairs = tagged.into_iter().zip(handles.iter().copied()).map(|((_, t), h)| (t, h)).collect();
         Ok((handles, pairs))
     }
@@ -1294,13 +1294,13 @@ type NetHandles = (Vec<Handle>, Vec<Option<Handle>>, Vec<Option<Handle>>);
 
 /// Draw a network (replacing `old` entities) and index it. Returns the
 /// handles of its manholes and pipes.
-fn write_net(ctx: &Ctx, g: &Gelezen, labels: bool, old: &[Handle], label: &str) -> Result<NetHandles, String> {
+fn write_net(ctx: &Ctx, g: &Gelezen, labels: bool, old: &[Handle], label: &str, append: bool) -> Result<NetHandles, String> {
     let mut out = Uit::default();
     draw_plan(ctx, &g.net, g, labels, &mut out)?;
     if !old.is_empty() {
         bridge::remove_entities(&t!("{} (oud)", "{} (old)", label), old)?;
     }
-    let (handles, pairs) = out.write(label)?;
+    let (handles, pairs) = out.write(label, append)?;
     bridge::index_add("riool", &g.net.naam, &handles, true);
     let mut puts = vec![None; g.net.putten.len()];
     let mut pipes = vec![None; g.net.leidingen.len()];
@@ -1614,7 +1614,7 @@ pub fn ontwerp(opt: &super::CivielOptions, input: Invoer, o: Ontwerp, progress: 
     let mut warnings = notes;
     warnings.extend(g.net.bereken()?);
     let label = g.net.naam.clone();
-    let (handles, puts, pipes) = write_net(&ctx, &g, opt.point_labels, &old, &label)?;
+    let (handles, puts, pipes) = write_net(&ctx, &g, opt.point_labels, &old, &label, false)?;
     ground.note_source();
     note_net(&g.net, &puts, &pipes, &warnings, &ground.label());
     api::note("aangesloten", joined.is_some());
@@ -1888,7 +1888,7 @@ pub fn bijwerken(opt: &super::CivielOptions, naam: Option<String>, w: Wijziging,
             let _ = bridge::remove_entities(tr("Riooltoets (oud)", "Sewer check (old)"), &stale);
         }
         let old = g.handles.clone();
-        let (handles, puts, pipes) = write_net(&ctx, &g, opt.point_labels, &old, &t!("{} bijwerken", "Update {}", g.net.naam))?;
+        let (handles, puts, pipes) = write_net(&ctx, &g, opt.point_labels, &old, &t!("{} bijwerken", "Update {}", g.net.naam), false)?;
         ground.note_source();
         // The length profile follows, in its place.
         let profile = redraw_profile(&ctx, &doc, &g, opt, &mut ground)?;
@@ -2920,7 +2920,7 @@ pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn
         warnings.extend(net.bereken()?);
         let n = net.leidingen.len();
         let g = Gelezen { put_handles: vec![None; net.putten.len()], leiding_handles: vec![None; n], net, handles: Vec::new(), changes: Vec::new(), referentie: Referentie::Auto, verhang_auto: vec![true; n] };
-        let (hs, _, _) = write_net(&ctx_b, &g, opt.point_labels, &[], &g.net.naam.clone())?;
+        let (hs, _, _) = write_net(&ctx_b, &g, opt.point_labels, &[], &g.net.naam, true)?;
         handles_all.extend(hs);
         msgs.push(format!("{} ({}): {}{}", g.net.naam, s.label(), summary(&g.net), if warnings.is_empty() { String::new() } else { t!(" — let op: {}", " — note: {}", warnings.join("; ")) }));
     }

@@ -5,7 +5,7 @@
 //! import workers use it to add layers and entities while the host stays
 //! responsive. Each import is one undo step.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -14,6 +14,7 @@ use ocs_plugin_api::host::{
     CommandStep, ExtendedDataRecord, HostApi, InteractiveCommand, LayerConfig, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
 };
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
+use ocs_plugin_api::host::codec::tables::normalize_name;
 
 use crate::gis::site::{unit_factor_for_insunits, Site};
 
@@ -950,9 +951,7 @@ pub fn add_entities_handles(label: &str, entities: Vec<EntityType>) -> Result<Ve
     request(PluginRequest::PushUndo { label: label.into() })?;
     let mut handles = Vec::with_capacity(entities.len());
     entity_batches(entities, |chunk| {
-        if let PluginResponse::Handles(added) = request(PluginRequest::AddEntities(chunk))? {
-            handles.extend(added);
-        }
+        handles.extend(confirmed_entities(send_entities(chunk)?)?);
         Ok(())
     })?;
     let _ = request(PluginRequest::SetDirty);
@@ -994,76 +993,70 @@ fn change_layer_lock(name: &str, locked: bool) -> Result<(), String> {
 /// Track only layers touched by this write. The host is the source of truth:
 /// users can change locks in OCS between imports, including after reopening.
 pub(crate) struct ImportLayers {
-    locked: Option<HashSet<String>>,
-    relock: BTreeSet<String>,
+    writable: HashSet<String>,
+    relock: BTreeMap<String, String>,
     auto_lock: bool,
     registered: bool,
 }
 
 impl ImportLayers {
-    pub(crate) fn unlock(&mut self, layers: impl IntoIterator<Item = String>) -> Result<BTreeSet<String>, String> {
-        let layers: BTreeSet<_> = layers.into_iter().collect();
-        if layers.is_empty() {
-            return Ok(BTreeSet::new());
-        }
-        if self.locked.is_none() {
-            // The shared-memory view only contains layer names. Read the full
-            // layer flags only when a write or draw-order operation needs them.
-            let PluginResponse::Document(doc) = request(PluginRequest::DocumentSnapshot)? else {
-                return Err(crate::lang::tr("OCS gaf geen laaggegevens terug", "OCS did not return layer data").into());
-            };
-            self.locked = Some(doc.layers.iter().filter(|l| l.is_locked()).map(|l| l.name.to_uppercase()).collect());
-        }
-        let locked = self.locked.as_mut().unwrap();
-        let mut unlocked = BTreeSet::new();
+    pub(crate) fn unlock(&mut self, layers: impl IntoIterator<Item = String>) -> Result<(), String> {
+        use ocs_plugin_api::host::codec::Point;
+
         for name in layers {
-            let key = name.to_uppercase();
-            if locked.contains(&key) {
-                self.relock.insert(key.clone());
-                change_layer_lock(&name, false)?;
-                locked.remove(&key);
-                unlocked.insert(key);
+            let key = normalize_name(&name);
+            if self.writable.contains(&key) {
+                continue;
             }
+            // API 23 has no layer-state read. A valid point probes just this
+            // layer. OCS refuses it on a locked layer. Remove an accepted point
+            // inside the same undo group before proceeding with the import.
+            let mut point = Point::default();
+            point.common.layer = name.clone();
+            match request(PluginRequest::AddEntity(EntityType::Point(point)))? {
+                PluginResponse::Handle(handle) if handle.is_null() => {
+                    self.relock.insert(key.clone(), name.clone());
+                    change_layer_lock(&name, false)?;
+                }
+                PluginResponse::Handle(handle) => match request(PluginRequest::RemoveEntity { handle })? {
+                    PluginResponse::Bool(true) => {}
+                    other => return Err(format!("RemoveEntity: {other:?}")),
+                },
+                other => return Err(format!("AddEntity: {other:?}")),
+            }
+            self.writable.insert(key);
         }
-        Ok(unlocked)
+        Ok(())
     }
 
     pub(crate) fn mark_written(&mut self, layer: &str) {
         if self.auto_lock {
-            self.relock.insert(layer.to_uppercase());
+            self.relock.insert(normalize_name(layer), layer.to_owned());
         }
     }
 
     fn add(&mut self, chunk: Vec<EntityType>) -> Result<Vec<Handle>, String> {
-        let write = |entities: Vec<EntityType>| -> Result<Vec<Handle>, String> {
-            let count = entities.len();
-            match request(PluginRequest::AddEntities(entities))? {
-                PluginResponse::Handles(handles) if handles.len() == count => Ok(handles),
-                _ => Err(crate::lang::tr(
-                    "OCS bevestigde de geïmporteerde elementen niet",
-                    "OCS did not confirm the imported entities",
-                ).into()),
-            }
-        };
-        let mut handles = write(chunk.clone())?;
+        let mut handles = send_entities(chunk.clone())?;
         let skipped: Vec<_> = handles.iter().enumerate()
             .filter_map(|(i, h)| h.is_null().then_some(i)).collect();
         for (entity, handle) in chunk.iter().zip(&handles) {
             if !handle.is_null() {
                 self.mark_written(&entity.common().layer);
+                self.writable.insert(normalize_name(&entity.common().layer));
             }
         }
         if !skipped.is_empty() {
-            let unlocked = self.unlock(skipped.iter().map(|&i| chunk[i].common().layer.clone()))?;
-            // Retry only the NULL slots on layers we actually unlocked.
-            // Other host refusals (e.g. a missing raster) are not retried.
             let retry: Vec<_> = skipped.into_iter()
-                .filter(|&i| unlocked.contains(&chunk[i].common().layer.to_uppercase()))
+                .filter(|&i| !self.writable.contains(&normalize_name(&chunk[i].common().layer)))
                 .collect();
             if !retry.is_empty() {
+                self.unlock(retry.iter().map(|&i| chunk[i].common().layer.clone()))?;
                 let entities = retry.iter().map(|&i| chunk[i].clone()).collect();
-                for (i, handle) in retry.into_iter().zip(write(entities)?) {
+                for (i, handle) in retry.into_iter().zip(send_entities(entities)?) {
                     handles[i] = handle;
+                    if !handle.is_null() {
+                        self.mark_written(&chunk[i].common().layer);
+                    }
                 }
             }
         }
@@ -1084,13 +1077,7 @@ impl ImportLayers {
                 }
             }
         }
-        if handles.iter().any(|h| h.is_null()) {
-            return Err(crate::lang::tr(
-                "OCS weigerde een deel van de import. Gebruik Ongedaan maken om de import terug te draaien.",
-                "OCS rejected part of the import. Use Undo to revert the import.",
-            ).into());
-        }
-        Ok(handles)
+        confirmed_entities(handles)
     }
 }
 
@@ -1098,20 +1085,25 @@ pub(crate) fn with_import_layers<R>(
     label: &str,
     write: impl FnOnce(&mut ImportLayers) -> Result<R, String>,
 ) -> Result<R, String> {
+    with_layer_writes(label, crate::settings::lock_imported_layers(), write)
+}
+
+fn with_layer_writes<R>(
+    label: &str,
+    auto_lock: bool,
+    write: impl FnOnce(&mut ImportLayers) -> Result<R, String>,
+) -> Result<R, String> {
     let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-    match request(PluginRequest::BeginUndoGroup { label: label.into() })? {
-        PluginResponse::Ok => {}
-        other => return Err(format!("BeginUndoGroup: {other:?}")),
-    }
+    begin_layer_undo(label)?;
     let mut layers = ImportLayers {
-        locked: None,
-        relock: BTreeSet::new(),
-        auto_lock: crate::settings::lock_imported_layers(),
+        writable: HashSet::new(),
+        relock: BTreeMap::new(),
+        auto_lock,
         registered: false,
     };
     let result = write(&mut layers);
     let mut errors = Vec::new();
-    for name in layers.relock {
+    for name in layers.relock.into_values() {
         if let Err(error) = change_layer_lock(&name, true) {
             errors.push(error);
         }
@@ -1129,8 +1121,37 @@ pub(crate) fn with_import_layers<R>(
     Err(errors.join("\n"))
 }
 
+fn begin_layer_undo(label: &str) -> Result<(), String> {
+    match request(PluginRequest::BeginUndoGroup { label: label.into() })? {
+        PluginResponse::Ok => Ok(()),
+        other => Err(format!("BeginUndoGroup: {other:?}")),
+    }
+}
+
 pub(crate) fn add_imported_entities(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
     write_import(label, entities, false)
+}
+
+pub(crate) fn append_entities(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
+    with_layer_writes(label, false, |layers| layers.write_entities(entities))
+}
+
+fn send_entities(entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
+    let count = entities.len();
+    match request(PluginRequest::AddEntities(entities))? {
+        PluginResponse::Handles(handles) if handles.len() == count => Ok(handles),
+        _ => Err(crate::lang::tr("OCS bevestigde de toegevoegde elementen niet", "OCS did not confirm the added entities").into()),
+    }
+}
+
+fn confirmed_entities(handles: Vec<Handle>) -> Result<Vec<Handle>, String> {
+    if handles.iter().any(|h| h.is_null()) {
+        return Err(crate::lang::tr(
+            "OCS weigerde elementen. Controleer of de doellaag vergrendeld is.",
+            "OCS rejected entities. Check whether the target layer is locked.",
+        ).into());
+    }
+    Ok(handles)
 }
 
 pub(crate) fn add_imported_map(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
@@ -1144,7 +1165,15 @@ fn write_import(label: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec
     with_import_layers(label, |layers| {
         let handles = layers.write_entities(entities)?;
         if map {
-            image_to_back(&handles, layers)?;
+            let moved = image_to_back(&handles, layers);
+            // OCS 2026.46 opens its own history step for DRAWORDER. Keep
+            // all subsequent lock changes together even for a multi-layer map.
+            if !layers.relock.is_empty() {
+                let scope = begin_layer_undo(crate::lang::tr("Kaartlagen vergrendelen", "Lock map layers"));
+                moved.and(scope)?;
+            } else {
+                moved?;
+            }
         }
         Ok(handles)
     })
@@ -1183,18 +1212,18 @@ fn send_to_back(handles: &[Handle]) -> Result<(), String> {
 /// excludes locked entities from DRAWORDER, so reopen the older image layers
 /// for this part of the same import and restore their original lock state.
 fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result<(), String> {
-    send_to_back(new)?;
     let rasters = query(serde_json::json!({"type": "RASTERIMAGE"}))?;
-    let new: HashSet<Handle> = new.iter().copied().collect();
-    let owner = rasters.iter().find(|e| new.contains(&e.common().handle))
+    let imported: HashSet<Handle> = new.iter().copied().collect();
+    let owner = rasters.iter().find(|e| imported.contains(&e.common().handle))
         .map(|e| e.common().owner_handle);
     let older: Vec<_> = rasters.into_iter().filter_map(|e| {
         let c = e.common();
-        (Some(c.owner_handle) == owner && !new.contains(&c.handle))
+        (Some(c.owner_handle) == owner && !imported.contains(&c.handle))
             .then(|| (c.handle, c.layer.clone()))
     }).collect();
     layers.unlock(older.iter().map(|(_, name)| name.clone()))?;
-    send_to_back(&older.into_iter().map(|(h, _)| h).collect::<Vec<_>>())
+    let order: Vec<_> = older.into_iter().map(|(h, _)| h).chain(new.iter().copied()).collect();
+    send_to_back(&order)
 }
 
 /// Attach a point cloud on its own layer. OCS's native command always uses
