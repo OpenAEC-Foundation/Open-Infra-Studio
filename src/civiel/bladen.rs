@@ -19,7 +19,7 @@
 use std::f64::consts::FRAC_PI_2;
 
 use ocs_plugin_api::host::codec::entities::{TextHorizontalAlignment, TextVerticalAlignment, Viewport};
-use ocs_plugin_api::host::codec::{EntityType, Handle, Vector3};
+use ocs_plugin_api::host::codec::{tables::Layer, EntityType, Handle, Vector3};
 use ocs_plugin_api::host::{ExtendedDataRecord, TableOperation, XDataValue, XRecordEntry, XRecordValue};
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 
@@ -715,6 +715,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
     let crs = ctx.site.as_ref().map(|s| s.crs.clone()).unwrap_or_else(|| "—".into());
     let place = ctx.site.as_ref().map(|s| s.label.clone()).unwrap_or_default();
     let mut layouts = Vec::new();
+    let legend = tekenblad::drawn_layers();
     let made = (|| -> Result<(), String> {
         let _back = BackToModel;
         for (i, view) in views.iter().enumerate() {
@@ -733,7 +734,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
                 ..SheetInfo::default()
             };
             let mut paper = Sheets::new(&set);
-            sheet(&ctx, &req, &lay, &al, &spans, i, view, &vert, &info, &crs, &place, &mut paper)?;
+            sheet(&ctx, &req, &lay, &al, &spans, i, view, &vert, &info, &crs, &place, &legend, &mut paper)?;
             paper.out.write(&t2(format!("Blad {} {name}", i + 1), format!("Sheet {} {name}", i + 1)))?;
         }
         Ok(())
@@ -1061,7 +1062,7 @@ fn ptext(at: XY, value: &str, mm: f64, rot: f64, spec: &LayerSpec, h: TextHorizo
 /// references, and the title column with sheet number, scales, north arrow,
 /// legend and title block.
 #[allow(clippy::too_many_arguments)]
-fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[Span], i: usize, view: &View, vert: &Vertical, info: &SheetInfo, crs: &str, place: &str, out: &mut Sheets) -> Result<(), String> {
+fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[Span], i: usize, view: &View, vert: &Vertical, info: &SheetInfo, crs: &str, place: &str, legend: &[Layer], out: &mut Sheets) -> Result<(), String> {
     let (f, k) = (ctx.f, ctx.k);
     let n = spans.len();
     let sp = &spans[i];
@@ -1093,7 +1094,7 @@ fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[S
     // Legend above the north arrow.
     let ylg = ysc + 58.0;
     parts.line("TEKENBLAD_DEELKADER", &[(col.x0, ylg), (col.x1, ylg)]);
-    parts.legend(col.x0 + 5.0, col.x1 - 5.0, ylg + 4.0, col.y1 - 4.0);
+    parts.legend(legend, col.x0 + 5.0, col.x1 - 5.0, ylg + 4.0, col.y1 - 4.0);
     for (spec, e) in parts.finish() {
         out.put(&spec, e);
     }
