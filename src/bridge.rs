@@ -1404,16 +1404,15 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
     let Some(owner) = owner else {
         return Err(crate::lang::tr("OCS gaf de geplaatste kaartbeelden niet terug", "OCS did not return the placed map images").into());
     };
-    let mut older: Vec<_> = rasters.into_iter().filter_map(|e| {
+    let older: Vec<_> = rasters.into_iter().filter_map(|e| {
         let c = e.common();
         (c.owner_handle == owner && !imported.contains(&c.handle))
             .then(|| (c.handle, c.layer.clone()))
     }).collect();
-    older.sort_unstable_by_key(|(handle, _)| handle.value());
-    let order: Vec<_> = older.iter().map(|(h, _)| *h).chain(new.iter().copied()).collect();
-    if rasters_already_in_order(owner, &order) {
+    let current = effective_draw_order(owner);
+    let Some(order) = raster_draw_order(older.iter().map(|(handle, _)| *handle), new, current.as_deref()) else {
         return Ok(());
-    }
+    };
     layers.unlock(older.iter().map(|(_, name)| name.clone()))?;
     let moved = send_to_back(&order);
     if !layers.relock.is_empty() {
@@ -1429,15 +1428,33 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
     Ok(())
 }
 
-fn rasters_already_in_order(owner: Handle, wanted: &[Handle]) -> bool {
+fn raster_draw_order(
+    older: impl IntoIterator<Item = Handle>,
+    new: &[Handle],
+    current: Option<&[Handle]>,
+) -> Option<Vec<Handle>> {
+    let mut remaining: HashSet<_> = older.into_iter().collect();
+    let mut order: Vec<_> = current.into_iter().flatten().copied()
+        .filter(|handle| remaining.remove(handle))
+        .collect();
+    // A large drawing may not fit in a snapshot. Use handle order for
+    // rasters whose positions are unavailable, then append the new tiles.
+    let mut unknown: Vec<_> = remaining.into_iter().collect();
+    unknown.sort_unstable_by_key(|handle| handle.value());
+    order.extend(unknown);
+    order.extend_from_slice(new);
+    (!current.is_some_and(|current| current.starts_with(&order))).then_some(order)
+}
+
+fn effective_draw_order(owner: Handle) -> Option<Vec<Handle>> {
     use ocs_plugin_api::host::codec::objects::ObjectType;
     // Shared views have no sort table. Only request the full snapshot when
     // the shared view puts the drawing comfortably below the IPC frame limit.
     if !view_entities().is_some_and(|(_, _, bytes)| bytes < SNAPSHOT_SAFE) {
-        return false;
+        return None;
     }
     let Ok(PluginResponse::Document(drawing)) = request(PluginRequest::DocumentSnapshot) else {
-        return false;
+        return None;
     };
     let overrides: std::collections::HashMap<_, _> = drawing.objects.values().find_map(|object| match object {
         ObjectType::SortEntitiesTable(table) if table.block_owner_handle == owner => {
@@ -1450,7 +1467,7 @@ fn rasters_already_in_order(owner: Handle, wanted: &[Handle]) -> bool {
         (c.owner_handle == owner || c.owner_handle.is_null()).then_some(c.handle)
     }).collect();
     order.sort_unstable_by_key(|handle| (overrides.get(handle).copied().unwrap_or_else(|| handle.value()), handle.value()));
-    order.starts_with(wanted)
+    Some(order)
 }
 
 fn run_on_target(line: &str) -> Result<(), String> {
@@ -1572,6 +1589,24 @@ pub fn image_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn raster_import_preserves_existing_stacking() {
+        let [older_bottom, older_top, vector, new_bottom, new_top] = [21, 15, 12, 30, 32].map(Handle::new);
+        let older = [older_top, older_bottom];
+        let new = [new_bottom, new_top];
+        let wanted = [older_bottom, older_top, new_bottom, new_top];
+
+        assert_eq!(
+            raster_draw_order(older, &new, Some(&[older_bottom, older_top, vector, new_bottom, new_top])),
+            Some(wanted.to_vec()),
+        );
+        assert_eq!(
+            raster_draw_order(older, &new, Some(&[older_bottom, older_top, new_bottom, new_top, vector])),
+            None,
+        );
+        assert_eq!(raster_draw_order(older, &new, None), Some([older_top, older_bottom, new_bottom, new_top].to_vec()));
+    }
 
     #[test]
     fn draw_order_restores_selection_and_reports_refusals() {
