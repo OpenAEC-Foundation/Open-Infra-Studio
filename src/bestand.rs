@@ -43,15 +43,6 @@ impl FileOptions {
     }
 }
 
-fn text_of(v: &serde_json::Value) -> Option<String> {
-    match v {
-        serde_json::Value::Null => None,
-        serde_json::Value::String(s) if s.trim().is_empty() => None,
-        serde_json::Value::String(s) => Some(s.trim().to_string()),
-        other => Some(other.to_string()),
-    }
-}
-
 /// Read a file and draw it.
 pub fn import_path(site: &Site, path: &Path, crs: Option<&str>, progress: &dyn Fn(String)) -> Result<String, String> {
     progress(format!("{} {}…", tr("Lezen", "Reading"), path.display()));
@@ -89,18 +80,17 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
             continue;
         }
         n_features += 1;
-        let layer = match opt.split_by.as_ref().and_then(|k| feat.props.get(k)).and_then(text_of) {
+        let layer = match opt.split_by.as_ref().and_then(|k| feat.props.get(k)).and_then(emit::attribute_text) {
             Some(v) => emit::layer_name(&opt.layer, &v),
             None => opt.layer.clone(),
         };
         if !layers.contains(&layer) {
             layers.push(layer.clone());
         }
-        // Object data: up to 40 attributes, `key=value`.
-        let record = bridge::object_data(feat.props.iter().filter_map(|(k, v)| text_of(v).map(|s| (k.as_str(), s))).take(40));
+        let record = emit::feature_data(feat);
         out.extend(emit::polylines(&lines, &layer, 1.0, Some(&record)));
         out.extend(emit::markers(&points, &layer, text_h * 0.25, Some(&record)));
-        if let Some(text) = opt.label_field.as_ref().and_then(|k| feat.props.get(k)).and_then(text_of) {
+        if let Some(text) = opt.label_field.as_ref().and_then(|k| feat.props.get(k)).and_then(emit::attribute_text) {
             let anchor = points
                 .first()
                 .copied()
