@@ -283,15 +283,12 @@ impl Out {
     }
 
     fn write_to(self, label: &str, mode: LayerWrite<'_>) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
-        let mut all = Vec::new();
-        let mut first_data = None;
-        for (spec, e) in self.layers {
-            bridge::ensure_nlcs_layer(&spec);
-            if matches!(mode, LayerWrite::Draw) && first_data.is_none() {
-                first_data = e.iter().find_map(|x| x.common().extended_data.get_record(bridge::XDATA_APP).cloned());
-            }
-            all.extend(e);
-        }
+        let all = self.into_entities();
+        let first_data = if matches!(mode, LayerWrite::Draw) {
+            all.iter().find_map(|e| e.common().extended_data.get_record(bridge::XDATA_APP).cloned())
+        } else {
+            None
+        };
         let handles = match mode {
             LayerWrite::Draw => bridge::add_entities_handles(label, all)?,
             LayerWrite::Import => bridge::add_imported_entities(label, all)?,
@@ -303,6 +300,13 @@ impl Out {
         }
         api::note("elementen", handles.len());
         Ok(handles)
+    }
+
+    fn into_entities(self) -> Vec<EntityType> {
+        self.layers.into_iter().flat_map(|(spec, entities)| {
+            bridge::ensure_nlcs_layer(&spec);
+            entities
+        }).collect()
     }
 }
 

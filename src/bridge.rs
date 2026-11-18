@@ -1035,8 +1035,10 @@ impl ImportLayers {
         }
     }
 
-    fn add(&mut self, chunk: Vec<EntityType>) -> Result<Vec<Handle>, String> {
+    fn add(&mut self, chunk: Vec<EntityType>, added: &mut Vec<Handle>) -> Result<(), String> {
         let mut handles = send_entities(chunk.clone())?;
+        let start = added.len();
+        added.extend(handles.iter().copied().filter(|h| !h.is_null()));
         let skipped: Vec<_> = handles.iter().enumerate()
             .filter_map(|(i, h)| h.is_null().then_some(i)).collect();
         for (entity, handle) in chunk.iter().zip(&handles) {
@@ -1058,6 +1060,9 @@ impl ImportLayers {
                         self.mark_written(&chunk[i].common().layer);
                     }
                 }
+                // Keep the original input order, including the successful retries.
+                added.truncate(start);
+                added.extend(handles.iter().copied().filter(|h| !h.is_null()));
             }
         }
         // WriteRecord is refused on a locked layer as well. Register the
@@ -1077,7 +1082,7 @@ impl ImportLayers {
                 }
             }
         }
-        confirmed_entities(handles)
+        confirmed_entities(handles).map(drop)
     }
 }
 
@@ -1134,7 +1139,7 @@ pub(crate) fn add_imported_entities(label: &str, entities: Vec<EntityType>) -> R
 
 pub(crate) fn append_entities(label: &str, entities: Vec<EntityType>, originals: &[(Handle, String)]) -> Result<Vec<Handle>, String> {
     with_layer_writes(label, false, |layers| {
-        let handles = layers.write_entities(entities)?;
+        let handles = layers.write_entities_inner(entities, (!originals.is_empty()).then_some(label))?;
         layers.remove_originals(originals)?;
         Ok(handles)
     })
@@ -1204,11 +1209,23 @@ impl ImportLayers {
     }
 
     pub(crate) fn write_entities(&mut self, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
+        self.write_entities_inner(entities, None)
+    }
+
+    fn write_entities_inner(&mut self, entities: Vec<EntityType>, rollback_label: Option<&str>) -> Result<Vec<Handle>, String> {
         let mut handles = Vec::with_capacity(entities.len());
-        entity_batches(entities, |chunk| {
-            handles.extend(self.add(chunk)?);
-            Ok(())
-        })?;
+        if let Err(error) = entity_batches(entities, |chunk| self.add(chunk, &mut handles)) {
+            if let Some(label) = rollback_label {
+                match remove_entities(label, &handles) {
+                    Ok(count) if count == handles.len() => {}
+                    _ => return Err(format!("{error}\n{}", crate::lang::tr(
+                        "OCS kon de reeds geplaatste kopieën niet allemaal opruimen. Gebruik Ongedaan maken.",
+                        "OCS could not clean up all newly added copies. Use Undo.",
+                    ))),
+                }
+            }
+            return Err(error);
+        }
         let _ = request(PluginRequest::SetDirty);
         // Force a rebuild after a batch (an image can hide newer lines).
         let _ = request(PluginRequest::BumpGeometry);
@@ -1375,7 +1392,15 @@ pub(crate) mod replacement_test_host {
 
     pub(crate) struct Drawing {
         pub doc: Mutex<CadDocument>,
-        pub reject_batch: bool,
+        reject_batch: bool,
+        pub reject_profile: bool,
+        pub index: Mutex<Vec<XRecordEntry>>,
+    }
+
+    impl Drawing {
+        pub(crate) fn new(doc: CadDocument, reject_batch: bool) -> Self {
+            Self { doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()) }
+        }
     }
 
     impl PluginRequestSender for Drawing {
@@ -1406,7 +1431,8 @@ pub(crate) mod replacement_test_host {
                     doc.add_entity(entity).unwrap()
                 }),
                 Q::AddEntities(entities) => A::Handles(entities.into_iter().map(|entity| {
-                    if self.reject_batch || locked(&doc, &entity) {
+                    if self.reject_batch || locked(&doc, &entity)
+                        || (self.reject_profile && crate::civiel::data_value(&entity, "rioolprofiel").is_some()) {
                         Handle::NULL
                     } else {
                         doc.add_entity(entity).unwrap()
@@ -1418,9 +1444,15 @@ pub(crate) mod replacement_test_host {
                 }
                 Q::WriteRecord { handle, .. } => A::Bool(doc.get_entity(handle).is_some_and(|e| !locked(&doc, e))),
                 Q::TableOperation { .. } => A::TableResult(Ok(Handle::new(1001))),
-                Q::ReadXRecord { .. } => A::XRecordEntries(Ok(Vec::new())),
-                Q::UpdateXRecord { .. } => A::XRecordUpdateResult(Ok(Handle::new(1002))),
-                Q::SetDirty | Q::BumpGeometry | Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup => A::Ok,
+                Q::OpenDocumentViewV4 { .. } => A::Error("no shared view in the test host".into()),
+                Q::GetSelection => A::Selection(doc.model_space_entities().map(|e| e.common().handle).collect()),
+                Q::GetEntitiesBatch { handles } => A::GetEntitiesBatchResult(Ok(handles.iter().map(|h| doc.get_entity(*h).cloned()).collect())),
+                Q::ReadXRecord { .. } => A::XRecordEntries(Ok(self.index.lock().unwrap().clone())),
+                Q::UpdateXRecord { entries, .. } => {
+                    *self.index.lock().unwrap() = entries;
+                    A::XRecordUpdateResult(Ok(Handle::new(1002)))
+                }
+                Q::CloseDocumentViewV4 { .. } | Q::SetDirty | Q::BumpGeometry | Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup => A::Ok,
                 other => panic!("unexpected host request: {other:?}"),
             })
         }

@@ -197,7 +197,7 @@ fn update_drawing(
 mod tests {
     use super::*;
     use crate::{bridge::replacement_test_host::Drawing, emit, nlcs};
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     #[test]
     fn replacement_bgt_preserves_refused_and_unmapped_originals() {
@@ -223,7 +223,7 @@ mod tests {
                 moved[1][1] += 1.0;
                 data.push((collection.into(), vec![Feature { lines: vec![(moved.to_vec(), false)], props, ..Feature::default() }]));
             }
-            let drawing = Arc::new(Drawing { doc: Mutex::new(doc.clone()), reject_batch });
+            let drawing = Arc::new(Drawing::new(doc.clone(), reject_batch));
             let target = bridge::Target { sender: drawing.clone(), tab_id: 13620 + u64::from(reject_batch), unit_factor: 1.0, doc_path: None };
             let result = bridge::with_command_context(target, None, None, || {
                 update_drawing(&site, &opt, 1.0, &doc, |_| Ok(data), &|_| {})
