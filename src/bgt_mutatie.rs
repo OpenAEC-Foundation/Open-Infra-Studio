@@ -835,13 +835,13 @@ pub fn build(doc: &CadDocument, site: &Site, opt: &Options) -> Mutation {
             m.skipped += 1;
             continue;
         }
-        let data = object_data(e);
-        // A legend sample a drawing sheet put on its content layer before
-        // the samples moved to the sheet's legend layer (#142).
-        if data.get("bron").is_some_and(|b| b == "tekenblad") {
+        // A legend sample of a drawing sheet: on the sheet's legend layer,
+        // or on its content layer in drawings from before #142.
+        if crate::tekenblad::is_legend_sample(e) {
             m.skipped += 1;
             continue;
         }
+        let data = object_data(e);
         let (rings, lines, points) = shapes(e, element == "S");
         let conv = |v: Vec<Vec<XY>>| -> Vec<Vec<XY>> { v.into_iter().map(|r| r.into_iter().filter_map(|p| to_rd(p)).collect()).collect() };
         let (rings, lines, points) = (conv(rings), conv(lines), points.into_iter().filter_map(|p| to_rd(p)).collect::<Vec<XY>>());
@@ -1676,13 +1676,24 @@ mod tests {
         // A legend sample an older drawing sheet put on the content layer,
         // inside the area.
         let _ = doc.add_entity(rect("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", 20.0, 0.0, 30.0, 10.0, &[("bron", "tekenblad")]));
+        // A legend sample of a sheet now, on its legend layer, outside the area.
+        let mut sheet = crate::tekenblad::Parts::new([800.0, 800.0], 0.5, &crate::basisdata::NlcsOptions::default());
+        let asphalt = nlcs::layer(nlcs::object_by_name("VH", "GESLOTENVERHARDING_ASFALT").unwrap(), nlcs::Status::N, "WE", nlcs::Element::G);
+        sheet.legend(&[crate::tekenblad::as_drawn(asphalt, None)], 0.0, 170.0, 0.0, 200.0);
+        for (spec, entities) in sheet.finish() {
+            for e in entities.into_iter().filter(|_| spec.name.ends_with("-AL-LEGENDA-G")) {
+                let _ = doc.add_entity(e);
+            }
+        }
         // Something far outside the project area, without object data.
-        let _ = doc.add_entity(rect("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", 900.0, 900.0, 910.0, 910.0, &[]));
+        let far = doc.add_entity(rect("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", 900.0, 900.0, 910.0, 910.0, &[])).unwrap();
         let mut o = opt();
         o.bronhouder = "G0505".into();
         let m = build(&doc, &s, &o);
         assert_eq!(m.features.len(), 1, "{:?}", m.issues);
-        assert!(m.issues.iter().any(|i| i.message.contains("buiten het projectgebied")), "{:?}", m.issues);
+        let outside: Vec<&Issue> = m.issues.iter().filter(|i| i.message.contains("buiten het projectgebied")).collect();
+        assert_eq!(outside.len(), 1, "{:?}", m.issues);
+        assert_eq!(outside[0].handles, [far], "the legend sample is no detail beside the plan: {:?}", m.issues);
     }
 
     #[test]
