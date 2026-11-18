@@ -19,9 +19,9 @@ fn target() -> Result<Target, String> {
 pub fn wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer, opt: &RasterOptions, fade: u8, progress: &dyn Fn(String)) -> Result<String, String> {
     let t = target()?;
     let placed = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
-    let layer_name = emit::layer_name("GIS-WMS", &layer.title);
+    let layer_name = bridge::gis_layer("GIS-WMS", &layer.title);
     bridge::ensure_layer(&layer_name, Color::from_index(8));
-    let handles = bridge::add_imported_map(&format!("GIS WMS {}", layer.title), &bridge::site_group(Some(site), &layer.title), emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
+    let handles = bridge::add_imported_map(&format!("GIS WMS {}", layer.title), &layer.title, emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
     let n = handles.len();
     bridge::zoom_extents();
     Ok(format!("{n} kaartdeel/delen van {} op laag {layer_name} ({}).", server.name, server.attribution))
@@ -30,9 +30,9 @@ pub fn wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer, op
 pub fn xyz(site: &Site, server: &MapServer, opt: &RasterOptions, fade: u8, progress: &dyn Fn(String)) -> Result<String, String> {
     let t = target()?;
     let placed = raster::import_xyz(site, server, opt, &bridge::image_dir(), progress)?;
-    let layer_name = emit::layer_name("GIS", &server.name);
+    let layer_name = bridge::gis_layer("GIS", &server.name);
     bridge::ensure_layer(&layer_name, Color::from_index(8));
-    bridge::add_imported_map(&format!("GIS {}", server.name), &bridge::site_group(Some(site), &server.name), emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
+    bridge::add_imported_map(&format!("GIS {}", server.name), &server.name, emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
     bridge::zoom_extents();
     Ok(format!("{} op laag {layer_name} ({}).", server.name, server.attribution))
 }
@@ -83,8 +83,9 @@ pub fn wfs_fetch(site: &Site, caps: &WfsCaps, ft: &WfsType, limit: usize, progre
 }
 
 pub fn wfs_place(site: &Site, ft: &WfsType, result: &wfs::WfsResult, style: &VectorStyle) -> Result<String, String> {
-    let layer = emit::layer_name("GIS", ft.name.rsplit(':').next().unwrap_or(&ft.name));
-    let n = place_features(site, &result.features, &result.data_crs, &layer, &format!("GIS WFS {}", ft.title), &bridge::site_group(Some(site), &ft.title), style, true)?;
+    let name = ft.name.rsplit(':').next().unwrap_or(&ft.name);
+    let layer = bridge::gis_layer("GIS", name);
+    let n = place_features(site, &result.features, &result.data_crs, &layer, &format!("GIS WFS {}", ft.title), name, style, true)?;
     bridge::zoom_extents();
     Ok(format!("{n} objecten van {} op laag {layer}.", ft.title))
 }
@@ -148,7 +149,7 @@ pub fn osm_place(site: &Site, theme_ids: &[&str], per_theme: &[Vec<Feature>], la
     for (id, features) in theme_ids.iter().zip(per_theme) {
         let Some(theme) = osm::THEMES.iter().find(|t| t.id == *id) else { continue };
         let style = VectorStyle { aci: theme.aci, label_field: labels.then(|| theme.label_tag.map(str::to_string)).flatten(), text_m, clip };
-        let n = place_features(site, features, "EPSG:4326", theme.layer, &format!("GIS OSM {}", theme.label), &bridge::site_group(Some(site), "OSM"), &style, false)?;
+        let n = place_features(site, features, "EPSG:4326", theme.layer, &format!("GIS OSM {}", theme.label), "OSM", &style, false)?;
         summary.push(format!("{}: {n}", theme.label));
     }
     bridge::zoom_extents();

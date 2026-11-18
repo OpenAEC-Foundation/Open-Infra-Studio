@@ -1916,7 +1916,7 @@ pub fn bijwerken(opt: &super::CivielOptions, naam: Option<String>, w: Wijziging,
         let mut entities = plan.out.into_entities();
         let plan_len = entities.len();
         entities.extend(profile.into_entities());
-        let mut handles = bridge::append_entities(&t!("{} bijwerken", "Update {}", g.net.naam), entities, &originals)?;
+        let mut handles = bridge::append_entities(&t!("{} bijwerken", "Update {}", g.net.naam), None, entities, &originals)?;
         let profile_handles = handles.split_off(plan_len);
         let pairs: Vec<_> = tags.into_iter().zip(handles.iter().copied()).collect();
         let (handles, puts, pipes) = index_net(&g, handles, pairs);

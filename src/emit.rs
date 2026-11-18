@@ -57,15 +57,26 @@ pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64
         .collect()
 }
 
-/// DWG layer names: no `<>/\":;?*|,=` characters, upper case like the rest.
-/// No whitespace either: OCS reads the layers of `LAYERGROUP ADD <group>
-/// <layers>` word by word, so a space becomes `_`.
+/// Characters a DWG layer name may not have.
+const NOT_IN_NAMES: &str = "<>/\\\":;?*|,=`";
+
+/// A layer or layer group name: no `<>/\":;?*|,=` characters and no
+/// whitespace, as OCS reads `LAYERGROUP ADD <group> <layers>` word by word.
+pub(crate) fn clean_name(name: &str) -> String {
+    name.chars().map(|c| if NOT_IN_NAMES.contains(c) { '-' } else if c.is_whitespace() { '_' } else { c }).collect()
+}
+
+/// DWG layer names (see [`clean_name`]), upper case like the rest.
 pub fn layer_name(prefix: &str, name: &str) -> String {
-    let clean: String = format!("{prefix}-{name}")
-        .chars()
-        .map(|c| if "<>/\\\":;?*|,=`".contains(c) { '-' } else if c.is_whitespace() { '_' } else { c })
-        .collect();
-    let mut s = clean.to_uppercase();
+    let mut s = clean_name(&format!("{prefix}-{name}")).to_uppercase();
+    s.truncate(60);
+    s
+}
+
+/// The name [`layer_name`] gave before #143, spaces kept.
+pub(crate) fn spaced_layer_name(prefix: &str, name: &str) -> String {
+    let clean: String = name.chars().map(|c| if NOT_IN_NAMES.contains(c) { '-' } else { c }).collect();
+    let mut s = format!("{prefix}-{clean}").to_uppercase();
     s.truncate(60);
     s
 }
@@ -153,5 +164,8 @@ mod tests {
         assert_eq!(super::layer_name("GIS-WMS", "Luchtfoto 2025 (8 cm)"), "GIS-WMS-LUCHTFOTO_2025_(8_CM)");
         assert_eq!(super::layer_name("GIS", "AHN4 puntenwolk"), "GIS-AHN4_PUNTENWOLK");
         assert_eq!(super::layer_name("Mijn laag", "a/b"), "MIJN_LAAG-A-B");
+        // Drawings from before #143 kept the spaces.
+        assert_eq!(super::spaced_layer_name("GIS-WMS", "Luchtfoto 2025 (8 cm)"), "GIS-WMS-LUCHTFOTO 2025 (8 CM)");
+        assert_eq!(super::spaced_layer_name("GIS", "a/b"), "GIS-A-B");
     }
 }

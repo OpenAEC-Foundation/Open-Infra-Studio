@@ -67,6 +67,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     let f = t.unit_factor;
     crate::gis::crs::ensure(&opt.crs)?;
     let to_site = vector::data_to_site(site, &opt.crs, &data.features)?;
+    let stem = Path::new(source).file_stem().and_then(|s| s.to_str()).unwrap_or("file");
     let text_h = opt.text_m * f;
     let mut layers: Vec<String> = Vec::new();
     let mut out: Vec<EntityType> = Vec::new();
@@ -80,11 +81,15 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
             continue;
         }
         n_features += 1;
-        let layer = match opt.split_by.as_ref().and_then(|k| feat.props.get(k)).and_then(emit::attribute_text) {
-            Some(v) => emit::layer_name(&opt.layer, &v),
-            None => opt.layer.clone(),
-        };
+        let value = opt.split_by.as_ref().and_then(|k| feat.props.get(k)).and_then(emit::attribute_text);
+        let layer = value.as_deref().map_or_else(|| opt.layer.clone(), |v| emit::layer_name(&opt.layer, v));
         if !layers.contains(&layer) {
+            // Once per layer: one from before #143, with spaces, takes this name.
+            match value.as_deref() {
+                Some(v) => { bridge::gis_layer(&opt.layer, v); }
+                None if opt.layer == emit::layer_name("GIS", stem) => { bridge::gis_layer("GIS", stem); }
+                None => {}
+            }
             layers.push(layer.clone());
         }
         let record = emit::feature_data(feat);
@@ -112,9 +117,8 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     for l in &layers {
         bridge::ensure_layer(l, Color::from_index(opt.aci));
     }
-    // A file is its own source: its name is the layer group.
-    let file = std::path::Path::new(source).file_name().and_then(|n| n.to_str()).unwrap_or(source);
-    let handles = bridge::add_imported_entities(&format!("GIS {}", source), file, out)?;
+    // A file is its own source: its layers are named after it, so is its group.
+    let handles = bridge::add_imported_entities(&format!("GIS {}", source), stem, out)?;
     bridge::note_source(source);
     bridge::zoom_extents();
     Ok(data.report(format!(

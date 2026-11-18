@@ -79,6 +79,15 @@ impl Invoer {
         Ok(Invoer::Bestand(path))
     }
 
+    /// The layer group of what is drawn from it (#143): AHN, or the file's
+    /// name as for the point cloud file's own import.
+    pub fn group(&self) -> String {
+        match self {
+            Invoer::Ahn(_) => "AHN".into(),
+            Invoer::Bestand(p) => p.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+        }
+    }
+
     pub fn label(&self) -> String {
         match self {
             Invoer::Ahn(e) => trf!("{}-puntenwolk", "{} point cloud", e.short()),
@@ -486,7 +495,7 @@ pub fn create_tin(opt: &CivielOptions, v: &TinVraag, progress: &dyn Fn(String)) 
         api::note("opgehaald_mb", g.pass.bytes as f64 / 1e6);
     }
     progress(tr("Terrein tekenen…", "Drawing the terrain…").into());
-    let handles = out.write_handles(&name)?;
+    let handles = out.write_from(&name, &bron.invoer.group())?;
     let written = handles.len();
     let status = faces_l.name.chars().next().unwrap_or('B').to_string();
     bridge::index_add("tin", &status, &handles[..meshes.min(handles.len())], false);

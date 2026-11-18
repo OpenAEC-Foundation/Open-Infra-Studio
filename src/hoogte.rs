@@ -230,7 +230,7 @@ pub fn spot_heights(site: &Site, opt: &AhnOptions, progress: &dyn Fn(String)) ->
     if n == 0 {
         return Err(format!("{} {}", src.label(), tr("heeft geen hoogtes in het importgebied", "has no heights in the import area")));
     }
-    let written = out.write(tr("Hoogtepunten", "Spot heights"), Some(&bridge::site_group(Some(site), src.short())))?;
+    let written = out.write(tr("Hoogtepunten", "Spot heights"), Some(src.short()))?;
     bridge::note_source(src.attribution());
     Ok(format!("{n} {} ({} m {}, {}) — {written} {} {}.", tr("hoogtepunten", "spot heights"), step, tr("raster", "grid"), src.label(), tr("elementen op", "entities on"), s_spec.name))
 }
@@ -308,7 +308,7 @@ pub fn contour_lines(site: &Site, opt: &AhnOptions, progress: &dyn Fn(String)) -
     if count == 0 {
         return Err(format!("{} {interval} m ({} {:.2} m)", tr("geen hoogtelijnen met interval", "no contour lines at an interval of"), tr("hoogteverschil", "height range"), range.1 - range.0));
     }
-    let written = out.write(tr("Hoogtelijnen", "Contour lines"), Some(&bridge::site_group(Some(site), src.short())))?;
+    let written = out.write(tr("Hoogtelijnen", "Contour lines"), Some(src.short()))?;
     bridge::note_source(src.attribution());
     Ok(format!(
         "{count} {}, {} – {} m {} {} {} m ({} m {}, {}{}) — {written} {}.",
@@ -590,7 +590,7 @@ pub fn point_cloud(site: &Site, opt: &AhnOptions, progress: &dyn Fn(String)) -> 
     if path.contains(char::is_whitespace) {
         return Ok(format!("{} punten opgeslagen in {path}. Het pad bevat spaties: koppel het bestand met POINTCLOUDATTACH.", xyz.len()));
     }
-    bridge::attach_imported_cloud(&path, &emit::layer_name("GIS", &format!("{} puntenwolk", c.edition.short())), &bridge::site_group(Some(site), "AHN"))?;
+    bridge::attach_imported_cloud(&path, &bridge::gis_layer("GIS", &format!("{} puntenwolk", c.edition.short())), "AHN")?;
     bridge::note_source(&format!("{} puntenwolk (Het Waterschapshuis, CC0)", c.edition.short()));
     Ok(format!(
         "{} puntenwolk: {} punten{} uit {} tegel(s){}, gekoppeld als {}.",
