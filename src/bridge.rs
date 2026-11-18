@@ -1842,11 +1842,16 @@ pub(crate) mod replacement_test_host {
         /// Undo groups and record writes, in order.
         pub log: Mutex<Vec<String>>,
         /// The current layout (CTAB). OCS adds to a sheet's layout while one
-        /// is current: `paper` keeps what went there.
+        /// is current, and to the block being edited while the block editor
+        /// is open (CTAB `Model`, and a switch of layout does not close it
+        /// while the block has unsaved changes): `outside` keeps what went
+        /// outside model space.
         pub layout: Mutex<String>,
-        pub paper: Mutex<Vec<Handle>>,
-        /// As OCS while a block is being edited: no switch of layout.
+        pub outside: Mutex<Vec<Handle>>,
         pub block_edit: bool,
+        /// Two commands in step: the first two reads of a record wait for
+        /// each other (at most a moment), as two commands started together.
+        pub meet: Option<(Mutex<u32>, std::sync::Condvar)>,
         /// Elements OCS refuses to remove (as on a layer locked meanwhile).
         pub refuse: Mutex<Vec<Handle>>,
     }
@@ -1855,17 +1860,30 @@ pub(crate) mod replacement_test_host {
         pub(crate) fn new(doc: CadDocument, reject_batch: bool) -> Self {
             Self {
                 doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()), log: Mutex::new(Vec::new()),
-                layout: Mutex::new("Model".into()), paper: Mutex::new(Vec::new()), block_edit: false, refuse: Mutex::new(Vec::new()),
+                layout: Mutex::new("Model".into()), outside: Mutex::new(Vec::new()), block_edit: false, meet: None, refuse: Mutex::new(Vec::new()),
             }
         }
 
-        /// A new element, in the current layout.
-        fn add(&self, doc: &mut CadDocument, entity: EntityType) -> Handle {
+        /// A new element, in the current layout or the block being edited.
+        fn add(&self, doc: &mut CadDocument, mut entity: EntityType) -> Handle {
+            let outside = self.block_edit || *self.layout.lock().unwrap() != "Model";
+            if outside {
+                entity.common_mut().owner_handle = doc.header.paper_space_block_handle;
+            }
             let handle = doc.add_entity(entity).unwrap();
-            if *self.layout.lock().unwrap() != "Model" {
-                self.paper.lock().unwrap().push(handle);
+            if outside {
+                self.outside.lock().unwrap().push(handle);
             }
             handle
+        }
+
+        fn meet(&self) {
+            if let Some((count, met)) = &self.meet {
+                let mut n = count.lock().unwrap();
+                *n += 1;
+                met.notify_all();
+                let _ = met.wait_timeout_while(n, std::time::Duration::from_millis(300), |n| *n < 2).unwrap();
+            }
         }
     }
 
@@ -1874,6 +1892,9 @@ pub(crate) mod replacement_test_host {
             use PluginRequest as Q;
             use PluginResponse as A;
 
+            if matches!(req, Q::ReadXRecord { .. }) {
+                self.meet();
+            }
             let mut doc = self.doc.lock().unwrap();
             let locked = |doc: &CadDocument, entity: &EntityType| {
                 doc.layers.get(&entity.common().layer).is_some_and(|layer| layer.is_locked())
@@ -1916,9 +1937,6 @@ pub(crate) mod replacement_test_host {
                     A::TableResult(Ok(Handle::NULL))
                 }
                 Q::TableOperation { .. } => A::TableResult(Ok(Handle::new(1001))),
-                Q::GetSystemVariable { name } if name == "CTAB" => {
-                    A::SystemVariable(Some(ocs_plugin_api::host::HostSettingValue::Text(self.layout.lock().unwrap().clone())))
-                }
                 Q::OpenDocumentViewV4 { .. } => A::Error("no shared view in the test host".into()),
                 Q::GetSelection => A::Selection(doc.model_space_entities().map(|e| e.common().handle).collect()),
                 Q::GetEntitiesBatch { handles } => A::GetEntitiesBatchResult(Ok(handles.iter().map(|h| doc.get_entity(*h).cloned()).collect())),
