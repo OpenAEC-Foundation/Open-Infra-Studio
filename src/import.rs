@@ -6,7 +6,8 @@ use ocs_plugin_api::host::codec::{Color, Handle};
 use crate::bridge::{self, Target};
 use crate::emit;
 use crate::gis::caps::{WfsCaps, WfsType, WmsCaps, WmsLayer};
-use crate::gis::raster::{self, Options as RasterOptions};
+use crate::gis::foto::Photo;
+use crate::gis::raster::{self, Options as RasterOptions, WmsImport};
 use crate::gis::servers::{self, MapServer, ServerKind};
 use crate::gis::site::Site;
 use crate::gis::vector::{self, Feature};
@@ -18,11 +19,28 @@ fn target() -> Result<Target, String> {
 
 pub fn wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer, opt: &RasterOptions, fade: u8, progress: &dyn Fn(String)) -> Result<String, String> {
     let t = target()?;
-    let placed = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
+    let result = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
     let layer_name = emit::layer_name("GIS-WMS", &layer.title);
-    let n = place_map(site, &placed, &layer_name, t.unit_factor, fade, &format!("GIS WMS {}", layer.title))?;
+    place_map(site, std::slice::from_ref(&result.image), &layer_name, t.unit_factor, fade, &format!("GIS WMS {}", layer.title))?;
     bridge::zoom_extents();
-    Ok(format!("{n} kaartdeel/delen van {} op laag {layer_name} ({}).", server.name, server.attribution))
+    Ok(wms_summary(server, &layer_name, &result))
+}
+
+fn wms_summary(server: &MapServer, layer: &str, result: &WmsImport) -> String {
+    use crate::lang::tr;
+    let received = result.parts as usize - result.missing.len();
+    let mut message = format!(
+        "{received}/{} {} {} {} {layer} ({}).",
+        result.parts, tr("kaartdelen van", "map parts from"), server.name, tr("op laag", "on layer"), server.attribution
+    );
+    if !result.missing.is_empty() {
+        let missing = result.missing.iter().map(u32::to_string).collect::<Vec<_>>().join(", ");
+        message.push_str(&format!(
+            " {} {missing}.",
+            tr("Let op, WMS-delen ontbreken na opnieuw proberen:", "Warning, WMS parts are missing after retrying:")
+        ));
+    }
+    message
 }
 
 pub fn xyz(site: &Site, server: &MapServer, opt: &RasterOptions, fade: u8, progress: &dyn Fn(String)) -> Result<String, String> {
@@ -259,6 +277,9 @@ pub(crate) fn prepare_dataset(site: &Site, data: &Dataset, progress: &dyn Fn(Str
     match data {
         Dataset::Raster { server } => {
             let srv = servers::find(server).ok_or_else(|| format!("server {server} onbekend"))?;
+            if *server == "pdok-luchtfoto" {
+                return prepare_aerial_wms(site, &srv, Photo::Pdok.finest(), progress);
+            }
             // Large areas: no more pixels than a 4096-wide image (a quick
             // import of 30 km at 25 cm would be billions of pixels).
             let cap = |fine: f64| fine.max(site.width.max(site.height) / 4096.0);
@@ -288,11 +309,23 @@ pub(crate) fn prepare_dataset(site: &Site, data: &Dataset, progress: &dyn Fn(Str
 }
 
 fn prepare_wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer, opt: &RasterOptions, progress: &dyn Fn(String)) -> Result<PreparedDataset, String> {
-    let images = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
+    let result = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
+    Ok(prepared_wms(server, layer, result, false))
+}
+
+fn prepared_wms(server: &MapServer, layer: &WmsLayer, result: WmsImport, aerial: bool) -> PreparedDataset {
     let name = emit::layer_name("GIS-WMS", &layer.title);
     let label = format!("GIS WMS {}", layer.title);
-    let summary = format!("{} kaartdeel/delen van {} op laag {name} ({}).", images.len(), server.name, server.attribution);
-    Ok(PreparedDataset::Map { images, layer: name, label, summary })
+    let mut summary = wms_summary(server, &name, &result);
+    if aerial {
+        let [west, south, east, north] = result.image.bbox;
+        let [width, height] = result.image.px;
+        let x = format!("{:.3}", (east - west) / f64::from(width));
+        let y = format!("{:.3}", (north - south) / f64::from(height));
+        let resolution = if x == y { x } else { format!("{x} × {y}") };
+        summary = format!("{} {resolution} m/px. {summary}", crate::lang::tr("Luchtfoto op", "Aerial photo at"));
+    }
+    PreparedDataset::Map { images: vec![result.image], layer: name, label, summary }
 }
 
 pub(crate) fn place_datasets(site: &Site, label: &str, origin: bool, datasets: Vec<PreparedDataset>) -> Result<Vec<String>, String> {
@@ -366,10 +399,16 @@ pub(crate) fn prepare_aerial(site: &Site, progress: &dyn Fn(String)) -> Result<P
         return prepare_dataset(site, &Dataset::Raster { server: "pdok-luchtfoto" }, progress);
     }
     let srv = servers::find("eox-s2-wms").ok_or("server eox-s2-wms onbekend")?;
+    let resolution = (site.width.max(site.height) / 2048.0).max(5.0);
+    prepare_aerial_wms(site, &srv, resolution, progress)
+}
+
+fn prepare_aerial_wms(site: &Site, srv: &MapServer, finest: f64, progress: &dyn Fn(String)) -> Result<PreparedDataset, String> {
     let caps = caps::fetch_wms(&srv.url)?;
-    let layer = caps.layers.iter().find(|l| l.name == srv.default_layer).or(caps.layers.first()).cloned().ok_or("geen lagen")?;
-    let res = (site.width.max(site.height) / 2048.0).max(5.0);
-    prepare_wms(site, &srv, &caps, &layer, &RasterOptions { resolution: res, format: "image/jpeg".into() }, progress)
+    let layer = caps.layers.iter().find(|l| l.name == srv.default_layer)
+        .ok_or_else(|| format!("WMS-laag {} ontbreekt", srv.default_layer))?;
+    let result = raster::import_aerial_wms(site, &caps, layer, finest, &bridge::image_dir(), progress)?;
+    Ok(prepared_wms(srv, layer, result, true))
 }
 
 #[cfg(test)]
@@ -423,6 +462,28 @@ mod import_layer_tests {
         let feature = Feature { points: vec![[site.lon, site.lat]], ..Default::default() };
         let style = VectorStyle { aci: 7, label_field: None, text_m: 1.0, clip: false };
         place_features(&site, &[feature], "EPSG:4326", layer, "WFS", &style, false)
+    }
+
+    #[test]
+    fn prepared_aerial_keeps_resolution_and_missing_parts() {
+        let server = servers::find("pdok-luchtfoto").unwrap();
+        let layer = WmsLayer { name: server.default_layer.clone(), title: server.name.clone(), crs: vec![], bbox: None };
+        let result = WmsImport {
+            image: raster::PlacedImage { path: "photo.png".into(), bbox: [0.0, 0.0, 160.0, 120.0], px: [2000, 1500] },
+            parts: 3,
+            missing: vec![2],
+        };
+        let PreparedDataset::Map { images, summary, .. } = prepared_wms(&server, &layer, result, true) else {
+            panic!("an aerial import must prepare a map");
+        };
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].px, [2000, 1500]);
+        assert!(summary.contains("0.080 m/px."));
+        assert!(summary.contains("2/3"));
+        assert!(summary.ends_with(crate::lang::tr(
+            "WMS-delen ontbreken na opnieuw proberen: 2.",
+            "WMS parts are missing after retrying: 2.",
+        )));
     }
 
     #[test]
