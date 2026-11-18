@@ -491,6 +491,7 @@ struct CoordsPage {
 }
 
 pub struct App {
+    pub(super) widget_scope: u64,
     tab: Tab,
     /// Location page edits a draft; the other pages use the saved site.
     draft: Site,
@@ -743,9 +744,15 @@ impl App {
     }
 
     pub(super) fn new() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        // A replacement drawing can reuse a tab ID while its old widgets
+        // still have state in the native window's egui context.
+        static NEXT_WIDGET_SCOPE: AtomicU64 = AtomicU64::new(0);
         let site = bridge::site();
         let draft = site.clone().unwrap_or_else(||Site::for_region(crate::localisation::current()));
         Self {
+            widget_scope: NEXT_WIDGET_SCOPE.fetch_add(1, Ordering::Relaxed),
             tab: Tab::Location,
             has_site: site.is_some(),
             map: MapView::new([draft.lon, draft.lat], 15.0),
@@ -1166,7 +1173,7 @@ impl App {
         } else {
             (field.left_top() - Vec2::new(0.0, 4.0), egui::Align2::LEFT_BOTTOM, above)
         };
-        let area = egui::Area::new(egui::Id::unique("open-infra-geo-suggest"))
+        let area = egui::Area::new(ui.make_persistent_id("open-infra-geo-suggest"))
             .order(egui::Order::Foreground)
             .pivot(pivot)
             .fixed_pos(pos)
@@ -3066,7 +3073,7 @@ fn server_combo(ui: &mut egui::Ui, id: &str, all: &[MapServer], kinds: &[ServerK
         .selected_text(current.map(|s| s.name.clone()).unwrap_or_else(|| crate::lang::tr("— kies een server —", "— choose a server —").into()))
         .show_ui(ui, |ui| {
             // Hundreds of presets worldwide: a filter on name, country and URL.
-            let fid = egui::Id::NULL.with((id, "filter"));
+            let fid = ui.make_persistent_id((id, "filter"));
             let mut filter: String = ui.data_mut(|d| d.get_temp(fid).unwrap_or_default());
             ui.horizontal(|ui| {
                 ui.label(crate::lang::tr("Filter", "Filter"));

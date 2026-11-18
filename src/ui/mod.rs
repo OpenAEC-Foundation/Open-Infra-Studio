@@ -182,11 +182,15 @@ impl Workbench {
         });
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) {
+    fn with_document_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        draw: impl FnOnce(&mut app::App, &mut egui::Ui, &mut Option<String>),
+    ) {
         let (target, site) = crate::bridge::workbench_document();
         self.with_document(target, site.clone(), |app, civiel_offsets| {
             app.sync_site(site);
-            app.ui(ui, civiel_offsets);
+            ui.push_id(app.widget_scope, |ui| draw(app, ui, civiel_offsets));
         });
     }
 
@@ -286,7 +290,7 @@ impl eframe::App for Window<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.workbench.ui(ui);
+        self.workbench.with_document_ui(ui, |app, ui, offsets| app.ui(ui, offsets));
     }
 }
 
@@ -326,4 +330,94 @@ pub(crate) fn run_macos_plugin(socket: String) -> Result<(), String> {
 fn app_icon() -> egui::IconData {
     let png: &[u8] = if product() == Product::Civiel { include_bytes!("../../assets/app-icon-civiel.png") } else { include_bytes!("../../assets/app-icon-gis.png") };
     eframe::icon_data::from_png_bytes(png).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod widget_scope_tests {
+    use super::*;
+    use crate::bridge::{self, Target};
+    use ocs_plugin_api::host::{PluginRequestError, PluginRequestSender};
+    use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
+    use std::sync::Arc;
+
+    struct NoHost;
+
+    impl PluginRequestSender for NoHost {
+        fn request(&self, _: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+            panic!("a widget-state test must not contact CAD");
+        }
+    }
+
+    fn frame(
+        ctx: &egui::Context,
+        workbench: &mut Workbench,
+        tab_id: u64,
+        text: &mut String,
+        input: egui::RawInput,
+    ) -> (egui::Id, egui::Response) {
+        let target = Target {
+            sender: Arc::new(NoHost),
+            tab_id,
+            unit_factor: 1.0,
+            doc_path: None,
+        };
+        let mut widgets = None;
+        ctx.run_ui(input, |ui| {
+            bridge::with_workbench_document(Some(target.clone()), None, || {
+                workbench.with_document_ui(ui, |_, ui, _| {
+                    let id = ui.text_edit_singleline(text).id;
+                    widgets = Some((id, ui.button("→")));
+                });
+            });
+        }).drop_without_applying_deltas();
+        widgets.unwrap()
+    }
+
+    #[test]
+    fn undo_after_switching_drawings_does_not_use_the_previous_draft() {
+        let ctx = egui::Context::default();
+        let mut workbench = Workbench::default();
+        let mut a = "Edited A".to_owned();
+        let (id_a, _) = frame(&ctx, &mut workbench, 1, &mut a, egui::RawInput::default());
+        let mut state = egui::TextEdit::load_state(&ctx, id_a).unwrap();
+        let mut undoer = state.undoer();
+        undoer.add_undo(&(egui::text::CCursorRange::default(), "Concept A".into()));
+        state.set_undoer(undoer);
+        egui::TextEdit::store_state(&ctx, id_a, state);
+
+        let mut b = "Concept B".to_owned();
+        let (id_b, _) = frame(&ctx, &mut workbench, 2, &mut b, egui::RawInput::default());
+        ctx.memory_mut(|memory| memory.request_focus(id_b));
+        let modifiers = egui::Modifiers::COMMAND;
+        let key = egui::Event::Key {
+            key: egui::Key::Z, physical_key: Some(egui::Key::Z),
+            pressed: true, repeat: false, modifiers,
+        };
+        let input = egui::RawInput { modifiers, events: vec![key], ..Default::default() };
+        frame(&ctx, &mut workbench, 2, &mut b, input);
+        assert_eq!(b, "Concept B");
+    }
+
+    #[test]
+    fn releasing_a_pressed_button_after_a_drawing_switch_does_not_click() {
+        let ctx = egui::Context::default();
+        let mut workbench = Workbench::default();
+        let mut text = String::new();
+        let (_, action) = frame(&ctx, &mut workbench, 1, &mut text, egui::RawInput::default());
+        let pos = action.rect.center();
+        let pointer = |pressed| egui::RawInput {
+            events: vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos, button: egui::PointerButton::Primary, pressed,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ],
+            ..Default::default()
+        };
+        assert!(!frame(&ctx, &mut workbench, 1, &mut text, pointer(true)).1.clicked());
+        assert!(!frame(&ctx, &mut workbench, 2, &mut text, pointer(false)).1.clicked());
+        assert!(frame(&ctx, &mut workbench, 2, &mut text, pointer(true)).1.is_pointer_button_down_on());
+        assert!(frame(&ctx, &mut workbench, 2, &mut text, pointer(false)).1.clicked());
+    }
 }
