@@ -526,13 +526,5 @@ fn write_plan(target: &bridge::Target, layers: &BTreeMap<String, [u8; 3]>, entit
             },
         );
     }
-    let record = entities
-        .first()
-        .and_then(|e| e.common().extended_data.get_record(bridge::XDATA_APP))
-        .cloned();
-    let handles = bridge::add_entities_handles("IMRO-plangegevens", entities)?;
-    if let (Some(handle), Some(record)) = (handles.first(), record) {
-        bridge::register_object_data(*handle, record);
-    }
-    Ok(handles.len())
+    Ok(bridge::add_imported_entities("IMRO-plangegevens", entities)?.len())
 }

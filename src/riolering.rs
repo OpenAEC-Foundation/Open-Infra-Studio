@@ -45,7 +45,6 @@ pub fn place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) ->
     let k = opt.scale / 1000.0 * f;
     let mut entities: Vec<EntityType> = Vec::new();
     let mut layers: Vec<LayerSpec> = Vec::new();
-    let mut first: Option<ExtendedDataRecord> = None;
     let mut counts: Vec<(String, usize)> = Vec::new();
     let ensure = |s: &LayerSpec, layers: &mut Vec<LayerSpec>| {
         if !layers.iter().any(|layer| layer.name == s.name) {
@@ -61,9 +60,6 @@ pub fn place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) ->
                 continue;
             }
             let d = opt.object_data.then(|| record(feat));
-            if first.is_none() {
-                first = d.clone();
-            }
             if !lines.is_empty() {
                 if let Some(g) = spec(&name, opt, Element::G) {
                     ensure(&g, &mut layers);
@@ -99,11 +95,7 @@ pub fn place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) ->
         for spec in &layers {
             bridge::ensure_nlcs_layer(spec);
         }
-        let handles = bridge::add_entities_handles(label, entities)?;
-        if let (Some(h), Some(r)) = (handles.first(), first) {
-            bridge::register_object_data(*h, r);
-        }
-        Ok(handles)
+        bridge::add_imported_entities(label, entities)
     })?;
     bridge::note_source("GWSW (Stichting RIONED / PDOK, CC0)");
     bridge::zoom_extents();

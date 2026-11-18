@@ -314,7 +314,7 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
             if a.spirals > 0 { format!(", {} overgangsbogen", a.spirals) } else { String::new() }
         ));
     }
-    let handles = out.write_handles(&format!("LandXML {file}"))?;
+    let handles = out.write_import(&format!("LandXML {file}"))?;
     let n = handles.len();
     super::api::note("punten", x.points.len());
     super::api::note("oppervlakken", x.surfaces.iter().map(|(n, f)| serde_json::json!({"naam": n, "driehoeken": f.len()})).collect::<Vec<_>>());

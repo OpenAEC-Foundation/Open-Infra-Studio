@@ -44,20 +44,10 @@ pub struct VectorStyle {
 
 fn place_map(site: &Site, images: &[raster::PlacedImage], layer: &str, unit_factor: f64, fade: u8, label: &str) -> Result<usize, String> {
     bridge::with_import_undo(label, || {
-        let handles = write_map(site, images, layer, unit_factor, fade, label)?;
-        // DRAWORDER can close the held step, so it must be the last mutation.
-        bridge::image_to_back(&handles)?;
-        Ok(handles.len())
+        bridge::ensure_layer(layer, Color::from_index(8));
+        let entities = emit::images(site, images, layer, unit_factor, fade);
+        Ok(bridge::add_imported_map(label, entities)?.len())
     })
-}
-
-fn write_map(site: &Site, images: &[raster::PlacedImage], layer: &str, unit_factor: f64, fade: u8, label: &str) -> Result<Vec<Handle>, String> {
-    let entities = emit::images(site, images, layer, unit_factor, fade);
-    if entities.is_empty() {
-        return Ok(Vec::new());
-    }
-    bridge::ensure_layer(layer, Color::from_index(8));
-    bridge::add_entities_handles(label, entities)
 }
 
 fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str, label: &str, style: &VectorStyle, with_data: bool) -> Result<usize, String> {
@@ -91,7 +81,7 @@ fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str
     }
     bridge::with_import_undo(label, || {
         bridge::ensure_layer(layer, Color::from_index(style.aci));
-        Ok(bridge::add_entities_with_object_data(label, polylines)?.len())
+        Ok(bridge::add_imported_entities(label, polylines)?.len())
     })
 }
 
@@ -210,7 +200,7 @@ pub fn geo_origin(site: &Site) -> Result<String, String> {
     }
     bridge::with_import_undo("GIS basispunt", || {
         bridge::ensure_layer(layer, Color::from_index(1));
-        bridge::add_entities("GIS basispunt", ents)
+        bridge::add_imported_entities("GIS basispunt", ents)
     })?;
     Ok(format!("Basispunt geplaatst op laag {layer}."))
 }
@@ -250,10 +240,12 @@ pub(crate) enum PreparedDataset {
 }
 
 impl PreparedDataset {
-    fn write(self, site: &Site, rasters: &mut Vec<Handle>) -> Result<String, String> {
+    fn write(self, site: &Site, layers: &mut bridge::ImportLayers, rasters: &mut Vec<Handle>) -> Result<String, String> {
         match self {
-            Self::Map { images, layer, label, summary } => {
-                rasters.extend(write_map(site, &images, &layer, target()?.unit_factor, 0, &label)?);
+            Self::Map { images, layer, summary, .. } => {
+                let entities = emit::images(site, &images, &layer, target()?.unit_factor, 0);
+                bridge::ensure_layer(&layer, Color::from_index(8));
+                rasters.extend(layers.write_entities(entities)?);
                 Ok(summary)
             }
             Self::Vector { features, feature_type, style } => write_wfs(site, &feature_type, &features, &style),
@@ -306,16 +298,16 @@ pub(crate) fn place_datasets(site: &Site, label: &str, origin: bool, datasets: V
     if !origin && datasets.is_empty() {
         return Ok(Vec::new());
     }
-    let messages = bridge::with_import_undo(label, || {
+    let messages = bridge::with_import_layers(label, |layers| {
         let mut messages = Vec::new();
         let mut rasters = Vec::new();
         if origin {
             messages.push(geo_origin(site)?);
         }
         for dataset in datasets {
-            messages.push(dataset.write(site, &mut rasters)?);
+            messages.push(dataset.write(site, layers, &mut rasters)?);
         }
-        bridge::image_to_back(&rasters)?;
+        bridge::image_to_back(&rasters, layers)?;
         Ok(messages)
     })?;
     bridge::zoom_extents();
@@ -379,6 +371,179 @@ pub(crate) fn prepare_aerial(site: &Site, progress: &dyn Fn(String)) -> Result<P
 }
 
 #[cfg(test)]
+mod import_layer_tests {
+    use super::*;
+    use ocs_plugin_api::host::{codec::{CadDocument, Handle}, PluginRequestError, PluginRequestSender};
+    use ocs_plugin_api::ipc::protocol::{PluginRequest as Q, PluginResponse as A};
+    use std::sync::{Arc, Mutex};
+
+    struct Drawing(Mutex<CadDocument>);
+
+    impl PluginRequestSender for Drawing {
+        fn request(&self, req: Q) -> Result<A, PluginRequestError> {
+            let mut doc = self.0.lock().unwrap();
+            Ok(match req {
+                Q::AddLayer(config) => {
+                    let mut layer = ocs_plugin_api::host::codec::tables::Layer::new(&config.name);
+                    layer.flags.locked = config.locked.unwrap_or_default();
+                    let handle = doc.allocate_handle();
+                    layer.handle = handle;
+                    A::OptHandle(doc.layers.add(layer).ok().map(|()| handle))
+                }
+                Q::ModifyLayer(config) => {
+                    let layer = doc.layers.get_mut(&config.name).unwrap();
+                    layer.flags.locked = config.locked.unwrap();
+                    A::Bool(true)
+                }
+                Q::AddEntities(entities) => A::Handles(entities.into_iter().map(|e| {
+                    if doc.layers.get(&e.common().layer).is_some_and(|l| l.is_locked()) || e.common().layer == "GIS-REFUSED" {
+                        Handle::NULL
+                    } else {
+                        doc.add_entity(e).unwrap()
+                    }
+                }).collect()),
+                Q::AddEntity(entity) => {
+                    if doc.layers.get(&entity.common().layer).is_some_and(|layer| layer.is_locked()) {
+                        A::Handle(Handle::NULL)
+                    } else {
+                        A::Handle(doc.add_entity(entity).unwrap())
+                    }
+                }
+                Q::RemoveEntity { handle } => A::Bool(doc.remove_entity(handle).is_some()),
+                Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup | Q::SetDirty | Q::BumpGeometry => A::Ok,
+                other => panic!("unexpected host request: {other:?}"),
+            })
+        }
+    }
+
+    fn import_point(layer: &str) -> Result<usize, String> {
+        let site = Site::default();
+        let feature = Feature { points: vec![[site.lon, site.lat]], ..Default::default() };
+        let style = VectorStyle { aci: 7, label_field: None, text_m: 1.0, clip: false };
+        place_features(&site, &[feature], "EPSG:4326", layer, "WFS", &style, false)
+    }
+
+    #[test]
+    fn combined_vector_import_groups_layer_locks_and_geometry() {
+        struct RecordingDrawing {
+            drawing: Drawing,
+            boundaries: Mutex<Vec<bool>>,
+        }
+        impl PluginRequestSender for RecordingDrawing {
+            fn request(&self, req: Q) -> Result<A, PluginRequestError> {
+                match &req {
+                    Q::BeginUndoGroup { .. } => self.boundaries.lock().unwrap().push(true),
+                    Q::EndUndoGroup => self.boundaries.lock().unwrap().push(false),
+                    Q::AddLayer(_) | Q::AddEntities(_) | Q::ModifyLayer(_) => {
+                        assert_eq!(*self.boundaries.lock().unwrap(), [true]);
+                    }
+                    _ => {}
+                }
+                self.drawing.request(req)
+            }
+        }
+
+        crate::settings::with_test_file(|| {
+            let drawing = Arc::new(RecordingDrawing {
+                drawing: Drawing(Mutex::new(CadDocument::new())),
+                boundaries: Mutex::new(Vec::new()),
+            });
+            let target = Target { sender: drawing.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                bridge::with_import_undo("Combined import", || {
+                    assert_eq!(import_point("GIS-FIRST")?, 1);
+                    assert_eq!(import_point("GIS-SECOND")?, 1);
+                    Ok(())
+                }).unwrap();
+            });
+            assert_eq!(*drawing.boundaries.lock().unwrap(), [true, false]);
+            let doc = drawing.drawing.0.lock().unwrap();
+            assert_eq!(doc.model_space_entities().count(), 2);
+            assert!(doc.layers.get("GIS-FIRST").unwrap().is_locked());
+            assert!(doc.layers.get("GIS-SECOND").unwrap().is_locked());
+        });
+    }
+
+    #[test]
+    fn vector_import_locks_layer_and_can_append_to_it() {
+        crate::settings::with_test_file(|| {
+            let drawing = Arc::new(Drawing(Mutex::new(CadDocument::new())));
+            let target = Target { sender: drawing.clone(), tab_id: 136, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                for expected in 1..=2 {
+                    assert_eq!(import_point("GIS-TEST").unwrap(), 1);
+                    let doc = drawing.0.lock().unwrap();
+                    assert!(doc.layers.get("GIS-TEST").unwrap().is_locked(), "the GIS layer must be locked after import");
+                    assert_eq!(doc.model_space_entities().count(), expected);
+                }
+                drawing.0.lock().unwrap().layers.get_mut("GIS-TEST").unwrap().flags.locked = false;
+                assert_eq!(import_point("GIS-TEST").unwrap(), 1);
+                assert!(drawing.0.lock().unwrap().layers.get("GIS-TEST").unwrap().is_locked());
+            });
+        });
+    }
+
+    #[test]
+    fn import_layer_preference_off_preserves_existing_locks() {
+        use crate::settings;
+        settings::with_test_file(|| {
+            settings::update(&settings::path(), |s| { s.insert("language".into(), "nl".into()); }).unwrap();
+            assert!(settings::lock_imported_layers());
+            settings::save_lock_imported_layers(false).unwrap();
+            assert!(!settings::lock_imported_layers());
+            let settings: serde_json::Value = serde_json::from_slice(&std::fs::read(settings::path()).unwrap()).unwrap();
+            assert_eq!(settings["language"], "nl");
+            let drawing = Arc::new(Drawing(Mutex::new(CadDocument::new())));
+            let target = Target { sender: drawing.clone(), tab_id: 137, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                assert_eq!(import_point("GIS-OPEN").unwrap(), 1);
+                assert!(!drawing.0.lock().unwrap().layers.get("GIS-OPEN").unwrap().is_locked());
+                drawing.0.lock().unwrap().layers.get_mut("GIS-OPEN").unwrap().flags.locked = true;
+                assert_eq!(import_point("gis-open").unwrap(), 1);
+                let doc = drawing.0.lock().unwrap();
+                assert!(doc.layers.get("GIS-OPEN").unwrap().is_locked());
+                assert_eq!(doc.model_space_entities().count(), 2);
+            });
+        });
+    }
+
+    #[test]
+    fn refused_import_restores_the_previous_layer_lock() {
+        crate::settings::with_test_file(|| {
+            let mut doc = CadDocument::new();
+            let mut layer = ocs_plugin_api::host::codec::tables::Layer::new("GIS-REFUSED");
+            layer.flags.locked = true;
+            doc.layers.add(layer).unwrap();
+            let drawing = Arc::new(Drawing(Mutex::new(doc)));
+            let target = Target { sender: drawing.clone(), tab_id: 138, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                assert!(import_point("GIS-REFUSED").is_err());
+                let doc = drawing.0.lock().unwrap();
+                assert!(doc.layers.get("GIS-REFUSED").unwrap().is_locked());
+                assert_eq!(doc.model_space_entities().count(), 0);
+            });
+        });
+    }
+
+    #[test]
+    fn lock_changes_keep_distinct_cad_layer_names() {
+        crate::settings::with_test_file(|| {
+            let drawing = Arc::new(Drawing(Mutex::new(CadDocument::new())));
+            let target = Target { sender: drawing.clone(), tab_id: 139, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                bridge::ensure_layer("STRASSE", Color::from_index(7));
+                assert_eq!(import_point("Straße").unwrap(), 1);
+                assert_eq!(import_point("Straße").unwrap(), 1);
+                let doc = drawing.0.lock().unwrap();
+                assert!(doc.layers.get("Straße").unwrap().is_locked());
+                assert!(!doc.layers.get("STRASSE").unwrap().is_locked());
+                assert_eq!(doc.model_space_entities().count(), 2);
+            });
+        });
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use ocs_plugin_api::host::codec::{EntityType, Handle};
@@ -406,6 +571,7 @@ mod tests {
                     self.records_written.lock().unwrap().push((handle, record));
                     PluginResponse::Bool(true)
                 }
+                PluginRequest::ModifyLayer(_) => PluginResponse::Bool(true),
                 _ => PluginResponse::Ok,
             })
         }

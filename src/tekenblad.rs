@@ -166,7 +166,7 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
 
     let mut batch = crate::basisdata::Batch::new();
     for (spec, entities) in s.out {
-        batch.push(&spec, entities, None);
+        batch.push(&spec, entities);
     }
     let (n, _) = batch.write("NLCS-tekenblad")?;
     Ok(format!("Tekenblad {paper} liggend, schaal 1:{} — {n} elementen, legenda met {shown} lagen.", opt.scale))

@@ -1103,8 +1103,7 @@ impl Uit {
         self.out.put(spec, e);
     }
 
-    /// Write as one undo step: all handles, and the handle per tag.
-    fn write(self, label: &str) -> Result<Written, String> {
+    fn tags_in_order(&self) -> Vec<Tag> {
         // Out writes layer by layer, in the order the layers were first used.
         let mut order: Vec<&str> = Vec::new();
         for (l, _) in &self.tags {
@@ -1114,8 +1113,17 @@ impl Uit {
         }
         let mut tagged: Vec<(usize, Tag)> = self.tags.iter().map(|(l, t)| (order.iter().position(|o| o == l).unwrap_or(0), *t)).collect();
         tagged.sort_by_key(|(i, _)| *i);
-        let handles = self.out.write_handles(label)?;
-        let pairs = tagged.into_iter().zip(handles.iter().copied()).map(|((_, t), h)| (t, h)).collect();
+        tagged.into_iter().map(|(_, tag)| tag).collect()
+    }
+
+    /// Write as one undo step: all handles, and the handle per tag.
+    fn write(self, label: &str, originals: Option<&[(Handle, String)]>) -> Result<Written, String> {
+        let tags = self.tags_in_order();
+        let handles = match originals {
+            Some(originals) => self.out.write_to(label, super::LayerWrite::Append(originals))?,
+            None => self.out.write_handles(label)?,
+        };
+        let pairs = tags.into_iter().zip(handles.iter().copied()).collect();
         Ok((handles, pairs))
     }
 }
@@ -1294,13 +1302,17 @@ type NetHandles = (Vec<Handle>, Vec<Option<Handle>>, Vec<Option<Handle>>);
 
 /// Draw a network (replacing `old` entities) and index it. Returns the
 /// handles of its manholes and pipes.
-fn write_net(ctx: &Ctx, g: &Gelezen, labels: bool, old: &[Handle], label: &str) -> Result<NetHandles, String> {
+fn write_net(ctx: &Ctx, g: &Gelezen, labels: bool, originals: Option<&[(Handle, String)]>, label: &str) -> Result<NetHandles, String> {
     let mut out = Uit::default();
     draw_plan(ctx, &g.net, g, labels, &mut out)?;
-    if !old.is_empty() {
-        bridge::remove_entities(&t!("{} (oud)", "{} (old)", label), old)?;
+    if originals.is_some() && out.out.is_empty() {
+        return Err(tr("Geen vervangende rioolobjecten om te plaatsen.", "No replacement sewer entities to add.").into());
     }
-    let (handles, pairs) = out.write(label)?;
+    let (handles, pairs) = out.write(label, originals)?;
+    Ok(index_net(g, handles, pairs))
+}
+
+fn index_net(g: &Gelezen, handles: Vec<Handle>, pairs: Vec<(Tag, Handle)>) -> NetHandles {
     bridge::index_add("riool", &g.net.naam, &handles, true);
     let mut puts = vec![None; g.net.putten.len()];
     let mut pipes = vec![None; g.net.leidingen.len()];
@@ -1311,7 +1323,15 @@ fn write_net(ctx: &Ctx, g: &Gelezen, labels: bool, old: &[Handle], label: &str) 
             Tag::Overig => {}
         }
     }
-    Ok((handles, puts, pipes))
+    (handles, puts, pipes)
+}
+
+fn original_layers(doc: &CadDocument, handles: impl IntoIterator<Item = Handle>) -> Result<Vec<(Handle, String)>, String> {
+    handles.into_iter().map(|handle| {
+        doc.get_entity(handle)
+            .map(|e| (handle, e.common().layer.clone()))
+            .ok_or_else(|| t!("Origineel rioolobject {} ontbreekt.", "Original sewer entity {} is missing.", handle_text(handle)))
+    }).collect()
 }
 
 /// The outcome of a network for scripts (ID=).
@@ -1614,7 +1634,8 @@ pub fn ontwerp(opt: &super::CivielOptions, input: Invoer, o: Ontwerp, progress: 
     let mut warnings = notes;
     warnings.extend(g.net.bereken()?);
     let label = g.net.naam.clone();
-    let (handles, puts, pipes) = write_net(&ctx, &g, opt.point_labels, &old, &label)?;
+    let originals = original_layers(&doc, old)?;
+    let (handles, puts, pipes) = write_net(&ctx, &g, opt.point_labels, joined.map(|_| originals.as_slice()), &label)?;
     ground.note_source();
     note_net(&g.net, &puts, &pipes, &warnings, &ground.label());
     api::note("aangesloten", joined.is_some());
@@ -1883,15 +1904,28 @@ pub fn bijwerken(opt: &super::CivielOptions, naam: Option<String>, w: Wijziging,
         let mut warnings = g.net.sample_ground(&mut |p| ground.height(p), opt.step.max(0.5));
         warnings.extend(g.net.bereken()?);
         // Old check markers no longer fit.
-        let stale: Vec<Handle> = doc.model_space_entities().filter(|e| data_value(e, "riooltoets").as_deref() == Some(g.net.naam.as_str())).map(|e| e.common().handle).collect();
-        if !stale.is_empty() {
-            let _ = bridge::remove_entities(tr("Riooltoets (oud)", "Sewer check (old)"), &stale);
+        let stale = doc.model_space_entities().filter(|e| data_value(e, "riooltoets").as_deref() == Some(g.net.naam.as_str())).map(|e| e.common().handle);
+        let mut plan = Uit::default();
+        draw_plan(&ctx, &g.net, &g, opt.point_labels, &mut plan)?;
+        if plan.out.is_empty() {
+            return Err(tr("Geen vervangende rioolobjecten om te plaatsen.", "No replacement sewer entities to add.").into());
         }
-        let old = g.handles.clone();
-        let (handles, puts, pipes) = write_net(&ctx, &g, opt.point_labels, &old, &t!("{} bijwerken", "Update {}", g.net.naam))?;
+        let (old_profile, profile) = prepare_profile(&ctx, &doc, &g, opt, &mut ground)?;
+        let originals = original_layers(&doc, g.handles.iter().copied().chain(stale).chain(old_profile))?;
+        let tags = plan.tags_in_order();
+        let mut entities = plan.out.into_entities();
+        let plan_len = entities.len();
+        entities.extend(profile.into_entities());
+        let mut handles = bridge::append_entities(&t!("{} bijwerken", "Update {}", g.net.naam), entities, &originals)?;
+        let profile_handles = handles.split_off(plan_len);
+        let pairs: Vec<_> = tags.into_iter().zip(handles.iter().copied()).collect();
+        let (handles, puts, pipes) = index_net(&g, handles, pairs);
+        let profile = (!profile_handles.is_empty()).then(|| {
+            bridge::index_add("rioolprofiel", &g.net.naam, &profile_handles, true);
+            t!("{} elementen", "{} entities", profile_handles.len())
+        });
+        api::note("elementen", if profile_handles.is_empty() { handles.len() } else { profile_handles.len() });
         ground.note_source();
-        // The length profile follows, in its place.
-        let profile = redraw_profile(&ctx, &doc, &g, opt, &mut ground)?;
         note_net(&g.net, &puts, &pipes, &warnings, &ground.label());
         api::note("wijzigingen", changes.clone());
         msgs.push(t!(
@@ -2139,19 +2173,16 @@ fn old_profile(doc: &CadDocument, naam: &str) -> (Vec<Handle>, Option<(XY, Strin
     (hs, place)
 }
 
-/// Draw the profile again in its place after an update. `None`: there was none.
-fn redraw_profile(ctx: &Ctx, doc: &CadDocument, g: &Gelezen, opt: &super::CivielOptions, ground: &mut Grond) -> Result<Option<String>, String> {
+/// Prepare the existing profile at its original position before writing the update.
+fn prepare_profile(ctx: &Ctx, doc: &CadDocument, g: &Gelezen, opt: &super::CivielOptions, ground: &mut Grond) -> Result<(Vec<Handle>, Out), String> {
     let (old, place) = old_profile(doc, &g.net.naam);
-    let Some((at, van, naar)) = place else { return Ok(None) };
+    let mut out = Out::default();
+    let Some((at, van, naar)) = place else { return Ok((Vec::new(), out)) };
     let from = g.net.putten.iter().position(|p| p.naam == van);
     let to = g.net.putten.iter().position(|p| p.naam == naar);
     let path = g.net.pad(from, to).or_else(|_| g.net.pad(None, None))?;
-    let mut out = Out::default();
     draw_profile(ctx, &g.net, &path, ground, opt, Some(at), &mut out)?;
-    bridge::remove_entities(tr("Rioolprofiel (oud)", "Sewer profile (old)"), &old)?;
-    let hs = out.write_handles(&t!("Lengteprofiel {}", "Length profile {}", g.net.naam))?;
-    bridge::index_add("rioolprofiel", &g.net.naam, &hs, true);
-    Ok(Some(t!("{} elementen", "{} entities", hs.len())))
+    Ok((old, out))
 }
 
 /// `CIV_SEWER_PROFILE`: the length profile of a network, from manhole `van`
@@ -2174,10 +2205,8 @@ pub fn profiel(opt: &super::CivielOptions, naam: Option<String>, van: Option<Str
     let mut ground = Grond::new(&ctx, &doc, g.referentie);
     let mut out = Out::default();
     let (at, len, _) = draw_profile(&ctx, &g.net, &path, &mut ground, opt, at, &mut out)?;
-    if !old.is_empty() {
-        bridge::remove_entities(tr("Rioolprofiel (oud)", "Sewer profile (old)"), &old)?;
-    }
-    let hs = out.write_handles(&t!("Lengteprofiel {}", "Length profile {}", g.net.naam))?;
+    let originals = original_layers(&doc, old)?;
+    let hs = out.write_to(&t!("Lengteprofiel {}", "Length profile {}", g.net.naam), super::LayerWrite::Append(&originals))?;
     bridge::index_add("rioolprofiel", &g.net.naam, &hs, true);
     ground.note_source();
     let names: Vec<String> = std::iter::once(g.net.putten[g.net.leidingen[path[0]].van].naam.clone()).chain(path.iter().map(|i| g.net.putten[g.net.leidingen[*i].naar].naam.clone())).collect();
@@ -2920,13 +2949,14 @@ pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn
         warnings.extend(net.bereken()?);
         let n = net.leidingen.len();
         let g = Gelezen { put_handles: vec![None; net.putten.len()], leiding_handles: vec![None; n], net, handles: Vec::new(), changes: Vec::new(), referentie: Referentie::Auto, verhang_auto: vec![true; n] };
-        let (hs, _, _) = write_net(&ctx_b, &g, opt.point_labels, &[], &g.net.naam.clone())?;
+        let (hs, _, _) = write_net(&ctx_b, &g, opt.point_labels, Some(&[]), &g.net.naam)?;
         handles_all.extend(hs);
         msgs.push(format!("{} ({}): {}{}", g.net.naam, s.label(), summary(&g.net), if warnings.is_empty() { String::new() } else { t!(" — let op: {}", " — note: {}", warnings.join("; ")) }));
     }
-    let mut remove: Vec<Handle> = used.into_iter().collect();
-    remove.extend(old_labels);
-    let removed = bridge::remove_entities(tr("GWSW overnemen", "Take over GWSW"), &remove)?;
+    let originals = original_layers(&doc, used.into_iter().chain(old_labels))?;
+    let label = tr("GWSW overnemen", "Take over GWSW");
+    bridge::with_import_layers(label, |layers| layers.remove_originals(&originals))?;
+    let removed = originals.len();
     ground.note_source();
     api::note("elementen", handles_all.len());
     api::note("vervangen", removed);
@@ -2951,6 +2981,117 @@ mod tests {
         let mut net = Net { naam: "Riool 1".into(), putten, leidingen };
         let _ = net.sample_ground(&mut |p| Some(g(p[0])), 1.0);
         net
+    }
+
+    #[test]
+    fn replacement_sewer_updates_the_shared_locked_layer_before_erasing_originals() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use std::sync::Arc;
+
+        for reject_batch in [true, false] {
+            let drawing = Arc::new(Drawing::new(CadDocument::new(), reject_batch));
+            let target = bridge::Target { sender: drawing.clone(), tab_id: 13630 + u64::from(reject_batch), unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                let ctx = Ctx::new(&super::super::CivielOptions::default()).unwrap();
+                let mut net = run(2, 20.0, 250.0, Materiaal::Pvc, |_| 0.0);
+                net.bereken().unwrap();
+                let g = Gelezen { net, handles: Vec::new(), put_handles: vec![None; 2], leiding_handles: vec![None], changes: Vec::new(), referentie: Referentie::Auto, verhang_auto: vec![true] };
+                let mut plan = Uit::default();
+                draw_plan(&ctx, &g.net, &g, true, &mut plan).unwrap();
+                let (old, pipe_layer) = {
+                    let mut doc = drawing.doc.lock().unwrap();
+                    let pipe_layer = plan.out.layers[0].0.name.clone();
+                    assert!(pipe_layer.contains("DWA_RIOOLLEIDING_PVC_250"));
+                    let mut old = Vec::new();
+                    for (spec, entities) in plan.out.layers {
+                        let mut layer = ocs_plugin_api::host::codec::tables::Layer::new(&spec.name);
+                        layer.flags.locked = spec.name == pipe_layer;
+                        doc.layers.add(layer).unwrap();
+                        for e in entities {
+                            old.push((doc.add_entity(e).unwrap(), spec.name.clone()));
+                        }
+                    }
+                    (old, pipe_layer)
+                };
+                let result = write_net(&ctx, &g, true, Some(&old), "Riool bijwerken");
+                let doc = drawing.doc.lock().unwrap();
+                assert!(doc.layers.get(&pipe_layer).unwrap().is_locked());
+                assert_eq!(doc.model_space_entities().count(), old.len());
+                assert!(old.iter().all(|(h, _)| doc.get_entity(*h).is_some() == reject_batch));
+                if reject_batch {
+                    assert!(result.is_err());
+                } else {
+                    let (_, _, pipes) = result.unwrap();
+                    assert_eq!(doc.get_entity(pipes[0].unwrap()).unwrap().common().layer, pipe_layer);
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn replacement_sewer_update_includes_the_existing_profile_on_locked_layers() {
+        check_sewer_profile_update(false);
+    }
+
+    #[test]
+    fn replacement_sewer_keeps_the_plan_and_profile_if_the_profile_is_refused() {
+        check_sewer_profile_update(true);
+    }
+
+    fn check_sewer_profile_update(reject_profile: bool) {
+        use crate::bridge::replacement_test_host::Drawing;
+        use std::sync::Arc;
+
+        let mut drawing = Drawing::new(CadDocument::new(), false);
+        drawing.reject_profile = reject_profile;
+        let drawing = Arc::new(drawing);
+        let target = bridge::Target { sender: drawing.clone(), tab_id: 13640 + u64::from(reject_profile), unit_factor: 1.0, doc_path: None };
+        bridge::with_command_context(target, None, None, || {
+            let mut opt = super::super::CivielOptions::default();
+            opt.nlcs.status = nlcs::Status::B;
+            let ctx = Ctx::new(&opt).unwrap();
+            let mut net = run(2, 20.0, 250.0, Materiaal::Pvc, |_| 0.0);
+            for put in &mut net.putten {
+                put.maaiveld_vast = true;
+            }
+            net.bereken().unwrap();
+            let g = Gelezen { net, handles: Vec::new(), put_handles: vec![None; 2], leiding_handles: vec![None], changes: Vec::new(), referentie: Referentie::Auto, verhang_auto: vec![true] };
+            let mut plan = Uit::default();
+            draw_plan(&ctx, &g.net, &g, true, &mut plan).unwrap();
+            let mut profile = Out::default();
+            let mut ground = Grond::new(&ctx, &CadDocument::new(), g.referentie);
+            let at = [100.0, -100.0];
+            draw_profile(&ctx, &g.net, &[0], &mut ground, &opt, Some(at), &mut profile).unwrap();
+            let pipe_layer = plan.out.layers[0].0.name.clone();
+            let old = {
+                let mut doc = drawing.doc.lock().unwrap();
+                let mut old = Vec::new();
+                for (spec, entities) in plan.out.layers.into_iter().chain(profile.layers) {
+                    if !doc.layers.contains(&spec.name) {
+                        let mut layer = ocs_plugin_api::host::codec::tables::Layer::new(&spec.name);
+                        layer.flags.locked = spec.name == pipe_layer;
+                        doc.layers.add(layer).unwrap();
+                    }
+                    old.extend(entities.into_iter().map(|e| doc.add_entity(e).unwrap()));
+                }
+                old
+            };
+            let result = bijwerken(&opt, Some(g.net.naam.clone()), Wijziging::default(), &|_| {});
+            let doc = drawing.doc.lock().unwrap();
+            assert!(doc.layers.get(&pipe_layer).unwrap().is_locked());
+            assert_eq!(result.is_err(), reject_profile, "{result:?}");
+            assert!(old.iter().all(|h| doc.get_entity(*h).is_some() == reject_profile));
+            assert_eq!(doc.model_space_entities().count(), old.len());
+            let (profile_handles, place) = old_profile(&doc, &g.net.naam);
+            assert!(!profile_handles.is_empty());
+            assert_eq!(place.unwrap().0, at);
+            let index = drawing.index.lock().unwrap();
+            if reject_profile {
+                assert!(index.is_empty());
+            } else {
+                assert_eq!(index.len(), 2);
+            }
+        });
     }
 
     #[test]

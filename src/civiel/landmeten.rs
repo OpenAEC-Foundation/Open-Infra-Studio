@@ -262,7 +262,7 @@ pub fn import_coded(path: &std::path::Path, opt: &super::CivielOptions, codes: O
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut out = Out::default();
     let n = draw(&ctx, &parsed.points, &name, &mut out)?;
-    let handles = out.write_handles(&format!("Punten {name}"))?;
+    let handles = out.write_import(&format!("Punten {name}"))?;
     let written = handles.len();
     index_points(&handles, n);
     super::api::note("punten", n);
@@ -361,7 +361,7 @@ impl Placer {
         let p = SurveyPoint { name: name.unwrap_or_else(|| self.next.to_string()), e: q[0], n: q[1], z, code };
         let mut out = Out::default();
         draw(&self.ctx, std::slice::from_ref(&p), &self.maaiveld.label(), &mut out)?;
-        let handles = out.write_handles(&format!("Punt {}", p.name))?;
+        let handles = out.append(&format!("Punt {}", p.name))?;
         index_points(&handles, 1);
         self.maaiveld.note_source();
         self.next += 1;

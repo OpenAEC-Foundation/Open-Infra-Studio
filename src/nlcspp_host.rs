@@ -113,15 +113,11 @@ pub fn import(site: &Site, path: &std::path::Path, unit_factor: f64) -> Result<S
                 c.extended_data.add_record(data.clone());
             }
         }
-        batch.push(&s, ents, Some(&data));
+        batch.push(&s, ents);
         drawn += 1;
         *kinds.entry(o.kind.clone()).or_insert(0) += 1;
     }
-    let (n, layers) = crate::bridge::with_import_undo("NLCS++", || {
-        let result = batch.write("NLCS++")?;
-        keep_relations(&import, &kept)?;
-        Ok(result)
-    })?;
+    let (n, layers) = batch.write_with("NLCS++", |_| keep_relations(&import, &kept))?;
     drawn += kept.len();
     crate::bridge::note_source(&format!("NLCS++ {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("")));
     let top: Vec<String> = {
