@@ -3,7 +3,7 @@
 //! `dispatch` (the host's call into the plugin) hands us a
 //! `PluginRequestSender` for the active document tab; the workbench window and
 //! import workers use it to add layers and entities while the host stays
-//! responsive. Each import is one undo step.
+//! responsive.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use ocs_plugin_api::host::{
     codec::{Color, EntityType, Handle, LineWeight},
-    CommandStep, ExtendedDataRecord, HostApi, HostNotification, InteractiveCommand, LayerConfig, PluginRequestError, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
+    CommandRequest, CommandStep, ExtendedDataRecord, HostApi, HostNotification, InteractiveCommand, LayerConfig, PluginRequestError, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
 };
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 use ocs_plugin_api::host::codec::tables::normalize_name;
@@ -62,6 +62,7 @@ fn closed_drawing_sender_refuses_and_does_not_forward_a_request() {
 
 struct CommandContext { target: Option<Target>, site: Option<Site>, reply: Option<String> }
 thread_local! { static COMMAND_CONTEXT: std::cell::RefCell<Option<CommandContext>> = const { std::cell::RefCell::new(None) }; }
+thread_local! { static IMPORT_UNDO_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 
 /// Bind a queued worker to its originating document and result ID, even if the active tab changes.
 pub fn with_command_context<R>(target: Target, site: Option<Site>, reply: Option<String>, f: impl FnOnce() -> R) -> R {
@@ -146,8 +147,6 @@ struct Shared {
     target: Option<Target>,
     site: Option<Site>,
     drawing_senders: HashMap<u64, Arc<DrawingSender>>,
-    /// NLCS layers and linetypes already set up, per tab.
-    made: HashSet<(u64, String)>,
     /// The NLCS layers imports drew on, per tab, for the legend.
     nlcs_layers: Vec<(u64, crate::nlcs::LayerSpec)>,
     /// Data sources of the imports, per tab, for the title block.
@@ -563,12 +562,12 @@ pub fn ensure_nlcs_layer(spec: &crate::nlcs::LayerSpec) {
     let Some(tab) = target().map(|t| t.tab_id) else { return };
     {
         let mut s = shared().lock().unwrap();
-        if !s.made.insert((tab, format!("LA:{}", spec.name))) {
-            return;
+        if !s.nlcs_layers.iter().any(|(t, layer)| *t == tab && layer.name == spec.name) {
+            s.nlcs_layers.push((tab, spec.clone()));
         }
-        s.nlcs_layers.push((tab, spec.clone()));
     }
-    let linetype = ensure_linetype(tab, &spec.linetype);
+    // Undo can remove a layer or linetype while the plugin stays loaded.
+    let linetype = ensure_linetype(&spec.linetype);
     let config = |linetype: Option<String>| LayerConfig {
         name: spec.name.clone(),
         color: Some(match spec.true_color {
@@ -588,11 +587,8 @@ pub fn ensure_nlcs_layer(spec: &crate::nlcs::LayerSpec) {
 
 /// Define an NLCS linetype in the drawing when it lacks it (shape and text
 /// elements left out). `None` for CONTINUOUS and names that cannot be made.
-fn ensure_linetype(tab: u64, name: &str) -> Option<String> {
+fn ensure_linetype(name: &str) -> Option<String> {
     let pattern = crate::nlcs::linetype_pattern(name)?;
-    if !shared().lock().unwrap().made.insert((tab, format!("LT:{name}"))) {
-        return Some(name.to_string());
-    }
     let description = if crate::nlcs::linetype_is_complex(name) { format!("NLCS {name} (vereenvoudigd, zonder symbolen)") } else { format!("NLCS {name}") };
     let op = TableOperation::LinetypeCreate { name: name.to_string(), description, pattern };
     match request(PluginRequest::TableOperation { operation: op }) {
@@ -927,8 +923,7 @@ pub fn select(handles: &[Handle]) -> Result<(), String> {
 
 /// Give an existing layer the NLCS colour, lineweight and linetype.
 pub fn restyle_layer(spec: &crate::nlcs::LayerSpec) -> Result<(), String> {
-    let tab = target().map(|t| t.tab_id).ok_or("geen tekening actief")?;
-    let linetype = ensure_linetype(tab, &spec.linetype).or_else(|| Some("Continuous".into()));
+    let linetype = ensure_linetype(&spec.linetype).or_else(|| Some("Continuous".into()));
     let config = LayerConfig {
         name: spec.name.clone(),
         color: Some(Color::Index(spec.color.max(1))),
@@ -944,16 +939,17 @@ pub fn remove_entities(label: &str, handles: &[Handle]) -> Result<usize, String>
     if handles.is_empty() {
         return Ok(0);
     }
-    request(PluginRequest::PushUndo { label: label.into() })?;
-    let mut n = 0;
-    for h in handles {
-        if matches!(request(PluginRequest::RemoveEntity { handle: *h }), Ok(PluginResponse::Bool(true))) {
-            n += 1;
+    with_import_undo(label, || {
+        let mut n = 0;
+        for h in handles {
+            if matches!(request(PluginRequest::RemoveEntity { handle: *h }), Ok(PluginResponse::Bool(true))) {
+                n += 1;
+            }
         }
-    }
-    let _ = request(PluginRequest::SetDirty);
-    let _ = request(PluginRequest::BumpGeometry);
-    Ok(n)
+        let _ = request(PluginRequest::SetDirty);
+        let _ = request(PluginRequest::BumpGeometry);
+        Ok(n)
+    })
 }
 
 /// Replace elements in one undo step (an atomic transaction in the host).
@@ -1022,6 +1018,37 @@ pub fn register_object_data(handle: Handle, record: ExtendedDataRecord) {
 
 const BATCH_BYTES: usize = 12 * 1024 * 1024;
 
+/// Hold API 23's history step across worker requests. Nested placement
+/// functions join the outer import. Keep fetches outside this scope.
+pub(crate) fn with_import_undo<R>(label: &str, write: impl FnOnce() -> Result<R, String>) -> Result<R, String> {
+    if IMPORT_UNDO_OPEN.get() {
+        return write();
+    }
+    if COMMAND_CONTEXT.with(|c| c.borrow().is_none()) {
+        let t = target().ok_or("geen tekening actief")?;
+        return with_command_context(t, site(), None, || with_import_undo(label, write));
+    }
+    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+    begin_layer_undo(label)?;
+    struct CloseUndo;
+    impl Drop for CloseUndo {
+        fn drop(&mut self) {
+            if IMPORT_UNDO_OPEN.replace(false) {
+                let _ = request(PluginRequest::EndUndoGroup);
+            }
+        }
+    }
+    IMPORT_UNDO_OPEN.set(true);
+    let _close = CloseUndo;
+    let result = write();
+    let closed = request(PluginRequest::EndUndoGroup).and_then(|response| match response {
+        PluginResponse::Ok => Ok(()),
+        other => Err(format!("EndUndoGroup: {other:?}")),
+    });
+    IMPORT_UNDO_OPEN.set(false);
+    result.and_then(|value| closed.map(|()| value))
+}
+
 /// A generous guess of an entity's size on the wire.
 fn estimated_size(e: &EntityType) -> usize {
     match e {
@@ -1052,16 +1079,16 @@ pub fn add_entities_handles(label: &str, entities: Vec<EntityType>) -> Result<Ve
     if entities.is_empty() {
         return Ok(Vec::new());
     }
-    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-    request(PluginRequest::PushUndo { label: label.into() })?;
-    let mut handles = Vec::with_capacity(entities.len());
-    entity_batches(entities, |chunk| {
-        handles.extend(confirmed_entities(send_entities(chunk)?)?);
-        Ok(())
-    })?;
-    let _ = request(PluginRequest::SetDirty);
-    let _ = request(PluginRequest::BumpGeometry);
-    Ok(handles)
+    with_import_undo(label, || {
+        let mut handles = Vec::with_capacity(entities.len());
+        entity_batches(entities, |chunk| {
+            handles.extend(confirmed_entities(send_entities(chunk)?)?);
+            Ok(())
+        })?;
+        let _ = request(PluginRequest::SetDirty);
+        let _ = request(PluginRequest::BumpGeometry);
+        Ok(handles)
+    })
 }
 
 fn entity_batches(
@@ -1203,32 +1230,28 @@ fn with_layer_writes<R>(
     auto_lock: bool,
     write: impl FnOnce(&mut ImportLayers) -> Result<R, String>,
 ) -> Result<R, String> {
-    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-    begin_layer_undo(label)?;
-    let mut layers = ImportLayers {
-        writable: HashSet::new(),
-        relock: BTreeMap::new(),
-        auto_lock,
-        registered: false,
-    };
-    let result = write(&mut layers);
-    let mut errors = Vec::new();
-    for name in layers.relock.into_values() {
-        if let Err(error) = change_layer_lock(&name, true) {
-            errors.push(error);
+    with_import_undo(label, || {
+        let mut layers = ImportLayers {
+            writable: HashSet::new(),
+            relock: BTreeMap::new(),
+            auto_lock,
+            registered: false,
+        };
+        let result = write(&mut layers);
+        let mut errors = Vec::new();
+        for name in layers.relock.into_values() {
+            if let Err(error) = change_layer_lock(&name, true) {
+                errors.push(error);
+            }
         }
-    }
-    match request(PluginRequest::EndUndoGroup) {
-        Ok(PluginResponse::Ok) => {}
-        other => errors.push(format!("EndUndoGroup: {other:?}")),
-    }
-    if errors.is_empty() {
-        return result;
-    }
-    if let Err(error) = result {
-        errors.insert(0, error);
-    }
-    Err(errors.join("\n"))
+        if errors.is_empty() {
+            return result;
+        }
+        if let Err(error) = result {
+            errors.insert(0, error);
+        }
+        Err(errors.join("\n"))
+    })
 }
 
 fn begin_layer_undo(label: &str) -> Result<(), String> {
@@ -1279,15 +1302,7 @@ fn write_import(label: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec
     with_import_layers(label, |layers| {
         let handles = layers.write_entities(entities)?;
         if map {
-            let moved = image_to_back(&handles, layers);
-            // OCS 2026.46 opens its own history step for DRAWORDER. Keep
-            // all subsequent lock changes together even for a multi-layer map.
-            if !layers.relock.is_empty() {
-                let scope = begin_layer_undo(crate::lang::tr("Kaartlagen vergrendelen", "Lock map layers"));
-                moved.and(scope)?;
-            } else {
-                moved?;
-            }
+            image_to_back(&handles, layers)?;
         }
         Ok(handles)
     })
@@ -1338,37 +1353,120 @@ impl ImportLayers {
     }
 }
 
-fn send_to_back(handles: &[Handle]) -> Result<(), String> {
-    if handles.is_empty() {
-        return Ok(());
-    }
+const SCRIPT_COMMANDS_OFF: &str = "running commands from a script is turned off (SCRIPTCOMMANDS = 0); turn it on at the command line with SCRIPTCOMMANDS 1";
+
+/// Return a notice if the host refuses draw order before running the command.
+fn send_to_back(handles: &[Handle]) -> Result<Option<&'static str>, String> {
     let select = |handles| {
         match request(PluginRequest::SetSelection { handles })? {
             PluginResponse::SelectionResult(result) => result,
             other => Err(format!("SetSelection: {other:?}")),
         }
     };
+    let previous = selection()?;
     select(handles.to_vec())?;
-    let moved = execute("DRAWORDER_BACK");
-    moved.and(select(Vec::new()))
+    let moved = run_on_target("DRAWORDER_BACK");
+    let restored = select(previous);
+    let notice = match moved {
+        Ok(()) => None,
+        // API 23 returns these strings before running the command. The
+        // actual import has already written its geometry.
+        Err(error) => Some(match error.as_str() {
+            "commands act on the active document; switch to it first" => crate::lang::tr(
+                "Kaartbeelden geplaatst. De tekenvolgorde is overgeslagen omdat de tekening niet meer actief is.",
+                "Map images were placed. Draw order was skipped because the drawing is no longer active.",
+            ),
+            "a command is already active; cancel it first" => crate::lang::tr(
+                "Kaartbeelden geplaatst. De tekenvolgorde is overgeslagen omdat er al een tekenopdracht actief is.",
+                "Map images were placed. Draw order was skipped because another drawing command is active.",
+            ),
+            SCRIPT_COMMANDS_OFF => crate::lang::tr(
+                "Kaartbeelden geplaatst. De tekenvolgorde is overgeslagen omdat SCRIPTCOMMANDS uitstaat.",
+                "Map images were placed. Draw order was skipped because SCRIPTCOMMANDS is off.",
+            ),
+            _ => return Err(error),
+        }),
+    };
+    restored.map(|()| notice)
 }
 
 /// Keep the new map below vector data and above older images. The host
 /// excludes locked entities from DRAWORDER, so reopen the older image layers
 /// for this part of the same import and restore their original lock state.
-fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result<(), String> {
+pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result<(), String> {
+    if new.is_empty() {
+        return Ok(());
+    }
     let rasters = query(serde_json::json!({"type": "RASTERIMAGE"}))?;
     let imported: HashSet<Handle> = new.iter().copied().collect();
     let owner = rasters.iter().find(|e| imported.contains(&e.common().handle))
         .map(|e| e.common().owner_handle);
-    let older: Vec<_> = rasters.into_iter().filter_map(|e| {
+    let Some(owner) = owner else {
+        return Err(crate::lang::tr("OCS gaf de geplaatste kaartbeelden niet terug", "OCS did not return the placed map images").into());
+    };
+    let mut older: Vec<_> = rasters.into_iter().filter_map(|e| {
         let c = e.common();
-        (Some(c.owner_handle) == owner && !imported.contains(&c.handle))
+        (c.owner_handle == owner && !imported.contains(&c.handle))
             .then(|| (c.handle, c.layer.clone()))
     }).collect();
+    older.sort_unstable_by_key(|(handle, _)| handle.value());
+    let order: Vec<_> = older.iter().map(|(h, _)| *h).chain(new.iter().copied()).collect();
+    if rasters_already_in_order(owner, &order) {
+        return Ok(());
+    }
     layers.unlock(older.iter().map(|(_, name)| name.clone()))?;
-    let order: Vec<_> = older.into_iter().map(|(h, _)| h).chain(new.iter().copied()).collect();
-    send_to_back(&order)
+    let moved = send_to_back(&order);
+    if !layers.relock.is_empty() {
+        // Native DRAWORDER can close the import group. Record the subsequent
+        // lock changes together even when several image layers were reopened.
+        let scope = begin_layer_undo(crate::lang::tr("Kaartlagen vergrendelen", "Lock map layers"));
+        scope?;
+    }
+    if let Some(message) = moved? {
+        crate::civiel::api::note("tekenvolgorde_overgeslagen", message);
+        let _ = request(PluginRequest::PushInfo(format!("[Open Infra] {message}")));
+    }
+    Ok(())
+}
+
+fn rasters_already_in_order(owner: Handle, wanted: &[Handle]) -> bool {
+    use ocs_plugin_api::host::codec::objects::ObjectType;
+    // Shared views have no sort table. Only request the full snapshot when
+    // the shared view puts the drawing comfortably below the IPC frame limit.
+    if !view_entities().is_some_and(|(_, _, bytes)| bytes < SNAPSHOT_SAFE) {
+        return false;
+    }
+    let Ok(PluginResponse::Document(drawing)) = request(PluginRequest::DocumentSnapshot) else {
+        return false;
+    };
+    let overrides: std::collections::HashMap<_, _> = drawing.objects.values().find_map(|object| match object {
+        ObjectType::SortEntitiesTable(table) if table.block_owner_handle == owner => {
+            Some(table.entries().map(|entry| (entry.entity_handle, entry.sort_handle.value())).collect())
+        }
+        _ => None,
+    }).unwrap_or_default();
+    let mut order: Vec<_> = drawing.entities().filter_map(|entity| {
+        let c = entity.common();
+        (c.owner_handle == owner || c.owner_handle.is_null()).then_some(c.handle)
+    }).collect();
+    order.sort_unstable_by_key(|handle| (overrides.get(handle).copied().unwrap_or_else(|| handle.value()), handle.value()));
+    order.starts_with(wanted)
+}
+
+fn run_on_target(line: &str) -> Result<(), String> {
+    match request(PluginRequest::RunCommand { request: CommandRequest::Run { line: line.into() } })? {
+        PluginResponse::CommandResult(result) => {
+            let result = result?;
+            if let Some(error) = result.error {
+                return Err(error);
+            }
+            if result.status != "completed" {
+                return Err(format!("Open CAD Studio heeft '{line}' niet voltooid"));
+            }
+            Ok(())
+        }
+        other => Err(format!("onverwacht antwoord op '{line}': {other:?}")),
+    }
 }
 
 /// Attach a point cloud on its own layer. OCS's native command always uses
@@ -1378,8 +1476,8 @@ pub(crate) fn attach_imported_cloud(path: &str, layer: &str) -> Result<(), Strin
     use crate::lang::tr;
 
     let label = tr("Puntenwolk importeren", "Import point cloud");
-    ensure_layer(layer, Color::from_index(7));
     with_import_layers(label, |layers| {
+        ensure_layer(layer, Color::from_index(7));
         layers.unlock([layer.to_owned()])?;
         let get = PluginRequest::GetSystemVariable { name: "CLAYER".into() };
         let PluginResponse::SystemVariable(Some(HostSettingValue::Text(previous))) = request(get)? else {
@@ -1429,7 +1527,7 @@ pub fn execute(command: &str) -> Result<(), String> {
 }
 
 pub fn zoom_extents() {
-    let _ = request(PluginRequest::ExecuteCommand("ZOOMEXTENTS".into()));
+    let _ = run_on_target("ZOOMEXTENTS");
 }
 
 /// A file beside the drawing (`<tekening>_<suffix>`), or in the plugin's
@@ -1474,6 +1572,88 @@ pub fn image_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draw_order_restores_selection_and_reports_refusals() {
+        use ocs_plugin_api::host::PluginRequestError;
+
+        struct Sender {
+            command: Result<(), &'static str>,
+            restore: Result<(), &'static str>,
+            selections: Mutex<Vec<Vec<Handle>>>,
+        }
+        impl PluginRequestSender for Sender {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                Ok(match req {
+                    PluginRequest::GetSelection => PluginResponse::Selection(vec![Handle::new(1)]),
+                    PluginRequest::SetSelection { handles } => {
+                        let mut selections = self.selections.lock().unwrap();
+                        selections.push(handles);
+                        let result = if selections.len() == 1 { Ok(()) } else { self.restore };
+                        PluginResponse::SelectionResult(result.map_err(str::to_string))
+                    }
+                    PluginRequest::RunCommand { request: CommandRequest::Run { line } } => {
+                        assert_eq!(line, "DRAWORDER_BACK");
+                        assert_eq!(*self.selections.lock().unwrap(), [vec![Handle::new(2)]]);
+                        PluginResponse::CommandResult(self.command.map(|()| ocs_plugin_api::host::CommandOutcome {
+                            status: "completed".into(),
+                            ..Default::default()
+                        }).map_err(str::to_string))
+                    }
+                    other => panic!("unexpected request: {other:?}"),
+                })
+            }
+        }
+
+        let run = |command, restore| {
+            let sender = Arc::new(Sender { command, restore, selections: Mutex::default() });
+            let target = Target { sender: sender.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
+            let result = with_command_context(target, None, None, || send_to_back(&[Handle::new(2)]));
+            assert_eq!(*sender.selections.lock().unwrap(), [vec![Handle::new(2)], vec![Handle::new(1)]]);
+            result
+        };
+        let inactive_tab = Err("commands act on the active document; switch to it first");
+        let active_command = Err("a command is already active; cancel it first");
+        assert_eq!(run(Ok(()), Ok(())), Ok(None));
+        assert!(run(inactive_tab, Ok(())).unwrap().is_some());
+        assert!(run(active_command, Ok(())).unwrap().is_some());
+        assert!(run(Err(SCRIPT_COMMANDS_OFF), Ok(())).unwrap().is_some());
+        assert_eq!(run(active_command, Err("restore failed")), Err("restore failed".into()));
+        assert_eq!(run(Err("DRAWORDER failed"), Ok(())), Err("DRAWORDER failed".into()));
+    }
+
+    #[test]
+    fn entity_chunks_share_one_undo_group() {
+        use ocs_plugin_api::host::codec::entities::Point;
+        use ocs_plugin_api::host::PluginRequestError;
+
+        #[derive(Default)]
+        struct Sender(Mutex<Vec<&'static str>>);
+        impl PluginRequestSender for Sender {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                let (name, response) = match req {
+                    PluginRequest::BeginUndoGroup { .. } => ("begin", PluginResponse::Ok),
+                    PluginRequest::EndUndoGroup => ("end", PluginResponse::Ok),
+                    PluginRequest::PushUndo { .. } => ("push", PluginResponse::Ok),
+                    PluginRequest::AddEntities(ents) => {
+                        let name = if ents.len() == 2000 { "first chunk" } else { "second chunk" };
+                        (name, PluginResponse::Handles(vec![Handle::new(1); ents.len()]))
+                    }
+                    PluginRequest::SetDirty | PluginRequest::BumpGeometry => return Ok(PluginResponse::Ok),
+                    other => panic!("unexpected request: {other:?}"),
+                };
+                self.0.lock().unwrap().push(name);
+                Ok(response)
+            }
+        }
+
+        let sender = Arc::new(Sender::default());
+        let drawing = Target { sender: sender.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
+        let points = vec![EntityType::Point(Point::from_coords(1.0, 2.0, 0.0)); 2001];
+        let count = with_command_context(drawing, None, None, || add_entities("Import", points)).unwrap();
+        assert_eq!(count, 2001);
+        assert_eq!(*sender.0.lock().unwrap(), ["begin", "first chunk", "second chunk", "end"]);
+    }
 
     #[test]
     fn a_name_stays_one_file_beside_the_drawing() {
