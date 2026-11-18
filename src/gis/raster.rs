@@ -314,7 +314,49 @@ fn aligned_request(tile: &WmsTile, [sx, sy]: [f64; 2]) -> ([f64; 4], u32, u32) {
     ([west * sx, south * sy, east * sx, north * sy], (east - west) as u32, (north - south) as u32)
 }
 
-fn fetch_wms_tile(url: &str, width: u32, height: u32) -> Result<RgbaImage, String> {
+// Treat values within a few ulps of an integer as an exact pixel edge.
+fn exact_pixel_edge(index: f64) -> f64 {
+    let edge = index.round();
+    if (index - edge).abs() <= 4.0 * f64::EPSILON * index.abs().max(1.0) { edge } else { index }
+}
+
+fn paste_wms_tile(
+    mosaic: &mut RgbaImage,
+    img: &RgbaImage,
+    tile: &WmsTile,
+    request_bbox: [f64; 4],
+    grid_bbox: [f64; 4],
+    aligned_step: Option<[f64; 2]>,
+) {
+    if let Some([sx, sy]) = aligned_step {
+        // Use the centre of the pixel in the *whole* output grid. On an
+        // exact source edge always choose the pixel to its east or south.
+        let east_stride = (grid_bbox[2] - grid_bbox[0]) / f64::from(mosaic.width()) / sx;
+        let north_stride = (grid_bbox[1] - grid_bbox[3]) / f64::from(mosaic.height()) / sy;
+        let source_left = (request_bbox[0] / sx).round() as i64;
+        let source_top = (request_bbox[3] / sy).round() as i64;
+        let west = grid_bbox[0] / sx;
+        let north = grid_bbox[3] / sy;
+        let columns: Vec<u32> = (tile.x..tile.x + tile.width).map(|x| {
+            let source = exact_pixel_edge((f64::from(x) + 0.5).mul_add(east_stride, west));
+            (source.floor() as i64 - source_left).clamp(0, i64::from(img.width()) - 1) as u32
+        }).collect();
+        for y in tile.y..tile.y + tile.height {
+            let source = exact_pixel_edge((f64::from(y) + 0.5).mul_add(north_stride, north));
+            let row = (source_top - source.ceil() as i64).clamp(0, i64::from(img.height()) - 1) as u32;
+            for (x, col) in (tile.x..tile.x + tile.width).zip(columns.iter().copied()) {
+                mosaic.put_pixel(x, y, *img.get_pixel(col, row));
+            }
+        }
+    } else if img.dimensions() == (tile.width, tile.height) {
+        image::imageops::replace(mosaic, img, i64::from(tile.x), i64::from(tile.y));
+    } else {
+        // The one-pixel tile was fetched with extra samples to check content.
+        mosaic.put_pixel(tile.x, tile.y, *img.get_pixel(img.width() / 2, img.height() / 2));
+    }
+}
+
+fn fetch_wms_tile(url: &str, width: u32, height: u32, photo: bool) -> Result<RgbaImage, String> {
     let bytes = http::get_image(url)?;
     if bytes.starts_with(&[0xff, 0xd8]) && !bytes.ends_with(&[0xff, 0xd9]) {
         return Err(tr("WMS-deel bevat een afgebroken JPEG.", "WMS part contains a truncated JPEG.").into());
@@ -331,7 +373,8 @@ fn fetch_wms_tile(url: &str, width: u32, height: u32) -> Result<RgbaImage, Strin
         return Err(tr("WMS-deel heeft afwijkende afmetingen.", "WMS part has unexpected dimensions.").into());
     }
     let first = img.get_pixel(0, 0);
-    if (width > 1 || height > 1) && img.pixels().all(|p| p == first || (p[3] == 0 && first[3] == 0)) {
+    // Thematic WMS layers can legitimately show one colour over a whole polygon.
+    if photo && (width > 1 || height > 1) && img.pixels().all(|p| p == first || (p[3] == 0 && first[3] == 0)) {
         return Err(tr("WMS-deel bevat overal dezelfde kleur.", "WMS part is entirely one colour.").into());
     }
     Ok(img)
@@ -391,12 +434,14 @@ fn import_wms_mosaic(
     let mut missing = Vec::new();
     let mut last_error = String::new();
     let mut mosaic = RgbaImage::new(source_px[0], source_px[1]);
+    let photo = is_photo(&layer.name);
     for (i, tile) in tiles.enumerate() {
         let part = i as u32 + 1;
         let (request_bbox, mut width, mut height) = aligned_step
             .map(|step| aligned_request(&tile, step))
             .unwrap_or((tile.bbox, tile.width, tile.height));
-        if width == 1 && height == 1 {
+        let extra_samples = photo && width == 1 && height == 1;
+        if extra_samples {
             // One output pixel needs a few source samples to distinguish a
             // valid crop from a service's constant-colour error response.
             width = request_limit[0].min(2);
@@ -404,19 +449,15 @@ fn import_wms_mosaic(
         }
         let url = get_map_url(caps, &layer.name, &crs, request_bbox, width, height, &opt.format);
         progress(format!("{} {part}/{parts}…", tr("Kaartdeel ophalen", "Fetching map part")));
-        let raster = fetch_wms_tile(&url, width, height).or_else(|_| {
+        let raster = fetch_wms_tile(&url, width, height, photo).or_else(|_| {
             progress(format!("{} {part}/{parts}…", tr("Kaartdeel opnieuw ophalen", "Retrying map part")));
-            fetch_wms_tile(&url, width, height)
+            fetch_wms_tile(&url, width, height, photo)
         });
         match raster {
-            Ok(img) => {
-                let img = if request_bbox == tile.bbox && (width, height) == (tile.width, tile.height) {
-                    img
-                } else {
-                    warp(&img, &crs, request_bbox, &crs, tile.bbox, tile.width, tile.height)?
-                };
-                image::imageops::replace(&mut mosaic, &img, i64::from(tile.x), i64::from(tile.y));
-            }
+            Ok(img) => paste_wms_tile(
+                &mut mosaic, &img, &tile, request_bbox, source_bbox,
+                aligned_step.filter(|_| !extra_samples),
+            ),
             Err(err) => {
                 missing.push(part);
                 last_error = err;
@@ -648,6 +689,27 @@ mod tests {
     }
 
     #[test]
+    fn wms_rd_join_samples_distinct_source_columns() {
+        let bbox = [108200.0 - 882.64 / 2.0, 447595.0, 108200.0 + 882.64 / 2.0, 447605.0];
+        let px = [11033, 125];
+        let step = [0.08; 2];
+        let tiles: Vec<_> = wms_tiles(bbox, px, [2045; 2]).collect();
+        assert_eq!(tiles[4].x, 7355);
+        let color = |i: u32| Rgba([i as u8, (i >> 8) as u8, (i >> 16) as u8, 255]);
+        let mut mosaic = RgbaImage::new(px[0], px[1]);
+        for tile in &tiles[3..5] {
+            let (request, w, h) = aligned_request(tile, step);
+            let first = (request[0] / step[0]).round() as u32;
+            let image = RgbaImage::from_fn(w, h, |x, _| color(first + x));
+            paste_wms_tile(&mut mosaic, &image, tile, request, bbox, Some(step));
+        }
+        for y in 0..px[1] {
+            assert_eq!(*mosaic.get_pixel(7354, y), color(1354338));
+            assert_eq!(*mosaic.get_pixel(7355, y), color(1354339));
+        }
+    }
+
+    #[test]
     fn pdok_requests_share_the_native_grid_across_the_gouda_join() {
         let caps = super::super::caps::parse_wms(
             "https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0",
@@ -780,6 +842,25 @@ mod tests {
         assert_eq!(result.image.bbox, site.bbox());
         assert_eq!(image::image_dimensions(result.image.path).unwrap(), (1, 1));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn wms_preserves_uniform_thematic_polygons_at_both_resolutions() {
+        let caps = TINY_WMS.replace("ortho", "BRO Bodemkaart");
+        let site = Site { width: 2.0, height: 2.0, ..Site::default() };
+        let color = Rgba([50, 211, 73, 255]);
+        for (resolution, size) in [(1.0, 2), (2.0, 1)] {
+            let image = RgbaImage::from_pixel(size, size, color);
+            let (result, requests, dir) = wms_fixture(
+                vec![("image/png", png_bytes(image))], &caps, &site, resolution, "image/png",
+            );
+            let result = result.unwrap();
+            assert_eq!(requests.len(), 1);
+            let output = image::open(result.image.path).unwrap().into_rgba8();
+            assert_eq!(output.dimensions(), (size, size));
+            assert!(output.pixels().all(|pixel| *pixel == color));
+            std::fs::remove_dir_all(dir).unwrap();
+        }
     }
 
     fn png_bytes(img: RgbaImage) -> Vec<u8> {
