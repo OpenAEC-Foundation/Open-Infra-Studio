@@ -511,19 +511,7 @@ pub(crate) fn place_with_text(
             },
         );
     }
-    let record = rendered
-        .entities
-        .first()
-        .and_then(|e| e.common().extended_data.get_record(bridge::XDATA_APP))
-        .cloned();
-    let count = rendered.entities.len();
-    let handles = bridge::add_entities_handles("IMRO-plangegevens", rendered.entities)?;
-    if handles.len() != count {
-        return Err("De host heeft niet alle plangegevens bevestigd; controleer Undo".into());
-    }
-    if let (Some(handle), Some(record)) = (handles.first(), record) {
-        bridge::register_object_data(*handle, record);
-    }
+    let count = bridge::add_imported_entities("IMRO-plangegevens", rendered.entities)?.len();
     bridge::note_source(source);
     bridge::zoom_extents();
     for warning in &data.warnings {

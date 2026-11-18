@@ -127,7 +127,15 @@ pub fn bgt_update(site: &Site, opt: &NlcsOptions, progress: &dyn Fn(String)) -> 
     let vanished: Vec<Handle> = drawn.iter().filter(|(id, d)| !seen.contains(*id) && collections.contains(&d.collection)).flat_map(|(_, d)| d.handles.iter().copied()).collect();
     let n_vanished = drawn.iter().filter(|(id, d)| !seen.contains(*id) && collections.contains(&d.collection)).count();
     if !remove.is_empty() {
-        bridge::remove_entities(tr("BGT bijwerken: gewijzigde objecten", "BGT update: changed objects"), &remove)?;
+        let label = tr("BGT bijwerken: gewijzigde objecten", "BGT update: changed objects");
+        bridge::with_import_layers(label, |layers| {
+            layers.unlock(remove.iter().map(|h| entities[h].common().layer.clone()))?;
+            let removed = bridge::remove_entities(label, &remove)?;
+            if removed != remove.len() {
+                return Err(tr("OCS kon de oude BGT-objecten niet allemaal verwijderen", "OCS could not remove all old BGT entities").into());
+            }
+            Ok(())
+        })?;
     }
     let placed = if redraw.is_empty() { String::new() } else { basisdata::bgt_place(site, &redraw, opt)? };
     if !vanished.is_empty() {
@@ -140,7 +148,15 @@ pub fn bgt_update(site: &Site, opt: &NlcsOptions, progress: &dyn Fn(String)) -> 
                 e
             })
             .collect();
-        bridge::update_entities(tr("BGT bijwerken: vervallen objecten", "BGT update: removed objects"), moved)?;
+        let label = tr("BGT bijwerken: vervallen objecten", "BGT update: removed objects");
+        bridge::with_import_layers(label, |layers| {
+            layers.unlock(vanished.iter().map(|h| entities[h].common().layer.clone())
+                .chain(std::iter::once(vanished_layer().to_owned())))?;
+            if bridge::update_entities(label, moved)? > 0 {
+                layers.mark_written(vanished_layer());
+            }
+            Ok(())
+        })?;
     }
     let mut msg = format!(
         "{}: {added} {}, {changed} {}, {n_vanished} {} ({}), {same} {}.",

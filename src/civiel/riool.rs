@@ -2926,7 +2926,12 @@ pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn
     }
     let mut remove: Vec<Handle> = used.into_iter().collect();
     remove.extend(old_labels);
-    let removed = bridge::remove_entities(tr("GWSW overnemen", "Take over GWSW"), &remove)?;
+    let label = tr("GWSW overnemen", "Take over GWSW");
+    let removed = bridge::with_import_layers(label, |layers| {
+        layers.unlock(remove.iter().filter_map(|h| doc.get_entity(*h))
+            .map(|e| e.common().layer.clone()))?;
+        bridge::remove_entities(label, &remove)
+    })?;
     ground.note_source();
     api::note("elementen", handles_all.len());
     api::note("vervangen", removed);
