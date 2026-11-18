@@ -153,10 +153,15 @@ impl Sheet {
 /// The object data that marks a legend sample.
 const SAMPLE: (&str, &str) = ("bron", "tekenblad");
 
-/// Whether `e` is a legend sample of a drawing sheet.
+/// Whether `e` is a legend sample of a drawing sheet: its object data's
+/// last `bron` is `tekenblad`, read as other object data (trimmed).
 pub fn is_legend_sample(e: &EntityType) -> bool {
     e.common().extended_data.get_record(bridge::XDATA_APP).is_some_and(|r| {
-        r.values.iter().any(|v| matches!(v, XDataValue::String(s) if s.split_once('=').map(|(k, v)| (k.trim(), v.trim())) == Some(SAMPLE)))
+        let sources = r.values.iter().filter_map(|v| match v {
+            XDataValue::String(s) => s.split_once('=').map(|(k, v)| (k.trim(), v.trim())).filter(|(k, _)| *k == SAMPLE.0),
+            _ => None,
+        });
+        sources.last().is_some_and(|(_, v)| v == SAMPLE.1)
     })
 }
 
@@ -397,7 +402,7 @@ fn title_block(s: &mut Sheet, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOpti
 /// Legend of the NLCS `drawn` layers (see [`drawn_layers`]), grouped by
 /// main group. Returns the number of layers shown.
 fn legend(s: &mut Sheet, drawn: &[Layer], x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
-    let mut layers: Vec<&Layer> = drawn.iter().filter(|l| in_legend(&l.name)).collect();
+    let mut layers: Vec<&Layer> = drawn.iter().collect();
     let key = |l: &Layer| {
         let parts: Vec<&str> = l.name.splitn(5, '-').collect();
         (parts.get(2).copied().unwrap_or("").to_string(), parts.get(3).copied().unwrap_or("").to_string(), l.name.clone())
@@ -575,6 +580,19 @@ mod tests {
         let mut sample = EntityType::Point(Point::default());
         sample.common_mut().extended_data.add_record(record);
         assert!(is_legend_sample(&sample));
+    }
+
+    /// An element whose object data names its source twice: the last one
+    /// counts, as for the rest of its object data (#142).
+    #[test]
+    fn the_last_source_of_an_element_decides() {
+        use ocs_plugin_api::host::{codec::Point, ExtendedDataRecord};
+        let mut record = ExtendedDataRecord::new(bridge::XDATA_APP);
+        record.add_value(XDataValue::String("bron=tekenblad".into()));
+        record.add_value(XDataValue::String("bron=BGT".into()));
+        let mut element = EntityType::Point(Point::default());
+        element.common_mut().extended_data.add_record(record);
+        assert!(!is_legend_sample(&element));
     }
 
     /// A layer on the default lineweight ("Standaard" in Layer management):

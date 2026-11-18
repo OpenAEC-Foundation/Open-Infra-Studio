@@ -24,7 +24,7 @@ use ocs_plugin_api::host::{ExtendedDataRecord, TableOperation, XDataValue, XReco
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 
 use super::as_profiel::{self, design_z, Alignment, Pvi, Seg};
-use super::{api, nice_step, record, station, CivielOptions, Ctx, Maaiveld, Out};
+use super::{api, nice_step, record, station, CivielOptions, Ctx, LayerWrite, Maaiveld, Out};
 use crate::bridge;
 use crate::gis::crs::XY;
 use crate::hoogte::nap;
@@ -545,6 +545,18 @@ struct Sheets {
     mark: ExtendedDataRecord,
 }
 
+/// Write a set's model-space part in place of the `old` one (its handles),
+/// as one undo step. A locked sheet layer is opened for it and locked again,
+/// so the set is replaced whole: no old part stays, no new part is refused.
+fn replace_model(model: Sheets, label: &str, old: &[Handle]) -> Result<Vec<Handle>, String> {
+    let mut originals = Vec::new();
+    for chunk in old.chunks(500) {
+        // Elements a user deleted are gone already.
+        originals.extend(bridge::entities(chunk)?.into_iter().flatten().map(|e| (e.common().handle, e.common().layer.clone())));
+    }
+    model.out.write_to(label, LayerWrite::Append(&originals))
+}
+
 /// Write the sheet of one layout. A user may have locked a sheet layer (the
 /// legend layer, say): the write opens it and locks it again, so a set that
 /// replaces an older one is never left half made.
@@ -640,10 +652,8 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
 
     // Model space: view frames, match lines, profile views.
     let set = format!("{name} {}", req.paper.name);
+    // The set this one replaces: removed when the new one is written.
     let old: Vec<Handle> = bridge::index_read().into_iter().filter(|(kind, key, _)| kind == "bladen" && *key == set).flat_map(|(_, _, h)| h).collect();
-    if !old.is_empty() {
-        let _ = bridge::remove_entities(&t2(format!("Bladen {name} vervangen"), format!("Replace sheets {name}")), &old);
-    }
     let mut out = Sheets::new(&set);
     // The plan grew into the room the profile leaves: the same centres.
     let frame = Frame { h: lay.plan.h() * k, ..frame };
@@ -707,7 +717,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
         draw_profile(&ctx, &al, &samples, design.as_deref(), &view, &rows, &vert, &title, &mut out)?;
         views.push(view);
     }
-    let handles = out.out.write_handles(&t2(format!("Bladen {name}"), format!("Sheets {name}")))?;
+    let handles = replace_model(out, &t2(format!("Bladen {name}"), format!("Sheets {name}")), &old)?;
     bridge::index_add("bladen", &set, &handles, true);
     // The view frames are for model space only: they do not plot.
     for spec in [&grens, &grens_t] {
@@ -1229,6 +1239,44 @@ mod tests {
     use std::f64::consts::PI;
 
     use super::*;
+
+    /// A user locked the frame layer of a set: replacing the set leaves one
+    /// set, the old one gone, and the lock in place (#142).
+    #[test]
+    fn replacing_a_set_with_a_locked_frame_layer_leaves_one_set_and_the_lock() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Point};
+
+        crate::settings::with_test_file(|| {
+            let spec = |element| crate::nlcs::layer(crate::nlcs::object_by_name("AL", "TEKENBLADGRENS").unwrap(), crate::nlcs::Status::B, "XX", element);
+            let (frame, text) = (spec(Element::G), spec(Element::T));
+            let on = |layer: &str| {
+                let mut point = Point::default();
+                point.common.layer = layer.into();
+                EntityType::Point(point)
+            };
+            let mut doc = CadDocument::new();
+            let mut locked = Layer::new(&frame.name);
+            locked.flags.locked = true;
+            doc.layers.add(locked).unwrap();
+            doc.layers.add(Layer::new(&text.name)).unwrap();
+            let old = [doc.add_entity(on(&frame.name)).unwrap(), doc.add_entity(on(&text.name)).unwrap()];
+            let drawing = std::sync::Arc::new(Drawing::new(doc, false));
+            let target = bridge::Target { sender: drawing.clone(), tab_id: 142_102, unit_factor: 1.0, doc_path: None };
+            let new = bridge::with_command_context(target, None, None, || {
+                let mut model = Sheets::new("As 1 A3");
+                model.put(&frame, [on(&frame.name)]);
+                model.put(&text, [on(&text.name)]);
+                replace_model(model, "Bladen As 1", &old).unwrap()
+            });
+            let doc = drawing.doc.lock().unwrap();
+            let left: Vec<_> = doc.model_space_entities().map(|e| e.common().handle).collect();
+            assert_eq!(left.len(), 2, "one set: {left:?}");
+            assert!(new.iter().all(|h| left.contains(h)) && old.iter().all(|h| !left.contains(h)));
+            assert!(doc.layers.get(&frame.name).unwrap().is_locked());
+            assert!(!doc.layers.get(&text.name).unwrap().is_locked());
+        });
+    }
 
     /// A user locked the legend layer: the sheet of a replaced set is
     /// written in full, its samples included, and the lock is back after it
