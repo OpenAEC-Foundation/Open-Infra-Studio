@@ -1656,7 +1656,7 @@ mod tests {
 
     #[test]
     fn raster_import_uses_relative_order_when_back_would_collide() {
-        let [older_bottom, older_top, vector, new] = [21, 15, 12, 30].map(Handle::new);
+        let [older_bottom, older_top, vector, new] = [21, 15, 25, 30].map(Handle::new);
         let older = [older_top, older_bottom];
         let under_vector = |handles| RasterMove { handles, under: Some(vector) };
 
