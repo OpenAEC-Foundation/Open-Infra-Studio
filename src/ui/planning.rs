@@ -100,7 +100,6 @@ impl PlanningPage {
 
     pub fn page(&mut self, ui: &mut egui::Ui) {
         self.finish();
-        let ctx = ui.ctx().clone();
         let site = bridge::site();
         let target = bridge::target();
         let busy = self.busy();
@@ -136,7 +135,7 @@ impl PlanningPage {
                     self.data = None;
                     self.source.clear();
                     self.message = None;
-                    self.search = Some(Job::spawn(&ctx, tr("Plannen zoeken…", "Finding plans…"), move |progress| {
+                    self.search = Some(Job::spawn(tr("Plannen zoeken…", "Finding plans…"), move |progress| {
                         site.register_crs();
                         let point = crs::transform(&site.crs, "EPSG:28992", [site.origin_e, site.origin_n])?;
                         progress(format!("RD {:.2}, {:.2}", point[0], point[1]));
@@ -211,7 +210,6 @@ impl PlanningPage {
                 self.source = format!("{}/plannen/{id}", planning::BASE);
                 self.data = None;
                 self.download = Some(Job::spawn(
-                    &ctx,
                     tr("Planobjecten ophalen…", "Downloading plan features…"),
                     move |_| Client::new(key)?.download(&id),
                 ));
@@ -240,7 +238,6 @@ impl PlanningPage {
                     (site.clone().unwrap(), data.clone(), self.source.clone());
                 let target = target.clone().unwrap();
                 self.run = Some(Job::spawn(
-                    &ctx,
                     tr("Plan plaatsen…", "Placing plan…"),
                     move |progress| {
                         bridge::with_command_context(target, Some(site.clone()), None, || {
@@ -276,7 +273,6 @@ impl PlanningPage {
                     let path = PathBuf::from(self.path.trim().trim_matches('"'));
                     self.message = None;
                     self.run = Some(Job::spawn(
-                        &ctx,
                         tr("GML importeren…", "Importing GML…"),
                         move |progress| {
                             bridge::with_command_context(target, Some(site.clone()), None, || {

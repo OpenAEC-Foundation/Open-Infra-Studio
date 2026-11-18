@@ -160,15 +160,15 @@ impl App {
         }
     }
 
-    fn select_service(&mut self, ctx: &egui::Context, s: Service) {
+    fn select_service(&mut self, s: Service) {
         self.svc.caps = None;
         self.svc.layer = (!s.default_layer.is_empty()).then(|| s.default_layer.clone());
         self.svc.layer_filter.clear();
         self.svc.resolution = if s.kind == ServerKind::Xyz { 0.5 } else { 0.25 };
         let (kind, url) = (s.kind, s.url.clone());
         self.svc.caps_job = match kind {
-            ServerKind::Wms => Some(Job::spawn(ctx, tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wms(&url).map(Caps::Wms))),
-            ServerKind::Wfs => Some(Job::spawn(ctx, tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wfs(&url).map(Caps::Wfs))),
+            ServerKind::Wms => Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wms(&url).map(Caps::Wms))),
+            ServerKind::Wfs => Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wfs(&url).map(Caps::Wfs))),
             ServerKind::Xyz => None,
         };
         self.svc.selected = Some(s);
@@ -211,7 +211,7 @@ impl App {
     }
 
     /// Hand the service and layer to the WMS or WFS page for all its options.
-    fn open_on_import_page(&mut self, ctx: &egui::Context) {
+    fn open_on_import_page(&mut self) {
         let Some(s) = self.svc.selected.clone() else { return };
         let ms = s.to_map_server();
         match (s.kind, self.svc.caps.clone()) {
@@ -228,7 +228,7 @@ impl App {
                         let url = ms.url.clone();
                         self.wfs.caps = None;
                         self.wfs.ft = None;
-                        self.wfs.caps_job = Some(Job::spawn(ctx, tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wfs(&url)));
+                        self.wfs.caps_job = Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wfs(&url)));
                     }
                 }
                 self.wfs.server = Some(ms);
@@ -250,7 +250,7 @@ impl App {
                     }
                     _ if kind == ServerKind::Wms => {
                         let url = ms.url.clone();
-                        self.raster.caps_job = Some(Job::spawn(ctx, tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wms(&url)));
+                        self.raster.caps_job = Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wms(&url)));
                     }
                     _ => {}
                 }
@@ -261,7 +261,6 @@ impl App {
     }
 
     pub(super) fn services_page(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         if self.svc.catalogue.is_empty() {
             self.svc.catalogue = catalog::all();
         }
@@ -435,7 +434,7 @@ impl App {
             });
         });
         if let Some(s) = chosen {
-            self.select_service(&ctx, s);
+            self.select_service(s);
         }
 
         let Some(s) = self.svc.selected.clone() else { return };
@@ -589,18 +588,17 @@ impl App {
         }
 
         if refetch {
-            self.select_service(&ctx, s.clone());
+            self.select_service(s.clone());
         }
         if add {
             self.add_service_to_mine();
         }
         if open_page {
-            self.open_on_import_page(&ctx);
+            self.open_on_import_page();
         }
     }
 
     pub(super) fn services_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         let Some(s) = self.svc.selected.clone() else {
             ui.label(RichText::new(tr("Kies een dienst in de resultaten.", "Choose a service in the results.")).weak());
             return;
@@ -616,7 +614,7 @@ impl App {
             if ui.add_enabled(ready, primary_button(tr("Laden in tekening", "Load into the drawing"))).clicked() {
                 let (site, caps, layer, res, limit) = (site.clone().unwrap(), self.svc.caps.clone(), self.svc.layer.clone(), self.svc.resolution, self.svc.limit);
                 let server = s.to_map_server();
-                self.svc.run = Some(Job::spawn(&ctx, tr("Importeren…", "Importing…"), move |p| load(&site, &server, caps.as_ref(), layer.as_deref(), res, limit, p)));
+                self.svc.run = Some(Job::spawn(tr("Importeren…", "Importing…"), move |p| load(&site, &server, caps.as_ref(), layer.as_deref(), res, limit, p)));
             }
             match s.kind {
                 ServerKind::Wfs => {
