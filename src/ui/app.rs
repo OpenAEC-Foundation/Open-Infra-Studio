@@ -2079,6 +2079,9 @@ impl App {
                             (b, c)
                         }
                     };
+                    // The legend's pens before the import's undo step: no
+                    // write waits for that read.
+                    let pens = if sheet { tekenblad::layer_pens() } else { None };
                     let done = bridge::with_import_undo(tr("Basisdata importeren", "Import reference data"), || {
                         let mut done = Vec::new();
                         if !bgt_data.is_empty() {
@@ -2095,7 +2098,7 @@ impl App {
                         }
                         if sheet {
                             p(tr("Tekenblad…", "Drawing sheet…").into());
-                            done.push(tekenblad::draw(&s, &opt, &info)?);
+                            done.push(tekenblad::draw(&s, &opt, &info, pens.as_ref())?);
                         }
                         Ok(done)
                     })?;

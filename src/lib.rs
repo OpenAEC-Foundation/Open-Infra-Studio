@@ -983,7 +983,7 @@ fn base_data(host: &mut dyn HostApi, verb: &str, arg: &str) {
                 if !arg.is_empty() {
                     info.subject = arg.clone();
                 }
-                tekenblad::draw(&site, &opt, &info)
+                tekenblad::draw(&site, &opt, &info, tekenblad::legend_pens().as_ref())
             }
         };
         match result {

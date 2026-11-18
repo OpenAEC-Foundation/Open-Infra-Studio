@@ -545,6 +545,13 @@ struct Sheets {
     mark: ExtendedDataRecord,
 }
 
+/// Write the sheet of one layout. A user may have locked a sheet layer (the
+/// legend layer, say): the write opens it and locks it again, so a set that
+/// replaces an older one is never left half made.
+fn write_sheet(paper: Sheets, label: &str) -> Result<(), String> {
+    paper.out.append(label).map(drop)
+}
+
 impl Sheets {
     fn new(set: &str) -> Sheets {
         Sheets { out: Out::default(), mark: record(&[("bladen", set.to_string())]) }
@@ -739,7 +746,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
             };
             let mut paper = Sheets::new(&set);
             sheet(&ctx, &req, &lay, &al, &spans, i, view, &vert, &info, &crs, &place, &legend, &mut paper)?;
-            paper.out.write(&t2(format!("Blad {} {name}", i + 1), format!("Sheet {} {name}", i + 1)))?;
+            write_sheet(paper, &t2(format!("Blad {} {name}", i + 1), format!("Sheet {} {name}", i + 1)))?;
         }
         Ok(())
     })();
@@ -1222,6 +1229,35 @@ mod tests {
     use std::f64::consts::PI;
 
     use super::*;
+
+    /// A user locked the legend layer: the sheet of a replaced set is
+    /// written in full, its samples included, and the lock is back after it
+    /// (#142).
+    #[test]
+    fn a_sheet_writes_onto_a_locked_legend_layer_and_locks_it_again() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Point};
+
+        crate::settings::with_test_file(|| {
+            let spec = crate::nlcs::layer(crate::nlcs::object_by_name("AL", "LEGENDA").unwrap(), crate::nlcs::Status::B, "XX", Element::G);
+            let mut doc = CadDocument::new();
+            let mut legend = Layer::new(&spec.name);
+            legend.flags.locked = true;
+            doc.layers.add(legend).unwrap();
+            let drawing = std::sync::Arc::new(Drawing::new(doc, false));
+            let target = bridge::Target { sender: drawing.clone(), tab_id: 142_101, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                let mut paper = Sheets::new("As 1 A3");
+                let mut sample = Point::default();
+                sample.common.layer = spec.name.clone();
+                paper.put(&spec, [EntityType::Point(sample)]);
+                write_sheet(paper, "Blad 1 As 1").unwrap();
+            });
+            let doc = drawing.doc.lock().unwrap();
+            assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == spec.name).count(), 1);
+            assert!(doc.layers.get(&spec.name).unwrap().is_locked());
+        });
+    }
 
     fn frame(w: f64, h: f64, overlap: f64, max_len: f64, round: f64) -> Frame {
         Frame { w, h, overlap, max_len, round, start: 0.0 }

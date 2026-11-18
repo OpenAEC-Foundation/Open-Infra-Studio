@@ -618,9 +618,9 @@ static PARTIAL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::n
 /// The host's shared-memory view of the drawing: the entities and the size
 /// of their encoding, or `None` when the host cannot share it (a drawing
 /// larger than its view segment, 16 MB unless Open CAD Studio is started
-/// with OCS_V4_SNAPSHOT_SEGMENT_SIZE). The entities are decoded only when
-/// `decode` says so for that size: a caller that needs the size alone
-/// skips the work.
+/// with OCS_V4_SNAPSHOT_SEGMENT_SIZE). The entities and layer names are
+/// read only when `decode` says so for that size: a caller that needs the
+/// size alone skips the work.
 fn view_entities(decode: impl FnOnce(usize) -> bool) -> Option<(Vec<EntityType>, Vec<String>, usize)> {
     use ocs_plugin_api::shm::{DocumentViewDataV4, SharedDocumentReader};
     // A refused view costs the host a full serialisation: after a refusal,
@@ -643,12 +643,11 @@ fn view_entities(decode: impl FnOnce(usize) -> bool) -> Option<(Vec<EntityType>,
         let reader = SharedDocumentReader::<DocumentViewDataV4>::open(std::path::Path::new(&path)).ok()?;
         let p = reader.payload()?;
         let size: usize = p.entities.iter().map(|e| e.data.len()).sum();
+        if !decode(size) {
+            return Some((Vec::new(), Vec::new(), size));
+        }
         let layers = p.layers.iter().map(|l| l.name.as_str().to_string()).collect();
-        let entities = if decode(size) {
-            p.entities.iter().filter_map(|e| bincode::deserialize::<EntityType>(e.data.as_slice()).ok()).collect()
-        } else {
-            Vec::new()
-        };
+        let entities = p.entities.iter().filter_map(|e| bincode::deserialize::<EntityType>(e.data.as_slice()).ok()).collect();
         Some((entities, layers, size))
     };
     let out = read();
@@ -709,12 +708,12 @@ fn full_snapshot() -> Result<Box<ocs_plugin_api::host::Document>, String> {
     }
 }
 
-/// The drawing with its layer table, as far as a full snapshot can bring
-/// it: `None` for a drawing too large for that. The shared view is only
-/// measured, not decoded.
-pub fn layer_table() -> Option<ocs_plugin_api::host::codec::CadDocument> {
+/// The drawing's layer table, from a full snapshot: `None` for a drawing
+/// too large for that. The shared view is only measured, not decoded.
+pub fn layer_table() -> Option<ocs_plugin_api::host::codec::tables::Table<ocs_plugin_api::host::codec::tables::Layer>> {
     view_entities(|_| false).filter(|(_, _, size)| *size < SNAPSHOT_SAFE)?;
-    full_snapshot().ok().map(|doc| (*doc).into())
+    let doc: ocs_plugin_api::host::codec::CadDocument = (*full_snapshot().ok()?).into();
+    Some(doc.layers)
 }
 
 /// The whole drawing of the active tab, read from a worker or window thread.
@@ -1844,7 +1843,7 @@ mod layer_table_tests {
     fn the_layer_table_has_the_pens_of_the_drawing() {
         on(Host::new(142_001, true), 142_001, || {
             let table = layer_table().expect("a small drawing comes whole");
-            assert_eq!(table.layers.get("B-XX-VH-GESLOTENVERHARDING_ASFALT-G").unwrap().color, Color::Index(5));
+            assert_eq!(table.get("B-XX-VH-GESLOTENVERHARDING_ASFALT-G").unwrap().color, Color::Index(5));
         });
     }
 
