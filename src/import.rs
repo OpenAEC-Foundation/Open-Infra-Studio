@@ -476,6 +476,29 @@ mod import_layer_tests {
         place_features(&site, &[feature], "EPSG:4326", layer, "WFS", "WFS", &style, false)
     }
 
+    /// A map of a PDOK import fills its own layer group through the writer
+    /// the import's datasets share (#143).
+    #[test]
+    fn a_prepared_map_fills_its_own_layer_group() {
+        use crate::bridge::replacement_test_host::Drawing as Host;
+        crate::settings::with_test_file(|| {
+            let host = Arc::new(Host::new(CadDocument::new(), false));
+            let target = Target { sender: host.clone(), tab_id: 143_101, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                let image = raster::PlacedImage { path: "luchtfoto.png".into(), bbox: [0.0, 0.0, 10.0, 10.0], px: [10, 10] };
+                let map = PreparedDataset::Map {
+                    images: vec![image],
+                    layer: "GIS-WMS-LUCHTFOTO".into(),
+                    group: "Luchtfoto".into(),
+                    label: "GIS WMS Luchtfoto".into(),
+                    summary: String::new(),
+                };
+                bridge::with_import_layers("PDOK", None, |layers| map.write(&Site::default(), layers, &mut Vec::new())).unwrap();
+            });
+            assert_eq!(host.groups.lock().unwrap().clone(), [("Luchtfoto".to_string(), vec!["GIS-WMS-LUCHTFOTO".to_string()])]);
+        });
+    }
+
     #[test]
     fn prepared_aerial_keeps_resolution_and_missing_parts() {
         let server = servers::find("pdok-luchtfoto").unwrap();
