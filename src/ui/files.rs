@@ -26,22 +26,21 @@ pub struct FilesPage {
 
 impl FilesPage {
     /// Load `path` (from the ribbon's file dialog).
-    pub fn open(&mut self, ctx: &egui::Context, path: PathBuf) {
+    pub fn open(&mut self, path: PathBuf) {
         self.path = path.to_string_lossy().into_owned();
         self.gpkg_layer = None;
-        self.load(ctx);
+        self.load();
     }
 
-    fn load(&mut self, ctx: &egui::Context) {
+    fn load(&mut self) {
         let (p, layer) = (PathBuf::from(self.path.trim().trim_matches('"')), self.gpkg_layer.clone());
         self.data = None;
         self.opt = None;
         self.message = None;
-        self.read = Some(Job::spawn(ctx, tr("Bestand lezen…", "Reading the file…"), move |_| files::read(&p, layer.as_deref())));
+        self.read = Some(Job::spawn(tr("Bestand lezen…", "Reading the file…"), move |_| files::read(&p, layer.as_deref())));
     }
 
     pub fn page(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         if let Some(r) = poll(&mut self.read) {
             match r {
                 Ok(d) => {
@@ -71,7 +70,7 @@ impl FilesPage {
             ui.label(tr("Bestand", "File"));
             let r = ui.add(egui::TextEdit::singleline(&mut self.path).hint_text(tr("pad naar het bestand, of gebruik de knop GIS-bestand in het lint", "path to the file, or use the GIS file button in the ribbon")).desired_width(ui.available_width() - 90.0));
             if (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) || ui.button(tr("Lezen", "Read")).clicked() {
-                self.load(&ctx);
+                self.load();
             }
         });
         if let Some(j) = &self.read {
@@ -147,7 +146,7 @@ impl FilesPage {
         });
         if let Some(l) = reload {
             self.gpkg_layer = Some(l);
-            self.load(&ctx);
+            self.load();
             return;
         }
         ui.add_space(8.0);
@@ -156,7 +155,7 @@ impl FilesPage {
         if ui.add_enabled(can, b).clicked() {
             let (site, d, o, src) = (bridge::site().unwrap_or_default(), data.clone(), opt.clone(), self.path.trim().to_string());
             let name = PathBuf::from(&src).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or(src);
-            self.run = Some(Job::spawn(&ctx, tr("Importeren…", "Importing…"), move |p| bestand::place(&site, &d, &o, &name, p)));
+            self.run = Some(Job::spawn(tr("Importeren…", "Importing…"), move |p| bestand::place(&site, &d, &o, &name, p)));
         }
         self.opt = Some(opt);
         if bridge::site().is_none() {
@@ -199,7 +198,7 @@ mod tests {
     fn load_page_path(path: PathBuf) -> FilesPage {
         let ctx = egui::Context::default();
         let mut page = FilesPage::default();
-        page.open(&ctx, path.clone());
+        page.open(path.clone());
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         while page.read.is_some() && std::time::Instant::now() < deadline {
             let mut frame = ctx.run_ui(egui::RawInput::default(), |ui| {

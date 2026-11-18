@@ -111,6 +111,12 @@ impl MapView {
         }
     }
 
+    pub(super) fn reset_window(&mut self) {
+        self.textures.clear();
+        self.drag_start = None;
+        self.hover = None;
+    }
+
     pub fn hover(&self) -> Option<LonLat> {
         self.hover
     }
@@ -132,7 +138,7 @@ impl MapView {
         self.center = unproject([(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0], 0.0);
     }
 
-    fn request(&self, ctx: &egui::Context, key: Key) {
+    fn request(&self, key: Key) {
         let mut slots = self.slots.lock().unwrap();
         if slots.contains_key(&key) || self.inflight.load(Ordering::Relaxed) >= MAX_INFLIGHT {
             return;
@@ -140,7 +146,7 @@ impl MapView {
         slots.insert(key, Slot::Loading);
         drop(slots);
         self.inflight.fetch_add(1, Ordering::Relaxed);
-        let (slots, inflight, ctx) = (self.slots.clone(), self.inflight.clone(), ctx.clone());
+        let (slots, inflight) = (self.slots.clone(), self.inflight.clone());
         let url = BASEMAPS[key.0].url.replace("{z}", &key.1.to_string()).replace("{x}", &key.2.to_string()).replace("{y}", &key.3.to_string());
         std::thread::spawn(move || {
             let slot = http::get_image(&url)
@@ -153,7 +159,7 @@ impl MapView {
                 .unwrap_or(Slot::Failed);
             slots.lock().unwrap().insert(key, slot);
             inflight.fetch_sub(1, Ordering::Relaxed);
-            ctx.request_repaint();
+            super::repaint();
         });
     }
 
@@ -174,7 +180,7 @@ impl MapView {
             Some(_) => None,
             None => {
                 drop(slots);
-                self.request(ctx, key);
+                self.request(key);
                 None
             }
         }

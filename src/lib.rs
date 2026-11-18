@@ -1454,8 +1454,40 @@ impl BuiltinPlugin for OpenInfra {
     }
 }
 
-#[cfg(feature = "plugin")]
+#[cfg(all(feature = "plugin", not(target_os = "macos")))]
 ocs_plugin_api::export_plugin!(OpenInfra);
+
+// The pinned OCS runner loads these symbols on the runner's main thread.
+// The GIS workbench uses that thread for AppKit on macOS.
+#[cfg(all(feature = "plugin", target_os = "macos"))]
+mod macos_plugin {
+    #[no_mangle]
+    pub extern "C" fn ocs_plugin_api_version() -> u32 {
+        ocs_plugin_api::API_VERSION
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ocs_plugin_run(socket: *const std::os::raw::c_char) -> i32 {
+        if socket.is_null() {
+            return 2;
+        }
+        // SAFETY: OCS passes a live, NUL-terminated socket name.
+        let socket = unsafe { std::ffi::CStr::from_ptr(socket) }.to_string_lossy().into_owned();
+        match std::panic::catch_unwind(|| crate::ui::run_macos_plugin(socket)) {
+            Ok(Ok(())) => 0,
+            Ok(Err(e)) => {
+                eprintln!("[plugin] {e}");
+                1
+            }
+            Err(_) => 2,
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ocs_plugin_register() -> *mut Box<dyn ocs_plugin_api::host::BuiltinPlugin> {
+        Box::into_raw(Box::new(Box::new(super::OpenInfra)))
+    }
+}
 
 #[cfg(test)]
 mod gis_worker_tests;
