@@ -1722,6 +1722,9 @@ impl App {
                         let label = tr(d.label, d.label_en);
                         p(format!("{}/{}: {}…", k + 1, chosen.len(), label));
                         match import::run_dataset(&s, &d.data, &|m: String| p(format!("{}/{}: {} — {m}", k + 1, chosen.len(), label))) {
+                            Ok(message) if matches!(&d.data, import::Dataset::Raster { .. }) => {
+                                done.push(message.trim_end_matches('.').to_string());
+                            }
                             Ok(_) => done.push(label.to_string()),
                             Err(e) => done.push(tr_format!("{} (mislukt: {e})", "{} (failed: {e})", label)),
                         }

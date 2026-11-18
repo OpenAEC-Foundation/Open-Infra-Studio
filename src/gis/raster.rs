@@ -33,7 +33,7 @@ pub struct Options {
 
 const MAX_TILE_PX: u32 = 2048;
 pub const MAX_TOTAL_PX: f64 = 64e6;
-// 50 Mpx costs at most 191 MiB of RGBA pixels in the host's decoded cache.
+// 50 Mpx costs at most 191 MiB of RGBA pixels in the host's renderer.
 const MAX_AERIAL_PX: u64 = 50_000_000;
 
 fn is_photo(name: &str) -> bool {
@@ -172,17 +172,17 @@ fn pixel_count([width, height]: [u32; 2]) -> u64 {
     u64::from(width) * u64::from(height)
 }
 
-fn aerial_size(span: [f64; 2], finest: f64) -> [u32; 2] {
+fn finest_size(span: [f64; 2], finest: f64, fits: impl Fn([u32; 2]) -> bool) -> [u32; 2] {
     // Finding the limit on the integer grid also handles long, thin areas.
     let native = raster_size(span, finest);
-    if pixel_count(native) <= MAX_AERIAL_PX {
+    if fits(native) {
         return native;
     }
     let mut lo = finest;
     let mut hi = span[0].max(span[1]); // a 1 × 1 grid always fits
     for _ in 0..64 {
         let mid = lo + (hi - lo) / 2.0;
-        if pixel_count(raster_size(span, mid)) <= MAX_AERIAL_PX {
+        if fits(raster_size(span, mid)) {
             hi = mid;
         } else {
             lo = mid;
@@ -208,12 +208,7 @@ pub fn import_wms(
     out_dir: &Path,
     progress: &dyn Fn(String),
 ) -> Result<WmsImport, String> {
-    let (bbox, span) = wms_extent(site)?;
-    let px = raster_size(span, opt.resolution);
-    if !opt.resolution.is_finite() || opt.resolution <= 0.0 || pixel_count(px) > MAX_TOTAL_PX as u64 {
-        return Err(tr("Ongeldige resolutie of te groot WMS-beeld.", "Invalid resolution or WMS image too large.").into());
-    }
-    import_wms_mosaic(site, caps, layer, &opt.format, bbox, px, out_dir, progress)
+    import_wms_mosaic(site, caps, layer, opt, false, out_dir, progress)
 }
 
 pub(crate) fn import_aerial_wms(
@@ -224,9 +219,40 @@ pub(crate) fn import_aerial_wms(
     out_dir: &Path,
     progress: &dyn Fn(String),
 ) -> Result<WmsImport, String> {
-    let (bbox, span) = wms_extent(site)?;
-    let px = aerial_size(span, finest);
-    import_wms_mosaic(site, caps, layer, &default_format(caps, &layer.name), bbox, px, out_dir, progress)
+    let opt = Options { resolution: finest, format: default_format(caps, &layer.name) };
+    import_wms_mosaic(site, caps, layer, &opt, true, out_dir, progress)
+}
+
+/// The largest local displacement in project units when moving along a
+/// source axis, scaled to the full span of that axis. A rotated source
+/// envelope may need many more rows than the drawing extent.
+fn source_displacement(bbox: [f64; 4], to_project: &Transformer) -> Result<[[f64; 2]; 2], String> {
+    let span = [bbox[2] - bbox[0], bbox[3] - bbox[1]];
+    let mut displacement = [[0.0_f64; 2]; 2];
+    for y in [0.0, 0.5, 1.0] {
+        for x in [0.0, 0.5, 1.0] {
+            let p = [bbox[0] + x * span[0], bbox[1] + y * span[1]];
+            let q = to_project.apply(p)?;
+            for (axis, position) in [x, y].into_iter().enumerate() {
+                let mut neighbor = p;
+                let sign = if position == 1.0 { -1.0 } else { 1.0 };
+                neighbor[axis] += sign * span[axis] / 1024.0;
+                let r = to_project.apply(neighbor)?;
+                for (d, (a, b)) in displacement[axis].iter_mut().zip(q.into_iter().zip(r)) {
+                    *d = d.max((a - b).abs() * 1024.0);
+                }
+            }
+        }
+    }
+    if displacement.iter().any(|d| !d.iter().all(|n| n.is_finite()) || *d == [0.0, 0.0]) {
+        return Err(tr("Ongeldige WMS-bronprojectie.", "Invalid WMS source projection.").into());
+    }
+    Ok(displacement)
+}
+
+fn projected_source_size(displacement: [[f64; 2]; 2], span: [f64; 2], px: [u32; 2]) -> [u32; 2] {
+    let [sx, sy] = [span[0] / f64::from(px[0]), span[1] / f64::from(px[1])];
+    displacement.map(|[dx, dy]| ((dx / sx).hypot(dy / sy).ceil() as u32).max(1))
 }
 
 #[derive(Debug)]
@@ -290,6 +316,9 @@ fn aligned_request(tile: &WmsTile, [sx, sy]: [f64; 2]) -> ([f64; 4], u32, u32) {
 
 fn fetch_wms_tile(url: &str, width: u32, height: u32) -> Result<RgbaImage, String> {
     let bytes = http::get_image(url)?;
+    if bytes.starts_with(&[0xff, 0xd8]) && !bytes.ends_with(&[0xff, 0xd9]) {
+        return Err(tr("WMS-deel bevat een afgebroken JPEG.", "WMS part contains a truncated JPEG.").into());
+    }
     let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|e| e.to_string())?;
@@ -302,29 +331,50 @@ fn fetch_wms_tile(url: &str, width: u32, height: u32) -> Result<RgbaImage, Strin
         return Err(tr("WMS-deel heeft afwijkende afmetingen.", "WMS part has unexpected dimensions.").into());
     }
     let first = img.get_pixel(0, 0);
-    if img.pixels().all(|p| p == first || (p[3] == 0 && first[3] == 0)) {
+    if (width > 1 || height > 1) && img.pixels().all(|p| p == first || (p[3] == 0 && first[3] == 0)) {
         return Err(tr("WMS-deel bevat overal dezelfde kleur.", "WMS part is entirely one colour.").into());
     }
     Ok(img)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn import_wms_mosaic(
     site: &Site,
     caps: &WmsCaps,
     layer: &WmsLayer,
-    format: &str,
-    bbox: [f64; 4],
-    px: [u32; 2],
+    opt: &Options,
+    automatic: bool,
     out_dir: &Path,
     progress: &dyn Fn(String),
 ) -> Result<WmsImport, String> {
+    let (bbox, span) = wms_extent(site)?;
+    if !opt.resolution.is_finite() || opt.resolution <= 0.0 {
+        return Err(tr("Ongeldige WMS-resolutie.", "Invalid WMS resolution.").into());
+    }
     let crs = request_crs(layer, &site.crs);
     super::crs::ensure(&crs)?;
     let direct = crs == site.crs;
-    let source_bbox = if direct { bbox } else { envelope(bbox, &Transformer::new(&site.crs, &crs)?)? };
-    let mut tile_size = [caps.max_width, caps.max_height].map(|n| n.unwrap_or(MAX_TILE_PX).min(MAX_TILE_PX));
-    let pitch = [(bbox[2] - bbox[0]) / f64::from(px[0]), (bbox[3] - bbox[1]) / f64::from(px[1])];
+    let (source_bbox, displacement) = if direct {
+        (bbox, None)
+    } else {
+        let source = envelope(bbox, &Transformer::new(&site.crs, &crs)?)?;
+        let measure = source_displacement(source, &Transformer::new(&crs, &site.crs)?)?;
+        (source, Some(measure))
+    };
+    let source_size = |px| displacement.map_or(px, |measure| projected_source_size(measure, span, px));
+    let budget = if automatic { MAX_AERIAL_PX } else { MAX_TOTAL_PX as u64 };
+    let fits = |px| pixel_count(px) <= budget && pixel_count(source_size(px)) <= budget;
+    let native = raster_size(span, opt.resolution);
+    let px = if automatic { finest_size(span, opt.resolution, fits) } else { native };
+    if !fits(px) {
+        return Err(tr(
+            "Het WMS-beeld of bronbeeld is te groot voor deze resolutie. Kies grovere pixels of een kleiner gebied.",
+            "The WMS image or its source is too large for this resolution. Choose coarser pixels or a smaller area.",
+        ).into());
+    }
+    let source_px = source_size(px);
+    let request_limit = [caps.max_width, caps.max_height].map(|n| n.unwrap_or(MAX_TILE_PX).min(MAX_TILE_PX));
+    let mut tile_size = request_limit;
+    let pitch = [(source_bbox[2] - source_bbox[0]) / f64::from(source_px[0]), (source_bbox[3] - source_bbox[1]) / f64::from(source_px[1])];
     let aligned_step = if direct && tile_size.iter().all(|&n| n > 2) {
         pdok_request_step(caps, layer, &crs, pitch)
     } else {
@@ -336,17 +386,23 @@ fn import_wms_mosaic(
             tile_size[axis] = (f64::from(tile_size[axis] - 2) * step[axis] / pitch[axis]).floor().max(1.0) as u32;
         }
     }
-    let tiles = wms_tiles(source_bbox, px, tile_size);
+    let tiles = wms_tiles(source_bbox, source_px, tile_size);
     let parts = tiles.len() as u32;
     let mut missing = Vec::new();
     let mut last_error = String::new();
-    let mut mosaic = RgbaImage::new(px[0], px[1]);
+    let mut mosaic = RgbaImage::new(source_px[0], source_px[1]);
     for (i, tile) in tiles.enumerate() {
         let part = i as u32 + 1;
-        let (request_bbox, width, height) = aligned_step
+        let (request_bbox, mut width, mut height) = aligned_step
             .map(|step| aligned_request(&tile, step))
             .unwrap_or((tile.bbox, tile.width, tile.height));
-        let url = get_map_url(caps, &layer.name, &crs, request_bbox, width, height, format);
+        if width == 1 && height == 1 {
+            // One output pixel needs a few source samples to distinguish a
+            // valid crop from a service's constant-colour error response.
+            width = request_limit[0].min(2);
+            height = request_limit[1].min(2);
+        }
+        let url = get_map_url(caps, &layer.name, &crs, request_bbox, width, height, &opt.format);
         progress(format!("{} {part}/{parts}…", tr("Kaartdeel ophalen", "Fetching map part")));
         let raster = fetch_wms_tile(&url, width, height).or_else(|_| {
             progress(format!("{} {part}/{parts}…", tr("Kaartdeel opnieuw ophalen", "Retrying map part")));
@@ -375,7 +431,7 @@ fn import_wms_mosaic(
         mosaic = warp(&mosaic, &crs, source_bbox, &site.crs, bbox, px[0], px[1])?;
     }
     // Preserve transparent gaps, and use PNG for dimensions JPEG cannot encode.
-    let jpeg = format == "image/jpeg" && missing.is_empty() && px.iter().all(|&n| n <= u16::MAX.into());
+    let jpeg = opt.format == "image/jpeg" && missing.is_empty() && px.iter().all(|&n| n <= u16::MAX.into());
     let path = save_wms_mosaic(&mosaic, &layer.name, out_dir, jpeg)?;
     Ok(WmsImport { image: PlacedImage { path, bbox, px }, parts, missing })
 }
@@ -506,6 +562,10 @@ pub fn import_xyz(site: &Site, server: &MapServer, opt: &Options, out_dir: &Path
 mod tests {
     use super::*;
 
+    fn aerial_size(span: [f64; 2], resolution: f64) -> [u32; 2] {
+        finest_size(span, resolution, |px| pixel_count(px) <= MAX_AERIAL_PX)
+    }
+
     #[test]
     fn aerial_tiles_share_one_grid_at_the_source_resolution() {
         let bbox = [120000.13, 425000.17, 120401.16, 425210.20];
@@ -545,6 +605,39 @@ mod tests {
     }
 
     #[test]
+    fn projected_wms_requests_enough_source_rows_at_maastricht() {
+        let mut site = Site {
+            lon: 5.69, lat: 50.85, crs: "EPSG:31370".into(),
+            width: 883.0, height: 30.0, ..Site::default()
+        };
+        site.reproject_origin();
+        let (bbox, span) = wms_extent(&site).unwrap();
+        let source_crs = "EPSG:3857";
+        let source = envelope(bbox, &Transformer::new(&site.crs, source_crs).unwrap()).unwrap();
+        let inverse = Transformer::new(source_crs, &site.crs).unwrap();
+        let displacement = source_displacement(source, &inverse).unwrap();
+        let output = raster_size(span, 0.08);
+        let source_px = projected_source_size(displacement, span, output);
+        let center = [(source[0] + source[2]) / 2.0, (source[1] + source[3]) / 2.0];
+        let project_row_length = |rows: u32| {
+            let p = inverse.apply(center).unwrap();
+            let n = center[1] + (source[3] - source[1]) / f64::from(rows);
+            let q = inverse.apply([center[0], n]).unwrap();
+            (p[0] - q[0]).hypot(p[1] - q[1])
+        };
+        assert!(project_row_length(output[1]) > 0.12);
+        assert!(project_row_length(source_px[1]) <= 0.08);
+        assert!(pixel_count(source_px) <= MAX_AERIAL_PX);
+
+        let fits = |px| pixel_count(px) <= 1_000_000
+            && pixel_count(projected_source_size(displacement, span, px)) <= 1_000_000;
+        let reduced = finest_size(span, 0.08, fits);
+        assert!(fits(reduced));
+        assert!(!fits(output));
+        assert!(reduced[0] < output[0]);
+    }
+
+    #[test]
     fn wms_request_crs_prefers_transformable() {
         let layer = |crs: &[&str]| WmsLayer { name: "l".into(), title: "l".into(), crs: crs.iter().map(|c| c.to_string()).collect(), bbox: None };
         assert_eq!(request_crs(&layer(&["EPSG:28992", "EPSG:3857"]), "EPSG:28992"), "EPSG:28992");
@@ -580,27 +673,23 @@ mod tests {
         }
     }
 
-    #[test]
-    fn wms_retries_white_tiles_and_names_missing_parts() {
+    fn wms_fixture(
+        responses: Vec<(&'static str, Vec<u8>)>,
+        caps_xml: &str,
+        site: &Site,
+        resolution: f64,
+        format: &str,
+    ) -> (Result<WmsImport, String>, Vec<String>, PathBuf) {
         use std::io::{BufRead, Write};
         use std::net::TcpListener;
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        use std::sync::Arc;
+        use std::sync::{Arc, Mutex};
 
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let url = format!("http://{}/wms", listener.local_addr().unwrap());
-        let calls = Arc::new(AtomicUsize::new(0));
-        let count = Arc::clone(&calls);
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let requests = Arc::clone(&calls);
         let worker = std::thread::spawn(move || {
-            let white = RgbaImage::from_pixel(2, 2, Rgba([255; 4]));
-            let mut good = white.clone();
-            good.put_pixel(0, 0, Rgba([32, 64, 96, 255]));
-            for (mime, body) in [
-                ("image/png", png_bytes(white)),
-                ("image/png", png_bytes(good)),
-                ("text/xml", b"<ServiceException>laadfout</ServiceException>".to_vec()),
-                ("image/png", b"<ServiceException>laadfout</ServiceException>".to_vec()),
-            ] {
+            for (mime, body) in responses {
                 let (mut conn, _) = listener.accept().unwrap();
                 let mut reader = std::io::BufReader::new(&mut conn);
                 let mut line = String::new();
@@ -613,23 +702,45 @@ mod tests {
                         break;
                     }
                 }
-                assert!(request.contains("WIDTH=2") && request.contains("HEIGHT=2"));
-                assert!(request.contains("EXCEPTIONS=XML"));
-                count.fetch_add(1, Ordering::Relaxed);
+                requests.lock().unwrap().push(request);
                 write!(conn, "HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).unwrap();
                 conn.write_all(&body).unwrap();
             }
         });
-        let caps = super::super::caps::parse_wms(&url, r#"<WMS_Capabilities version="1.3.0">
-            <Service><MaxWidth>2</MaxWidth><MaxHeight>2</MaxHeight></Service>
-            <Capability><Layer><Name>ortho</Name><CRS>EPSG:28992</CRS></Layer></Capability>
-            </WMS_Capabilities>"#).unwrap();
+        let caps = super::super::caps::parse_wms(&url, caps_xml).unwrap();
+        let opt = Options { resolution, format: format.into() };
+        let dir = std::env::temp_dir().join(format!("ois-wms-test-{}-{:?}-{}", std::process::id(), std::thread::current().id(), stamp()));
+        let result = import_wms(site, &caps, &caps.layers[0], &opt, &dir, &|_| {});
+        if worker.is_finished() {
+            worker.join().unwrap();
+        }
+        let calls = std::mem::take(&mut *calls.lock().unwrap());
+        (result, calls, dir)
+    }
+
+    const TINY_WMS: &str = r#"<WMS_Capabilities version="1.3.0">
+        <Service><MaxWidth>2</MaxWidth><MaxHeight>2</MaxHeight></Service>
+        <Capability><Layer><Name>ortho</Name><CRS>EPSG:28992</CRS></Layer></Capability>
+        </WMS_Capabilities>"#;
+
+    fn coloured_tile() -> RgbaImage {
+        let mut img = RgbaImage::from_pixel(2, 2, Rgba([255; 4]));
+        img.put_pixel(0, 0, Rgba([32, 64, 96, 255]));
+        img
+    }
+
+    #[test]
+    fn wms_retries_white_tiles_and_names_missing_parts() {
+        let white = RgbaImage::from_pixel(2, 2, Rgba([255; 4]));
         let site = Site { width: 4.0, height: 2.0, ..Site::default() };
-        let opt = Options { resolution: 1.0, format: "image/png".into() };
-        let dir = std::env::temp_dir().join(format!("ois-wms-test-{}-{}", std::process::id(), stamp()));
-        let result = import_wms(&site, &caps, &caps.layers[0], &opt, &dir, &|_| {});
-        assert_eq!(calls.load(Ordering::Relaxed), 4, "blank and invalid replies each need a retry: {result:?}");
-        worker.join().unwrap();
+        let (result, requests, dir) = wms_fixture(vec![
+            ("image/png", png_bytes(white)),
+            ("image/png", png_bytes(coloured_tile())),
+            ("text/xml", b"<ServiceException>laadfout</ServiceException>".to_vec()),
+            ("image/png", b"<ServiceException>laadfout</ServiceException>".to_vec()),
+        ], TINY_WMS, &site, 1.0, "image/png");
+        assert_eq!(requests.len(), 4, "blank and invalid replies each need a retry: {result:?}");
+        assert!(requests.iter().all(|line| line.contains("WIDTH=2") && line.contains("HEIGHT=2") && line.contains("EXCEPTIONS=XML")));
         let result = result.unwrap();
         assert_eq!(result.parts, 2);
         assert_eq!(result.missing, [2]);
@@ -639,6 +750,35 @@ mod tests {
         assert_eq!(image.get_pixel(0, 0).0, [32, 64, 96, 255]);
         assert_eq!(image.get_pixel(1, 0).0, [255; 4]);
         assert!(image.enumerate_pixels().filter(|(x, _, _)| *x >= 2).all(|(_, _, p)| p[3] == 0));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn wms_retries_truncated_jpeg() {
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut jpeg).encode_image(&coloured_tile()).unwrap();
+        let truncated = jpeg[..jpeg.len() - 2].to_vec();
+        let site = Site { width: 2.0, height: 2.0, ..Site::default() };
+        let (result, requests, dir) = wms_fixture(vec![
+            ("image/jpeg", truncated),
+            ("image/jpeg", jpeg),
+        ], TINY_WMS, &site, 1.0, "image/jpeg");
+        assert_eq!(requests.len(), 2, "{result:?}");
+        assert_eq!(requests[0], requests[1]);
+        assert!(result.unwrap().missing.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn wms_validates_more_than_one_sample_for_one_output_pixel() {
+        let site = Site { width: 10.0, height: 10.0, ..Site::default() };
+        let (result, requests, dir) = wms_fixture(vec![("image/png", png_bytes(coloured_tile()))], TINY_WMS, &site, 10.0, "image/png");
+        assert_eq!(requests.len(), 1);
+        let result = result.unwrap();
+        assert!(requests[0].contains("WIDTH=2") && requests[0].contains("HEIGHT=2"));
+        assert_eq!(result.image.px, [1, 1]);
+        assert_eq!(result.image.bbox, site.bbox());
+        assert_eq!(image::image_dimensions(result.image.path).unwrap(), (1, 1));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

@@ -305,7 +305,8 @@ pub fn aerial(site: &Site, progress: &dyn Fn(String)) -> Result<String, String> 
         return run_dataset(site, &Dataset::Raster { server: "pdok-luchtfoto" }, progress);
     }
     let srv = servers::find("eox-s2-wms").ok_or("server eox-s2-wms onbekend")?;
-    aerial_wms(site, &srv, 10.0, progress)
+    let resolution = (site.width.max(site.height) / 2048.0).max(5.0);
+    aerial_wms(site, &srv, resolution, progress)
 }
 
 fn aerial_wms(site: &Site, srv: &MapServer, finest: f64, progress: &dyn Fn(String)) -> Result<String, String> {
