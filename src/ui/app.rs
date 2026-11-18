@@ -1840,8 +1840,11 @@ impl App {
                         p(format!("{}/{}: {}…", k + 1, chosen.len(), label));
                         match import::prepare_dataset(&s, &d.data, &|m: String| p(format!("{}/{}: {} — {m}", k + 1, chosen.len(), label))) {
                             Ok(dataset) => {
+                                done.push(match &dataset {
+                                    import::PreparedDataset::Map { summary, .. } => summary.trim_end_matches('.').to_string(),
+                                    import::PreparedDataset::Vector { .. } => label.to_string(),
+                                });
                                 datasets.push(dataset);
-                                done.push(label.to_string());
                             }
                             Err(e) => done.push(tr_format!("{} (mislukt: {e})", "{} (failed: {e})", label)),
                         }
