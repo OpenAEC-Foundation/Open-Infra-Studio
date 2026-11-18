@@ -92,6 +92,8 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 
 75. **GWSW-overname mist bronobjecten zonder volledige documentweergave** (#136, Sol ronde 2, [BEVESTIGD] VERVOLG). De terugvalroute leest selectie en index, maar de GWSW-import indexeert de bronobjecten niet. Zonder volledige documentweergave is de overname daardoor afhankelijk van de selectie. Richting: haal de bronobjecten op via begrensde opvragen of indexeer ze bij import.
 
+76. **Riool bijwerken kan aparte ongedaanmaakstappen voor de index geven** (#136, Sol ronde 4, [BEVESTIGD] VERVOLG). OIS schrijft de index van de plattegrond en die van het lengteprofiel na de geometrie, in twee verzoeken. OCS kan voor elk verzoek een undo-stap maken. Na één keer Ongedaan maken kan de terugvalroute daardoor nieuwe planhandles en oude profielhandles lezen. Richting: schrijf beide indexvermeldingen samen binnen dezelfde undo-groep als de geometrie.
+
 81. **WFS en GIS-bestanden herschrijven een objectrecord na plaatsing** (#139, Sol ronde 1, [BEVESTIGD] VERVOLG). De gepinde CAD-host registreert `OPENINFRA` al bij `AddEntities`. De extra `WriteRecord` schrijft de gegevens opnieuw en laat de host de geometriecaches opnieuw opbouwen en een documentwijziging publiceren. Richting: gebruik de gewone batchfuncties en controleer de meegestuurde records in de tests.
 
 82. **De WFS-uitleg vermeldt de lengtebeperking per attribuut niet** (#139, Sol ronde 1, [BEVESTIGD] VERVOLG). De README noemt maximaal 40 niet-lege attributen per feature. De gedeelde encoder kort elke combinatie `key=value` ook af op 255 UTF-8-bytes. Het BAG-id en bouwjaar passen ruim. Richting: verwijs vanuit de WFS-uitleg naar de lengtebeperking.
