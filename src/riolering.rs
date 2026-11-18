@@ -45,7 +45,6 @@ pub fn place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) ->
     let k = opt.scale / 1000.0 * f;
     let mut entities: Vec<EntityType> = Vec::new();
     let mut layers: Vec<String> = Vec::new();
-    let mut first: Option<ExtendedDataRecord> = None;
     let mut counts: Vec<(String, usize)> = Vec::new();
     let ensure = |s: &LayerSpec, layers: &mut Vec<String>| {
         if !layers.contains(&s.name) {
@@ -62,9 +61,6 @@ pub fn place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) ->
                 continue;
             }
             let d = opt.object_data.then(|| record(feat));
-            if first.is_none() {
-                first = d.clone();
-            }
             if !lines.is_empty() {
                 if let Some(g) = spec(&name, opt, Element::G) {
                     ensure(&g, &mut layers);
@@ -95,10 +91,7 @@ pub fn place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) ->
     if entities.is_empty() {
         return Err(tr("geen GWSW-riolering in het importgebied (niet elke gemeente publiceert haar stelsel)", "no GWSW sewer data in the import area (not every municipality publishes its network)").into());
     }
-    let handles = bridge::add_entities_handles(tr("GWSW-riolering", "GWSW sewers"), entities)?;
-    if let (Some(h), Some(r)) = (handles.first(), first) {
-        bridge::register_object_data(*h, r);
-    }
+    let handles = bridge::add_imported_entities(tr("GWSW-riolering", "GWSW sewers"), entities)?;
     bridge::note_source("GWSW (Stichting RIONED / PDOK, CC0)");
     bridge::zoom_extents();
     let parts: Vec<String> = counts.iter().filter(|(_, n)| *n > 0).map(|(t, n)| format!("{t}: {n}")).collect();

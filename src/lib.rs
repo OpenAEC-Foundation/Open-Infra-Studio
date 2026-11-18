@@ -30,6 +30,7 @@ pub mod lang;
 pub mod localisation;
 pub mod library;
 pub mod riolering;
+mod settings;
 pub mod bgt_mutatie;
 pub mod planning_commands;
 pub mod nlcs;

@@ -52,15 +52,14 @@ fn target() -> Result<Target, String> {
 pub(crate) struct Batch {
     entities: Vec<EntityType>,
     layers: BTreeMap<String, usize>,
-    first_data: Option<ExtendedDataRecord>,
 }
 
 impl Batch {
     pub(crate) fn new() -> Self {
-        Self { entities: Vec::new(), layers: BTreeMap::new(), first_data: None }
+        Self { entities: Vec::new(), layers: BTreeMap::new() }
     }
 
-    pub(crate) fn push(&mut self, spec: &LayerSpec, ents: Vec<EntityType>, data: Option<&ExtendedDataRecord>) {
+    pub(crate) fn push(&mut self, spec: &LayerSpec, ents: Vec<EntityType>) {
         if ents.is_empty() {
             return;
         }
@@ -68,19 +67,20 @@ impl Batch {
             bridge::ensure_nlcs_layer(spec);
         }
         *self.layers.entry(spec.name.clone()).or_insert(0) += ents.len();
-        if self.first_data.is_none() {
-            self.first_data = data.cloned();
-        }
         self.entities.extend(ents);
     }
 
     pub(crate) fn write(self, label: &str) -> Result<(usize, usize), String> {
-        let n = self.entities.len();
-        let handles = bridge::add_entities_handles(label, self.entities)?;
-        if let (Some(h), Some(r)) = (handles.first(), self.first_data) {
-            bridge::register_object_data(*h, r);
-        }
-        Ok((n, self.layers.len()))
+        let handles = bridge::add_imported_entities(label, self.entities)?;
+        Ok((handles.len(), self.layers.len()))
+    }
+
+    pub(crate) fn write_with(self, label: &str, finish: impl FnOnce(&mut bridge::ImportLayers) -> Result<(), String>) -> Result<(usize, usize), String> {
+        bridge::with_import_layers(label, |layers| {
+            let handles = layers.write_entities(self.entities)?;
+            finish(layers)?;
+            Ok((handles.len(), self.layers.len()))
+        })
     }
 }
 
@@ -115,14 +115,25 @@ pub fn bgt(site: &Site, collections: &[&str], opt: &NlcsOptions, progress: &dyn 
 }
 
 pub fn bgt_place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) -> Result<String, String> {
+    bgt_place_with(site, data, opt, |_, _| Ok(()))
+}
+
+pub(crate) fn bgt_place_with(
+    site: &Site,
+    data: &[(String, Vec<Feature>)],
+    opt: &NlcsOptions,
+    finish: impl FnOnce(&mut bridge::ImportLayers, &std::collections::HashSet<&str>) -> Result<(), String>,
+) -> Result<String, String> {
     let t = target()?;
     let f = t.unit_factor;
     let to_site = vector::data_to_site(site, "EPSG:28992", &[])?;
     let ltscale = opt.scale / 1000.0 * f;
     let mut batch = Batch::new();
+    let mut prepared = std::collections::HashSet::new();
     let mut unmapped = 0usize;
     for (collection, features) in data {
         for feat in features {
+            let before = batch.entities.len();
             let mut pairs: Vec<(&str, String)> = vec![("bron", "BGT".into()), ("objecttype", collection.clone())];
             for (k, v) in &feat.props {
                 if !bgt_skip(k) {
@@ -142,7 +153,7 @@ pub fn bgt_place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions
                 pairs.push(("nlcs", obj.id.to_string()));
                 let d = record(opt.object_data, pairs);
                 let ents = pts.iter().map(|p| emit::text(*p, &text, opt.paper(mm, f), emit::readable(angle), &spec.name, d.as_ref())).collect();
-                batch.push(&spec, ents, d.as_ref());
+                batch.push(&spec, ents);
                 continue;
             }
             let id = nlcs::bgt_lookup(collection, &feat.props).map(|(id, _)| id).or_else(|| nlcs::bgt_default(collection));
@@ -155,16 +166,25 @@ pub fn bgt_place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions
             let (lines, points) = vector::feature_to_drawing(site, feat, &*to_site, f, opt.clip);
             if !lines.is_empty() {
                 let spec = nlcs::layer(obj, opt.status, &opt.discipline, Element::G);
-                batch.push(&spec, emit::polylines(&lines, &spec.name, ltscale, d.as_ref()), d.as_ref());
+                batch.push(&spec, emit::polylines(&lines, &spec.name, ltscale, d.as_ref()));
             }
             if !points.is_empty() {
                 let spec = nlcs::layer(obj, opt.status, &opt.discipline, Element::S);
-                batch.push(&spec, emit::markers(&points, &spec.name, opt.paper(0.5, f), d.as_ref()), d.as_ref());
+                batch.push(&spec, emit::markers(&points, &spec.name, opt.paper(0.5, f), d.as_ref()));
+            }
+            if batch.entities.len() > before {
+                if let Some(id) = feat.props.get("lokaal_id").and_then(|v| v.as_str()) {
+                    prepared.insert(id);
+                }
             }
         }
     }
     let total: usize = data.iter().map(|(_, v)| v.len()).sum();
-    let (n, layers) = batch.write("BGT (NLCS)")?;
+    let (n, layers) = if batch.entities.is_empty() {
+        (0, 0)
+    } else {
+        batch.write_with("BGT (NLCS)", |layers| finish(layers, &prepared))?
+    };
     bridge::note_source("BGT (PDOK, CC0)");
     let mut msg = format!("BGT: {total} objecten → {n} elementen op {layers} NLCS-lagen.");
     if unmapped > 0 {
@@ -215,7 +235,7 @@ pub fn cadastre_place(site: &Site, data: &Cadastre, opt: &NlcsOptions) -> Result
         let (lines, _) = vector::feature_to_drawing(site, g, &*to_site, f, opt.clip);
         let get = |k: &str| g.props.get(k).and_then(prop_string).unwrap_or_default();
         let d = data_pairs(opt.object_data, &[("bron", "BRK".into()), ("objecttype", "kadastralegrens".into()), ("lokaal_id", get("identificatie_lokaal_id")), ("kwaliteit", get("classificatie_kwaliteit_waarde")), ("perceel_links", get("perceel_links_identificatie_lokaal_id")), ("perceel_rechts", get("perceel_rechts_identificatie_lokaal_id"))]);
-        batch.push(&line_spec, emit::polylines(&lines, &line_spec.name, ltscale, d.as_ref()), d.as_ref());
+        batch.push(&line_spec, emit::polylines(&lines, &line_spec.name, ltscale, d.as_ref()));
     }
     for p in &data.parcels {
         let get = |k: &str| p.props.get(k).and_then(prop_string).unwrap_or_default();
@@ -231,7 +251,7 @@ pub fn cadastre_place(site: &Site, data: &Cadastre, opt: &NlcsOptions) -> Result
         let rot = p.props.get("perceelnummer_rotatie").and_then(|v| v.as_f64()).unwrap_or(0.0).to_radians();
         let aanduiding = format!("{} {} {}", get("akr_kadastrale_gemeente_code_waarde"), get("sectie"), number);
         let d = data_pairs(opt.object_data, &[("bron", "BRK".into()), ("objecttype", "perceel".into()), ("kadastrale_aanduiding", aanduiding), ("gemeente", get("kadastrale_gemeente_waarde")), ("grootte_m2", get("kadastrale_grootte_waarde")), ("lokaal_id", get("identificatie_lokaal_id"))]);
-        batch.push(&text_spec, vec![emit::text(at, &number, opt.paper(1.8, f), emit::readable(rot), &text_spec.name, d.as_ref())], d.as_ref());
+        batch.push(&text_spec, vec![emit::text(at, &number, opt.paper(1.8, f), emit::readable(rot), &text_spec.name, d.as_ref())]);
     }
     let (n, _) = batch.write("Kadastrale kaart (NLCS)")?;
     bridge::note_source("BRK kadastrale kaart (Kadaster, CC BY 4.0)");
@@ -308,7 +328,7 @@ pub fn klic_place(site: &Site, lev: &klic::Levering, opt: &KlicOptions) -> Resul
         drawn += 1;
         if !lines.is_empty() {
             let spec = paint(nlcs::layer(obj, o.status, &o.discipline, Element::G));
-            batch.push(&spec, emit::polylines(&lines, &spec.name, ltscale, d.as_ref()), d.as_ref());
+            batch.push(&spec, emit::polylines(&lines, &spec.name, ltscale, d.as_ref()));
             let casing = matches!(kind, "Mantelbuis" | "Kabelbed");
             if o.labels && !casing && thema != "graafpolygoon" {
                 let text = klic::label(feat);
@@ -325,7 +345,7 @@ pub fn klic_place(site: &Site, lev: &klic::Levering, opt: &KlicOptions) -> Resul
                         if !duplicate {
                             placed.push((text.clone(), spot));
                             let ents = vec![emit::text(spot, &text, h, emit::readable(angle), &spec.name, d.as_ref())];
-                            batch.push(&spec, ents, d.as_ref());
+                            batch.push(&spec, ents);
                         }
                     }
                 }
@@ -333,7 +353,7 @@ pub fn klic_place(site: &Site, lev: &klic::Levering, opt: &KlicOptions) -> Resul
         }
         if !points.is_empty() {
             let spec = paint(nlcs::layer(obj, o.status, &o.discipline, Element::S));
-            batch.push(&spec, emit::markers(&points, &spec.name, o.paper(0.6, f), d.as_ref()), d.as_ref());
+            batch.push(&spec, emit::markers(&points, &spec.name, o.paper(0.6, f), d.as_ref()));
         }
     }
     let (ev, details) = klic_extras(site, lev, opt, &*to_site, &mut batch);
@@ -408,7 +428,7 @@ fn klic_extras(site: &Site, lev: &klic::Levering, opt: &KlicOptions, to_site: &d
             spec
         };
         let outline = paint(nlcs::layer(obj, o.status, &o.discipline, Element::G));
-        batch.push(&outline, emit::polylines(&lines, &outline.name, o.scale / 1000.0 * f, d.as_ref()), d.as_ref());
+        batch.push(&outline, emit::polylines(&lines, &outline.name, o.scale / 1000.0 * f, d.as_ref()));
         if is_ev && !lines.is_empty() {
             let fill = paint(nlcs::layer(obj, o.status, &o.discipline, Element::A));
             let rings: Vec<Vec<XY>> = lines.iter().map(|(r, _)| r.clone()).collect();
@@ -417,7 +437,7 @@ fn klic_extras(site: &Site, lev: &klic::Levering, opt: &KlicOptions, to_site: &d
             if let Some(d) = &d {
                 h.common_mut().extended_data.add_record(d.clone());
             }
-            batch.push(&fill, vec![h], d.as_ref());
+            batch.push(&fill, vec![h]);
             ev += 1;
         } else {
             details += 1;
@@ -427,10 +447,10 @@ fn klic_extras(site: &Site, lev: &klic::Levering, opt: &KlicOptions, to_site: &d
             let at = points.first().copied().or_else(|| lines.first().map(|(r, _)| [r.iter().map(|p| p[0]).sum::<f64>() / r.len() as f64, r.iter().map(|p| p[1]).sum::<f64>() / r.len() as f64]));
             if let Some(at) = at {
                 let spec = nlcs::layer(obj, o.status, &o.discipline, Element::T);
-                batch.push(&spec, vec![emit::text(at, &format!("{} {name}", crate::lang::tr("Detail:", "Detail:")), o.paper(1.8, f), 0.0, &spec.name, d.as_ref())], d.as_ref());
+                batch.push(&spec, vec![emit::text(at, &format!("{} {name}", crate::lang::tr("Detail:", "Detail:")), o.paper(1.8, f), 0.0, &spec.name, d.as_ref())]);
             }
             if !points.is_empty() {
-                batch.push(&outline, emit::markers(&points, &outline.name, o.paper(1.2, f), d.as_ref()), d.as_ref());
+                batch.push(&outline, emit::markers(&points, &outline.name, o.paper(1.2, f), d.as_ref()));
             }
         }
     }
