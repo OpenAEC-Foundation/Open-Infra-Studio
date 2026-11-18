@@ -872,7 +872,11 @@ fn ensure_symbol(name: &str, made: &mut HashSet<String>) -> Result<String, Strin
         }
     };
     let description = t!("Open Infra meetsymbool {shape} (papiermillimeters)", "Open Infra survey symbol {shape} (paper millimetres)");
-    let exists = table(TableOperation::BlockModify { name: block.clone(), description: Some(description.clone()), explodable: Some(true), scale_uniformly: Some(true) }).is_ok();
+    // Whether it exists, without changing it: OCS refuses a change of
+    // nothing with this answer only for a block that exists, so a block a
+    // user changed keeps its settings.
+    let none = TableOperation::BlockModify { name: block.clone(), description: None, explodable: None, scale_uniformly: None };
+    let exists = matches!(table(none), Err(e) if e == "no block properties to change");
     if !exists {
         let geometry: Vec<EntityType> = symbol_shapes(&shape)
             .into_iter()
@@ -897,6 +901,7 @@ fn ensure_symbol(name: &str, made: &mut HashSet<String>) -> Result<String, Strin
             .collect();
         let handles = crate::bridge::add_entities_handles(&format!("Open Infra: {block}"), geometry)?;
         table(TableOperation::BlockCreate { name: block.clone(), entities: handles, base_point: [0.0, 0.0, 0.0], erase_originals: true, description: Some(description) })?;
+        table(TableOperation::BlockModify { name: block.clone(), description: None, explodable: Some(true), scale_uniformly: Some(true) })?;
     }
     made.insert(block.clone());
     Ok(block)
@@ -1003,7 +1008,7 @@ pub fn apply_codes(ctx: &Ctx, table: &CodeTable, points: &[SurveyPoint], source:
         }
         let handles = if out.is_empty() { Vec::new() } else { out.write_from(&label, "Landmeten")? };
         let gone = crate::bridge::remove_replaced(&label, &originals);
-        let mut index = handles.clone();
+        let mut index = handles;
         if gone.is_err() {
             index.extend(originals.iter().map(|(h, _)| *h));
         }
@@ -1117,10 +1122,11 @@ mod tests {
         });
     }
 
-    /// A coded survey undone whole takes its new symbol blocks with it: a
+    /// A symbol block a user changed keeps those settings on a next import;
+    /// a coded survey undone whole takes its new symbol blocks with it, and a
     /// next import makes them again, so its symbols show (#143).
     #[test]
-    fn a_survey_imported_again_after_undo_makes_its_symbol_blocks_again() {
+    fn a_survey_keeps_its_symbol_blocks_and_makes_them_again_after_undo() {
         use crate::bridge::replacement_test_host::Drawing;
         use ocs_plugin_api::host::codec::CadDocument;
         crate::settings::with_test_file(|| {
@@ -1134,12 +1140,16 @@ mod tests {
                 });
             };
             import();
-            assert!(drawing.blocks.lock().unwrap().contains("OI_SYMBOOL_BOOM"));
+            assert!(drawing.blocks.lock().unwrap().contains_key("OI_SYMBOOL_BOOM"));
+            // A user's own description, and not explodable.
+            drawing.blocks.lock().unwrap().insert("OI_SYMBOOL_BOOM".into(), ("Mijn boom".into(), false));
+            import();
+            assert_eq!(drawing.blocks.lock().unwrap()["OI_SYMBOOL_BOOM"], ("Mijn boom".to_string(), false), "the user's settings");
             // Ctrl+Z of the import: its block definition goes with it.
             drawing.blocks.lock().unwrap().clear();
             import();
             let _ = std::fs::remove_file(&file);
-            assert!(drawing.blocks.lock().unwrap().contains("OI_SYMBOOL_BOOM"), "a tree insert without its block");
+            assert!(drawing.blocks.lock().unwrap().contains_key("OI_SYMBOOL_BOOM"), "a tree insert without its block");
         });
     }
 

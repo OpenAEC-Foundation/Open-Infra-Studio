@@ -2107,8 +2107,8 @@ pub(crate) mod replacement_test_host {
         pub index: Mutex<Vec<XRecordEntry>>,
         /// Layer groups as OCS's LAYERGROUP keeps them, by layer name.
         pub groups: Mutex<Vec<(String, Vec<String>)>>,
-        /// The block definitions in the drawing.
-        pub blocks: Mutex<HashSet<String>>,
+        /// The block definitions in the drawing: description, explodable.
+        pub blocks: Mutex<HashMap<String, (String, bool)>>,
         /// How many commands to refuse as OCS does while another runs.
         pub busy: Mutex<u32>,
         /// Undo groups, record writes and command lines, in order.
@@ -2148,7 +2148,7 @@ pub(crate) mod replacement_test_host {
         pub(crate) fn new(doc: CadDocument, reject_batch: bool) -> Self {
             Self {
                 doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()),
-                groups: Mutex::new(Vec::new()), blocks: Mutex::new(HashSet::new()), busy: Mutex::new(0), log: Mutex::new(Vec::new()), info: Mutex::new(Vec::new()),
+                groups: Mutex::new(Vec::new()), blocks: Mutex::new(HashMap::new()), busy: Mutex::new(0), log: Mutex::new(Vec::new()), info: Mutex::new(Vec::new()),
                 clayer: Mutex::new("0".into()), layout: Mutex::new("Model".into()), outside: Mutex::new(Vec::new()), block_edit: false,
                 meet: None, refuse: Mutex::new(Vec::new()), hold_sheet: false, switched: std::sync::Condvar::new(),
                 clean_block_edit: Mutex::new(false), open: Mutex::new(false),
@@ -2264,16 +2264,30 @@ pub(crate) mod replacement_test_host {
                 Q::TableOperation { operation: TableOperation::LayerRename { from, to } } => A::TableResult(
                     if doc.layers.contains(&to) { Err(format!("layer {to:?} already exists")) } else { doc.rename_layer(&from, &to).map_err(|e| e.to_string()) },
                 ),
-                Q::TableOperation { operation: TableOperation::BlockModify { name, .. } } => A::TableResult(
-                    if self.blocks.lock().unwrap().contains(&name) { Ok(Handle::new(1003)) } else { Err(format!("block {name:?} not found")) },
-                ),
-                Q::TableOperation { operation: TableOperation::BlockCreate { name, entities, erase_originals, .. } } => {
+                // As OCS: a block that does not exist first, then a change of
+                // nothing.
+                Q::TableOperation { operation: TableOperation::BlockModify { name, description, explodable, scale_uniformly } } => {
+                    A::TableResult(match self.blocks.lock().unwrap().get_mut(&name) {
+                        None => Err(format!("block {name:?} does not exist")),
+                        Some(_) if description.is_none() && explodable.is_none() && scale_uniformly.is_none() => Err("no block properties to change".into()),
+                        Some(block) => {
+                            if let Some(text) = description {
+                                block.0 = text;
+                            }
+                            if let Some(value) = explodable {
+                                block.1 = value;
+                            }
+                            Ok(Handle::new(1003))
+                        }
+                    })
+                }
+                Q::TableOperation { operation: TableOperation::BlockCreate { name, entities, erase_originals, description, .. } } => {
                     if erase_originals {
                         for handle in entities {
                             doc.remove_entity(handle);
                         }
                     }
-                    self.blocks.lock().unwrap().insert(name);
+                    self.blocks.lock().unwrap().insert(name, (description.unwrap_or_default(), true));
                     A::TableResult(Ok(Handle::new(1003)))
                 }
                 Q::TableOperation { .. } => A::TableResult(Ok(Handle::new(1001))),
