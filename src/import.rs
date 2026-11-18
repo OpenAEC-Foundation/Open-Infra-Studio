@@ -302,11 +302,12 @@ pub(crate) fn place_datasets(site: &Site, label: &str, origin: bool, datasets: V
     let messages = bridge::with_import_layers(label, |layers| {
         let mut messages = Vec::new();
         let mut rasters = Vec::new();
-        if origin {
-            messages.push(geo_origin(site)?);
-        }
         for dataset in datasets {
             messages.push(dataset.write(site, layers, &mut rasters)?);
+        }
+        if origin {
+            // Draw the marker above the new aerial image in the default order.
+            messages.push(geo_origin(site)?);
         }
         bridge::image_to_back(&rasters, layers)?;
         Ok(messages)
