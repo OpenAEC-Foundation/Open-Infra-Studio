@@ -1166,10 +1166,7 @@ impl BuiltinPlugin for OpenInfraCiviel {
     }
 
     fn on_notification(&mut self, _command_id: Option<u64>, notification: ocs_plugin_api::host::HostNotification) {
-        use ocs_plugin_api::host::HostNotification;
-        if let HostNotification::DocumentTabClosed { tab_id } | HostNotification::DocumentOpened { tab_id } = notification {
-            bridge::drawing_closed(tab_id);
-        }
+        bridge::handle_document_notification(notification);
     }
 
     fn dispatch(&self, host: &mut dyn HostApi, cmd: &str) -> bool {
