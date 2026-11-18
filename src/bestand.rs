@@ -123,13 +123,17 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
             tr("geen tekenbare objecten in het bestand", "no drawable features in the file").into()
         }));
     }
-    for l in &layers {
-        bridge::ensure_layer(l, Color::from_index(opt.aci));
-    }
-    let handles = bridge::add_entities_handles(&format!("GIS {}", source), out)?;
-    if let (Some(h), Some(r)) = (handles.first(), first_record) {
-        bridge::register_object_data(*h, r);
-    }
+    let label = format!("GIS {source}");
+    let handles = bridge::with_import_undo(&label, || {
+        for l in &layers {
+            bridge::ensure_layer(l, Color::from_index(opt.aci));
+        }
+        let handles = bridge::add_entities_handles(&label, out)?;
+        if let (Some(h), Some(r)) = (handles.first(), first_record) {
+            bridge::register_object_data(*h, r);
+        }
+        Ok(handles)
+    })?;
     bridge::note_source(source);
     bridge::zoom_extents();
     Ok(data.report(format!(

@@ -118,20 +118,12 @@ impl Out {
         }
     }
     fn write(self, label: &str) -> Result<usize, String> {
-        let mut all = Vec::new();
-        let mut first_data = None;
-        for (spec, e) in self.layers {
-            bridge::ensure_nlcs_layer(&spec);
-            if first_data.is_none() {
-                first_data = e.iter().find_map(|x| x.common().extended_data.get_record(bridge::XDATA_APP).cloned());
-            }
-            all.extend(e);
+        let mut batch = crate::basisdata::Batch::new();
+        for (spec, entities) in self.layers {
+            let data = entities.iter().find_map(|entity| entity.common().extended_data.get_record(bridge::XDATA_APP).cloned());
+            batch.push(&spec, entities, data.as_ref());
         }
-        let handles = bridge::add_entities_handles(label, all)?;
-        if let (Some(h), Some(r)) = (handles.first(), first_data) {
-            bridge::register_object_data(*h, r);
-        }
-        Ok(handles.len())
+        batch.write(label).map(|(count, _)| count)
     }
 }
 

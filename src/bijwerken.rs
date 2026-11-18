@@ -126,22 +126,25 @@ pub fn bgt_update(site: &Site, opt: &NlcsOptions, progress: &dyn Fn(String)) -> 
     // Objects of the fetched collections that the BGT no longer has.
     let vanished: Vec<Handle> = drawn.iter().filter(|(id, d)| !seen.contains(*id) && collections.contains(&d.collection)).flat_map(|(_, d)| d.handles.iter().copied()).collect();
     let n_vanished = drawn.iter().filter(|(id, d)| !seen.contains(*id) && collections.contains(&d.collection)).count();
-    if !remove.is_empty() {
-        bridge::remove_entities(tr("BGT bijwerken: gewijzigde objecten", "BGT update: changed objects"), &remove)?;
-    }
-    let placed = if redraw.is_empty() { String::new() } else { basisdata::bgt_place(site, &redraw, opt)? };
-    if !vanished.is_empty() {
-        bridge::ensure_layer(vanished_layer(), Color::from_index(1));
-        let moved: Vec<EntityType> = vanished
-            .iter()
-            .filter_map(|h| entities.get(h).cloned())
-            .map(|mut e| {
-                e.common_mut().layer = vanished_layer().to_string();
-                e
-            })
-            .collect();
-        bridge::update_entities(tr("BGT bijwerken: vervallen objecten", "BGT update: removed objects"), moved)?;
-    }
+    let placed = bridge::with_import_undo(tr("BGT bijwerken", "Update BGT"), || {
+        if !remove.is_empty() {
+            bridge::remove_entities(tr("BGT bijwerken: gewijzigde objecten", "BGT update: changed objects"), &remove)?;
+        }
+        let placed = if redraw.is_empty() { String::new() } else { basisdata::bgt_place(site, &redraw, opt)? };
+        if !vanished.is_empty() {
+            bridge::ensure_layer(vanished_layer(), Color::from_index(1));
+            let moved: Vec<EntityType> = vanished
+                .iter()
+                .filter_map(|h| entities.get(h).cloned())
+                .map(|mut e| {
+                    e.common_mut().layer = vanished_layer().to_string();
+                    e
+                })
+                .collect();
+            bridge::update_entities(tr("BGT bijwerken: vervallen objecten", "BGT update: removed objects"), moved)?;
+        }
+        Ok(placed)
+    })?;
     let mut msg = format!(
         "{}: {added} {}, {changed} {}, {n_vanished} {} ({}), {same} {}.",
         tr("BGT bijgewerkt", "BGT updated"),

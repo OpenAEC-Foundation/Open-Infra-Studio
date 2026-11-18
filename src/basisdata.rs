@@ -51,7 +51,7 @@ fn target() -> Result<Target, String> {
 /// Collects entities per layer and writes them as one undo step.
 pub(crate) struct Batch {
     entities: Vec<EntityType>,
-    layers: BTreeMap<String, usize>,
+    layers: BTreeMap<String, LayerSpec>,
     first_data: Option<ExtendedDataRecord>,
 }
 
@@ -64,10 +64,7 @@ impl Batch {
         if ents.is_empty() {
             return;
         }
-        if !self.layers.contains_key(&spec.name) {
-            bridge::ensure_nlcs_layer(spec);
-        }
-        *self.layers.entry(spec.name.clone()).or_insert(0) += ents.len();
+        self.layers.entry(spec.name.clone()).or_insert_with(|| spec.clone());
         if self.first_data.is_none() {
             self.first_data = data.cloned();
         }
@@ -75,12 +72,19 @@ impl Batch {
     }
 
     pub(crate) fn write(self, label: &str) -> Result<(usize, usize), String> {
-        let n = self.entities.len();
-        let handles = bridge::add_entities_handles(label, self.entities)?;
-        if let (Some(h), Some(r)) = (handles.first(), self.first_data) {
-            bridge::register_object_data(*h, r);
+        if self.entities.is_empty() {
+            return Ok((0, 0));
         }
-        Ok((n, self.layers.len()))
+        bridge::with_import_undo(label, || {
+            for spec in self.layers.values() {
+                bridge::ensure_nlcs_layer(spec);
+            }
+            let handles = bridge::add_entities_handles(label, self.entities)?;
+            if let (Some(h), Some(r)) = (handles.first(), self.first_data) {
+                bridge::register_object_data(*h, r);
+            }
+            Ok((handles.len(), self.layers.len()))
+        })
     }
 }
 

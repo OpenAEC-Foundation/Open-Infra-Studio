@@ -20,10 +20,11 @@ impl PluginRequestSender for Drawing {
         Ok(match request {
             PluginRequest::AddLayer(_) => PluginResponse::OptHandle(Some(Handle::from(1000u64))),
             PluginRequest::TableOperation { .. } => PluginResponse::TableResult(Ok(Handle::from(1001u64))),
-            PluginRequest::PushUndo { label } => {
+            PluginRequest::BeginUndoGroup { label } => {
                 self.undo.lock().unwrap().push(label);
                 PluginResponse::Ok
             }
+            PluginRequest::EndUndoGroup => PluginResponse::Ok,
             PluginRequest::AddEntities(entities) => {
                 let mut stored = self.entities.lock().unwrap();
                 let handles = (stored.len()..stored.len() + entities.len()).map(|i| Handle::from(i as u64 + 1)).collect();

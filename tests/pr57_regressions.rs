@@ -153,7 +153,8 @@ impl PluginRequestSender for Drawing {
             PluginRequest::CreateXRecord { .. } => {
                 PluginResponse::XRecordCreateResult(Ok(Handle::from(1002u64)))
             }
-            PluginRequest::PushUndo { .. }
+            PluginRequest::BeginUndoGroup { .. }
+            | PluginRequest::EndUndoGroup
             | PluginRequest::WriteRecord { .. }
             | PluginRequest::SetDirty
             | PluginRequest::BumpGeometry => PluginResponse::Ok,

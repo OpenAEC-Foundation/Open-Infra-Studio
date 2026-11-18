@@ -11,7 +11,7 @@ impl PluginRequestSender for Drawing {
     fn request(&self, req: Q) -> Result<A, PluginRequestError> {
         Ok(match req {
             Q::AddLayer(_) => A::OptHandle(Some(Handle::from(1000u64))),
-            Q::PushUndo { .. } | Q::SetDirty | Q::BumpGeometry => A::Ok,
+            Q::BeginUndoGroup { .. } | Q::EndUndoGroup | Q::SetDirty | Q::BumpGeometry => A::Ok,
             Q::AddEntities(entities) => {
                 let mut all = self.0.lock().unwrap();
                 let mut handles = Vec::new();

@@ -144,7 +144,7 @@ impl ocs_plugin_api::host::PluginRequestSender for Drawing {
                 self.records.lock().unwrap().insert(name, entries);
                 A::XRecordCreateResult(Ok(Handle::from(1002u64)))
             }
-            Q::PushUndo { .. } | Q::WriteRecord { .. } | Q::SetDirty | Q::BumpGeometry => A::Ok,
+            Q::BeginUndoGroup { .. } | Q::EndUndoGroup | Q::WriteRecord { .. } | Q::SetDirty | Q::BumpGeometry => A::Ok,
             other => return Err(ocs_plugin_api::host::PluginRequestError(format!("unexpected host request: {other:?}"))),
         })
     }

@@ -3,7 +3,7 @@
 //! `dispatch` (the host's call into the plugin) hands us a
 //! `PluginRequestSender` for the active document tab; the workbench window and
 //! import workers use it to add layers and entities while the host stays
-//! responsive. Each import is one undo step.
+//! responsive.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -28,6 +28,8 @@ pub struct Target {
 
 struct CommandContext { target: Target, site: Option<Site>, reply: Option<String> }
 thread_local! { static COMMAND_CONTEXT: std::cell::RefCell<Option<CommandContext>> = const { std::cell::RefCell::new(None) }; }
+thread_local! { static IMPORT_UNDO_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+static IMPORT_WRITES: Mutex<()> = Mutex::new(());
 
 /// Bind a queued worker to its originating document and result ID, even if the active tab changes.
 pub fn with_command_context<R>(target: Target, site: Option<Site>, reply: Option<String>, f: impl FnOnce() -> R) -> R {
@@ -102,8 +104,6 @@ impl InteractiveCommand for BoundInteractive {
 struct Shared {
     target: Option<Target>,
     site: Option<Site>,
-    /// NLCS layers and linetypes already set up, per tab.
-    made: HashSet<(u64, String)>,
     /// The NLCS layers imports drew on, per tab, for the legend.
     nlcs_layers: Vec<(u64, crate::nlcs::LayerSpec)>,
     /// Data sources of the imports, per tab, for the title block.
@@ -457,12 +457,12 @@ pub fn ensure_nlcs_layer(spec: &crate::nlcs::LayerSpec) {
     let Some(tab) = target().map(|t| t.tab_id) else { return };
     {
         let mut s = shared().lock().unwrap();
-        if !s.made.insert((tab, format!("LA:{}", spec.name))) {
-            return;
+        if !s.nlcs_layers.iter().any(|(t, layer)| *t == tab && layer.name == spec.name) {
+            s.nlcs_layers.push((tab, spec.clone()));
         }
-        s.nlcs_layers.push((tab, spec.clone()));
     }
-    let linetype = ensure_linetype(tab, &spec.linetype);
+    // Undo can remove a layer or linetype while the plugin stays loaded.
+    let linetype = ensure_linetype(&spec.linetype);
     let config = |linetype: Option<String>| LayerConfig {
         name: spec.name.clone(),
         color: Some(match spec.true_color {
@@ -482,11 +482,8 @@ pub fn ensure_nlcs_layer(spec: &crate::nlcs::LayerSpec) {
 
 /// Define an NLCS linetype in the drawing when it lacks it (shape and text
 /// elements left out). `None` for CONTINUOUS and names that cannot be made.
-fn ensure_linetype(tab: u64, name: &str) -> Option<String> {
+fn ensure_linetype(name: &str) -> Option<String> {
     let pattern = crate::nlcs::linetype_pattern(name)?;
-    if !shared().lock().unwrap().made.insert((tab, format!("LT:{name}"))) {
-        return Some(name.to_string());
-    }
     let description = if crate::nlcs::linetype_is_complex(name) { format!("NLCS {name} (vereenvoudigd, zonder symbolen)") } else { format!("NLCS {name}") };
     let op = TableOperation::LinetypeCreate { name: name.to_string(), description, pattern };
     match request(PluginRequest::TableOperation { operation: op }) {
@@ -821,8 +818,7 @@ pub fn select(handles: &[Handle]) -> Result<(), String> {
 
 /// Give an existing layer the NLCS colour, lineweight and linetype.
 pub fn restyle_layer(spec: &crate::nlcs::LayerSpec) -> Result<(), String> {
-    let tab = target().map(|t| t.tab_id).ok_or("geen tekening actief")?;
-    let linetype = ensure_linetype(tab, &spec.linetype).or_else(|| Some("Continuous".into()));
+    let linetype = ensure_linetype(&spec.linetype).or_else(|| Some("Continuous".into()));
     let config = LayerConfig {
         name: spec.name.clone(),
         color: Some(Color::Index(spec.color.max(1))),
@@ -838,16 +834,17 @@ pub fn remove_entities(label: &str, handles: &[Handle]) -> Result<usize, String>
     if handles.is_empty() {
         return Ok(0);
     }
-    request(PluginRequest::PushUndo { label: label.into() })?;
-    let mut n = 0;
-    for h in handles {
-        if request(PluginRequest::RemoveEntity { handle: *h }).is_ok() {
-            n += 1;
+    with_import_undo(label, || {
+        let mut n = 0;
+        for h in handles {
+            if request(PluginRequest::RemoveEntity { handle: *h }).is_ok() {
+                n += 1;
+            }
         }
-    }
-    let _ = request(PluginRequest::SetDirty);
-    let _ = request(PluginRequest::BumpGeometry);
-    Ok(n)
+        let _ = request(PluginRequest::SetDirty);
+        let _ = request(PluginRequest::BumpGeometry);
+        Ok(n)
+    })
 }
 
 /// Replace elements in one undo step (an atomic transaction in the host).
@@ -916,6 +913,40 @@ pub fn register_object_data(handle: Handle, record: ExtendedDataRecord) {
 
 const BATCH_BYTES: usize = 12 * 1024 * 1024;
 
+/// Hold API 23's history step across worker requests. Nested placement
+/// functions join the outer import. Keep fetches outside this scope.
+pub(crate) fn with_import_undo<R>(label: &str, write: impl FnOnce() -> Result<R, String>) -> Result<R, String> {
+    if IMPORT_UNDO_OPEN.get() {
+        return write();
+    }
+    if COMMAND_CONTEXT.with(|c| c.borrow().is_none()) {
+        let t = target().ok_or("geen tekening actief")?;
+        return with_command_context(t, site(), None, || with_import_undo(label, write));
+    }
+    let _one = IMPORT_WRITES.lock().unwrap_or_else(|e| e.into_inner());
+    match request(PluginRequest::BeginUndoGroup { label: label.into() })? {
+        PluginResponse::Ok => {}
+        other => return Err(format!("BeginUndoGroup: {other:?}")),
+    }
+    struct CloseUndo;
+    impl Drop for CloseUndo {
+        fn drop(&mut self) {
+            if IMPORT_UNDO_OPEN.replace(false) {
+                let _ = request(PluginRequest::EndUndoGroup);
+            }
+        }
+    }
+    IMPORT_UNDO_OPEN.set(true);
+    let _close = CloseUndo;
+    let result = write();
+    let closed = request(PluginRequest::EndUndoGroup).and_then(|response| match response {
+        PluginResponse::Ok => Ok(()),
+        other => Err(format!("EndUndoGroup: {other:?}")),
+    });
+    IMPORT_UNDO_OPEN.set(false);
+    result.and_then(|value| closed.map(|()| value))
+}
+
 /// A generous guess of an entity's size on the wire.
 fn estimated_size(e: &EntityType) -> usize {
     match e {
@@ -942,11 +973,10 @@ pub fn add_entities_handles(label: &str, entities: Vec<EntityType>) -> Result<Ve
     if entities.is_empty() {
         return Ok(Vec::new());
     }
-    // Imports run on their own threads: one at a time keeps each its own
-    // undo step.
-    static WRITING: Mutex<()> = Mutex::new(());
-    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-    request(PluginRequest::PushUndo { label: label.into() })?;
+    with_import_undo(label, || add_entity_chunks(entities))
+}
+
+fn add_entity_chunks(entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
     let mut handles = Vec::with_capacity(entities.len());
     // Batches well under the host's 64 MB message limit: meshes carry a
     // full record per vertex and face, so count bytes, not entities.
@@ -954,8 +984,13 @@ pub fn add_entities_handles(label: &str, entities: Vec<EntityType>) -> Result<Ve
     let mut bytes = 0usize;
     let send = |chunk: &mut Vec<EntityType>, handles: &mut Vec<Handle>| -> Result<(), String> {
         if !chunk.is_empty() {
-            if let PluginResponse::Handles(h) = request(PluginRequest::AddEntities(std::mem::take(chunk)))? {
-                handles.extend(h);
+            let expected = chunk.len();
+            match request(PluginRequest::AddEntities(std::mem::take(chunk)))? {
+                PluginResponse::Handles(h) if h.len() == expected && h.iter().all(|handle| !handle.is_null()) => handles.extend(h),
+                other => return Err(format!("Open CAD Studio heeft niet alle elementen geplaatst ({} verwacht, {} bevestigd)", expected, match other {
+                    PluginResponse::Handles(h) => h.iter().filter(|handle| !handle.is_null()).count(),
+                    _ => 0,
+                })),
             }
         }
         Ok(())
@@ -978,7 +1013,7 @@ pub fn add_entities_handles(label: &str, entities: Vec<EntityType>) -> Result<Ve
 }
 
 /// Map images are underlays: send them behind the vector data.
-pub fn send_to_back(handles: &[Handle]) {
+fn send_to_back(handles: &[Handle]) {
     if handles.is_empty() {
         return;
     }
@@ -992,17 +1027,27 @@ pub fn send_to_back(handles: &[Handle]) {
 /// A new map image behind the drawing's vectors, but on top of the images
 /// already there (newest map on top: a cadastre overlay over the photo).
 pub fn image_to_back(new: &[Handle]) {
-    send_to_back(new);
-    let older: Vec<Handle> = view()
-        .map(|d| {
-            d.model_space_entities()
-                .filter(|e| matches!(e, EntityType::RasterImage(_)))
-                .map(|e| e.common().handle)
-                .filter(|h| !new.contains(h))
-                .collect()
-        })
-        .unwrap_or_default();
-    send_to_back(&older);
+    if new.is_empty() {
+        return;
+    }
+    let Some(drawing) = view() else {
+        send_to_back(new);
+        return;
+    };
+    let imported: HashSet<_> = new.iter().copied().collect();
+    let mut existing = drawing.model_space_entities().filter(|entity| !imported.contains(&entity.common().handle)).peekable();
+    if existing.peek().is_none() {
+        return;
+    }
+    // One native DRAWORDER step. Its BACK command uses the order supplied
+    // by SetSelection, so older images go below the new tiles.
+    let mut images: Vec<_> = existing.filter_map(|entity| match entity {
+        EntityType::RasterImage(_) => Some(entity.common().handle),
+        _ => None,
+    }).collect();
+    images.sort_unstable_by_key(|handle| handle.value());
+    images.extend_from_slice(new);
+    send_to_back(&images);
 }
 
 /// Run a command line in the active drawing (tokens answer its prompts).
@@ -1059,6 +1104,39 @@ pub fn image_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn entity_chunks_share_one_undo_group() {
+        use ocs_plugin_api::host::codec::entities::Point;
+        use ocs_plugin_api::host::PluginRequestError;
+
+        #[derive(Default)]
+        struct Sender(Mutex<Vec<&'static str>>);
+        impl PluginRequestSender for Sender {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                let (name, response) = match req {
+                    PluginRequest::BeginUndoGroup { .. } => ("begin", PluginResponse::Ok),
+                    PluginRequest::EndUndoGroup => ("end", PluginResponse::Ok),
+                    PluginRequest::PushUndo { .. } => ("push", PluginResponse::Ok),
+                    PluginRequest::AddEntities(ents) => {
+                        let name = if ents.len() == 2000 { "first chunk" } else { "second chunk" };
+                        (name, PluginResponse::Handles(vec![Handle::new(1); ents.len()]))
+                    }
+                    PluginRequest::SetDirty | PluginRequest::BumpGeometry => return Ok(PluginResponse::Ok),
+                    other => panic!("unexpected request: {other:?}"),
+                };
+                self.0.lock().unwrap().push(name);
+                Ok(response)
+            }
+        }
+
+        let sender = Arc::new(Sender::default());
+        let drawing = Target { sender: sender.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
+        let points = vec![EntityType::Point(Point::from_coords(1.0, 2.0, 0.0)); 2001];
+        let count = with_command_context(drawing, None, None, || add_entities("Import", points)).unwrap();
+        assert_eq!(count, 2001);
+        assert_eq!(*sender.0.lock().unwrap(), ["begin", "first chunk", "second chunk", "end"]);
+    }
 
     #[test]
     fn a_name_stays_one_file_beside_the_drawing() {

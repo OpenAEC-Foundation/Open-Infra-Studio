@@ -164,12 +164,11 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
     title_block(&mut s, sx, pw - 10.0, info, opt, paper, &site.crs, &site.label);
     let shown = legend(&mut s, sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
 
-    let mut ents = Vec::new();
-    for (spec, e) in s.out {
-        bridge::ensure_nlcs_layer(&spec);
-        ents.extend(e);
+    let mut batch = crate::basisdata::Batch::new();
+    for (spec, entities) in s.out {
+        batch.push(&spec, entities, None);
     }
-    let n = bridge::add_entities("NLCS-tekenblad", ents)?;
+    let (n, _) = batch.write("NLCS-tekenblad")?;
     Ok(format!("Tekenblad {paper} liggend, schaal 1:{} — {n} elementen, legenda met {shown} lagen.", opt.scale))
 }
 

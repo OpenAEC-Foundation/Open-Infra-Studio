@@ -117,9 +117,11 @@ pub fn import(site: &Site, path: &std::path::Path, unit_factor: f64) -> Result<S
         drawn += 1;
         *kinds.entry(o.kind.clone()).or_insert(0) += 1;
     }
-    let (n, layers) = batch.write("NLCS++")?;
-    // After the entities, so the record can join their undo step.
-    keep_relations(&import, &kept)?;
+    let (n, layers) = crate::bridge::with_import_undo("NLCS++", || {
+        let result = batch.write("NLCS++")?;
+        keep_relations(&import, &kept)?;
+        Ok(result)
+    })?;
     drawn += kept.len();
     crate::bridge::note_source(&format!("NLCS++ {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("")));
     let top: Vec<String> = {

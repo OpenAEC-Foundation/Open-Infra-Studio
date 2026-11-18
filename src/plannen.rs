@@ -479,8 +479,23 @@ pub(crate) fn place_with_text(
     if rendered.entities.is_empty() {
         return Err("Geen tekenbare IMRO-objecten gevonden".into());
     }
-    if rendered
-        .entities
+    let count = bridge::with_import_undo("IMRO-plangegevens", || write_plan(&target, &rendered.layers, rendered.entities))?;
+    bridge::note_source(source);
+    bridge::zoom_extents();
+    for warning in &data.warnings {
+        progress(warning.clone());
+    }
+    Ok(files::report(
+        format!("IMRO: {} {}, {count} {} {} {} {}. {}",
+            rendered.objects, tr("objecten", "features"), tr("elementen", "entities"),
+            tr("op", "on"), rendered.layers.len(), tr("lagen", "layers"),
+            tr("Kaartgegevens; controleer actuele regels en rechtsgeldigheid.", "Map data; check current rules and legal validity.")),
+        &data.warnings,
+    ))
+}
+
+fn write_plan(target: &bridge::Target, layers: &BTreeMap<String, [u8; 3]>, entities: Vec<EntityType>) -> Result<usize, String> {
+    if entities
         .iter()
         .any(|e| e.common().linetype == DASH)
     {
@@ -501,7 +516,7 @@ pub(crate) fn place_with_text(
             }
         }
     }
-    for (name, [r, g, b]) in &rendered.layers {
+    for (name, [r, g, b]) in layers {
         bridge::ensure_layer(
             name,
             Color::Rgb {
@@ -511,29 +526,13 @@ pub(crate) fn place_with_text(
             },
         );
     }
-    let record = rendered
-        .entities
+    let record = entities
         .first()
         .and_then(|e| e.common().extended_data.get_record(bridge::XDATA_APP))
         .cloned();
-    let count = rendered.entities.len();
-    let handles = bridge::add_entities_handles("IMRO-plangegevens", rendered.entities)?;
-    if handles.len() != count {
-        return Err("De host heeft niet alle plangegevens bevestigd; controleer Undo".into());
-    }
+    let handles = bridge::add_entities_handles("IMRO-plangegevens", entities)?;
     if let (Some(handle), Some(record)) = (handles.first(), record) {
         bridge::register_object_data(*handle, record);
     }
-    bridge::note_source(source);
-    bridge::zoom_extents();
-    for warning in &data.warnings {
-        progress(warning.clone());
-    }
-    Ok(files::report(
-        format!("IMRO: {} {}, {count} {} {} {} {}. {}",
-            rendered.objects, tr("objecten", "features"), tr("elementen", "entities"),
-            tr("op", "on"), rendered.layers.len(), tr("lagen", "layers"),
-            tr("Kaartgegevens; controleer actuele regels en rechtsgeldigheid.", "Map data; check current rules and legal validity.")),
-        &data.warnings,
-    ))
+    Ok(handles.len())
 }

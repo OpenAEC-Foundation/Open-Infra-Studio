@@ -265,22 +265,27 @@ impl Out {
     /// Write and return the new handles, in the order the entities were put
     /// (layer by layer, as first used).
     pub fn write_handles(self, label: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
-        let mut all = Vec::new();
-        let mut first_data = None;
-        for (spec, e) in self.layers {
-            bridge::ensure_nlcs_layer(&spec);
-            if first_data.is_none() {
-                first_data = e.iter().find_map(|x| x.common().extended_data.get_record(bridge::XDATA_APP).cloned());
+        if self.is_empty() {
+            return Ok(Vec::new());
+        }
+        bridge::with_import_undo(label, || {
+            let mut all = Vec::new();
+            let mut first_data = None;
+            for (spec, e) in self.layers {
+                bridge::ensure_nlcs_layer(&spec);
+                if first_data.is_none() {
+                    first_data = e.iter().find_map(|x| x.common().extended_data.get_record(bridge::XDATA_APP).cloned());
+                }
+                all.extend(e);
             }
-            all.extend(e);
-        }
-        let handles = bridge::add_entities_handles(label, all)?;
-        // The host registers the XDATA application only through a record write.
-        if let (Some(h), Some(r)) = (handles.first(), first_data) {
-            bridge::register_object_data(*h, r);
-        }
-        api::note("elementen", handles.len());
-        Ok(handles)
+            let handles = bridge::add_entities_handles(label, all)?;
+            // The host registers the XDATA application only through a record write.
+            if let (Some(h), Some(r)) = (handles.first(), first_data) {
+                bridge::register_object_data(*h, r);
+            }
+            api::note("elementen", handles.len());
+            Ok(handles)
+        })
     }
 }
 
