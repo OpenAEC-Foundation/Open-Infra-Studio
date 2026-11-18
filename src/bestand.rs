@@ -72,10 +72,9 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     let base = emit::clean_name(opt.layer.trim());
     // The name a drawing from before #143 has for it: the layer as typed,
     // the default one with the spaces of the file's name.
-    let default = opt.layer.trim() == emit::layer_name("GIS", stem);
-    let old_base = if default { emit::spaced_layer_name("GIS", stem) } else { opt.layer.clone() };
+    let old_base = if opt.layer.trim() == emit::layer_name("GIS", stem) { emit::spaced_layer_name("GIS", stem) } else { opt.layer.clone() };
     let text_h = opt.text_m * f;
-    // Each layer with its name from before #143.
+    // Each layer's name without spaces, with the layer drawn on.
     let mut layers: Vec<(String, String)> = Vec::new();
     let mut out: Vec<EntityType> = Vec::new();
     let mut n_features = 0;
@@ -89,10 +88,15 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         }
         n_features += 1;
         let value = opt.split_by.as_ref().and_then(|k| feat.props.get(k)).and_then(emit::attribute_text);
-        let layer = value.as_deref().map_or_else(|| base.clone(), |v| emit::layer_name(&base, v));
-        if !layers.iter().any(|(l, _)| *l == layer) {
-            layers.push((layer.clone(), value.as_deref().map_or_else(|| old_base.clone(), |v| emit::spaced_layer_name(&old_base, v))));
-        }
+        let name = value.as_deref().map_or_else(|| base.clone(), |v| emit::layer_name(&base, v));
+        let layer = match layers.iter().find(|(n, _)| *n == name) {
+            Some((_, layer)) => layer.clone(),
+            None => {
+                let layer = bridge::import_layer(&name, &value.as_deref().map_or_else(|| old_base.clone(), |v| emit::spaced_layer_name(&old_base, v)));
+                layers.push((name, layer.clone()));
+                layer
+            }
+        };
         let record = emit::feature_data(feat);
         out.extend(emit::polylines(&lines, &layer, 1.0, Some(&record)));
         out.extend(emit::markers(&points, &layer, text_h * 0.25, Some(&record)));
@@ -117,13 +121,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     }
     let label = format!("GIS {source}");
     let handles = bridge::with_import_undo(&label, || {
-        for (layer, old) in &layers {
-            // The layer from before #143 takes this name, in this undo step:
-            // the default one always, a typed one only when an import made
-            // it, never a layer of someone's own drawing.
-            if old != layer && (default || bridge::imported_layer(old)) {
-                bridge::take_over_layer(old, layer);
-            }
+        for (_, layer) in &layers {
             bridge::ensure_layer(layer, Color::from_index(opt.aci));
         }
         // A file is its own source: its layers are named after it, so is its group.
@@ -139,7 +137,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         source,
         handles.len(),
         tr("elementen op", "entities on"),
-        if layers.len() == 1 { layers[0].0.clone() } else { format!("{} {}", layers.len(), tr("lagen", "layers")) }
+        if layers.len() == 1 { layers[0].1.clone() } else { format!("{} {}", layers.len(), tr("lagen", "layers")) }
     )))
 }
 
@@ -147,7 +145,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
 mod tests {
     use std::sync::Arc;
 
-    use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Line, Point};
+    use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Line};
 
     use super::*;
     use crate::bridge::replacement_test_host::Drawing;
@@ -179,14 +177,6 @@ mod tests {
         data
     }
 
-    /// A point on `layer` as an import places it, with its object data.
-    fn imported(layer: &str) -> EntityType {
-        let mut point = Point::default();
-        point.common.layer = layer.into();
-        point.common.extended_data.add_record(bridge::object_data([("soort", "dicht asfalt".to_string())]));
-        EntityType::Point(point)
-    }
-
     /// A line someone drew on `layer`.
     fn by_hand(layer: &str) -> EntityType {
         let mut line = Line::default();
@@ -216,83 +206,75 @@ mod tests {
     }
 
     /// A drawing from before #143 has a layer per value with the spaces of
-    /// the file's name: a re-import draws on that layer, renamed, and its
-    /// layer group holds it. That name is the import's own, whatever is on
-    /// it (#143).
+    /// the file's name: a re-import draws on it as it is, as on main, and a
+    /// layer group cannot hold it. A new value gets a layer without spaces,
+    /// in the group. No layer is renamed (#143).
     #[test]
-    fn a_reimport_per_value_takes_over_the_layer_with_spaces_from_before() {
+    fn a_reimport_per_value_draws_on_the_layer_with_spaces_from_before() {
         let mut doc = CadDocument::new();
         doc.layers.add(Layer::new("GIS-WEGEN WEST-DICHT ASFALT")).unwrap();
-        let mut point = Point::default();
-        point.common.layer = "GIS-WEGEN WEST-DICHT ASFALT".into();
-        let old = doc.add_entity(EntityType::Point(point)).unwrap();
+        let line = doc.add_entity(by_hand("GIS-WEGEN WEST-DICHT ASFALT")).unwrap();
         let drawing = Arc::new(Drawing::new(doc, false));
-        import(&drawing, 143_202, "wegen west.gpkg", &one_feature(&[("soort", "dicht asfalt")]), |opt| opt.split_by = Some("soort".into()));
-        assert_eq!(groups(&drawing), [group("Bestand-wegen_west", &["GIS-WEGEN_WEST-DICHT_ASFALT"])]);
+        import(&drawing, 143_202, "wegen west.gpkg", &per_value(&["dicht asfalt", "open asfalt"]), |opt| opt.split_by = Some("soort".into()));
+        assert_eq!(groups(&drawing), [group("Bestand-wegen_west", &["GIS-WEGEN_WEST-OPEN_ASFALT"])]);
         let doc = drawing.doc.lock().unwrap();
-        assert!(!doc.layers.contains("GIS-WEGEN WEST-DICHT ASFALT"));
-        assert_eq!(doc.get_entity(old).unwrap().common().layer, "GIS-WEGEN_WEST-DICHT_ASFALT");
+        assert_eq!(doc.get_entity(line).unwrap().common().layer, "GIS-WEGEN WEST-DICHT ASFALT");
+        assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == "GIS-WEGEN WEST-DICHT ASFALT").count(), 2);
+        assert!(!doc.layers.contains("GIS-WEGEN_WEST-DICHT_ASFALT"));
     }
 
     /// A typed layer name that, cleaned, is the file's default: a re-import
-    /// still takes over the layers made from the name as typed (#143).
+    /// still finds the layer made from the name as typed (#143).
     #[test]
-    fn a_typed_name_like_the_default_takes_over_its_layers_with_spaces() {
+    fn a_typed_name_like_the_default_finds_its_layer_with_spaces() {
         let mut doc = CadDocument::new();
         doc.layers.add(Layer::new("GIS-WEGEN WEST-DICHT ASFALT")).unwrap();
-        let old = doc.add_entity(imported("GIS-WEGEN WEST-DICHT ASFALT")).unwrap();
         let drawing = Arc::new(Drawing::new(doc, false));
         import(&drawing, 143_205, "wegen_west.gpkg", &one_feature(&[("soort", "dicht asfalt")]), |opt| {
             opt.layer = "GIS-WEGEN WEST".into();
             opt.split_by = Some("soort".into());
         });
-        assert_eq!(groups(&drawing), [group("Bestand-wegen_west", &["GIS-WEGEN_WEST-DICHT_ASFALT"])]);
+        assert!(groups(&drawing).is_empty());
         let doc = drawing.doc.lock().unwrap();
-        assert!(!doc.layers.contains("GIS-WEGEN WEST-DICHT ASFALT"));
-        assert_eq!(doc.get_entity(old).unwrap().common().layer, "GIS-WEGEN_WEST-DICHT_ASFALT");
+        assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == "GIS-WEGEN WEST-DICHT ASFALT").count(), 1);
+        assert!(!doc.layers.contains("GIS-WEGEN_WEST-DICHT_ASFALT"));
     }
 
     /// A layer name typed with a space and a layer per value: a re-import
-    /// takes over, in its own undo step, a layer that an import from
-    /// before #143 made from that name, spaces and all. A layer someone
-    /// also drew on by hand keeps its name and stays out of the group (#143).
+    /// draws on the layer an import from before #143 made from that name,
+    /// spaces and all, also with someone's own drawing on it (#143).
     #[test]
-    fn a_reimport_with_a_typed_base_takes_over_only_the_layers_an_import_made() {
+    fn a_reimport_with_a_typed_base_draws_on_its_layers_with_spaces() {
         let mut doc = CadDocument::new();
-        for layer in ["ONTWERP WEGEN-DICHT ASFALT", "ONTWERP WEGEN-OPEN ASFALT"] {
-            doc.layers.add(Layer::new(layer)).unwrap();
-        }
-        let old = doc.add_entity(imported("ONTWERP WEGEN-DICHT ASFALT")).unwrap();
-        doc.add_entity(imported("ONTWERP WEGEN-OPEN ASFALT")).unwrap();
-        let line = doc.add_entity(by_hand("ONTWERP WEGEN-OPEN ASFALT")).unwrap();
+        doc.layers.add(Layer::new("ONTWERP WEGEN-DICHT ASFALT")).unwrap();
+        let line = doc.add_entity(by_hand("ONTWERP WEGEN-DICHT ASFALT")).unwrap();
         let drawing = Arc::new(Drawing::new(doc, false));
         import(&drawing, 143_204, "wegen.gpkg", &per_value(&["dicht asfalt", "open asfalt"]), |opt| {
             opt.layer = "Ontwerp wegen".into();
             opt.split_by = Some("soort".into());
         });
-        let log = drawing.log.lock().unwrap().clone();
-        assert_eq!(log[..3], ["begin", "rename ONTWERP WEGEN-DICHT ASFALT ONTWERP_WEGEN-DICHT_ASFALT", "end"], "{log:?}");
-        assert_eq!(groups(&drawing), [group("Bestand-wegen", &["ONTWERP_WEGEN-DICHT_ASFALT", "ONTWERP_WEGEN-OPEN_ASFALT"])]);
+        assert_eq!(groups(&drawing), [group("Bestand-wegen", &["ONTWERP_WEGEN-OPEN_ASFALT"])]);
         let doc = drawing.doc.lock().unwrap();
-        assert!(!doc.layers.contains("ONTWERP WEGEN-DICHT ASFALT"));
-        assert_eq!(doc.get_entity(old).unwrap().common().layer, "ONTWERP_WEGEN-DICHT_ASFALT");
-        assert_eq!(doc.get_entity(line).unwrap().common().layer, "ONTWERP WEGEN-OPEN ASFALT");
+        assert_eq!(doc.get_entity(line).unwrap().common().layer, "ONTWERP WEGEN-DICHT ASFALT");
+        assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == "ONTWERP WEGEN-DICHT ASFALT").count(), 2);
     }
 
-    /// A first import onto a typed layer name with a space where someone
-    /// drew by hand: that layer keeps its name and its drawing, outside the
-    /// import's layer group (#143).
+    /// A first import onto a typed layer name with a space (and one after
+    /// it) where someone drew by hand: the import draws on that layer, as on
+    /// main; it keeps its name and stays out of the layer group (#143).
     #[test]
-    fn a_first_import_leaves_a_layer_drawn_by_hand_alone() {
+    fn a_first_import_draws_on_a_layer_with_a_space_as_it_is() {
         let mut doc = CadDocument::new();
         doc.layers.add(Layer::new("Ontwerp wegen")).unwrap();
         let line = doc.add_entity(by_hand("Ontwerp wegen")).unwrap();
         let drawing = Arc::new(Drawing::new(doc, false));
-        import(&drawing, 143_206, "metingen.csv", &one_feature(&[]), |opt| opt.layer = "Ontwerp wegen".into());
-        assert_eq!(groups(&drawing), [group("Bestand-metingen", &["Ontwerp_wegen"])]);
+        let message = import(&drawing, 143_206, "metingen.csv", &one_feature(&[]), |opt| opt.layer = "Ontwerp wegen ".into());
+        assert!(message.ends_with("Ontwerp wegen."), "{message}");
+        assert!(groups(&drawing).is_empty());
         let doc = drawing.doc.lock().unwrap();
-        assert!(doc.layers.contains("Ontwerp wegen"));
+        assert!(!doc.layers.contains("Ontwerp_wegen"));
         assert_eq!(doc.get_entity(line).unwrap().common().layer, "Ontwerp wegen");
+        assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == "Ontwerp wegen").count(), 2);
     }
 
     /// A layer name typed with a space: the import draws on it without the

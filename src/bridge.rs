@@ -1375,34 +1375,25 @@ struct WaitingGroup {
     deferred: bool,
 }
 
-/// The layer of a GIS import ([`emit::layer_name`]), taken over from a
-/// drawing from before #143 ([`take_over_layer`]).
+/// The layer of a GIS import ([`emit::layer_name`]), see [`import_layer`].
 pub(crate) fn gis_layer(prefix: &str, raw: &str) -> String {
-    let name = crate::emit::layer_name(prefix, raw);
-    take_over_layer(&crate::emit::spaced_layer_name(prefix, raw), &name);
-    name
+    import_layer(&crate::emit::layer_name(prefix, raw), &crate::emit::spaced_layer_name(prefix, raw))
 }
 
-/// Drawings from before #143 have an import's layer with spaces (`old`),
-/// which `LAYERGROUP` cannot name: it gets the new name, so a re-import
-/// draws on it and its group holds it. Asked on every import, as undo can
-/// bring the old name back; OCS refuses it without a change when there is
-/// no such layer.
-pub(crate) fn take_over_layer(old: &str, new: &str) {
-    if old != new {
-        let _ = request(PluginRequest::TableOperation { operation: TableOperation::LayerRename { from: old.into(), to: new.into() } });
-    }
+/// The layer an import draws on: `name`, unless the drawing has only `old`,
+/// the layer with spaces an import made before #143. That one is drawn on
+/// as it is, as on main: `LAYERGROUP` cannot name it, so it stays out of the
+/// group, and no import renames a layer (#143).
+pub(crate) fn import_layer(name: &str, old: &str) -> String {
+    let old = old.trim();
+    if old != name && !layer_exists(name) && layer_exists(old) { old.into() } else { name.into() }
 }
 
-/// Whether every element on layer `name` carries Open Infra's object data:
-/// an import drew there, no one by hand (#143).
-pub(crate) fn imported_layer(name: &str) -> bool {
-    let count = |query: serde_json::Value| match request(PluginRequest::QueryEntities { query: query.to_string() }) {
-        Ok(PluginResponse::EntityPage(Ok(page))) => Some(page.count),
-        _ => None,
-    };
-    let all = count(serde_json::json!({"layer": name, "limit": 0}));
-    all.is_some() && count(serde_json::json!({"layer": name, "xdata_app": XDATA_APP, "limit": 0})) == all
+/// Whether the drawing has layer `name`: OCS refuses to rename one to its
+/// own name, without a change, and says so only for a layer it has.
+fn layer_exists(name: &str) -> bool {
+    let rename = TableOperation::LayerRename { from: name.into(), to: name.into() };
+    matches!(request(PluginRequest::TableOperation { operation: rename }), Ok(PluginResponse::TableResult(Err(e))) if e != format!("layer {name:?} does not exist"))
 }
 
 /// A layer group's name: cleaned as a layer name ([`emit::clean_name`]).
@@ -2272,14 +2263,16 @@ pub(crate) mod replacement_test_host {
                 }
                 Q::WriteRecord { handle, .. } => A::Bool(doc.get_entity(handle).is_some_and(|e| !locked(&doc, e))),
                 // As OCS: refused without a change when it cannot rename.
-                Q::TableOperation { operation: TableOperation::LayerRename { from, to } } => A::TableResult(if doc.layers.contains(&to) {
+                // As OCS: a layer that does not exist first, then a name
+                // that stays the same.
+                Q::TableOperation { operation: TableOperation::LayerRename { from, to } } => A::TableResult(if !doc.layers.contains(&from) {
+                    Err(format!("layer {from:?} does not exist"))
+                } else if from == to {
+                    Err("the new layer name is the same as the current one".into())
+                } else if doc.layers.contains(&to) {
                     Err(format!("layer {to:?} already exists"))
                 } else {
-                    let renamed = doc.rename_layer(&from, &to).map_err(|e| e.to_string());
-                    if renamed.is_ok() {
-                        self.log.lock().unwrap().push(format!("rename {from} {to}"));
-                    }
-                    renamed
+                    doc.rename_layer(&from, &to).map_err(|e| e.to_string())
                 }),
                 // As OCS: a block that does not exist first, then a change of
                 // nothing.
@@ -2348,12 +2341,7 @@ pub(crate) mod replacement_test_host {
                 Q::QueryEntities { query } => {
                     let query: serde_json::Value = serde_json::from_str(&query).unwrap();
                     let layer = query["layer"].as_str().unwrap();
-                    let app = query["xdata_app"].as_str();
-                    let entities: Vec<EntityType> = doc
-                        .model_space_entities()
-                        .filter(|e| e.common().layer == layer && app.is_none_or(|app| e.common().extended_data.get_record(app).is_some()))
-                        .cloned()
-                        .collect();
+                    let entities: Vec<EntityType> = doc.model_space_entities().filter(|e| e.common().layer == layer).cloned().collect();
                     A::EntityPage(Ok(ocs_plugin_api::host::EntityPage { count: entities.len() as u64, entities, next_offset: None }))
                 }
                 Q::BeginUndoGroup { .. } => {
@@ -2950,22 +2938,22 @@ mod layer_group_tests {
     }
 
     /// A drawing from before #143 has its GIS layer with spaces: a re-import
-    /// draws on that same layer under its new name, which its group holds.
+    /// draws on it as it is, which a layer group cannot hold, and says so. A
+    /// drawing with the layer without spaces, or with neither, gets that one.
+    /// No layer is renamed (#143).
     #[test]
-    fn a_reimport_takes_over_a_layer_with_spaces_from_before() {
+    fn a_reimport_draws_on_a_layer_with_spaces_from_before() {
         in_drawing(143_004, |drawing| {
+            assert_eq!(gis_layer("GIS", "legacy punt"), "GIS-LEGACY_PUNT");
             ensure_layer("GIS-LEGACY PUNT", Color::from_index(7));
-            let old = drawing.doc.lock().unwrap().add_entity(on("GIS-LEGACY PUNT")).unwrap();
             let layer = gis_layer("GIS", "legacy punt");
-            assert_eq!(layer, "GIS-LEGACY_PUNT");
-            ensure_layer(&layer, Color::from_index(7));
+            assert_eq!(layer, "GIS-LEGACY PUNT");
             add_imported_entities("GIS legacy punt.csv", "legacy punt", vec![on(&layer)]).unwrap();
-            let doc = drawing.doc.lock().unwrap();
-            assert!(!doc.layers.contains("GIS-LEGACY PUNT"));
-            assert_eq!(doc.get_entity(old).unwrap().common().layer, layer);
-            assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == layer).count(), 2);
-            drop(doc);
-            assert_eq!(groups(drawing), [("legacy_punt".to_string(), vec![layer])]);
+            assert!(groups(drawing).is_empty());
+            assert!(drawing.info.lock().unwrap().iter().any(|line| line.contains("legacy_punt")), "{:?}", drawing.info.lock().unwrap());
+            ensure_layer("GIS-LEGACY_PUNT", Color::from_index(7));
+            assert_eq!(gis_layer("GIS", "legacy punt"), "GIS-LEGACY_PUNT");
+            assert!(drawing.doc.lock().unwrap().layers.contains("GIS-LEGACY PUNT"));
         });
     }
 

@@ -259,7 +259,7 @@ pub const PDOK: &[Catalogued] = &[
 
 pub(crate) enum PreparedDataset {
     /// `group`: the layer group of the map; `old_layer`: its layer's name in
-    /// a drawing from before #143, taken over when the map is written.
+    /// a drawing from before #143 ([`bridge::import_layer`]).
     Map { images: Vec<raster::PlacedImage>, layer: String, old_layer: String, group: String, label: String, summary: String },
     Vector { features: wfs::WfsResult, feature_type: WfsType, style: VectorStyle },
 }
@@ -268,8 +268,8 @@ impl PreparedDataset {
     fn write(self, site: &Site, layers: &mut bridge::ImportLayers, rasters: &mut Vec<Handle>) -> Result<String, String> {
         match self {
             Self::Map { images, layer, old_layer, group, summary, .. } => {
+                let layer = bridge::import_layer(&layer, &old_layer);
                 let entities = emit::images(site, &images, &layer, target()?.unit_factor, 0);
-                bridge::take_over_layer(&old_layer, &layer);
                 bridge::ensure_layer(&layer, Color::from_index(8));
                 // One writer for all datasets (one undo step): its group
                 // for this map only.
@@ -523,10 +523,10 @@ mod import_layer_tests {
         });
     }
 
-    /// A map from a drawing from before #143 takes over its old layer when
-    /// it is written, not while the import still fetches (#143).
+    /// A map in a drawing from before #143 draws on its old layer with
+    /// spaces as it is, and renames nothing (#143).
     #[test]
-    fn a_map_takes_over_its_old_layer_only_when_it_is_written() {
+    fn a_map_draws_on_its_old_layer_with_spaces() {
         use crate::bridge::replacement_test_host::Drawing as Host;
         use ocs_plugin_api::host::codec::tables::Layer;
         crate::settings::with_test_file(|| {
@@ -539,11 +539,11 @@ mod import_layer_tests {
                 let layer = WmsLayer { name: server.default_layer.clone(), title: "Luchtfoto 2025".into(), crs: vec![], bbox: None };
                 let image = raster::PlacedImage { path: "luchtfoto.png".into(), bbox: [0.0, 0.0, 10.0, 10.0], px: [10, 10] };
                 let map = prepared_wms(&server, &layer, WmsImport { image, parts: 1, missing: vec![] }, false);
-                assert!(host.doc.lock().unwrap().layers.contains("GIS-WMS-LUCHTFOTO 2025"), "renamed while fetching");
                 bridge::with_import_layers("PDOK", None, |layers| map.write(&Site::default(), layers, &mut Vec::new())).unwrap();
             });
             let doc = host.doc.lock().unwrap();
-            assert!(!doc.layers.contains("GIS-WMS-LUCHTFOTO 2025") && doc.layers.contains("GIS-WMS-LUCHTFOTO_2025"));
+            assert!(!doc.layers.contains("GIS-WMS-LUCHTFOTO_2025"));
+            assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == "GIS-WMS-LUCHTFOTO 2025").count(), 1);
         });
     }
 

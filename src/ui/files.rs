@@ -125,7 +125,10 @@ impl FilesPage {
                 let drawn = crate::emit::clean_name(opt.layer.trim());
                 if drawn != opt.layer {
                     ui.label(RichText::new(format!("{} {drawn}", tr("wordt", "becomes"))).small().color(Color32::GRAY))
-                        .on_hover_text(tr("Zonder spaties, zodat de laag in de laaggroep van dit bestand past.", "Without spaces, so the layer fits in this file's layer group."));
+                        .on_hover_text(tr(
+                            "Zonder spaties, zodat de laag in de laaggroep van dit bestand past. Heeft de tekening de laag al met spaties, dan tekent de import daarop, buiten de groep.",
+                            "Without spaces, so the layer fits in this file's layer group. If the drawing already has the layer with spaces, the import draws on that one, outside the group.",
+                        ));
                 }
             });
             ui.end_row();
