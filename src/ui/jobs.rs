@@ -1,5 +1,6 @@
 //! Background work for the window: network calls never block the UI thread.
 
+use crate::lang::tr;
 use std::sync::{Arc, Mutex};
 
 use eframe::egui;
@@ -23,7 +24,7 @@ impl<T: Send + 'static> Job<T> {
                 c.request_repaint();
             };
             let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&progress)))
-                .unwrap_or_else(|_| Err("interne fout in de import".into()));
+                .unwrap_or_else(|_| Err(tr("interne fout in de import", "internal import error").into()));
             *r.lock().unwrap() = Some(out);
             c.request_repaint();
         });

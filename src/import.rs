@@ -199,22 +199,24 @@ pub enum Dataset {
 pub struct Catalogued {
     pub id: &'static str,
     pub label: &'static str,
+    pub label_en: &'static str,
     pub group: &'static str,
+    pub group_en: &'static str,
     pub default_on: bool,
     pub data: Dataset,
 }
 
 pub const PDOK: &[Catalogued] = &[
-    Catalogued { id: "luchtfoto", label: "Luchtfoto 8 cm (Beeldmateriaal)", group: "Kaartbeelden", default_on: true, data: Dataset::Raster { server: "pdok-luchtfoto" } },
-    Catalogued { id: "kadasterkaart", label: "Kadastrale kaart", group: "Kaartbeelden", default_on: false, data: Dataset::Raster { server: "pdok-kadastralekaart-wms" } },
-    Catalogued { id: "ahn", label: "AHN hoogtekaart (DTM 0,5 m)", group: "Kaartbeelden", default_on: false, data: Dataset::Raster { server: "pdok-ahn-wms" } },
-    Catalogued { id: "bag", label: "BAG panden", group: "Vectordata", default_on: true, data: Dataset::Wfs { server: "pdok-bag-wfs", typename: "bag:pand", label: None, aci: 30 } },
-    Catalogued { id: "percelen", label: "Kadastrale percelen (met perceelnummer)", group: "Vectordata", default_on: true, data: Dataset::Wfs { server: "pdok-kadastralekaart-wfs", typename: "kadastralekaart:Perceel", label: Some("perceelnummer"), aci: 3 } },
-    Catalogued { id: "nwb", label: "NWB wegvakken (met straatnaam)", group: "Infra", default_on: true, data: Dataset::Wfs { server: "pdok-nwbwegen-wfs", typename: "nwbwegen:wegvakken", label: Some("stt_naam"), aci: 2 } },
-    Catalogued { id: "hecto", label: "NWB hectometerpunten", group: "Infra", default_on: false, data: Dataset::Wfs { server: "pdok-nwbwegen-wfs", typename: "nwbwegen:hectopunten", label: Some("hectomtrng"), aci: 2 } },
-    Catalogued { id: "spoor", label: "Spoorassen (ProRail)", group: "Infra", default_on: false, data: Dataset::Wfs { server: "pdok-spoorwegen-wfs", typename: "spoorwegen:spooras", label: None, aci: 6 } },
-    Catalogued { id: "spoorkm", label: "Spoorkilometrering (ProRail)", group: "Infra", default_on: false, data: Dataset::Wfs { server: "pdok-spoorwegen-wfs", typename: "spoorwegen:kilometrering", label: Some("kmGeocodeT"), aci: 6 } },
-    Catalogued { id: "vaarwegen", label: "NWB vaarwegen", group: "Infra", default_on: false, data: Dataset::Wfs { server: "pdok-nwbvaarwegen-wfs", typename: "", label: None, aci: 5 } },
+    Catalogued { id: "luchtfoto", label: "Luchtfoto 8 cm (Beeldmateriaal)", label_en: "8 cm aerial imagery (Beeldmateriaal)", group: "Kaartbeelden", group_en: "Map imagery", default_on: true, data: Dataset::Raster { server: "pdok-luchtfoto" } },
+    Catalogued { id: "kadasterkaart", label: "Kadastrale kaart", label_en: "Cadastral map", group: "Kaartbeelden", group_en: "Map imagery", default_on: false, data: Dataset::Raster { server: "pdok-kadastralekaart-wms" } },
+    Catalogued { id: "ahn", label: "AHN hoogtekaart (DTM 0,5 m)", label_en: "AHN elevation map (0.5 m DTM)", group: "Kaartbeelden", group_en: "Map imagery", default_on: false, data: Dataset::Raster { server: "pdok-ahn-wms" } },
+    Catalogued { id: "bag", label: "BAG panden", label_en: "BAG buildings", group: "Vectordata", group_en: "Vector data", default_on: true, data: Dataset::Wfs { server: "pdok-bag-wfs", typename: "bag:pand", label: None, aci: 30 } },
+    Catalogued { id: "percelen", label: "Kadastrale percelen (met perceelnummer)", label_en: "Cadastral parcels (with parcel numbers)", group: "Vectordata", group_en: "Vector data", default_on: true, data: Dataset::Wfs { server: "pdok-kadastralekaart-wfs", typename: "kadastralekaart:Perceel", label: Some("perceelnummer"), aci: 3 } },
+    Catalogued { id: "nwb", label: "NWB wegvakken (met straatnaam)", label_en: "NWB road sections (with street names)", group: "Infra", group_en: "Infrastructure", default_on: true, data: Dataset::Wfs { server: "pdok-nwbwegen-wfs", typename: "nwbwegen:wegvakken", label: Some("stt_naam"), aci: 2 } },
+    Catalogued { id: "hecto", label: "NWB hectometerpunten", label_en: "NWB hectometre markers", group: "Infra", group_en: "Infrastructure", default_on: false, data: Dataset::Wfs { server: "pdok-nwbwegen-wfs", typename: "nwbwegen:hectopunten", label: Some("hectomtrng"), aci: 2 } },
+    Catalogued { id: "spoor", label: "Spoorassen (ProRail)", label_en: "Railway centrelines (ProRail)", group: "Infra", group_en: "Infrastructure", default_on: false, data: Dataset::Wfs { server: "pdok-spoorwegen-wfs", typename: "spoorwegen:spooras", label: None, aci: 6 } },
+    Catalogued { id: "spoorkm", label: "Spoorkilometrering (ProRail)", label_en: "Railway kilometre markers (ProRail)", group: "Infra", group_en: "Infrastructure", default_on: false, data: Dataset::Wfs { server: "pdok-spoorwegen-wfs", typename: "spoorwegen:kilometrering", label: Some("kmGeocodeT"), aci: 6 } },
+    Catalogued { id: "vaarwegen", label: "NWB vaarwegen", label_en: "NWB waterways", group: "Infra", group_en: "Infrastructure", default_on: false, data: Dataset::Wfs { server: "pdok-nwbvaarwegen-wfs", typename: "", label: None, aci: 5 } },
 ];
 
 /// Import one catalogued dataset with sensible defaults.
