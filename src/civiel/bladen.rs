@@ -473,7 +473,9 @@ struct BackToModel;
 
 impl Drop for BackToModel {
     fn drop(&mut self) {
-        let _ = table(TableOperation::LayoutSetCurrent { name: "Model".into() });
+        // Under the write lock, as every layout switch of a set (see
+        // `write_sheet`); OCS keeps no undo step for it.
+        let _ = bridge::with_import_undo("Model", || table(TableOperation::LayoutSetCurrent { name: "Model".into() }));
     }
 }
 
@@ -559,29 +561,23 @@ fn indexed(set: &str) -> Vec<Handle> {
 /// the command again replaces them whole. The old set is read under the
 /// same write lock, so two starts at once replace it one after the other.
 fn replace_model(model: Sheets, set: &str, label: &str, axis: Handle) -> Result<Vec<Handle>, String> {
-    // OCS adds to the current layout; the set deletes its sheets' layouts
-    // when it is replaced.
-    table(TableOperation::LayoutSetCurrent { name: "Model".into() })?;
-    let owner = |h: Handle| -> Result<Handle, String> {
-        bridge::entities(&[h])?.into_iter().flatten().next().map(|e| e.common().owner_handle).ok_or_else(|| format!("{h:?}?"))
-    };
-    let space = owner(axis)?;
+    let space = bridge::owner(axis)?;
     bridge::with_import_undo(label, || {
+        // OCS adds to the current layout; the set deletes its sheets'
+        // layouts when it is replaced. Switched under the write lock, as
+        // every layout switch of a set, so no other set switches between
+        // this one and its write.
+        table(TableOperation::LayoutSetCurrent { name: "Model".into() })?;
         let mut originals = Vec::new();
         for chunk in indexed(set).chunks(500) {
             // Elements a user deleted are gone already.
             originals.extend(bridge::entities(chunk)?.into_iter().flatten().map(|e| (e.common().handle, e.common().layer.clone())));
         }
-        let handles = model.out.append(label)?;
-        if let Some(&first) = handles.first() {
-            if owner(first)? != space {
-                bridge::remove_entities(label, &handles)?;
-                return Err(tr(
-                    "OCS zette de bladen niet in de modelruimte, waar de as staat (wordt er een blok bewerkt?). Sluit de blokbewerker en probeer het opnieuw.",
-                    "OCS did not put the sheets in model space, where the alignment is (is a block being edited?). Close the block editor and try again.",
-                ).into());
-            }
-        }
+        let elsewhere = tr(
+            "OCS zette de bladen niet in de modelruimte, waar de as staat (wordt er een blok bewerkt?). Sluit de blokbewerker en probeer het opnieuw.",
+            "OCS did not put the sheets in model space, where the alignment is (is a block being edited?). Close the block editor and try again.",
+        );
+        let handles = bridge::append_in(label, model.out.into_entities(), space, elsewhere)?;
         let removed = bridge::remove_replaced(label, &originals);
         let mut index = handles.clone();
         if removed.is_err() {
@@ -592,11 +588,16 @@ fn replace_model(model: Sheets, set: &str, label: &str, axis: Handle) -> Result<
     })
 }
 
-/// Write the sheet of one layout. A user may have locked a sheet layer (the
-/// legend layer, say): the write opens it and locks it again, so a set that
-/// replaces an older one is never left half made.
-fn write_sheet(paper: Sheets, label: &str) -> Result<(), String> {
-    paper.out.append(label).map(drop)
+/// Write the sheet of one layout, in that layout: switched to under the
+/// same write lock, so no other set switches in between. A user may have
+/// locked a sheet layer (the legend layer, say): the write opens it and
+/// locks it again, so a set that replaces an older one is never left half
+/// made.
+fn write_sheet(paper: Sheets, label: &str, layout: &str) -> Result<(), String> {
+    bridge::with_import_undo(label, || {
+        table(TableOperation::LayoutSetCurrent { name: layout.into() }).map_err(|e| format!("layout {layout}: {e}"))?;
+        paper.out.append(label).map(drop)
+    })
 }
 
 impl Sheets {
@@ -779,7 +780,6 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
             layouts.push(lname.clone());
             table(TableOperation::LayoutSetPage { name: lname.clone(), paper_size: Some([req.paper.w, req.paper.h]), rotation: Some(0), scale: Some([1.0, 1.0]) })
                 .map_err(|e| format!("layout {lname}: {e}"))?;
-            table(TableOperation::LayoutSetCurrent { name: lname.clone() }).map_err(|e| format!("layout {lname}: {e}"))?;
             let info = SheetInfo {
                 project: req.project.clone().unwrap_or_default(),
                 subject: req.subject.clone().unwrap_or_else(|| t2(format!("{name} — situatie en lengteprofiel"), format!("{name} — plan and profile"))),
@@ -788,7 +788,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
             };
             let mut paper = Sheets::new(&set);
             sheet(&ctx, &req, &lay, &al, &spans, i, view, &vert, &info, &crs, &place, &legend, &mut paper)?;
-            write_sheet(paper, &t2(format!("Blad {} {name}", i + 1), format!("Sheet {} {name}", i + 1)))?;
+            write_sheet(paper, &t2(format!("Blad {} {name}", i + 1), format!("Sheet {} {name}", i + 1)), &lname)?;
         }
         Ok(())
     })();
@@ -1338,10 +1338,11 @@ mod tests {
                 let mut sample = Point::default();
                 sample.common.layer = spec.name.clone();
                 paper.put(&spec, [EntityType::Point(sample)]);
-                write_sheet(paper, "Blad 1 As 1").unwrap();
+                write_sheet(paper, "Blad 1 As 1", "As 1 A3 blad 1").unwrap();
             });
             let doc = drawing.doc.lock().unwrap();
-            assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == spec.name).count(), 1);
+            let sheet: Vec<_> = drawing.outside.lock().unwrap().iter().filter_map(|h| doc.get_entity(*h)).map(|e| e.common().layer.clone()).collect();
+            assert_eq!(sheet, [spec.name.clone()], "the sample is in the sheet's layout");
             assert!(doc.layers.get(&spec.name).unwrap().is_locked());
         });
     }
@@ -1473,6 +1474,53 @@ mod tests {
                 assert!(nothing_outside(drawing));
                 assert_eq!(model_space(drawing), old);
                 assert_eq!(indexed("As 1 A3"), old);
+            });
+        });
+    }
+
+    /// The block editor is open and a user locked the frame layer: what OCS
+    /// put in the block is taken back while the layer is still open, and the
+    /// lock is back after it (#142).
+    #[test]
+    fn a_set_written_into_an_open_block_on_a_locked_frame_layer_is_taken_back() {
+        let lock = |d: &mut crate::bridge::replacement_test_host::Drawing| {
+            d.block_edit = true;
+            d.doc.get_mut().unwrap().layers.get_mut(&frame_layer().name).unwrap().flags.locked = true;
+        };
+        crate::settings::with_test_file(|| {
+            sheet_drawing(1, lock, |drawing, old, axis| {
+                assert!(replace_model(new_set(1), "As 1 A3", "Bladen As 1", axis).is_err());
+                assert!(nothing_outside(drawing));
+                assert_eq!(model_space(drawing), old);
+                assert_eq!(indexed("As 1 A3"), old);
+                assert!(drawing.doc.lock().unwrap().layers.get(&frame_layer().name).unwrap().is_locked());
+            });
+        });
+    }
+
+    /// A second set started while the first writes a sheet: the sheet stays
+    /// in its own layout and the second set's model part goes to model
+    /// space (#142).
+    #[test]
+    fn a_set_started_while_another_writes_a_sheet_leaves_that_sheet_in_its_layout() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(1, |d| d.hold_sheet = true, |drawing, _, axis| {
+                let target = bridge::target().unwrap();
+                let first = std::thread::spawn(move || {
+                    bridge::with_command_context(target, None, None, || {
+                        let frame = frame_layer();
+                        let mut paper = Sheets::new("As 2 A3");
+                        paper.put(&frame, [point_on(&frame.name)]);
+                        write_sheet(paper, "Blad 1 As 2", "As 2 A3 blad 1")
+                    })
+                });
+                while *drawing.layout.lock().unwrap() != "As 2 A3 blad 1" {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                let new = replace_model(new_set(1), "As 1 A3", "Bladen As 1", axis).unwrap();
+                first.join().unwrap().unwrap();
+                assert_eq!(drawing.outside.lock().unwrap().len(), 1, "the sheet is in its layout");
+                assert_eq!(model_space(drawing), new);
             });
         });
     }
