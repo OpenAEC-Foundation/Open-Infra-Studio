@@ -332,7 +332,7 @@ impl InteractiveCommand for AreaCmd {
         bridge::spawn_command(move || match bridge::save_site(&site) {
             Ok(()) => {
                 bridge::info(&format!("Importgebied {} × {} m rond X {:.2} Y {:.2} ({}).", site.width, site.height, site.origin_e, site.origin_n, site.crs));
-                ui::send(ui::UiMsg::SiteChanged);
+                ui::repaint();
             }
             Err(e) => bridge::error(&format!("Gebied niet opgeslagen: {e}")),
         });
@@ -384,7 +384,7 @@ impl InteractiveCommand for PointCmd {
                 }
             }
             bridge::info(&lines.join("  |  "));
-            ui::send(ui::UiMsg::Picked(p));
+            ui::send(ui::UiMsg::Picked { point: p, source_crs: site });
         });
         CommandStep::Done
     }
@@ -956,7 +956,7 @@ fn save_site_reply(site: Site) {
         Ok(()) => {
             civiel::api::note("projectlocatie", serde_json::json!({"naam": site.label, "crs": site.crs, "x": site.origin_e, "y": site.origin_n, "breedte": site.width, "hoogte": site.height, "absoluut": site.absolute}));
             bridge::info(&format!("Projectlocatie {}: X {:.2} Y {:.2} ({}), {} × {} m.", site.label, site.origin_e, site.origin_n, site.crs, site.width, site.height));
-            ui::send(ui::UiMsg::SiteChanged);
+            ui::repaint();
         }
         Err(e) => bridge::error(&format!("GIS_SITE: {e}")),
     }
@@ -1040,7 +1040,7 @@ fn adopt_geodata(host: &mut dyn HostApi) {
         match gis::geodata::site_from(&g, unit).and_then(|mut site| {site.region=localisation::current();bridge::adopt_site(&site).map(|stored| stored.then_some(site))}) {
             Ok(Some(site)) => {
                 bridge::info(&format!("{} {} ({}).", lang::tr("Projectlocatie overgenomen uit het GEODATA-object van de tekening:", "Project location taken from the drawing's GEODATA object:"), site.crs, if site.absolute { lang::tr("absoluut", "absolute") } else { lang::tr("relatief", "relative") }));
-                ui::send(ui::UiMsg::SiteChanged);
+                ui::repaint();
             }
             Ok(None) => {}
             Err(e) => bridge::info(&e),
@@ -1217,6 +1217,13 @@ impl BuiltinPlugin for OpenInfra {
     // requests only after loading, so the site and units are read on the
     // first command (dispatch attaches).
     fn on_load(&mut self, _host: &mut dyn HostApi) {}
+
+    fn on_notification(&mut self, _command_id: Option<u64>, notification: ocs_plugin_api::host::HostNotification) {
+        use ocs_plugin_api::host::HostNotification;
+        if let HostNotification::DocumentTabClosed { tab_id } | HostNotification::DocumentOpened { tab_id } = notification {
+            bridge::drawing_closed(tab_id);
+        }
+    }
 
     fn dispatch(&self, host: &mut dyn HostApi, cmd: &str) -> bool {
         // The English name from here on, also for an older (Dutch) alias.
@@ -1455,8 +1462,40 @@ impl BuiltinPlugin for OpenInfra {
     }
 }
 
-#[cfg(feature = "plugin")]
+#[cfg(all(feature = "plugin", not(target_os = "macos")))]
 ocs_plugin_api::export_plugin!(OpenInfra);
+
+// The pinned OCS runner loads these symbols on the runner's main thread.
+// The GIS workbench uses that thread for AppKit on macOS.
+#[cfg(all(feature = "plugin", target_os = "macos"))]
+mod macos_plugin {
+    #[no_mangle]
+    pub extern "C" fn ocs_plugin_api_version() -> u32 {
+        ocs_plugin_api::API_VERSION
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ocs_plugin_run(socket: *const std::os::raw::c_char) -> i32 {
+        if socket.is_null() {
+            return 2;
+        }
+        // SAFETY: OCS passes a live, NUL-terminated socket name.
+        let socket = unsafe { std::ffi::CStr::from_ptr(socket) }.to_string_lossy().into_owned();
+        match std::panic::catch_unwind(|| crate::ui::run_macos_plugin(socket)) {
+            Ok(Ok(())) => 0,
+            Ok(Err(e)) => {
+                eprintln!("[plugin] {e}");
+                1
+            }
+            Err(_) => 2,
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ocs_plugin_register() -> *mut Box<dyn ocs_plugin_api::host::BuiltinPlugin> {
+        Box::into_raw(Box::new(Box::new(super::OpenInfra)))
+    }
+}
 
 #[cfg(test)]
 mod gis_worker_tests;
