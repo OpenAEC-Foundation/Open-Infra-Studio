@@ -5,13 +5,14 @@
 //! import workers use it to add layers and entities while the host stays
 //! responsive. Each import is one undo step.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use ocs_plugin_api::host::{
     codec::{Color, EntityType, Handle, LineWeight},
-    CommandStep, ExtendedDataRecord, HostApi, InteractiveCommand, LayerConfig, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
+    CommandStep, ExtendedDataRecord, HostApi, HostNotification, InteractiveCommand, LayerConfig, PluginRequestError, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
 };
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 use ocs_plugin_api::host::codec::tables::normalize_name;
@@ -27,11 +28,52 @@ pub struct Target {
     pub doc_path: Option<PathBuf>,
 }
 
-struct CommandContext { target: Target, site: Option<Site>, reply: Option<String> }
+struct DrawingSender {
+    sender: Box<dyn PluginRequestSender>,
+    closed: AtomicBool,
+}
+
+impl PluginRequestSender for DrawingSender {
+    fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+        if self.closed.load(Ordering::Acquire) {
+            return Err(PluginRequestError(crate::lang::tr(
+                "de doeltekening is gesloten",
+                "the target drawing is closed",
+            ).into()));
+        }
+        self.sender.request(req)
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn closed_drawing_sender_refuses_and_does_not_forward_a_request() {
+    struct NeverSend;
+    impl PluginRequestSender for NeverSend {
+        fn request(&self, _: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+            panic!("a request for a closed drawing reached CAD");
+        }
+    }
+
+    let closed = AtomicBool::new(true);
+    let sender = DrawingSender { sender: Box::new(NeverSend), closed };
+    assert!(sender.request(PluginRequest::PushInfo("probe".into())).is_err());
+}
+
+struct CommandContext { target: Option<Target>, site: Option<Site>, reply: Option<String> }
 thread_local! { static COMMAND_CONTEXT: std::cell::RefCell<Option<CommandContext>> = const { std::cell::RefCell::new(None) }; }
 
 /// Bind a queued worker to its originating document and result ID, even if the active tab changes.
 pub fn with_command_context<R>(target: Target, site: Option<Site>, reply: Option<String>, f: impl FnOnce() -> R) -> R {
+    with_context(Some(target), site, reply, f)
+}
+
+/// Keep a frame or worker bound to its snapshot even when there was no drawing.
+pub(crate) fn with_workbench_document<R>(target: Option<Target>, site: Option<Site>, f: impl FnOnce() -> R) -> R {
+    with_context(target, site, None, f)
+}
+
+fn with_context<R>(target: Option<Target>, site: Option<Site>, reply: Option<String>, f: impl FnOnce() -> R) -> R {
     struct Restore(Option<CommandContext>);
     impl Drop for Restore { fn drop(&mut self) { COMMAND_CONTEXT.with(|c| *c.borrow_mut() = self.0.take()); } }
     let old = COMMAND_CONTEXT.with(|c| c.replace(Some(CommandContext { target, site, reply })));
@@ -57,7 +99,7 @@ pub fn take_reply_id() -> Option<String> {
 /// on their later clicks. Keep that command's context until its final worker.
 pub fn start_interactive(host: &mut dyn HostApi, command: Box<dyn InteractiveCommand>) {
     let Some(target) = target() else { return };
-    let context = CommandContext { target, site: site(), reply: take_reply_id() };
+    let context = CommandContext { target: Some(target), site: site(), reply: take_reply_id() };
     host.start_interactive(Box::new(BoundInteractive { command, context }));
 }
 
@@ -68,7 +110,7 @@ struct BoundInteractive {
 
 impl BoundInteractive {
     fn call<R>(&mut self, f: impl FnOnce(&mut dyn InteractiveCommand) -> R) -> R {
-        with_command_context(self.context.target.clone(), self.context.site.clone(), self.context.reply.take(), || {
+        with_context(self.context.target.clone(), self.context.site.clone(), self.context.reply.take(), || {
             let out = f(self.command.as_mut());
             COMMAND_CONTEXT.with(|c| {
                 let mut c = c.borrow_mut();
@@ -103,6 +145,7 @@ impl InteractiveCommand for BoundInteractive {
 struct Shared {
     target: Option<Target>,
     site: Option<Site>,
+    drawing_senders: HashMap<u64, Arc<DrawingSender>>,
     /// NLCS layers and linetypes already set up, per tab.
     made: HashSet<(u64, String)>,
     /// The NLCS layers imports drew on, per tab, for the legend.
@@ -133,11 +176,22 @@ pub fn attach(host: &mut dyn HostApi) {
             })
         });
     let doc_path = host.document_path(tab_id);
+    // The V4 runner can wake for dispatch with earlier notifications still
+    // queued separately. Apply drawing changes before registering this
+    // sender, since DocumentOpened can replace the contents of the same tab.
+    while let Some((_, notification)) = host.try_recv_notification() {
+        handle_document_notification(notification);
+    }
     {
         let mut s = shared().lock().unwrap();
         let same_tab = s.target.as_ref().is_some_and(|t| t.tab_id == tab_id);
         let unit_factor = s.target.as_ref().filter(|_| same_tab).map(|t| t.unit_factor).unwrap_or(1.0);
-        s.target = Some(Target { sender: Arc::from(sender), tab_id, unit_factor, doc_path });
+        // Requests from this runner to one CAD tab use the same connection.
+        // Keep the sender's identity stable until the drawing is closed.
+        let sender = s.drawing_senders.entry(tab_id).or_insert_with(|| {
+            Arc::new(DrawingSender { sender, closed: AtomicBool::new(false) })
+        }).clone();
+        s.target = Some(Target { sender, tab_id, unit_factor, doc_path });
         match stored {
             Some(site) => {
                 site.register_crs();
@@ -156,6 +210,53 @@ pub fn attach(host: &mut dyn HostApi) {
     if let Some(t) = shared().lock().unwrap().target.as_mut() {
         t.unit_factor = f;
     }
+}
+
+/// Handle drawing lifecycle notifications for both the GIS and Civiel runners.
+pub fn handle_document_notification(notification: HostNotification) {
+    if let HostNotification::DocumentTabClosed { tab_id } | HostNotification::DocumentOpened { tab_id } = notification {
+        drawing_closed(tab_id);
+    }
+}
+
+/// Invalidate the previous drawing's senders and clear the workbench's
+/// active target if it closed or was replaced in its tab.
+pub fn drawing_closed(tab_id: u64) {
+    let mut state = shared().lock().unwrap();
+    if let Some(sender) = state.drawing_senders.remove(&tab_id) {
+        sender.closed.store(true, Ordering::Release);
+    }
+    if state.target.as_ref().is_some_and(|target| target.tab_id == tab_id) {
+        state.target = None;
+        state.site = None;
+    }
+    drop(state);
+    crate::ui::send(crate::ui::UiMsg::DrawingClosed(tab_id));
+}
+
+/// Capture a bound command's drawing or read the current target and saved
+/// location together when there is no command context.
+pub(crate) fn workbench_document() -> (Option<Target>, Option<Site>) {
+    if let Some(document) = COMMAND_CONTEXT.with(|ctx| {
+        ctx.borrow().as_ref().map(|ctx| (ctx.target.clone(), ctx.site.clone()))
+    }) {
+        return document;
+    }
+    let state = shared().lock().unwrap();
+    (state.target.clone(), state.site.clone())
+}
+
+pub(crate) fn workbench_target_is_open(target: &Target) -> bool {
+    shared().lock().unwrap().drawing_senders.get(&target.tab_id).is_some_and(|sender| {
+        std::ptr::addr_eq(Arc::as_ptr(sender), Arc::as_ptr(&target.sender))
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn workbench_test_target(tab_id: u64, sender: Box<dyn PluginRequestSender>) -> Target {
+    let sender = Arc::new(DrawingSender { sender, closed: AtomicBool::new(false) });
+    shared().lock().unwrap().drawing_senders.insert(tab_id, sender.clone());
+    Target { sender, tab_id, unit_factor: 1.0, doc_path: None }
 }
 
 /// Drawing units per metre for the tab. The current host exposes INSUNITS
@@ -214,7 +315,7 @@ fn record_units(f: f64) {
 }
 
 pub fn target() -> Option<Target> {
-    if let Some(t) = COMMAND_CONTEXT.with(|c| c.borrow().as_ref().map(|v| v.target.clone())) { return Some(t); }
+    if let Some(t) = COMMAND_CONTEXT.with(|c| c.borrow().as_ref().map(|v| v.target.clone())) { return t; }
     shared().lock().unwrap().target.clone()
 }
 
@@ -264,7 +365,11 @@ pub fn save_site(site: &Site) -> Result<(), String> {
             other => return Err(format!("onverwacht antwoord: {other:?}")),
         };
         COMMAND_CONTEXT.with(|c| {
-            if let Some(c) = c.borrow_mut().as_mut().filter(|c| c.target.tab_id == tab) { c.target.unit_factor = f; }
+            if let Some(target) = c.borrow_mut().as_mut()
+                .and_then(|ctx| ctx.target.as_mut()).filter(|target| target.tab_id == tab)
+            {
+                target.unit_factor = f;
+            }
         });
         if let Some(current) = shared().lock().unwrap().target.as_mut().filter(|t| t.tab_id == tab) { current.unit_factor = f; }
         match ask(PluginRequest::RemoveGeoLocation)? {
@@ -1462,6 +1567,47 @@ pub(crate) mod replacement_test_host {
 #[cfg(test)]
 mod command_worker_tests {
     use super::*;
+    #[test]
+    fn workbench_without_a_drawing_cannot_use_a_later_global_target() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        struct NeverSend;
+        impl PluginRequestSender for NeverSend {
+            fn request(&self, _: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                panic!("the documentless workbench contacted CAD");
+            }
+        }
+        struct Restore(Option<Target>, Option<Site>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let mut state = shared().lock().unwrap();
+                state.target = self.0.take();
+                state.site = self.1.take();
+            }
+        }
+
+        let restore = {
+            let mut state = shared().lock().unwrap();
+            Restore(
+                state.target.replace(Target {
+                    sender: Arc::new(NeverSend),
+                    tab_id: 130046,
+                    unit_factor: 1.0,
+                    doc_path: None,
+                }),
+                state.site.replace(Site::default()),
+            )
+        };
+        std::thread::spawn(|| with_workbench_document(None, None, || {
+            assert!(target().is_none());
+            assert!(site().is_none());
+            let (target, site) = workbench_document();
+            assert!(target.is_none() && site.is_none());
+            assert!(request(PluginRequest::PushInfo("probe".into())).is_err());
+        })).join().unwrap();
+        assert_eq!(target().unwrap().tab_id, 130046);
+        drop(restore);
+    }
+
     #[test]
     fn command_worker_keeps_the_originating_drawing_and_site() {
         let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());

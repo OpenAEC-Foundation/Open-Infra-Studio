@@ -3,7 +3,6 @@
 //! "Locatie / Begrenzing", "Webserver / Verzoek" and "Import-instellingen"
 //! groups, and OK / Test / Annuleren at the bottom.
 
-use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 
 #[path = "services.rs"]
@@ -34,7 +33,7 @@ use crate::nlcs::{self, Element, Status};
 use crate::tekenblad::{self, SheetInfo};
 use crate::gis::ahn::{self, Model};
 use crate::gis::pointcloud::{self, Colouring, Edition};
-use crate::hoogte::{self, AhnOptions};
+use crate::hoogte;
 use crate::hoeveelheden::{self, Quantities};
 use crate::nlcs_check::{self, Report, Rule, Severity};
 use crate::civiel::{self, landmeten::Format, CivielOptions};
@@ -147,7 +146,8 @@ struct RasterPage {
     format: String,
     resolution: f64,
     fade: u8,
-    preview: Option<(TextureHandle, [LonLat; 4])>,
+    preview: Option<Preview>,
+    preview_texture: Option<(TextureHandle, [LonLat; 4])>,
     preview_job: Option<Job<Preview>>,
     run: Option<Job<String>>,
 }
@@ -194,11 +194,9 @@ type NlcsFetched = (Vec<&'static str>, bool, Arc<Vec<(String, Vec<Feature>)>>, O
 type AhnPreview = (Preview2, (f64, f64), f64);
 
 struct AhnPage {
-    opt: AhnOptions,
     spots: bool,
     contours: bool,
     cloud: bool,
-    class_on: Vec<bool>,
     preview: Option<AhnPreview>,
     test: Option<Job<AhnPreview>>,
     run: Option<Job<String>>,
@@ -206,9 +204,7 @@ struct AhnPage {
 
 impl Default for AhnPage {
     fn default() -> Self {
-        let opt = hoogte::settings();
-        let class_on = pointcloud::CLASSES.iter().map(|c| opt.cloud.classes.is_empty() || opt.cloud.classes.contains(&c.0)).collect();
-        Self { opt, spots: false, contours: true, cloud: false, class_on, preview: None, test: None, run: None }
+        Self { spots: false, contours: true, cloud: false, preview: None, test: None, run: None }
     }
 }
 
@@ -236,21 +232,6 @@ struct ControlePage {
 impl Default for ControlePage {
     fn default() -> Self {
         Self { scale: 500.0, text_heights: true, empty_layers: true, job: None, report: None, open: None, repair: None, bronhouder: String::new(), as_built: false, mutation: None }
-    }
-}
-
-struct CivielPage {
-    opt: CivielOptions,
-    /// The offsets as typed: "-3,5; 3,5".
-    offsets: String,
-    run: Option<Job<String>>,
-}
-
-impl Default for CivielPage {
-    fn default() -> Self {
-        let opt = civiel::settings();
-        let offsets = offsets_text(&opt.offsets);
-        Self { opt, offsets, run: None }
     }
 }
 
@@ -510,10 +491,11 @@ struct CoordsPage {
 }
 
 pub struct App {
-    rx: Receiver<UiMsg>,
+    pub(super) widget_scope: u64,
     tab: Tab,
     /// Location page edits a draft; the other pages use the saved site.
     draft: Site,
+    saved_draft_base: Option<Site>,
     has_site: bool,
     message: Option<(bool, String)>,
     map: MapView,
@@ -527,7 +509,7 @@ pub struct App {
     ahn: AhnPage,
     controle: ControlePage,
     hoev: HoeveelhedenPage,
-    civ: CivielPage,
+    civiel_run: Option<Job<String>>,
     srv: ServersPage,
     coords: CoordsPage,
     servers: Vec<MapServer>,
@@ -538,14 +520,142 @@ pub struct App {
 }
 
 #[cfg(test)]
+mod close_reopen_tests {
+    use super::*;
+
+    struct NoRequests;
+
+    impl ocs_plugin_api::host::PluginRequestSender for NoRequests {
+        fn request(
+            &self,
+            _: ocs_plugin_api::ipc::protocol::PluginRequest,
+        ) -> Result<ocs_plugin_api::ipc::protocol::PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+            panic!("the workbench test must not contact CAD");
+        }
+    }
+
+    #[test]
+    fn reopen_keeps_per_drawing_drafts_and_reports_until_cad_closes_the_drawing() {
+        let target = |tab_id| Some(bridge::Target {
+            sender: std::sync::Arc::new(NoRequests),
+            tab_id,
+            unit_factor: 1.0,
+            doc_path: None,
+        });
+        let mut workbench = super::super::Workbench::default();
+        let saved = Site::default();
+        workbench.with_document(target(10), Some(saved.clone()), |app, _| {
+            app.draft.label = "Draft area".into();
+            app.map.zoom = 12.0;
+            app.controle.report = Some(Report::default());
+            app.reset_window();
+        });
+
+        workbench.with_document(target(11), Some(saved.clone()), |app, _| {
+            assert_eq!(app.draft, saved);
+            assert!(app.controle.report.is_none());
+        });
+
+        workbench.with_document(target(10), Some(saved.clone()), |app, _| {
+            assert_eq!(app.draft.label, "Draft area");
+            assert_eq!(app.map.zoom, 12.0);
+            assert!(app.controle.report.is_some());
+        });
+
+        workbench.handle_message(super::super::Message::capture(UiMsg::DrawingClosed(10)));
+        workbench.with_document(target(10), None, |app, _| {
+            assert!(!app.has_site);
+            assert_ne!(app.draft.label, "Draft area");
+            assert!(app.controle.report.is_none());
+        });
+    }
+
+
+    #[test]
+    fn queued_point_keeps_its_drawing_and_source_crs() {
+        use super::super::{Message, Workbench};
+        let _lock = bridge::COMMAND_TEST_LOCK.lock().unwrap();
+        const FIRST_TAB: u64 = 139001;
+        const SECOND_TAB: u64 = 139002;
+        let a = bridge::workbench_test_target(FIRST_TAB, Box::new(NoRequests));
+        let b = bridge::workbench_test_target(SECOND_TAB, Box::new(NoRequests));
+        let mut site = Site::default();
+        site.crs = "EPSG:3857".into();
+        let queued = bridge::with_command_context(a.clone(), Some(site.clone()), None, || {
+            Message::capture(UiMsg::Picked {
+                point: [104885.0, 425320.0],
+                source_crs: "EPSG:28992".into(),
+            })
+        });
+
+        let mut workbench = Workbench::default();
+        bridge::with_command_context(b.clone(), Some(site.clone()), None, || {
+            assert!(!workbench.handle_message(queued));
+        });
+        workbench.with_document(Some(b), Some(site.clone()), |app, _| {
+            assert!(app.coords.picked.is_none());
+        });
+        workbench.with_document(Some(a.clone()), Some(site.clone()), |app, _| {
+            let [lon, lat] = app.coords.picked.expect("the point stays on its drawing");
+            assert!((lon - 4.6606).abs() < 0.001);
+            assert!((lat - 51.8142).abs() < 0.001);
+        });
+
+        let queued = bridge::with_command_context(a, None, None, || {
+            Message::capture(UiMsg::Show(Tab::Coords))
+        });
+        bridge::drawing_closed(FIRST_TAB);
+        workbench.handle_message(Message::capture(UiMsg::DrawingClosed(FIRST_TAB)));
+        let replacement = bridge::workbench_test_target(FIRST_TAB, Box::new(NoRequests));
+        bridge::with_command_context(replacement.clone(), None, None, || {
+            assert!(!workbench.handle_message(queued));
+        });
+        workbench.with_document(Some(replacement), None, |app, _| {
+            assert_eq!(app.tab, Tab::Location);
+        });
+        bridge::drawing_closed(FIRST_TAB);
+        bridge::drawing_closed(SECOND_TAB);
+    }
+
+    #[test]
+    fn civiel_page_reads_shared_settings_when_switching_drawings() {
+        struct Restore(CivielOptions);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                civiel::set_settings(self.0.clone());
+            }
+        }
+        let _restore = Restore(civiel::settings());
+        let ctx = egui::Context::default();
+        let mut a = App::new();
+        let mut b = App::new();
+        let mut offsets_text = None;
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            a.civiel_page(ui, &mut offsets_text);
+        }).drop_without_applying_deltas();
+
+        let mut settings = civiel::settings();
+        settings.interval = 2.0;
+        civiel::set_settings(settings);
+
+        let frame = ctx.run_ui(egui::RawInput::default(), |ui| {
+            b.civiel_page(ui, &mut offsets_text);
+        });
+        assert!(format!("{:?}", frame.shapes).contains("2 m"));
+        assert_eq!(civiel::settings().interval, 2.0);
+        frame.drop_without_applying_deltas();
+    }
+
+}
+
+#[cfg(test)]
 mod qgis_preview_tests {
     use super::*;
 
     fn render(connections: Vec<crate::gis::qgis::Connection>) -> String {
         let context = egui::Context::default();
-        let creation = eframe::CreationContext::_new_kittest(context.clone());
-        let (_, receiver) = std::sync::mpsc::channel();
-        let mut app = App::new(&creation, receiver);
+        let mut app = App::new();
+        App::configure_window(&context);
         app.srv.qgis = connections.into_iter().map(|c| (c, true)).collect();
         let output = context.run_ui(egui::RawInput::default(), |ui| app.qgis_import(ui));
         let rendered = format!("{:?}", output.shapes);
@@ -616,28 +726,42 @@ mod qgis_preview_tests {
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, rx: Receiver<UiMsg>) -> Self {
-        egui_extras::install_image_loaders(&cc.egui_ctx);
+    pub(super) fn reset_window(&mut self) {
+        self.map.reset_window();
+        self.raster.preview_texture = None;
+    }
+
+    pub(super) fn configure_window(ctx: &egui::Context) {
+        egui_extras::install_image_loaders(ctx);
         let mut visuals = egui::Visuals::dark();
         visuals.selection.bg_fill = ACCENT;
         visuals.hyperlink_color = ACCENT;
-        cc.egui_ctx.set_visuals(visuals);
-        cc.egui_ctx.all_styles_mut(|s| {
+        ctx.set_visuals(visuals);
+        ctx.all_styles_mut(|s| {
             s.spacing.item_spacing = Vec2::new(8.0, 6.0);
             s.spacing.button_padding = Vec2::new(10.0, 4.0);
         });
+    }
+
+    pub(super) fn new() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        // A replacement drawing can reuse a tab ID while its old widgets
+        // still have state in the native window's egui context.
+        static NEXT_WIDGET_SCOPE: AtomicU64 = AtomicU64::new(0);
         let site = bridge::site();
         let draft = site.clone().unwrap_or_else(||Site::for_region(crate::localisation::current()));
         Self {
-            rx,
+            widget_scope: NEXT_WIDGET_SCOPE.fetch_add(1, Ordering::Relaxed),
             tab: Tab::Location,
             has_site: site.is_some(),
             map: MapView::new([draft.lon, draft.lat], 15.0),
             draft,
+            saved_draft_base: site,
             fit_pending: true,
             message: None,
             loc: LocationPage::default(),
-            raster: RasterPage { server: None, caps: None, caps_job: None, layer: None, filter: String::new(), format: "image/png".into(), resolution: 0.25, fade: 0, preview: None, preview_job: None, run: None },
+            raster: RasterPage { server: None, caps: None, caps_job: None, layer: None, filter: String::new(), format: "image/png".into(), resolution: 0.25, fade: 0, preview: None, preview_texture: None, preview_job: None, run: None },
             wfs: WfsPage { server: None, caps: None, caps_job: None, ft: None, filter: String::new(), limit: 5000, fetch: None, result: None, preview: Vec::new(), label: String::new(), text_m: 1.0, aci: 2, clip: true, place: None },
             osm: OsmPage { on: THEMES.iter().map(|t| t.default_on).collect(), labels: true, text_m: 2.0, clip: true, fetch: None, fetched: None, run: None },
             pdok: PdokPage { on: PDOK.iter().map(|d| d.default_on).collect(), run: None },
@@ -645,7 +769,7 @@ impl App {
             ahn: AhnPage::default(),
             controle: ControlePage::default(),
             hoev: HoeveelhedenPage::default(),
-            civ: CivielPage::default(),
+            civiel_run: None,
             srv: ServersPage::default(),
             coords: CoordsPage { crs: "EPSG:4326".into(), xy: [4.660_612, 51.814_158], picked: None, job: None },
             servers: servers::all(),
@@ -667,71 +791,65 @@ impl App {
     }
 
     fn reload_site(&mut self) {
-        match bridge::site() {
-            Some(s) => {
-                self.draft = s;
-                self.has_site = true;
-            }
-            None => self.has_site = false,
-        }
+        self.set_draft_base(bridge::site());
+    }
+
+    fn set_draft_base(&mut self, site: Option<Site>) {
+        self.saved_draft_base = site;
+        self.has_site = self.saved_draft_base.is_some();
+        self.draft = self.saved_draft_base.clone()
+            .unwrap_or_else(|| Site::for_region(crate::localisation::current()));
         self.fit_pending = true;
     }
 
-    fn handle_messages(&mut self, ctx: &egui::Context) {
-        while let Ok(msg) = self.rx.try_recv() {
-            match msg {
-                UiMsg::RegionalServices(region) => {self.svc.regional(region);self.tab=Tab::Services;}
-                UiMsg::InfraLibrary => { self.tab = Tab::Library; self.lib.show_infra = true; }
-                UiMsg::Show(tab) => {
-                    self.tab = tab;
-                    self.reload_site();
-                    self.servers = servers::all();
-                    self.svc.refresh();
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+    pub(super) fn sync_site(&mut self, site: Option<Site>) {
+        if self.saved_draft_base != site {
+            self.set_draft_base(site);
+        }
+    }
+
+    pub(super) fn handle_message(&mut self, msg: UiMsg) {
+        match msg {
+            UiMsg::RegionalServices(region) => {
+                self.svc.regional(region);
+                self.tab = Tab::Services;
+            }
+            UiMsg::InfraLibrary => {
+                self.tab = Tab::Library;
+                self.lib.show_infra = true;
+            }
+            UiMsg::Show(tab) => {
+                self.tab = tab;
+                self.servers = servers::all();
+                self.svc.refresh();
+            }
+            UiMsg::Picked { point, source_crs } => {
+                self.tab = Tab::Coords;
+                if let Ok(ll) = crs::transform(&source_crs, "EPSG:4326", point) {
+                    self.coords.picked = Some(ll);
+                    self.map.center = ll;
                 }
-                UiMsg::Picked(p) => {
-                    self.tab = Tab::Coords;
-                    if let Ok(ll) = crs::transform(&self.draft.crs, "EPSG:4326", p) {
-                        self.coords.picked = Some(ll);
-                        self.map.center = ll;
-                    }
-                    if let Ok(q) = crs::transform(&self.draft.crs, &self.coords.crs, p) {
-                        self.coords.xy = q;
-                    }
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                if let Ok(q) = crs::transform(&source_crs, &self.coords.crs, point) {
+                    self.coords.xy = q;
                 }
-                UiMsg::SiteChanged => self.reload_site(),
-                UiMsg::File(path) => {
-                    self.tab = Tab::Files;
-                    self.reload_site();
-                    self.files.open(ctx, path);
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+            UiMsg::DrawingClosed(_) => unreachable!("handled by the workbench"),
+            UiMsg::File(path) => {
+                self.tab = Tab::Files;
+                self.files.open(path);
+            }
+            UiMsg::Run(tab) => {
+                self.tab = tab;
+                match tab {
+                    Tab::Controle => self.start_check(),
+                    Tab::Hoeveelheden => self.start_quantities(),
+                    _ => {}
                 }
-                UiMsg::Run(tab) => {
-                    self.tab = tab;
-                    self.reload_site();
-                    match tab {
-                        Tab::Controle => self.start_check(ctx),
-                        Tab::Hoeveelheden => self.start_quantities(ctx),
-                        _ => {}
-                    }
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                }
-                UiMsg::Klic(path) => {
-                    self.tab = Tab::Nlcs;
-                    self.reload_site();
-                    self.nlcs.klic_path = path.to_string_lossy().into_owned();
-                    self.load_klic(ctx);
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                }
+            }
+            UiMsg::Klic(path) => {
+                self.tab = Tab::Nlcs;
+                self.nlcs.klic_path = path.to_string_lossy().into_owned();
+                self.load_klic();
             }
         }
     }
@@ -826,7 +944,7 @@ impl App {
                 self.loc.typed_at = None;
                 if q.chars().count() >= 3 && q != self.loc.hits_for {
                     let q2 = q.clone();
-                    self.loc.suggest = Some(Job::spawn(&ctx, tr("Suggesties…", "Suggestions…"), move |_| geocode::suggest(&q2).map(|h| (q2, h))));
+                    self.loc.suggest = Some(Job::spawn(tr("Suggesties…", "Suggestions…"), move |_| geocode::suggest(&q2).map(|h| (q2, h))));
                 }
             }
         }
@@ -949,7 +1067,7 @@ impl App {
                     ui.add(egui::TextEdit::singleline(&mut self.loc.custom_epsg).hint_text(tr("EPSG-code", "EPSG code")).desired_width(80.0));
                     if ui.add_enabled(self.loc.crs_job.is_none() && !self.loc.custom_epsg.trim().is_empty(), egui::Button::new(tr("Laden", "Load"))).on_hover_text(tr("Definitie ophalen via epsg.io", "Fetch the definition from epsg.io")).clicked() {
                         let code = self.loc.custom_epsg.clone();
-                        self.loc.crs_job = Some(Job::spawn(&ctx, tr("Stelsel laden…", "Loading CRS…"), move |_| crs::ensure(&code)));
+                        self.loc.crs_job = Some(Job::spawn(tr("Stelsel laden…", "Loading CRS…"), move |_| crs::ensure(&code)));
                     }
                 });
                 ui.end_row();
@@ -979,10 +1097,10 @@ impl App {
             let q = self.loc.query.trim().to_string();
             self.loc.popup = true;
             self.loc.typed_at = None;
-            self.loc.search = Some(Job::spawn(&ctx, tr("Zoeken…", "Searching…"), move |_| geocode::search(&q)));
+            self.loc.search = Some(Job::spawn(tr("Zoeken…", "Searching…"), move |_| geocode::search(&q)));
         }
         if let Some(i) = pick {
-            self.pick_hit(&ctx, i);
+            self.pick_hit(i);
         }
 
         group(ui, tr("Begrenzing en plaatsing", "Bounds and placement"), |ui| {
@@ -1055,7 +1173,7 @@ impl App {
         } else {
             (field.left_top() - Vec2::new(0.0, 4.0), egui::Align2::LEFT_BOTTOM, above)
         };
-        let area = egui::Area::new(egui::Id::unique("open-infra-geo-suggest"))
+        let area = egui::Area::new(ui.make_persistent_id("open-infra-geo-suggest"))
             .order(egui::Order::Foreground)
             .pivot(pivot)
             .fixed_pos(pos)
@@ -1112,7 +1230,7 @@ impl App {
         picked
     }
 
-    fn pick_hit(&mut self, ctx: &egui::Context, i: usize) {
+    fn pick_hit(&mut self, i: usize) {
         let Some(h) = self.loc.hits.get(i).cloned() else { return };
         self.draft.label = h.label.clone();
         self.draft.lon = h.lon;
@@ -1123,7 +1241,7 @@ impl App {
             self.draft.reproject_origin();
         } else {
             let c = code.clone();
-            self.loc.crs_job = Some(Job::spawn(ctx, tr("Stelsel laden…", "Loading CRS…"), move |_| crs::ensure(&c)));
+            self.loc.crs_job = Some(Job::spawn(tr("Stelsel laden…", "Loading CRS…"), move |_| crs::ensure(&c)));
         }
         self.map.center = [h.lon, h.lat];
         self.fit_pending = true;
@@ -1155,8 +1273,8 @@ impl App {
         if let Some(r) = poll(&mut self.raster.preview_job) {
             match r {
                 Ok(p) => {
-                    let img = egui::ColorImage::from_rgba_unmultiplied(p.size, &p.rgba);
-                    self.raster.preview = Some((ctx.load_texture("wms-preview", img, egui::TextureOptions::LINEAR), p.corners));
+                    self.raster.preview = Some(p);
+                    self.raster.preview_texture = None;
                     self.message = Some((true, tr("Voorbeeld getoond op de kaart.", "Preview shown on the map.").into()));
                 }
                 Err(e) => self.err(tr_format!("Test mislukt: {e}", "Test failed: {e}")),
@@ -1171,9 +1289,13 @@ impl App {
 
         page_header(ui, "map", tr("Rasterdata laden met WMS / TMS", "Load raster data with WMS / TMS"), tr("Luchtfoto's, kaarten en hoogtebeelden als onderlegger in de tekening.", "Aerial imagery, maps and elevation imagery as drawing underlays."));
         let Some(site) = self.saved_site(ui) else { return };
-        let preview = self.raster.preview.take();
+        let preview = self.raster.preview.as_ref().map(|p| {
+            self.raster.preview_texture.get_or_insert_with(|| {
+                let image = egui::ColorImage::from_rgba_unmultiplied(p.size, &p.rgba);
+                (ctx.load_texture("wms-preview", image, egui::TextureOptions::LINEAR), p.corners)
+            }).clone()
+        });
         self.map_section(ui, Some(&site), None, preview.as_ref(), &[]);
-        self.raster.preview = preview;
 
         group(ui, tr("Webserver / verzoek", "Web server / request"), |ui| {
             egui::Grid::new("wms").num_columns(2).spacing([14.0, 7.0]).min_col_width(170.0).show(ui, |ui| {
@@ -1182,10 +1304,11 @@ impl App {
                     self.raster.caps = None;
                     self.raster.layer = None;
                     self.raster.preview = None;
+                    self.raster.preview_texture = None;
                     self.raster.filter.clear();
                     if s.kind == ServerKind::Wms {
                         let url = s.url.clone();
-                        self.raster.caps_job = Some(Job::spawn(&ctx, tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wms(&url)));
+                        self.raster.caps_job = Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wms(&url)));
                         self.raster.resolution = 0.25;
                     } else {
                         self.raster.resolution = 0.5;
@@ -1238,6 +1361,7 @@ impl App {
                     self.raster.format = raster::default_format(c, &l.name);
                     self.raster.layer = Some(l);
                     self.raster.preview = None;
+                    self.raster.preview_texture = None;
                 }
             }
         });
@@ -1281,7 +1405,6 @@ impl App {
 
     // ── Vectordata (WFS) ────────────────────────────────────────────────────
     fn wfs(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         if let Some(r) = poll(&mut self.wfs.caps_job) {
             match r {
                 Ok(c) => {
@@ -1329,7 +1452,7 @@ impl App {
                     self.wfs.result = None;
                     self.wfs.preview.clear();
                     let url = s.url.clone();
-                    self.wfs.caps_job = Some(Job::spawn(&ctx, tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wfs(&url)));
+                    self.wfs.caps_job = Some(Job::spawn(tr("Capabilities ophalen…", "Fetching capabilities…"), move |_| caps::fetch_wfs(&url)));
                     self.wfs.server = Some(s);
                 }
                 ui.end_row();
@@ -1485,7 +1608,6 @@ impl App {
 
     // ── Coördinaten ─────────────────────────────────────────────────────────
     fn coords(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         if let Some(r) = poll(&mut self.coords.job) {
             match r {
                 Ok(info) => {
@@ -1527,7 +1649,7 @@ impl App {
                     }
                 });
                 if let Some(c) = chosen {
-                    self.coords.job = Some(Job::spawn(&ctx, "…", move |_| crs::ensure(&c)));
+                    self.coords.job = Some(Job::spawn("…", move |_| crs::ensure(&c)));
                 }
                 let a = ui.add(egui::DragValue::new(&mut self.coords.xy[0]).speed(if geo { 0.0001 } else { 1.0 }).fixed_decimals(if geo { 8 } else { 3 }).prefix(if geo { "lon " } else { "X " }));
                 let b = ui.add(egui::DragValue::new(&mut self.coords.xy[1]).speed(if geo { 0.0001 } else { 1.0 }).fixed_decimals(if geo { 8 } else { 3 }).prefix(if geo { "lat " } else { "Y " }));
@@ -1578,10 +1700,11 @@ impl App {
                     Ok(()) => {
                         self.has_site = true;
                         let site = self.draft.clone();
+                        self.saved_draft_base = Some(site.clone());
                         let (origin, aerial) = (self.loc.geo_origin, self.loc.aerial);
                         let summary = tr_format!("Projectlocatie opgeslagen: {} — {} X {:.2} Y {:.2}, {}×{} m.", "Project location saved: {} — {} X {:.2} Y {:.2}, {}×{} m.", site.label, site.crs, site.origin_e, site.origin_n, site.width, site.height);
                         if origin || aerial {
-                            self.loc.apply = Some(Job::spawn(&ctx, tr("Bezig…", "Working…"), move |p| {
+                            self.loc.apply = Some(Job::spawn(tr("Bezig…", "Working…"), move |p| {
                                 let mut out = vec![summary];
                                 if origin {
                                     out.push(import::geo_origin(&site)?);
@@ -1606,7 +1729,7 @@ impl App {
                 self.loc.popup = false;
                 self.loc.highlight = None;
                 self.message = None;
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
             job_status(ui, &self.loc.apply);
             job_status(ui, &self.loc.search);
@@ -1614,7 +1737,6 @@ impl App {
     }
 
     fn raster_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         let Some(site) = bridge::site() else { return };
         let too_big = (site.width / self.raster.resolution) * (site.height / self.raster.resolution) > MAX_TOTAL_PX;
         let is_xyz = self.raster.server.as_ref().is_some_and(|s| s.kind == ServerKind::Xyz);
@@ -1624,20 +1746,21 @@ impl App {
                 let server = self.raster.server.clone().unwrap();
                 let opt = raster::Options { resolution: self.raster.resolution, format: self.raster.format.clone() };
                 let (fade, caps, layer, s) = (self.raster.fade, self.raster.caps.clone(), self.raster.layer.clone(), site.clone());
-                self.raster.run = Some(Job::spawn(&ctx, tr("Importeren…", "Importing…"), move |p| match server.kind {
+                self.raster.run = Some(Job::spawn(tr("Importeren…", "Importing…"), move |p| match server.kind {
                     ServerKind::Xyz => import::xyz(&s, &server, &opt, fade, p),
                     _ => import::wms(&s, &server, caps.as_ref().ok_or(tr("geen capabilities", "no capabilities"))?, layer.as_ref().ok_or(tr("geen laag", "no layer"))?, &opt, fade, p),
                 }));
             }
             if ui.add_enabled(ready && self.raster.preview_job.is_none(), egui::Button::new(tr("Test — voorbeeld op kaart", "Test — preview on map"))).clicked() {
                 let (server, caps, layer, fmt, s) = (self.raster.server.clone().unwrap(), self.raster.caps.clone(), self.raster.layer.clone(), self.raster.format.clone(), site.clone());
-                self.raster.preview_job = Some(Job::spawn(&ctx, tr("Voorbeeld ophalen…", "Fetching preview…"), move |_| match server.kind {
+                self.raster.preview_job = Some(Job::spawn(tr("Voorbeeld ophalen…", "Fetching preview…"), move |_| match server.kind {
                     ServerKind::Xyz => raster::preview_xyz(&s, &server),
                     _ => raster::preview_wms(&s, caps.as_ref().ok_or(tr("geen capabilities", "no capabilities"))?, layer.as_ref().ok_or(tr("geen laag", "no layer"))?, &fmt, 900),
                 }));
             }
             if self.raster.preview.is_some() && ui.button(tr("Voorbeeld wissen", "Clear preview")).clicked() {
                 self.raster.preview = None;
+                self.raster.preview_texture = None;
             }
             job_status(ui, &self.raster.run);
             job_status(ui, &self.raster.preview_job);
@@ -1645,7 +1768,6 @@ impl App {
     }
 
     fn wfs_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         let Some(site) = bridge::site() else { return };
         button_bar(ui, |ui| {
             let can = self.wfs.ft.is_some() && self.wfs.place.is_none() && self.wfs.fetch.is_none();
@@ -1653,7 +1775,7 @@ impl App {
                 let style = VectorStyle { aci: self.wfs.aci, label_field: (!self.wfs.label.is_empty()).then(|| self.wfs.label.clone()), text_m: self.wfs.text_m, clip: self.wfs.clip };
                 let (s, ft, caps, limit, cached) = (site.clone(), self.wfs.ft.clone().unwrap(), self.wfs.caps.clone(), self.wfs.limit, self.wfs.result.take());
                 self.wfs.preview.clear();
-                self.wfs.place = Some(Job::spawn(&ctx, tr("Importeren…", "Importing…"), move |p| {
+                self.wfs.place = Some(Job::spawn(tr("Importeren…", "Importing…"), move |p| {
                     let res = match cached {
                         Some(r) => r,
                         None => import::wfs_fetch(&s, caps.as_ref().ok_or(tr("geen capabilities", "no capabilities"))?, &ft, limit, p)?,
@@ -1663,7 +1785,7 @@ impl App {
             }
             if ui.add_enabled(can, egui::Button::new(tr("Test — ophalen en tonen", "Test — fetch and display"))).clicked() {
                 let (s, c, t, n) = (site.clone(), self.wfs.caps.clone().unwrap(), self.wfs.ft.clone().unwrap(), self.wfs.limit);
-                self.wfs.fetch = Some(Job::spawn(&ctx, tr("Objecten ophalen…", "Fetching features…"), move |p| {
+                self.wfs.fetch = Some(Job::spawn(tr("Objecten ophalen…", "Fetching features…"), move |p| {
                     let res = import::wfs_fetch(&s, &c, &t, n, p)?;
                     let lines = vector::preview_lines(&s, &res.data_crs, &res.features)?;
                     Ok((res, lines))
@@ -1675,7 +1797,6 @@ impl App {
     }
 
     fn osm_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         let Some(site) = bridge::site() else { return };
         let ids: Vec<&'static str> = THEMES.iter().zip(&self.osm.on).filter(|(_, on)| **on).map(|(t, _)| t.id).collect();
         let busy = self.osm.fetch.is_some() || self.osm.run.is_some();
@@ -1683,7 +1804,7 @@ impl App {
             if ui.add_enabled(!ids.is_empty() && !busy, primary_button(tr("OK en importeren", "OK and import"))).clicked() {
                 let cached = self.osm.fetched.take().filter(|f| f.0 == ids).map(|f| f.1);
                 let (s, ids2, labels, h, clip) = (site.clone(), ids.clone(), self.osm.labels, self.osm.text_m, self.osm.clip);
-                self.osm.run = Some(Job::spawn(&ctx, "OpenStreetMap…", move |p| {
+                self.osm.run = Some(Job::spawn("OpenStreetMap…", move |p| {
                     let per_theme = match cached {
                         Some(c) => c,
                         None => import::osm_fetch(&s, &ids2, p)?,
@@ -1693,7 +1814,7 @@ impl App {
             }
             if ui.add_enabled(!ids.is_empty() && !busy, egui::Button::new(tr("Test — ophalen en tonen", "Test — fetch and display"))).clicked() {
                 let (s, ids2) = (site.clone(), ids.clone());
-                self.osm.fetch = Some(Job::spawn(&ctx, tr("OpenStreetMap ophalen…", "Fetching OpenStreetMap data…"), move |p| {
+                self.osm.fetch = Some(Job::spawn(tr("OpenStreetMap ophalen…", "Fetching OpenStreetMap data…"), move |p| {
                     let per_theme = import::osm_fetch(&s, &ids2, p)?;
                     let mut lines = Vec::new();
                     for (id, feats) in ids2.iter().zip(&per_theme) {
@@ -1709,13 +1830,12 @@ impl App {
     }
 
     fn pdok_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         let Some(site) = bridge::site() else { return };
         button_bar(ui, |ui| {
             let chosen: Vec<usize> = (0..PDOK.len()).filter(|i| self.pdok.on[*i]).collect();
             if ui.add_enabled(!chosen.is_empty() && self.pdok.run.is_none(), primary_button(tr("OK en importeren", "OK and import"))).clicked() {
                 let s = site.clone();
-                self.pdok.run = Some(Job::spawn(&ctx, "PDOK…", move |p| {
+                self.pdok.run = Some(Job::spawn("PDOK…", move |p| {
                     let mut done = Vec::new();
                     for (k, i) in chosen.iter().enumerate() {
                         let d = &PDOK[*i];
@@ -1740,12 +1860,12 @@ impl App {
     }
 
     // ── BGT · Kadaster · KLIC (NLCS) ────────────────────────────────────────
-    fn load_klic(&mut self, ctx: &egui::Context) {
+    fn load_klic(&mut self) {
         let path = std::path::PathBuf::from(self.nlcs.klic_path.trim().trim_matches('"'));
         let Some(site) = bridge::site().or_else(|| Some(self.draft.clone())) else { return };
         self.nlcs.klic = None;
         self.nlcs.klic_preview.clear();
-        self.nlcs.klic_job = Some(Job::spawn(ctx, tr("KLIC-levering lezen…", "Reading KLIC delivery…"), move |_| {
+        self.nlcs.klic_job = Some(Job::spawn(tr("KLIC-levering lezen…", "Reading KLIC delivery…"), move |_| {
             let lev = klic::read(&path)?;
             let preview = klic_preview(&site, &lev)?;
             Ok((lev, preview))
@@ -1784,8 +1904,7 @@ impl App {
         let dropped: Vec<std::path::PathBuf> = ui.ctx().input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).filter(|p| !p.as_os_str().is_empty()).collect());
         if let Some(p) = dropped.into_iter().next() {
             self.nlcs.klic_path = p.to_string_lossy().into_owned();
-            let ctx = ui.ctx().clone();
-            self.load_klic(&ctx);
+            self.load_klic();
         }
 
         page_header(ui, "nlcs", tr("BGT, kadaster en KLIC conform NLCS", "BGT, cadastre and KLIC in NLCS format"), tr("Basisdata voor een infra-ontwerp: elk object op zijn NLCS-laag, met kleur, lijndikte, lijntype en objectgegevens.", "Reference data for infrastructure design. Each feature is placed on its NLCS layer with colour, lineweight, linetype and attributes."));
@@ -1870,8 +1989,7 @@ impl App {
                 ui.label(tr("Bestand", "File"));
                 ui.add(egui::TextEdit::singleline(&mut self.nlcs.klic_path).hint_text(tr("Levering_….zip of GI_gebiedsinformatielevering_….xml — of sleep het bestand op dit venster", "Levering_….zip or GI_gebiedsinformatielevering_….xml — or drop the file on this window")).desired_width(ui.available_width() - 90.0));
                 if ui.add_enabled(!self.nlcs.klic_path.trim().is_empty() && self.nlcs.klic_job.is_none(), egui::Button::new(tr("Lezen", "Read"))).clicked() {
-                    let ctx = ui.ctx().clone();
-                    self.load_klic(&ctx);
+                    self.load_klic();
                 }
             });
             job_status(ui, &self.nlcs.klic_job);
@@ -1940,7 +2058,6 @@ impl App {
     }
 
     fn nlcs_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         let Some(site) = bridge::site() else { return };
         let collections = self.nlcs.collections();
         let brk = self.nlcs.brk;
@@ -1952,7 +2069,7 @@ impl App {
                 let cached = self.nlcs.fetched.take().filter(|f| f.0 == collections && f.1 == brk);
                 let (opt, kopt, lev, sheet, info) = (self.nlcs.options(), self.nlcs.klic_options(), self.nlcs.klic.clone().filter(|_| klic_ready), self.nlcs.sheet, self.nlcs.info.clone());
                 let (s, cols) = (site.clone(), collections.clone());
-                self.nlcs.run = Some(Job::spawn(&ctx, tr("Basisdata…", "Reference data…"), move |p| {
+                self.nlcs.run = Some(Job::spawn(tr("Basisdata…", "Reference data…"), move |p| {
                     let mut done = Vec::new();
                     let (bgt_data, cad) = match cached {
                         Some(c) => (c.2, c.3),
@@ -1984,7 +2101,7 @@ impl App {
             }
             if ui.add_enabled((!collections.is_empty() || brk) && !busy, egui::Button::new(tr("Test — ophalen en tonen", "Test — fetch and display"))).clicked() {
                 let (s, cols, labels) = (site.clone(), collections.clone(), self.nlcs.labels);
-                self.nlcs.fetch = Some(Job::spawn(&ctx, tr("BGT ophalen…", "Fetching BGT data…"), move |p| {
+                self.nlcs.fetch = Some(Job::spawn(tr("BGT ophalen…", "Fetching BGT data…"), move |p| {
                     let data = if cols.is_empty() { Vec::new() } else { bgt::fetch(&s, &cols, p)? };
                     let cad = if brk { Some(basisdata::cadastre_fetch(&s, labels, p)?) } else { None };
                     let preview = bgt_preview(&s, &data, cad.as_ref())?;
@@ -2020,7 +2137,10 @@ impl App {
         if !(site.lon > 3.2 && site.lon < 7.3 && site.lat > 50.7 && site.lat < 53.7) {
             ui.colored_label(WARN, tr("Let op: AHN bestaat alleen voor Nederland.", "AHN covers the Netherlands only."));
         }
-        let o = &mut self.ahn.opt;
+        let mut o = hoogte::settings();
+        let mut class_on: Vec<bool> = pointcloud::CLASSES.iter()
+            .map(|c| o.cloud.keeps_class(c.0))
+            .collect();
         group(ui, tr("Tekenen", "Drawing"), |ui| {
             ui.horizontal(|ui| {
                 ui.label(tr("Schaal", "Scale"));
@@ -2124,7 +2244,7 @@ impl App {
                         };
                         let (rect, _) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
                         ui.painter().rect_filled(rect, 2.0, Color32::from_rgb(rgb[0], rgb[1], rgb[2]));
-                        ui.checkbox(&mut self.ahn.class_on[i], label);
+                        ui.checkbox(&mut class_on[i], label);
                         if i % 2 == 1 {
                             ui.end_row();
                         }
@@ -2136,20 +2256,26 @@ impl App {
             });
         });
         // Keep the shared settings in step: the ribbon buttons use them too.
-        let all = self.ahn.class_on.iter().all(|c| *c);
-        self.ahn.opt.cloud.classes = if all { Vec::new() } else { pointcloud::CLASSES.iter().zip(&self.ahn.class_on).filter(|(_, on)| **on).map(|(c, _)| c.0).collect() };
-        hoogte::set_settings(self.ahn.opt.clone());
+        o.cloud.classes = (!class_on.iter().all(|selected| *selected)).then(|| {
+            pointcloud::CLASSES.iter().zip(class_on).filter(|(_, on)| *on).map(|(c, _)| c.0).collect()
+        });
+        hoogte::set_settings(o);
     }
 
     fn ahn_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         let Some(site) = bridge::site() else { return };
         let busy = self.ahn.test.is_some() || self.ahn.run.is_some();
         let any = self.ahn.spots || self.ahn.contours || self.ahn.cloud;
+        let settings = hoogte::settings();
+        let missing_classes = self.ahn.cloud && !settings.cloud.has_selected_classes();
         button_bar(ui, |ui| {
-            if ui.add_enabled(any && !busy, primary_button(tr("OK en importeren", "OK and import"))).clicked() {
-                let (s, opt, spots, contours, cloud) = (site.clone(), self.ahn.opt.clone(), self.ahn.spots, self.ahn.contours, self.ahn.cloud);
-                self.ahn.run = Some(Job::spawn(&ctx, "AHN…", move |p| {
+            let import = ui.add_enabled(any && !busy && !missing_classes, primary_button(tr("OK en importeren", "OK and import")));
+            if missing_classes {
+                import.clone().on_disabled_hover_text(tr("Kies ten minste één puntenwolkklasse.", "Select at least one point cloud class."));
+            }
+            if import.clicked() {
+                let (s, opt, spots, contours, cloud) = (site.clone(), settings.clone(), self.ahn.spots, self.ahn.contours, self.ahn.cloud);
+                self.ahn.run = Some(Job::spawn("AHN…", move |p| {
                     let mut done = Vec::new();
                     if contours {
                         done.push(hoogte::contour_lines(&s, &opt, p)?);
@@ -2164,8 +2290,8 @@ impl App {
                 }));
             }
             if ui.add_enabled(!busy, egui::Button::new(tr("Test — hoogtelijnen op de kaart", "Test — contours on map"))).clicked() {
-                let (s, opt) = (site.clone(), self.ahn.opt.clone());
-                self.ahn.test = Some(Job::spawn(&ctx, tr("AHN ophalen…", "Fetching AHN data…"), move |p| {
+                let (s, opt) = (site.clone(), settings);
+                self.ahn.test = Some(Job::spawn(tr("AHN ophalen…", "Fetching AHN data…"), move |p| {
                     let b = crate::basisdata::rd_bbox(&s)?;
                     let mut grid = ahn::fetch(b, Model::Dtm, opt.contour_cell, p)?;
                     if opt.smooth {
@@ -2196,7 +2322,7 @@ impl App {
     }
 
     // ── NLCS-controle ───────────────────────────────────────────────────────
-    fn start_check(&mut self, ctx: &egui::Context) {
+    fn start_check(&mut self) {
         if self.controle.job.is_some() {
             return;
         }
@@ -2207,7 +2333,7 @@ impl App {
             empty_layers: self.controle.empty_layers,
             layer_props: true,
         };
-        self.controle.job = Some(Job::spawn(ctx, tr("Tekening controleren…", "Checking drawing…"), move |_| {
+        self.controle.job = Some(Job::spawn(tr("Tekening controleren…", "Checking drawing…"), move |_| {
             let doc = bridge::snapshot()?;
             let opt = nlcs_check::Options { layer_props: !bridge::partial(), ..opt };
             Ok(nlcs_check::check(&doc, &opt))
@@ -2228,8 +2354,7 @@ impl App {
             match r {
                 Ok(m) => {
                     self.ok(m);
-                    let ctx = ui.ctx().clone();
-                    self.start_check(&ctx);
+                    self.start_check();
                 }
                 Err(e) => self.err(e),
             }
@@ -2328,17 +2453,16 @@ impl App {
     }
 
     fn controle_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         let busy = self.controle.job.is_some() || self.controle.repair.is_some();
         let repairs = self.controle.report.as_ref().map(|r| r.repairs().len()).unwrap_or(0);
         button_bar(ui, |ui| {
             if ui.add_enabled(!busy, primary_button(tr("Controleren", "Check"))).clicked() {
-                self.start_check(&ctx);
+                self.start_check();
             }
             let label = if repairs > 0 { tr_format!("Herstellen ({repairs})", "Repair ({repairs})") } else { tr("Herstellen", "Repair").into() };
             if ui.add_enabled(!busy && repairs > 0, egui::Button::new(label)).on_hover_text(tr("Laagkleur, -lijndikte en -lijntype volgens NLCS; elementen op DuLaag. Laagnamen en teksthoogtes blijven zoals ze zijn.", "Set layer colour, lineweight and linetype according to NLCS and entity properties to ByLayer. Keep layer names and text heights.")).clicked() {
                 if let Some(rep) = self.controle.report.clone() {
-                    self.controle.repair = Some(Job::spawn(&ctx, tr("Herstellen…", "Repairing…"), move |_| {
+                    self.controle.repair = Some(Job::spawn(tr("Herstellen…", "Repairing…"), move |_| {
                         let doc = bridge::snapshot()?;
                         nlcs_check::repair(&doc, &rep.repairs())
                     }));
@@ -2360,7 +2484,7 @@ impl App {
                 .on_hover_text(tr("Het ontwerp op NLCS-lagen als BGT-mutatie (IMGeo-GML 2.1.1) met een rapport, naast de tekening. N = plantopografie, R = gerealiseerd, V = beëindigen.", "Export the design on NLCS layers as a BGT change (IMGeo-GML 2.1.1) with a report beside the drawing. N = planned, R = as built, V = retired."))
                 .clicked()
             {
-                self.controle.mutation = Some(Job::spawn(&ctx, tr("BGT-mutatie maken…", "Creating BGT change…"), move |_| crate::bgt_mutatie::export(&bronhouder, as_built, None)));
+                self.controle.mutation = Some(Job::spawn(tr("BGT-mutatie maken…", "Creating BGT change…"), move |_| crate::bgt_mutatie::export(&bronhouder, as_built, None)));
             }
             job_status(ui, &self.controle.job);
             job_status(ui, &self.controle.repair);
@@ -2369,13 +2493,13 @@ impl App {
     }
 
     // ── Hoeveelheden ────────────────────────────────────────────────────────
-    fn start_quantities(&mut self, ctx: &egui::Context) {
+    fn start_quantities(&mut self) {
         if self.hoev.job.is_some() {
             return;
         }
         let only_selection = self.hoev.selection;
         let unit = bridge::target().map(|t| t.unit_factor).unwrap_or(1.0);
-        self.hoev.job = Some(Job::spawn(ctx, tr("Hoeveelheden berekenen…", "Calculating quantities…"), move |_| {
+        self.hoev.job = Some(Job::spawn(tr("Hoeveelheden berekenen…", "Calculating quantities…"), move |_| {
             let doc = bridge::snapshot()?;
             let sel: std::collections::HashSet<_> = if only_selection { bridge::selection()?.into_iter().collect() } else { Default::default() };
             if only_selection && sel.is_empty() {
@@ -2458,7 +2582,7 @@ impl App {
                     ui.colored_label(WARN, format!("⚠ {note}."));
                     if ui.small_button(tr("Kopieën selecteren", "Select duplicates")).on_hover_text(tr("Selecteer de dubbel getekende kopieën in de tekening, om ze te controleren of te verwijderen", "Select duplicate entities in the drawing to review or delete them")).clicked() {
                         let copies: Vec<_> = q.duplicates.iter().map(|d| d.2).collect();
-                        std::thread::spawn(move || {
+                        bridge::spawn_command(move || {
                             if let Err(e) = crate::bridge::select(&copies) {
                                 crate::bridge::error(&e);
                             }
@@ -2471,10 +2595,9 @@ impl App {
     }
 
     fn hoeveelheden_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         button_bar(ui, |ui| {
             if ui.add_enabled(self.hoev.job.is_none(), primary_button(tr("Berekenen", "Calculate"))).clicked() {
-                self.start_quantities(&ctx);
+                self.start_quantities();
             }
             if ui.add_enabled(self.hoev.result.is_some(), egui::Button::new(tr("CSV opslaan", "Save CSV"))).on_hover_text(tr("Puntkomma's en decimale komma's, voor Excel en LibreOffice", "Semicolon delimiters and decimal commas for Excel and LibreOffice")).clicked() {
                 if let Some(q) = &self.hoev.result {
@@ -2490,15 +2613,16 @@ impl App {
     }
 
     // ── Civiel ──────────────────────────────────────────────────────────────
-    fn civiel_page(&mut self, ui: &mut egui::Ui) {
-        if let Some(r) = poll(&mut self.civ.run) {
+    fn civiel_page(&mut self, ui: &mut egui::Ui, offsets: &mut Option<String>) {
+        if let Some(r) = poll(&mut self.civiel_run) {
             match r {
                 Ok(m) => self.ok(m),
                 Err(e) => self.err(e),
             }
         }
         page_header(ui, "axis", tr("Civiel — instellingen", "Civil — settings"), tr("Civiele ontwerptools op het tabblad Civiel: meetpunten, terrein (TIN), assen, profielen en grondverzet. De instellingen gelden ook voor de knoppen in het lint.", "Civil design tools on the Civil tab: survey points, terrain (TIN), alignments, profiles and earthworks. These settings also apply to the ribbon tools."));
-        let o = &mut self.civ.opt;
+        let mut o = civiel::settings();
+        let offsets = offsets.get_or_insert_with(|| offsets_text(&o.offsets));
         let num = |ui: &mut egui::Ui, v: &mut f64, lo: f64, hi: f64, speed: f64, suffix: &str| {
             ui.add(egui::DragValue::new(v).range(lo..=hi).speed(speed).suffix(suffix));
         };
@@ -2573,8 +2697,8 @@ impl App {
                 });
                 ui.horizontal(|ui| {
                     ui.label(tr("Verschuivingen (m, links < 0)", "Offsets (m, left < 0)"));
-                    if ui.add(egui::TextEdit::singleline(&mut self.civ.offsets).desired_width(140.0)).changed() {
-                        o.offsets = parse_offsets(&self.civ.offsets);
+                    if ui.add(egui::TextEdit::singleline(offsets).desired_width(140.0)).changed() {
+                        o.offsets = parse_offsets(offsets);
                     }
                 });
             });
@@ -2606,40 +2730,38 @@ impl App {
                 ui.label(RichText::new(tr("Selecteer de as in de tekening en kies Lengteprofiel of Dwarsprofielen in het lint; klik dan waar ze komen. Ontwerpprofiel: teken een polylijn in het lengteprofiel en selecteer die.", "Select the alignment in the drawing and choose Longitudinal profile or Cross sections on the ribbon. Click to place the result. For a design profile, draw a polyline in the longitudinal profile and select it.")).small().weak());
             });
         });
-        civiel::set_settings(self.civ.opt.clone());
+        civiel::set_settings(o);
     }
 
     fn civiel_actions(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
-        let busy = self.civ.run.is_some();
-        let mut start: Option<(&'static str, fn(&dyn Fn(String)) -> Result<String, String>)> = None;
+        let ready = self.civiel_run.is_none() && bridge::target().is_some();
+        let mut start: Option<(&'static str, fn(&CivielOptions, &dyn Fn(String)) -> Result<String, String>)> = None;
         button_bar(ui, |ui| {
-            use civiel::{as_profiel, landmeten, settings, terrein};
+            use civiel::{as_profiel, landmeten, terrein};
             for (label, f) in [
-                (tr("TIN maken", "Create TIN"), (|p| terrein::create(&settings(), terrein::TinSource::Auto, p)) as fn(&dyn Fn(String)) -> Result<String, String>),
-                (tr("Hoogtelijnen", "Contours"), |p| terrein::contours(&settings(), terrein::Surface::Auto, p)),
-                (tr("Hoogteanalyse", "Elevation analysis"), |_| terrein::analysis(&settings(), terrein::Surface::Auto)),
-                (tr("Grondverzet", "Earthworks"), |p| terrein::volume(&settings(), terrein::Design::Auto, p)),
-                (tr("As maken", "Create alignment"), |_| as_profiel::create(&settings(), as_profiel::AxisInput::Line(None), None, None)),
-                (tr("As verschuiven", "Offset alignment"), |_| as_profiel::offsets(&settings(), None)),
-                (tr("Ontwerpprofiel", "Design profile"), |_| as_profiel::design_profile(&settings(), None, None, None)),
-                (tr("Punten exporteren", "Export points"), |_| landmeten::export(&settings(), None)),
+                (tr("TIN maken", "Create TIN"), (|opt, p| terrein::create(opt, terrein::TinSource::Auto, p)) as fn(&CivielOptions, &dyn Fn(String)) -> Result<String, String>),
+                (tr("Hoogtelijnen", "Contours"), |opt, p| terrein::contours(opt, terrein::Surface::Auto, p)),
+                (tr("Hoogteanalyse", "Elevation analysis"), |opt, _| terrein::analysis(opt, terrein::Surface::Auto)),
+                (tr("Grondverzet", "Earthworks"), |opt, p| terrein::volume(opt, terrein::Design::Auto, p)),
+                (tr("As maken", "Create alignment"), |opt, _| as_profiel::create(opt, as_profiel::AxisInput::Line(None), None, None)),
+                (tr("As verschuiven", "Offset alignment"), |opt, _| as_profiel::offsets(opt, None)),
+                (tr("Ontwerpprofiel", "Design profile"), |opt, _| as_profiel::design_profile(opt, None, None, None)),
+                (tr("Punten exporteren", "Export points"), |opt, _| landmeten::export(opt, None)),
             ] {
-                if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                if ui.add_enabled(ready, egui::Button::new(label)).clicked() {
                     start = Some((label, f));
                 }
             }
-            job_status(ui, &self.civ.run);
+            job_status(ui, &self.civiel_run);
         });
         if let Some((label, f)) = start {
-            civiel::set_settings(self.civ.opt.clone());
-            self.civ.run = Some(Job::spawn(&ctx, &format!("{label}…"), move |p| f(p)));
+            let settings = civiel::settings();
+            self.civiel_run = Some(Job::spawn(&format!("{label}…"), move |p| f(&settings, p)));
         }
     }
 
     // ── Servers ─────────────────────────────────────────────────────────────
     fn servers_page(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
         if let Some(r) = poll(&mut self.srv.test) {
             match r {
                 Ok(title) => {
@@ -2687,7 +2809,7 @@ impl App {
                 ui.add(egui::TextEdit::singleline(&mut self.srv.region).hint_text(tr("groep (leeg = eigen servers)", "group (leave empty for custom servers)")));
                 if ui.add_enabled(self.srv.test.is_none() && !self.srv.url.trim().is_empty(), primary_button(tr("Testen en toevoegen", "Test and add"))).clicked() {
                     let (kind, url) = (self.srv.kind.unwrap_or(ServerKind::Wms), self.srv.url.trim().to_string());
-                    self.srv.test = Some(Job::spawn(&ctx, tr("Server testen…", "Testing server…"), move |_| match kind {
+                    self.srv.test = Some(Job::spawn(tr("Server testen…", "Testing server…"), move |_| match kind {
                         ServerKind::Wms => caps::fetch_wms(&crate::gis::http::clean_service_url(&url)).map(|c| c.title),
                         ServerKind::Wfs => caps::fetch_wfs(&crate::gis::http::clean_service_url(&url)).map(|c| c.title),
                         ServerKind::Xyz => {
@@ -2954,7 +3076,7 @@ fn server_combo(ui: &mut egui::Ui, id: &str, all: &[MapServer], kinds: &[ServerK
         .selected_text(current.map(|s| s.name.clone()).unwrap_or_else(|| crate::lang::tr("— kies een server —", "— choose a server —").into()))
         .show_ui(ui, |ui| {
             // Hundreds of presets worldwide: a filter on name, country and URL.
-            let fid = egui::Id::NULL.with((id, "filter"));
+            let fid = ui.make_persistent_id((id, "filter"));
             let mut filter: String = ui.data_mut(|d| d.get_temp(fid).unwrap_or_default());
             ui.horizontal(|ui| {
                 ui.label(crate::lang::tr("Filter", "Filter"));
@@ -2993,17 +3115,8 @@ fn aci_combo(ui: &mut egui::Ui, id: &str, aci: &mut i16) -> bool {
     before != *aci
 }
 
-impl eframe::App for App {
-    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.handle_messages(ctx);
-        // Closing only hides: the event loop cannot be created twice.
-        if ctx.input(|i| i.viewport().close_requested()) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-        }
-    }
-
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+impl App {
+    pub(super) fn ui(&mut self, ui: &mut egui::Ui, civiel_offsets: &mut Option<String>) {
         egui::Panel::left("nav").exact_size(196.0).resizable(false).show(ui, |ui| {
             ui.add_space(8.0);
             let civil = super::product() == Product::Civiel;
@@ -3133,7 +3246,7 @@ impl eframe::App for App {
                     Tab::Coords => self.coords(ui),
                     Tab::Library => self.lib.page(ui),
                     Tab::Files => self.files.page(ui),
-                    Tab::Civiel => self.civiel_page(ui),
+                    Tab::Civiel => self.civiel_page(ui, civiel_offsets),
                     Tab::Services => self.services_page(ui),
                     Tab::Localisation => self.localisation_page(ui),
                     Tab::Planning => self.planning.page(ui),

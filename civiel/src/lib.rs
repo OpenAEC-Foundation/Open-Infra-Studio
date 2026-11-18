@@ -1165,6 +1165,10 @@ impl BuiltinPlugin for OpenInfraCiviel {
         Box::new(CivielModule)
     }
 
+    fn on_notification(&mut self, _command_id: Option<u64>, notification: ocs_plugin_api::host::HostNotification) {
+        bridge::handle_document_notification(notification);
+    }
+
     fn dispatch(&self, host: &mut dyn HostApi, cmd: &str) -> bool {
         // The English name from here on, also for an older (Dutch) alias.
         let cmd = open_infra::commands::normalise(cmd);

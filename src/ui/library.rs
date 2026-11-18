@@ -38,7 +38,7 @@ fn matches(v: &Vehicle, q: &str) -> bool {
 
 /// Run a command line in Open CAD Studio from a worker (it may wait on the host).
 fn run(cmd: String) {
-    std::thread::spawn(move || {
+    crate::bridge::spawn_command(move || {
         if let Err(e) = bridge::execute(&cmd) {
             bridge::error(&e);
         }
