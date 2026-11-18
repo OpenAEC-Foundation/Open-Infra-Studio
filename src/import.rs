@@ -272,3 +272,63 @@ pub fn aerial(site: &Site, progress: &dyn Fn(String)) -> Result<String, String> 
     let res = (site.width.max(site.height) / 2048.0).max(5.0);
     wms(site, &srv, &caps, &layer, &RasterOptions { resolution: res, format: "image/jpeg".into() }, 0, progress)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ocs_plugin_api::host::codec::{EntityType, Handle};
+    use ocs_plugin_api::host::{PluginRequestError, PluginRequestSender, XDataValue};
+    use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct Drawing {
+        entities: Mutex<Vec<EntityType>>,
+    }
+
+    impl PluginRequestSender for Drawing {
+        fn request(&self, request: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+            if let PluginRequest::AddEntities(entities) = request {
+                let mut placed = self.entities.lock().unwrap();
+                let first = placed.len() as u64 + 1;
+                let handles = (first..first + entities.len() as u64).map(Handle::new).collect();
+                placed.extend(entities);
+                return Ok(PluginResponse::Handles(handles));
+            }
+            Ok(PluginResponse::Ok)
+        }
+    }
+
+    #[test]
+    fn wfs_bag_pand_carries_source_attributes() {
+        // Synthetic GetFeature response in RD, with the BAG field names.
+        let response = serde_json::json!({
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "properties": { "identificatie": "0503100000000001", "bouwjaar": 1984 },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[105000, 425000], [105010, 425000], [105010, 425010], [105000, 425000]]]
+                }
+            }]
+        });
+        let site = Site { origin_e: 105000.0, origin_n: 425000.0, ..Site::default() };
+        let ft = WfsType { name: "bag:pand".into(), title: "Pand".into(), crs: vec![site.crs.clone()], bbox: None };
+        let result = wfs::WfsResult { features: vector::parse_geojson(&response), data_crs: site.crs.clone(), truncated: false };
+        let style = VectorStyle { aci: 30, label_field: None, text_m: 1.0, clip: true };
+        let drawing = Arc::new(Drawing::default());
+        let target = Target { sender: drawing.clone(), tab_id: 139, unit_factor: 1.0, doc_path: None };
+
+        bridge::with_command_context(target, None, None, || wfs_place(&site, &ft, &result, &style)).unwrap();
+
+        let placed = drawing.entities.lock().unwrap();
+        assert_eq!(placed.len(), 1);
+        assert!(matches!(&placed[0], EntityType::LwPolyline(p) if p.is_closed));
+        assert_eq!(placed[0].common().layer, "GIS-PAND");
+        let record = placed[0].common().extended_data.get_record(bridge::XDATA_APP)
+            .expect("GIS-PAND must carry OPENINFRA XDATA");
+        assert!(record.values.contains(&XDataValue::String("bouwjaar=1984".into())));
+        assert!(record.values.contains(&XDataValue::String("identificatie=0503100000000001".into())));
+    }
+}
