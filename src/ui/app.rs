@@ -32,7 +32,7 @@ use crate::nlcs::{self, Element, Status};
 use crate::tekenblad::{self, SheetInfo};
 use crate::gis::ahn::{self, Model};
 use crate::gis::pointcloud::{self, Colouring, Edition};
-use crate::hoogte::{self, AhnOptions};
+use crate::hoogte;
 use crate::hoeveelheden::{self, Quantities};
 use crate::nlcs_check::{self, Report, Rule, Severity};
 use crate::civiel::{self, landmeten::Format, CivielOptions};
@@ -183,11 +183,9 @@ type NlcsFetched = (Vec<&'static str>, bool, Arc<Vec<(String, Vec<Feature>)>>, O
 type AhnPreview = (Preview2, (f64, f64), f64);
 
 struct AhnPage {
-    opt: AhnOptions,
     spots: bool,
     contours: bool,
     cloud: bool,
-    class_on: Vec<bool>,
     preview: Option<AhnPreview>,
     test: Option<Job<AhnPreview>>,
     run: Option<Job<String>>,
@@ -195,9 +193,7 @@ struct AhnPage {
 
 impl Default for AhnPage {
     fn default() -> Self {
-        let opt = hoogte::settings();
-        let class_on = pointcloud::CLASSES.iter().map(|c| opt.cloud.classes.is_empty() || opt.cloud.classes.contains(&c.0)).collect();
-        Self { opt, spots: false, contours: true, cloud: false, class_on, preview: None, test: None, run: None }
+        Self { spots: false, contours: true, cloud: false, preview: None, test: None, run: None }
     }
 }
 
@@ -225,21 +221,6 @@ struct ControlePage {
 impl Default for ControlePage {
     fn default() -> Self {
         Self { scale: 500.0, text_heights: true, empty_layers: true, job: None, report: None, open: None, repair: None, bronhouder: String::new(), as_built: false, mutation: None }
-    }
-}
-
-struct CivielPage {
-    opt: CivielOptions,
-    /// The offsets as typed: "-3,5; 3,5".
-    offsets: String,
-    run: Option<Job<String>>,
-}
-
-impl Default for CivielPage {
-    fn default() -> Self {
-        let opt = civiel::settings();
-        let offsets = offsets_text(&opt.offsets);
-        Self { opt, offsets, run: None }
     }
 }
 
@@ -456,7 +437,7 @@ pub struct App {
     ahn: AhnPage,
     controle: ControlePage,
     hoev: HoeveelhedenPage,
-    civ: CivielPage,
+    civiel_run: Option<Job<String>>,
     srv: ServersPage,
     coords: CoordsPage,
     servers: Vec<MapServer>,
@@ -491,31 +472,106 @@ mod close_reopen_tests {
         });
         let mut workbench = super::super::Workbench::default();
         let saved = Site::default();
-        workbench.with_document(target(10), Some(saved.clone()), |app| {
+        workbench.with_document(target(10), Some(saved.clone()), |app, _| {
             app.draft.label = "Draft area".into();
             app.map.zoom = 12.0;
             app.controle.report = Some(Report::default());
             app.reset_window();
         });
 
-        workbench.with_document(target(11), Some(saved.clone()), |app| {
+        workbench.with_document(target(11), Some(saved.clone()), |app, _| {
             assert_eq!(app.draft, saved);
             assert!(app.controle.report.is_none());
         });
 
-        workbench.with_document(target(10), Some(saved.clone()), |app| {
+        workbench.with_document(target(10), Some(saved.clone()), |app, _| {
             assert_eq!(app.draft.label, "Draft area");
             assert_eq!(app.map.zoom, 12.0);
             assert!(app.controle.report.is_some());
         });
 
-        let ctx = egui::Context::default();
-        workbench.handle_message(&ctx, UiMsg::DrawingClosed(10));
-        workbench.with_document(target(10), None, |app| {
+        workbench.handle_message(super::super::Message::capture(UiMsg::DrawingClosed(10)));
+        workbench.with_document(target(10), None, |app, _| {
             assert!(!app.has_site);
             assert_ne!(app.draft.label, "Draft area");
             assert!(app.controle.report.is_none());
         });
+    }
+
+
+    #[test]
+    fn queued_point_keeps_its_drawing_and_source_crs() {
+        use super::super::{Message, Workbench};
+        let _lock = bridge::COMMAND_TEST_LOCK.lock().unwrap();
+        const FIRST_TAB: u64 = 139001;
+        const SECOND_TAB: u64 = 139002;
+        let a = bridge::workbench_test_target(FIRST_TAB, Box::new(NoRequests));
+        let b = bridge::workbench_test_target(SECOND_TAB, Box::new(NoRequests));
+        let mut site = Site::default();
+        site.crs = "EPSG:3857".into();
+        let queued = bridge::with_command_context(a.clone(), Some(site.clone()), None, || {
+            Message::capture(UiMsg::Picked {
+                point: [104885.0, 425320.0],
+                source_crs: "EPSG:28992".into(),
+            })
+        });
+
+        let mut workbench = Workbench::default();
+        bridge::with_command_context(b.clone(), Some(site.clone()), None, || {
+            assert!(!workbench.handle_message(queued));
+        });
+        workbench.with_document(Some(b), Some(site.clone()), |app, _| {
+            assert!(app.coords.picked.is_none());
+        });
+        workbench.with_document(Some(a.clone()), Some(site.clone()), |app, _| {
+            let [lon, lat] = app.coords.picked.expect("the point stays on its drawing");
+            assert!((lon - 4.6606).abs() < 0.001);
+            assert!((lat - 51.8142).abs() < 0.001);
+        });
+
+        let queued = bridge::with_command_context(a, None, None, || {
+            Message::capture(UiMsg::Show(Tab::Coords))
+        });
+        bridge::drawing_closed(FIRST_TAB);
+        workbench.handle_message(Message::capture(UiMsg::DrawingClosed(FIRST_TAB)));
+        let replacement = bridge::workbench_test_target(FIRST_TAB, Box::new(NoRequests));
+        bridge::with_command_context(replacement.clone(), None, None, || {
+            assert!(!workbench.handle_message(queued));
+        });
+        workbench.with_document(Some(replacement), None, |app, _| {
+            assert_eq!(app.tab, Tab::Location);
+        });
+        bridge::drawing_closed(FIRST_TAB);
+        bridge::drawing_closed(SECOND_TAB);
+    }
+
+    #[test]
+    fn civiel_page_reads_shared_settings_when_switching_drawings() {
+        struct Restore(CivielOptions);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                civiel::set_settings(self.0.clone());
+            }
+        }
+        let _restore = Restore(civiel::settings());
+        let ctx = egui::Context::default();
+        let mut a = App::new();
+        let mut b = App::new();
+        let mut offsets_text = None;
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            a.civiel_page(ui, &mut offsets_text);
+        }).drop_without_applying_deltas();
+
+        let mut settings = civiel::settings();
+        settings.interval = 2.0;
+        civiel::set_settings(settings);
+
+        let frame = ctx.run_ui(egui::RawInput::default(), |ui| {
+            b.civiel_page(ui, &mut offsets_text);
+        });
+        assert!(format!("{:?}", frame.shapes).contains("2 m"));
+        assert_eq!(civiel::settings().interval, 2.0);
+        frame.drop_without_applying_deltas();
     }
 
 }
@@ -635,7 +691,7 @@ impl App {
             ahn: AhnPage::default(),
             controle: ControlePage::default(),
             hoev: HoeveelhedenPage::default(),
-            civ: CivielPage::default(),
+            civiel_run: None,
             srv: ServersPage { region: "Eigen servers".into(), ..Default::default() },
             coords: CoordsPage { crs: "EPSG:4326".into(), xy: [4.660_612, 51.814_158], picked: None, job: None },
             servers: servers::all(),
@@ -656,7 +712,7 @@ impl App {
         self.message = Some((false, msg.into()));
     }
 
-    pub(super) fn reload_site(&mut self) {
+    fn reload_site(&mut self) {
         self.set_draft_base(bridge::site());
     }
 
@@ -674,7 +730,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_message(&mut self, ctx: &egui::Context, msg: UiMsg) {
+    pub(super) fn handle_message(&mut self, msg: UiMsg) {
         match msg {
             UiMsg::RegionalServices(region) => {
                 self.svc.regional(region);
@@ -689,17 +745,17 @@ impl App {
                 self.servers = servers::all();
                 self.svc.refresh();
             }
-            UiMsg::Picked(p) => {
+            UiMsg::Picked { point, source_crs } => {
                 self.tab = Tab::Coords;
-                if let Ok(ll) = crs::transform(&self.draft.crs, "EPSG:4326", p) {
+                if let Ok(ll) = crs::transform(&source_crs, "EPSG:4326", point) {
                     self.coords.picked = Some(ll);
                     self.map.center = ll;
                 }
-                if let Ok(q) = crs::transform(&self.draft.crs, &self.coords.crs, p) {
+                if let Ok(q) = crs::transform(&source_crs, &self.coords.crs, point) {
                     self.coords.xy = q;
                 }
             }
-            UiMsg::SiteChanged | UiMsg::DrawingClosed(_) => return,
+            UiMsg::DrawingClosed(_) => unreachable!("handled by the workbench"),
             UiMsg::File(path) => {
                 self.tab = Tab::Files;
                 self.files.open(path);
@@ -718,8 +774,6 @@ impl App {
                 self.load_klic();
             }
         }
-        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
     }
 
     /// The site for import pages (saved in the drawing), or a hint to set one.
@@ -2000,7 +2054,10 @@ impl App {
         if !(site.lon > 3.2 && site.lon < 7.3 && site.lat > 50.7 && site.lat < 53.7) {
             ui.colored_label(WARN, "Let op: AHN bestaat alleen voor Nederland.");
         }
-        let o = &mut self.ahn.opt;
+        let mut o = hoogte::settings();
+        let mut class_on: Vec<bool> = pointcloud::CLASSES.iter()
+            .map(|c| o.cloud.classes.is_empty() || o.cloud.classes.contains(&c.0))
+            .collect();
         group(ui, "Tekenen", |ui| {
             ui.horizontal(|ui| {
                 ui.label("Schaal");
@@ -2095,7 +2152,7 @@ impl App {
                     for (i, (_, label, rgb)) in pointcloud::CLASSES.iter().enumerate() {
                         let (rect, _) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());
                         ui.painter().rect_filled(rect, 2.0, Color32::from_rgb(rgb[0], rgb[1], rgb[2]));
-                        ui.checkbox(&mut self.ahn.class_on[i], *label);
+                        ui.checkbox(&mut class_on[i], *label);
                         if i % 2 == 1 {
                             ui.end_row();
                         }
@@ -2107,9 +2164,12 @@ impl App {
             });
         });
         // Keep the shared settings in step: the ribbon buttons use them too.
-        let all = self.ahn.class_on.iter().all(|c| *c);
-        self.ahn.opt.cloud.classes = if all { Vec::new() } else { pointcloud::CLASSES.iter().zip(&self.ahn.class_on).filter(|(_, on)| **on).map(|(c, _)| c.0).collect() };
-        hoogte::set_settings(self.ahn.opt.clone());
+        o.cloud.classes = if class_on.iter().all(|c| *c) {
+            Vec::new()
+        } else {
+            pointcloud::CLASSES.iter().zip(class_on).filter(|(_, on)| *on).map(|(c, _)| c.0).collect()
+        };
+        hoogte::set_settings(o);
     }
 
     fn ahn_actions(&mut self, ui: &mut egui::Ui) {
@@ -2118,7 +2178,7 @@ impl App {
         let any = self.ahn.spots || self.ahn.contours || self.ahn.cloud;
         button_bar(ui, |ui| {
             if ui.add_enabled(any && !busy, primary_button("OK en importeren")).clicked() {
-                let (s, opt, spots, contours, cloud) = (site.clone(), self.ahn.opt.clone(), self.ahn.spots, self.ahn.contours, self.ahn.cloud);
+                let (s, opt, spots, contours, cloud) = (site.clone(), hoogte::settings(), self.ahn.spots, self.ahn.contours, self.ahn.cloud);
                 self.ahn.run = Some(Job::spawn("AHN…", move |p| {
                     let mut done = Vec::new();
                     if contours {
@@ -2134,7 +2194,7 @@ impl App {
                 }));
             }
             if ui.add_enabled(!busy, egui::Button::new("Test — hoogtelijnen op de kaart")).clicked() {
-                let (s, opt) = (site.clone(), self.ahn.opt.clone());
+                let (s, opt) = (site.clone(), hoogte::settings());
                 self.ahn.test = Some(Job::spawn("AHN ophalen…", move |p| {
                     let b = crate::basisdata::rd_bbox(&s)?;
                     let mut grid = ahn::fetch(b, Model::Dtm, opt.contour_cell, p)?;
@@ -2424,7 +2484,7 @@ impl App {
                     ui.colored_label(WARN, format!("⚠ {note}."));
                     if ui.small_button("Kopieën selecteren").on_hover_text("Selecteer de dubbel getekende kopieën in de tekening, om ze te controleren of te verwijderen").clicked() {
                         let copies: Vec<_> = q.duplicates.iter().map(|d| d.2).collect();
-                        std::thread::spawn(move || {
+                        bridge::spawn_command(move || {
                             if let Err(e) = crate::bridge::select(&copies) {
                                 crate::bridge::error(&e);
                             }
@@ -2455,15 +2515,16 @@ impl App {
     }
 
     // ── Civiel ──────────────────────────────────────────────────────────────
-    fn civiel_page(&mut self, ui: &mut egui::Ui) {
-        if let Some(r) = poll(&mut self.civ.run) {
+    fn civiel_page(&mut self, ui: &mut egui::Ui, offsets: &mut Option<String>) {
+        if let Some(r) = poll(&mut self.civiel_run) {
             match r {
                 Ok(m) => self.ok(m),
                 Err(e) => self.err(e),
             }
         }
         page_header(ui, "axis", "Civiel — instellingen", "Civiele ontwerptools op het tabblad Civiel: meetpunten, terrein (TIN), assen, profielen en grondverzet. De instellingen gelden ook voor de knoppen in het lint.");
-        let o = &mut self.civ.opt;
+        let mut o = civiel::settings();
+        let offsets = offsets.get_or_insert_with(|| offsets_text(&o.offsets));
         let num = |ui: &mut egui::Ui, v: &mut f64, lo: f64, hi: f64, speed: f64, suffix: &str| {
             ui.add(egui::DragValue::new(v).range(lo..=hi).speed(speed).suffix(suffix));
         };
@@ -2538,8 +2599,8 @@ impl App {
                 });
                 ui.horizontal(|ui| {
                     ui.label("Verschuivingen (m, links < 0)");
-                    if ui.add(egui::TextEdit::singleline(&mut self.civ.offsets).desired_width(140.0)).changed() {
-                        o.offsets = parse_offsets(&self.civ.offsets);
+                    if ui.add(egui::TextEdit::singleline(offsets).desired_width(140.0)).changed() {
+                        o.offsets = parse_offsets(offsets);
                     }
                 });
             });
@@ -2571,33 +2632,33 @@ impl App {
                 ui.label(RichText::new("Selecteer de as in de tekening en kies Lengteprofiel of Dwarsprofielen in het lint; klik dan waar ze komen. Ontwerpprofiel: teken een polylijn in het lengteprofiel en selecteer die.").small().weak());
             });
         });
-        civiel::set_settings(self.civ.opt.clone());
+        civiel::set_settings(o);
     }
 
     fn civiel_actions(&mut self, ui: &mut egui::Ui) {
-        let busy = self.civ.run.is_some();
-        let mut start: Option<(&'static str, fn(&dyn Fn(String)) -> Result<String, String>)> = None;
+        let busy = self.civiel_run.is_some();
+        let mut start: Option<(&'static str, fn(&CivielOptions, &dyn Fn(String)) -> Result<String, String>)> = None;
         button_bar(ui, |ui| {
-            use civiel::{as_profiel, landmeten, settings, terrein};
+            use civiel::{as_profiel, landmeten, terrein};
             for (label, f) in [
-                ("TIN maken", (|p| terrein::create(&settings(), terrein::TinSource::Auto, p)) as fn(&dyn Fn(String)) -> Result<String, String>),
-                ("Hoogtelijnen", |p| terrein::contours(&settings(), terrein::Surface::Auto, p)),
-                ("Hoogteanalyse", |_| terrein::analysis(&settings(), terrein::Surface::Auto)),
-                ("Grondverzet", |p| terrein::volume(&settings(), terrein::Design::Auto, p)),
-                ("As maken", |_| as_profiel::create(&settings(), as_profiel::AxisInput::Line(None), None, None)),
-                ("As verschuiven", |_| as_profiel::offsets(&settings(), None)),
-                ("Ontwerpprofiel", |_| as_profiel::design_profile(&settings(), None, None, None)),
-                ("Punten exporteren", |_| landmeten::export(&settings(), None)),
+                ("TIN maken", (|opt, p| terrein::create(opt, terrein::TinSource::Auto, p)) as fn(&CivielOptions, &dyn Fn(String)) -> Result<String, String>),
+                ("Hoogtelijnen", |opt, p| terrein::contours(opt, terrein::Surface::Auto, p)),
+                ("Hoogteanalyse", |opt, _| terrein::analysis(opt, terrein::Surface::Auto)),
+                ("Grondverzet", |opt, p| terrein::volume(opt, terrein::Design::Auto, p)),
+                ("As maken", |opt, _| as_profiel::create(opt, as_profiel::AxisInput::Line(None), None, None)),
+                ("As verschuiven", |opt, _| as_profiel::offsets(opt, None)),
+                ("Ontwerpprofiel", |opt, _| as_profiel::design_profile(opt, None, None, None)),
+                ("Punten exporteren", |opt, _| landmeten::export(opt, None)),
             ] {
                 if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
                     start = Some((label, f));
                 }
             }
-            job_status(ui, &self.civ.run);
+            job_status(ui, &self.civiel_run);
         });
         if let Some((label, f)) = start {
-            civiel::set_settings(self.civ.opt.clone());
-            self.civ.run = Some(Job::spawn(&format!("{label}…"), move |p| f(p)));
+            let settings = civiel::settings();
+            self.civiel_run = Some(Job::spawn(&format!("{label}…"), move |p| f(&settings, p)));
         }
     }
 
@@ -2933,7 +2994,7 @@ fn aci_combo(ui: &mut egui::Ui, id: &str, aci: &mut i16) -> bool {
 }
 
 impl App {
-    pub(super) fn ui(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn ui(&mut self, ui: &mut egui::Ui, civiel_offsets: &mut Option<String>) {
         egui::Panel::left("nav").exact_size(196.0).resizable(false).show(ui, |ui| {
             ui.add_space(8.0);
             let civil = super::product() == Product::Civiel;
@@ -3063,7 +3124,7 @@ impl App {
                     Tab::Coords => self.coords(ui),
                     Tab::Library => self.lib.page(ui),
                     Tab::Files => self.files.page(ui),
-                    Tab::Civiel => self.civiel_page(ui),
+                    Tab::Civiel => self.civiel_page(ui, civiel_offsets),
                     Tab::Services => self.services_page(ui),
                     Tab::Localisation => self.localisation_page(ui),
                     Tab::Planning => self.planning.page(ui),

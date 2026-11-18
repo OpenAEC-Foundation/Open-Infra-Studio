@@ -331,7 +331,7 @@ impl InteractiveCommand for AreaCmd {
         bridge::spawn_command(move || match bridge::save_site(&site) {
             Ok(()) => {
                 bridge::info(&format!("Importgebied {} × {} m rond X {:.2} Y {:.2} ({}).", site.width, site.height, site.origin_e, site.origin_n, site.crs));
-                ui::send(ui::UiMsg::SiteChanged);
+                ui::repaint();
             }
             Err(e) => bridge::error(&format!("Gebied niet opgeslagen: {e}")),
         });
@@ -383,7 +383,7 @@ impl InteractiveCommand for PointCmd {
                 }
             }
             bridge::info(&lines.join("  |  "));
-            ui::send(ui::UiMsg::Picked(p));
+            ui::send(ui::UiMsg::Picked { point: p, source_crs: site });
         });
         CommandStep::Done
     }
@@ -955,7 +955,7 @@ fn save_site_reply(site: Site) {
         Ok(()) => {
             civiel::api::note("projectlocatie", serde_json::json!({"naam": site.label, "crs": site.crs, "x": site.origin_e, "y": site.origin_n, "breedte": site.width, "hoogte": site.height, "absoluut": site.absolute}));
             bridge::info(&format!("Projectlocatie {}: X {:.2} Y {:.2} ({}), {} × {} m.", site.label, site.origin_e, site.origin_n, site.crs, site.width, site.height));
-            ui::send(ui::UiMsg::SiteChanged);
+            ui::repaint();
         }
         Err(e) => bridge::error(&format!("GIS_SITE: {e}")),
     }
@@ -1039,7 +1039,7 @@ fn adopt_geodata(host: &mut dyn HostApi) {
         match gis::geodata::site_from(&g, unit).and_then(|mut site| {site.region=localisation::current();bridge::adopt_site(&site).map(|stored| stored.then_some(site))}) {
             Ok(Some(site)) => {
                 bridge::info(&format!("{} {} ({}).", lang::tr("Projectlocatie overgenomen uit het GEODATA-object van de tekening:", "Project location taken from the drawing's GEODATA object:"), site.crs, if site.absolute { lang::tr("absoluut", "absolute") } else { lang::tr("relatief", "relative") }));
-                ui::send(ui::UiMsg::SiteChanged);
+                ui::repaint();
             }
             Ok(None) => {}
             Err(e) => bridge::info(&e),

@@ -66,9 +66,7 @@ pub enum UiMsg {
     InfraLibrary,
     Show(Tab),
     /// A point picked in the drawing (project CRS), for the coordinate tab.
-    Picked([f64; 2]),
-    /// The import area was set in the drawing; reload the site.
-    SiteChanged,
+    Picked { point: [f64; 2], source_crs: String },
     /// OCS closed or replaced the drawing in this tab.
     DrawingClosed(u64),
     /// A KLIC delivery chosen in Open CAD Studio's file dialog.
@@ -79,14 +77,28 @@ pub enum UiMsg {
     Run(Tab),
 }
 
+struct Message {
+    target: Option<crate::bridge::Target>,
+    site: Option<crate::gis::site::Site>,
+    action: UiMsg,
+}
+
+impl Message {
+    fn capture(action: UiMsg) -> Self {
+        let (target, site) = crate::bridge::workbench_document();
+        Self { target, site, action }
+    }
+}
+
 struct Handle {
-    tx: Option<Sender<UiMsg>>,
+    tx: Option<Sender<Message>>,
     ctx: Option<egui::Context>,
 }
 
 static HANDLE: Mutex<Handle> = Mutex::new(Handle { tx: None, ctx: None });
 
 pub fn send(msg: UiMsg) -> bool {
+    let msg = Message::capture(msg);
     let handle = HANDLE.lock().unwrap();
     let sent = handle.tx.as_ref().is_some_and(|tx| tx.send(msg).is_ok());
     if sent {
@@ -124,9 +136,10 @@ pub(crate) fn allow_debugger() {
 
 /// Show the workbench on `tab`, creating the window on first use.
 pub fn open(tab: Tab) -> Result<(), String> {
+    let message = Message::capture(UiMsg::Show(tab));
     let mut handle = HANDLE.lock().unwrap();
     if let Some(tx) = &handle.tx {
-        if tx.send(UiMsg::Show(tab)).is_ok() {
+        if tx.send(message).is_ok() {
             request_repaint(&handle);
             return Ok(());
         }
@@ -137,7 +150,7 @@ pub fn open(tab: Tab) -> Result<(), String> {
         return Err("het venster is op macOS niet beschikbaar; gebruik de opdrachten".into());
     }
     let (tx, rx) = channel();
-    tx.send(UiMsg::Show(tab)).expect("new workbench channel");
+    tx.send(message).expect("new workbench channel");
     allow_debugger();
     std::thread::Builder::new()
         .name("open-infra-ui".into())
@@ -150,6 +163,7 @@ pub fn open(tab: Tab) -> Result<(), String> {
 #[derive(Default)]
 struct Workbench {
     drawings: HashMap<Option<u64>, app::App>,
+    civiel_offsets: Option<String>,
 }
 
 impl Workbench {
@@ -157,13 +171,12 @@ impl Workbench {
         &mut self,
         target: Option<crate::bridge::Target>,
         site: Option<crate::gis::site::Site>,
-        run: impl FnOnce(&mut app::App),
+        run: impl FnOnce(&mut app::App, &mut Option<String>),
     ) {
         let tab = target.as_ref().map(|target| target.tab_id);
         let update = || {
             let app = self.drawings.entry(tab).or_insert_with(app::App::new);
-            app.sync_site(site.clone());
-            run(app);
+            run(app, &mut self.civiel_offsets);
         };
         // Pin reads, writes and new jobs to the drawing whose state is shown
         // even if a host command attaches another drawing mid-frame.
@@ -173,31 +186,47 @@ impl Workbench {
         }
     }
 
-    fn with_active_document(&mut self, run: impl FnOnce(&mut app::App)) {
+    fn ui(&mut self, ui: &mut egui::Ui) {
         let (target, site) = crate::bridge::workbench_document();
-        self.with_document(target, site, run);
+        self.with_document(target, site.clone(), |app, civiel_offsets| {
+            app.sync_site(site);
+            app.ui(ui, civiel_offsets);
+        });
     }
 
-    fn handle_message(&mut self, ctx: &egui::Context, msg: UiMsg) {
-        match msg {
-            UiMsg::DrawingClosed(tab_id) => { self.drawings.remove(&Some(tab_id)); }
-            UiMsg::SiteChanged => self.with_active_document(|_| {}),
-            _ => self.with_active_document(|app| app.handle_message(ctx, msg)),
+    // A late reply can update its own drawing's page, but only a message for
+    // the current drawing may focus or open the native window.
+    fn handle_message(&mut self, msg: Message) -> bool {
+        if let UiMsg::DrawingClosed(tab_id) = msg.action {
+            self.drawings.remove(&Some(tab_id));
+            return false;
         }
+        if msg.target.as_ref().is_some_and(|target| !crate::bridge::workbench_target_is_open(target)) {
+            return false;
+        }
+
+        let (active, saved_site) = crate::bridge::workbench_document();
+        let focus = match (&msg.target, &active) {
+            (Some(target), Some(active)) => std::sync::Arc::ptr_eq(&target.sender, &active.sender),
+            (None, None) => true,
+            _ => false,
+        };
+        let site = if focus { saved_site } else { msg.site };
+        self.with_document(msg.target, site.clone(), |app, _| {
+            if focus {
+                app.sync_site(site);
+            }
+            app.handle_message(msg.action);
+        });
+        focus
     }
 }
 
-fn run_workbench(rx: Receiver<UiMsg>) {
+fn run_workbench(rx: Receiver<Message>) {
     let mut workbench = Workbench::default();
     while let Ok(msg) = rx.recv() {
-        match msg {
-            // These notifications update state without opening a window.
-            UiMsg::SiteChanged => continue,
-            UiMsg::DrawingClosed(tab_id) => {
-                workbench.drawings.remove(&Some(tab_id));
-                continue;
-            }
-            _ => {}
+        if !workbench.handle_message(msg) {
+            continue;
         }
 
         let options = eframe::NativeOptions {
@@ -227,7 +256,7 @@ fn run_workbench(rx: Receiver<UiMsg>) {
             Box::new(|cc| {
                 app::App::configure_window(&cc.egui_ctx);
                 HANDLE.lock().unwrap().ctx = Some(cc.egui_ctx.clone());
-                Ok(Box::new(Window { workbench: &mut workbench, rx: &rx, first: Some(msg) }))
+                Ok(Box::new(Window { workbench: &mut workbench, rx: &rx }))
             }),
         );
         HANDLE.lock().unwrap().ctx = None;
@@ -242,8 +271,7 @@ fn run_workbench(rx: Receiver<UiMsg>) {
 
 struct Window<'a> {
     workbench: &'a mut Workbench,
-    rx: &'a Receiver<UiMsg>,
-    first: Option<UiMsg>,
+    rx: &'a Receiver<Message>,
 }
 
 impl eframe::App for Window<'_> {
@@ -253,13 +281,16 @@ impl eframe::App for Window<'_> {
         if ctx.input(|i| i.viewport().close_requested()) {
             return;
         }
-        for msg in self.first.take().into_iter().chain(self.rx.try_iter()) {
-            self.workbench.handle_message(ctx, msg);
+        for msg in self.rx.try_iter() {
+            if self.workbench.handle_message(msg) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
         }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.workbench.with_active_document(|app| app.ui(ui));
+        self.workbench.ui(ui);
     }
 }
 

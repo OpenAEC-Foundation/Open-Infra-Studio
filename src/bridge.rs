@@ -29,7 +29,7 @@ pub struct Target {
 
 struct DrawingSender {
     sender: Box<dyn PluginRequestSender>,
-    closed: Arc<AtomicBool>,
+    closed: AtomicBool,
 }
 
 impl PluginRequestSender for DrawingSender {
@@ -54,7 +54,7 @@ fn closed_drawing_sender_refuses_and_does_not_forward_a_request() {
         }
     }
 
-    let closed = Arc::new(AtomicBool::new(true));
+    let closed = AtomicBool::new(true);
     let sender = DrawingSender { sender: Box::new(NeverSend), closed };
     assert!(sender.request(PluginRequest::PushInfo("probe".into())).is_err());
 }
@@ -135,7 +135,7 @@ impl InteractiveCommand for BoundInteractive {
 struct Shared {
     target: Option<Target>,
     site: Option<Site>,
-    drawing_closed: HashMap<u64, Arc<AtomicBool>>,
+    drawing_senders: HashMap<u64, Arc<DrawingSender>>,
     /// NLCS layers and linetypes already set up, per tab.
     made: HashSet<(u64, String)>,
     /// The NLCS layers imports drew on, per tab, for the legend.
@@ -170,11 +170,12 @@ pub fn attach(host: &mut dyn HostApi) {
         let mut s = shared().lock().unwrap();
         let same_tab = s.target.as_ref().is_some_and(|t| t.tab_id == tab_id);
         let unit_factor = s.target.as_ref().filter(|_| same_tab).map(|t| t.unit_factor).unwrap_or(1.0);
-        let closed = s.drawing_closed.entry(tab_id).or_default().clone();
-        s.target = Some(Target {
-            sender: Arc::new(DrawingSender { sender, closed }),
-            tab_id, unit_factor, doc_path,
-        });
+        // Requests from this runner to one CAD tab use the same connection.
+        // Keep the sender's identity stable until the drawing is closed.
+        let sender = s.drawing_senders.entry(tab_id).or_insert_with(|| {
+            Arc::new(DrawingSender { sender, closed: AtomicBool::new(false) })
+        }).clone();
+        s.target = Some(Target { sender, tab_id, unit_factor, doc_path });
         match stored {
             Some(site) => {
                 site.register_crs();
@@ -199,8 +200,8 @@ pub fn attach(host: &mut dyn HostApi) {
 /// active target if it closed or was replaced in its tab.
 pub fn drawing_closed(tab_id: u64) {
     let mut state = shared().lock().unwrap();
-    if let Some(closed) = state.drawing_closed.remove(&tab_id) {
-        closed.store(true, Ordering::Release);
+    if let Some(sender) = state.drawing_senders.remove(&tab_id) {
+        sender.closed.store(true, Ordering::Release);
     }
     if state.target.as_ref().is_some_and(|target| target.tab_id == tab_id) {
         state.target = None;
@@ -210,10 +211,29 @@ pub fn drawing_closed(tab_id: u64) {
     crate::ui::send(crate::ui::UiMsg::DrawingClosed(tab_id));
 }
 
-/// Read the target and its saved location from the same bridge update.
+/// Capture a bound command's drawing or read the current target and saved
+/// location together when there is no command context.
 pub(crate) fn workbench_document() -> (Option<Target>, Option<Site>) {
+    if let Some(document) = COMMAND_CONTEXT.with(|ctx| {
+        ctx.borrow().as_ref().map(|ctx| (Some(ctx.target.clone()), ctx.site.clone()))
+    }) {
+        return document;
+    }
     let state = shared().lock().unwrap();
     (state.target.clone(), state.site.clone())
+}
+
+pub(crate) fn workbench_target_is_open(target: &Target) -> bool {
+    shared().lock().unwrap().drawing_senders.get(&target.tab_id).is_some_and(|sender| {
+        std::ptr::addr_eq(Arc::as_ptr(sender), Arc::as_ptr(&target.sender))
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn workbench_test_target(tab_id: u64, sender: Box<dyn PluginRequestSender>) -> Target {
+    let sender = Arc::new(DrawingSender { sender, closed: AtomicBool::new(false) });
+    shared().lock().unwrap().drawing_senders.insert(tab_id, sender.clone());
+    Target { sender, tab_id, unit_factor: 1.0, doc_path: None }
 }
 
 /// Drawing units per metre for the tab. The current host exposes INSUNITS
