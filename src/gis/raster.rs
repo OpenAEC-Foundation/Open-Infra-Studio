@@ -290,20 +290,20 @@ fn wms_tiles(bbox: [f64; 4], [w, h]: [u32; 2], [max_w, max_h]: [u32; 2]) -> impl
 // requests can differ by a source pixel at their join, even if their BBOX
 // edges coincide. Use native-aligned request grids, then sample the original
 // drawing grid at its pixel centres.
-fn pdok_request_step(caps: &WmsCaps, layer: &WmsLayer, crs: &str, pitch: [f64; 2]) -> Option<[f64; 2]> {
-    if crs != "EPSG:28992" || layer.name != "Actueel_orthoHR"
-        || !caps.get_map_url.starts_with("https://service.pdok.nl/hwh/luchtfotorgb/wms/")
-    {
-        return None;
-    }
+fn is_pdok_orthophoto(caps: &WmsCaps, layer: &WmsLayer) -> bool {
+    layer.name == "Actueel_orthoHR"
+        && caps.source_url.starts_with("https://service.pdok.nl/hwh/luchtfotorgb/wms/")
+}
+
+fn pdok_request_step(pitch: [f64; 2]) -> [f64; 2] {
     let native = super::foto::Photo::Pdok.finest();
-    Some(pitch.map(|res| {
+    pitch.map(|res| {
         if res >= native {
             native * (res / native).floor()
         } else {
             native / (native / res).ceil()
         }
-    }))
+    })
 }
 
 fn aligned_request(tile: &WmsTile, [sx, sy]: [f64; 2]) -> ([f64; 4], u32, u32) {
@@ -356,7 +356,7 @@ fn paste_wms_tile(
     }
 }
 
-fn fetch_wms_tile(url: &str, width: u32, height: u32, photo: bool) -> Result<RgbaImage, String> {
+fn fetch_wms_tile(url: &str, width: u32, height: u32, pdok_orthophoto: bool) -> Result<RgbaImage, String> {
     let bytes = http::get_image(url)?;
     if bytes.starts_with(&[0xff, 0xd8]) && !bytes.ends_with(&[0xff, 0xd9]) {
         return Err(tr("WMS-deel bevat een afgebroken JPEG.", "WMS part contains a truncated JPEG.").into());
@@ -372,10 +372,18 @@ fn fetch_wms_tile(url: &str, width: u32, height: u32, photo: bool) -> Result<Rgb
     if img.dimensions() != (width, height) {
         return Err(tr("WMS-deel heeft afwijkende afmetingen.", "WMS part has unexpected dimensions.").into());
     }
-    let first = img.get_pixel(0, 0);
-    // Thematic WMS layers can legitimately show one colour over a whole polygon.
-    if photo && (width > 1 || height > 1) && img.pixels().all(|p| p == first || (p[3] == 0 && first[3] == 0)) {
-        return Err(tr("WMS-deel bevat overal dezelfde kleur.", "WMS part is entirely one colour.").into());
+    // A white PDOK orthophoto tile is a known empty response. A uniform
+    // colour in a different raster, such as Sentinel-2, may be real data.
+    if pdok_orthophoto && (width > 1 || height > 1) {
+        let first = img.get_pixel(0, 0);
+        let empty = if first.0 == [255; 4] {
+            img.pixels().all(|pixel| pixel == first)
+        } else {
+            first[3] == 0 && img.pixels().all(|pixel| pixel[3] == 0)
+        };
+        if empty {
+            return Err(tr("PDOK gaf een leeg luchtfotodeel terug.", "PDOK returned an empty aerial photo part.").into());
+        }
     }
     Ok(img)
 }
@@ -418,11 +426,9 @@ fn import_wms_mosaic(
     let request_limit = [caps.max_width, caps.max_height].map(|n| n.unwrap_or(MAX_TILE_PX).min(MAX_TILE_PX));
     let mut tile_size = request_limit;
     let pitch = [(source_bbox[2] - source_bbox[0]) / f64::from(source_px[0]), (source_bbox[3] - source_bbox[1]) / f64::from(source_px[1])];
-    let aligned_step = if direct && tile_size.iter().all(|&n| n > 2) {
-        pdok_request_step(caps, layer, &crs, pitch)
-    } else {
-        None
-    };
+    let pdok_orthophoto = is_pdok_orthophoto(caps, layer);
+    let aligned_step = (pdok_orthophoto && direct && crs == "EPSG:28992" && tile_size.iter().all(|&n| n > 2))
+        .then(|| pdok_request_step(pitch));
     if let Some(step) = aligned_step {
         for axis in 0..2 {
             // Reserve the two edge pixels the outward snap can add.
@@ -434,13 +440,12 @@ fn import_wms_mosaic(
     let mut missing = Vec::new();
     let mut last_error = String::new();
     let mut mosaic = RgbaImage::new(source_px[0], source_px[1]);
-    let photo = is_photo(&layer.name);
     for (i, tile) in tiles.enumerate() {
         let part = i as u32 + 1;
         let (request_bbox, mut width, mut height) = aligned_step
             .map(|step| aligned_request(&tile, step))
             .unwrap_or((tile.bbox, tile.width, tile.height));
-        let extra_samples = photo && width == 1 && height == 1;
+        let extra_samples = pdok_orthophoto && width == 1 && height == 1;
         if extra_samples {
             // One output pixel needs a few source samples to distinguish a
             // valid crop from a service's constant-colour error response.
@@ -449,9 +454,9 @@ fn import_wms_mosaic(
         }
         let url = get_map_url(caps, &layer.name, &crs, request_bbox, width, height, &opt.format);
         progress(format!("{} {part}/{parts}…", tr("Kaartdeel ophalen", "Fetching map part")));
-        let raster = fetch_wms_tile(&url, width, height, photo).or_else(|_| {
+        let raster = fetch_wms_tile(&url, width, height, pdok_orthophoto).or_else(|_| {
             progress(format!("{} {part}/{parts}…", tr("Kaartdeel opnieuw ophalen", "Retrying map part")));
-            fetch_wms_tile(&url, width, height, photo)
+            fetch_wms_tile(&url, width, height, pdok_orthophoto)
         });
         match raster {
             Ok(img) => paste_wms_tile(
@@ -719,7 +724,8 @@ mod tests {
         let [west, south, east, north] = [107758.5, 447453.0, 108641.5, 447747.0];
         let px = raster_size([east - west, north - south], 0.08);
         let pitch = [(east - west) / f64::from(px[0]), (north - south) / f64::from(px[1])];
-        let step = pdok_request_step(&caps, &caps.layers[0], "EPSG:28992", pitch).unwrap();
+        assert!(is_pdok_orthophoto(&caps, &caps.layers[0]));
+        let step = pdok_request_step(pitch);
         assert_eq!(step, [0.08; 2]);
         let tiles: Vec<_> = wms_tiles([west, south, east, north], px, [2045, 2046]).collect();
         let left = &tiles[7];
@@ -738,6 +744,7 @@ mod tests {
     fn wms_fixture(
         responses: Vec<(&'static str, Vec<u8>)>,
         caps_xml: &str,
+        source_url: Option<&str>,
         site: &Site,
         resolution: f64,
         format: &str,
@@ -769,7 +776,8 @@ mod tests {
                 conn.write_all(&body).unwrap();
             }
         });
-        let caps = super::super::caps::parse_wms(&url, caps_xml).unwrap();
+        let mut caps = super::super::caps::parse_wms(source_url.unwrap_or(&url), caps_xml).unwrap();
+        caps.get_map_url = url;
         let opt = Options { resolution, format: format.into() };
         let dir = std::env::temp_dir().join(format!("ois-wms-test-{}-{:?}-{}", std::process::id(), std::thread::current().id(), stamp()));
         let result = import_wms(site, &caps, &caps.layers[0], &opt, &dir, &|_| {});
@@ -785,6 +793,8 @@ mod tests {
         <Capability><Layer><Name>ortho</Name><CRS>EPSG:28992</CRS></Layer></Capability>
         </WMS_Capabilities>"#;
 
+    const PDOK_WMS: &str = "https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0";
+
     fn coloured_tile() -> RgbaImage {
         let mut img = RgbaImage::from_pixel(2, 2, Rgba([255; 4]));
         img.put_pixel(0, 0, Rgba([32, 64, 96, 255]));
@@ -794,20 +804,22 @@ mod tests {
     #[test]
     fn wms_retries_white_tiles_and_names_missing_parts() {
         let white = RgbaImage::from_pixel(2, 2, Rgba([255; 4]));
-        let site = Site { width: 4.0, height: 2.0, ..Site::default() };
+        let site = Site { width: 6.0, height: 2.0, ..Site::default() };
         let (result, requests, dir) = wms_fixture(vec![
-            ("image/png", png_bytes(white)),
+            ("image/png", png_bytes(white.clone())),
             ("image/png", png_bytes(coloured_tile())),
+            ("image/png", png_bytes(white.clone())),
+            ("image/png", png_bytes(white)),
             ("text/xml", b"<ServiceException>laadfout</ServiceException>".to_vec()),
             ("image/png", b"<ServiceException>laadfout</ServiceException>".to_vec()),
-        ], TINY_WMS, &site, 1.0, "image/png");
-        assert_eq!(requests.len(), 4, "blank and invalid replies each need a retry: {result:?}");
+        ], &TINY_WMS.replace("ortho", "Actueel_orthoHR"), Some(PDOK_WMS), &site, 1.0, "image/png");
+        assert_eq!(requests.len(), 6, "blank and invalid replies each need a retry: {result:?}");
         assert!(requests.iter().all(|line| line.contains("WIDTH=2") && line.contains("HEIGHT=2") && line.contains("EXCEPTIONS=XML")));
         let result = result.unwrap();
-        assert_eq!(result.parts, 2);
-        assert_eq!(result.missing, [2]);
+        assert_eq!(result.parts, 3);
+        assert_eq!(result.missing, [2, 3]);
         assert_eq!(result.image.bbox, site.bbox());
-        assert_eq!(result.image.px, [4, 2]);
+        assert_eq!(result.image.px, [6, 2]);
         let image = image::open(&result.image.path).unwrap().into_rgba8();
         assert_eq!(image.get_pixel(0, 0).0, [32, 64, 96, 255]);
         assert_eq!(image.get_pixel(1, 0).0, [255; 4]);
@@ -824,7 +836,7 @@ mod tests {
         let (result, requests, dir) = wms_fixture(vec![
             ("image/jpeg", truncated),
             ("image/jpeg", jpeg),
-        ], TINY_WMS, &site, 1.0, "image/jpeg");
+        ], TINY_WMS, None, &site, 1.0, "image/jpeg");
         assert_eq!(requests.len(), 2, "{result:?}");
         assert_eq!(requests[0], requests[1]);
         assert!(result.unwrap().missing.is_empty());
@@ -834,7 +846,7 @@ mod tests {
     #[test]
     fn wms_validates_more_than_one_sample_for_one_output_pixel() {
         let site = Site { width: 10.0, height: 10.0, ..Site::default() };
-        let (result, requests, dir) = wms_fixture(vec![("image/png", png_bytes(coloured_tile()))], TINY_WMS, &site, 10.0, "image/png");
+        let (result, requests, dir) = wms_fixture(vec![("image/png", png_bytes(coloured_tile()))], &TINY_WMS.replace("ortho", "Actueel_orthoHR"), Some(PDOK_WMS), &site, 10.0, "image/png");
         assert_eq!(requests.len(), 1);
         let result = result.unwrap();
         assert!(requests[0].contains("WIDTH=2") && requests[0].contains("HEIGHT=2"));
@@ -852,10 +864,30 @@ mod tests {
         for (resolution, size) in [(1.0, 2), (2.0, 1)] {
             let image = RgbaImage::from_pixel(size, size, color);
             let (result, requests, dir) = wms_fixture(
-                vec![("image/png", png_bytes(image))], &caps, &site, resolution, "image/png",
+                vec![("image/png", png_bytes(image))], &caps, None, &site, resolution, "image/png",
             );
             let result = result.unwrap();
             assert_eq!(requests.len(), 1);
+            let output = image::open(result.image.path).unwrap().into_rgba8();
+            assert_eq!(output.dimensions(), (size, size));
+            assert!(output.pixels().all(|pixel| *pixel == color));
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn wms_preserves_valid_uniform_sentinel_crops() {
+        let caps = TINY_WMS.replace("ortho", "s2cloudless-2023");
+        let site = Site { width: 10.0, height: 10.0, ..Site::default() };
+        for (resolution, size, rgb) in [(5.0, 2, [27, 54, 37]), (20.0, 1, [81, 107, 82])] {
+            let color = Rgba([rgb[0], rgb[1], rgb[2], 255]);
+            let image = RgbaImage::from_pixel(size, size, color);
+            let (result, requests, dir) = wms_fixture(
+                vec![("image/png", png_bytes(image))], &caps, None, &site, resolution, "image/png",
+            );
+            let result = result.expect("a valid Sentinel crop can be uniform");
+            assert_eq!(requests.len(), 1);
+            assert!(result.missing.is_empty());
             let output = image::open(result.image.path).unwrap().into_rgba8();
             assert_eq!(output.dimensions(), (size, size));
             assert!(output.pixels().all(|pixel| *pixel == color));

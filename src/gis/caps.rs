@@ -19,6 +19,7 @@ pub struct WmsLayer {
 pub struct WmsCaps {
     pub version: String,
     pub title: String,
+    pub(crate) source_url: String,
     pub get_map_url: String,
     pub formats: Vec<String>,
     pub max_width: Option<u32>,
@@ -172,6 +173,7 @@ pub fn parse_wms(url: &str, xml: &str) -> Result<WmsCaps, String> {
     Ok(WmsCaps {
         version,
         title: text_of(service, "Title"),
+        source_url: url.to_string(),
         get_map_url: same_scheme(url, operation_url(capability, "GetMap")),
         formats,
         max_width: image_limit("MaxWidth"),
