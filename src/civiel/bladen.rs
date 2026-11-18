@@ -628,6 +628,9 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
     }
     let lay = lay.with_profile_height(bands_mm + span * vert.v * 1000.0 / req.scale + 4.0);
 
+    // The pens for the legend, read before the set changes the drawing.
+    let pens = tekenblad::layer_pens();
+
     // Model space: view frames, match lines, profile views.
     let set = format!("{name} {}", req.paper.name);
     let old: Vec<Handle> = bridge::index_read().into_iter().filter(|(kind, key, _)| kind == "bladen" && *key == set).flat_map(|(_, _, h)| h).collect();
@@ -715,7 +718,8 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
     let crs = ctx.site.as_ref().map(|s| s.crs.clone()).unwrap_or_else(|| "—".into());
     let place = ctx.site.as_ref().map(|s| s.label.clone()).unwrap_or_default();
     let mut layouts = Vec::new();
-    let legend = tekenblad::drawn_layers();
+    // Late, so the layers this set drew are in it too.
+    let legend = tekenblad::drawn_layers(pens.as_ref());
     let made = (|| -> Result<(), String> {
         let _back = BackToModel;
         for (i, view) in views.iter().enumerate() {

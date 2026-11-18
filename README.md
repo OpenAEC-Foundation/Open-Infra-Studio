@@ -311,7 +311,7 @@ The NLCS tables and the official NLCS-BGT 5.0 mapping are built in from [`assets
 - **Drawing sheet:**
   - The sheet format is chosen automatically (A3–A0 landscape).
   - The title block lists the data sources of the imports.
-  - The legend shows the NLCS layers used, grouped by main group.
+  - The legend shows the NLCS layers used, grouped by main group. Its samples sit on the legend layer, so the sheet's own layers hold the whole sheet, and show the pen each layer has in the drawing (in a drawing too large to read whole: the NLCS pen, with a note).
   - Sheet texts follow the NLCS text classes (T1.8, T2.5, …).
 
 ## AHN heights, profiles and point clouds

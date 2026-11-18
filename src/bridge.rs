@@ -280,7 +280,7 @@ pub fn units(host: &mut dyn HostApi, tab_id: u64, fresh: bool) -> f64 {
     let f = match f.or_else(|| if fresh { None } else { recorded() }) {
         Some(f) => f,
         // The header, but only from a drawing small enough to send whole.
-        None => match view_entities() {
+        None => match view_entities(|_| false) {
             Some((_, _, size)) if size < SNAPSHOT_SAFE => unit_factor_for_insunits(host.document().header.insertion_units as i64),
             _ => recorded().unwrap_or(1.0),
         },
@@ -497,8 +497,13 @@ pub(crate) fn request(req: PluginRequest) -> Result<PluginResponse, String> {
 }
 
 pub fn info(msg: &str) {
-    let _ = request(PluginRequest::PushInfo(format!("[Open Infra] {msg}")));
+    push_info(msg);
     reply(true, msg);
+}
+
+/// A line on the host's command line, without answering a waiting script.
+pub(crate) fn push_info(msg: &str) {
+    let _ = request(PluginRequest::PushInfo(format!("[Open Infra] {msg}")));
 }
 
 pub fn error(msg: &str) {
@@ -613,8 +618,10 @@ static PARTIAL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::n
 /// The host's shared-memory view of the drawing: the entities and the size
 /// of their encoding, or `None` when the host cannot share it (a drawing
 /// larger than its view segment, 16 MB unless Open CAD Studio is started
-/// with OCS_V4_SNAPSHOT_SEGMENT_SIZE).
-fn view_entities() -> Option<(Vec<EntityType>, Vec<String>, usize)> {
+/// with OCS_V4_SNAPSHOT_SEGMENT_SIZE). The entities are decoded only when
+/// `decode` says so for that size: a caller that needs the size alone
+/// skips the work.
+fn view_entities(decode: impl FnOnce(usize) -> bool) -> Option<(Vec<EntityType>, Vec<String>, usize)> {
     use ocs_plugin_api::shm::{DocumentViewDataV4, SharedDocumentReader};
     // A refused view costs the host a full serialisation: after a refusal,
     // do not ask again for a while (drawings rarely shrink).
@@ -637,7 +644,11 @@ fn view_entities() -> Option<(Vec<EntityType>, Vec<String>, usize)> {
         let p = reader.payload()?;
         let size: usize = p.entities.iter().map(|e| e.data.len()).sum();
         let layers = p.layers.iter().map(|l| l.name.as_str().to_string()).collect();
-        let entities = p.entities.iter().filter_map(|e| bincode::deserialize::<EntityType>(e.data.as_slice()).ok()).collect();
+        let entities = if decode(size) {
+            p.entities.iter().filter_map(|e| bincode::deserialize::<EntityType>(e.data.as_slice()).ok()).collect()
+        } else {
+            Vec::new()
+        };
         Some((entities, layers, size))
     };
     let out = read();
@@ -666,8 +677,44 @@ fn document_of(entities: Vec<EntityType>, layers: &[String]) -> ocs_plugin_api::
 /// The whole drawing, if the host can share it (any size up to its view
 /// segment); layers carry names only.
 pub fn view() -> Option<ocs_plugin_api::host::codec::CadDocument> {
-    let (entities, layers, _) = view_entities()?;
+    let (entities, layers, _) = view_entities(|_| true)?;
     Some(document_of(entities, &layers))
+}
+
+/// How long a full snapshot may take. OCS sends no answer at all to one
+/// that does not fit in a message (64 MB), and the drawing's tables and
+/// records do not count in the size of the shared view: without a limit,
+/// such a request would wait forever.
+const SNAPSHOT_WAIT: std::time::Duration = std::time::Duration::from_secs(if cfg!(test) { 1 } else { 60 });
+
+/// The full snapshot of the active tab, or an error when the host does not
+/// send it within [`SNAPSHOT_WAIT`]. Ask it only for a drawing whose shared
+/// view is below [`SNAPSHOT_SAFE`].
+fn full_snapshot() -> Result<Box<ocs_plugin_api::host::Document>, String> {
+    let t = target().ok_or("geen tekening actief — klik eerst in Open CAD Studio op het GIS-tabblad")?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    // A request that never gets its answer keeps this thread, not the command.
+    std::thread::spawn(move || {
+        let _ = tx.send(with_command_context(t, None, None, || request(PluginRequest::DocumentSnapshot)));
+    });
+    match rx.recv_timeout(SNAPSHOT_WAIT) {
+        Ok(Ok(PluginResponse::Document(doc))) => Ok(doc),
+        Ok(Ok(other)) => Err(format!("onverwacht antwoord op de tekeningopvraag: {other:?}")),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err(crate::lang::tr(
+            "Open CAD Studio stuurde de tekening niet: ze is waarschijnlijk te groot voor één bericht (64 MB)",
+            "Open CAD Studio did not send the drawing: it is probably too large for one message (64 MB)",
+        )
+        .into()),
+    }
+}
+
+/// The drawing with its layer table, as far as a full snapshot can bring
+/// it: `None` for a drawing too large for that. The shared view is only
+/// measured, not decoded.
+pub fn layer_table() -> Option<ocs_plugin_api::host::codec::CadDocument> {
+    view_entities(|_| false).filter(|(_, _, size)| *size < SNAPSHOT_SAFE)?;
+    full_snapshot().ok().map(|doc| (*doc).into())
 }
 
 /// The whole drawing of the active tab, read from a worker or window thread.
@@ -675,13 +722,10 @@ pub fn view() -> Option<ocs_plugin_api::host::codec::CadDocument> {
 /// one from the shared view, whose layers have names only (see [`partial`]).
 /// A drawing too large for both gives an error, never a stalled request.
 pub fn snapshot() -> Result<ocs_plugin_api::host::codec::CadDocument, String> {
-    match view_entities() {
+    match view_entities(|size| size >= SNAPSHOT_SAFE) {
         Some((_, _, size)) if size < SNAPSHOT_SAFE => {
             PARTIAL.store(false, std::sync::atomic::Ordering::Relaxed);
-            match request(PluginRequest::DocumentSnapshot)? {
-                PluginResponse::Document(doc) => Ok((*doc).into()),
-                other => Err(format!("onverwacht antwoord op de tekeningopvraag: {other:?}")),
-            }
+            full_snapshot().map(|doc| (*doc).into())
         }
         Some((entities, layers, _)) => {
             PARTIAL.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1429,7 +1473,7 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
     }
     if let Some(message) = moved? {
         crate::civiel::api::note("tekenvolgorde_overgeslagen", message);
-        let _ = request(PluginRequest::PushInfo(format!("[Open Infra] {message}")));
+        push_info(message);
     }
     Ok(())
 }
@@ -1438,10 +1482,10 @@ fn rasters_already_in_order(owner: Handle, wanted: &[Handle]) -> bool {
     use ocs_plugin_api::host::codec::objects::ObjectType;
     // Shared views have no sort table. Only request the full snapshot when
     // the shared view puts the drawing comfortably below the IPC frame limit.
-    if !view_entities().is_some_and(|(_, _, bytes)| bytes < SNAPSHOT_SAFE) {
+    if !view_entities(|_| false).is_some_and(|(_, _, bytes)| bytes < SNAPSHOT_SAFE) {
         return false;
     }
-    let Ok(PluginResponse::Document(drawing)) = request(PluginRequest::DocumentSnapshot) else {
+    let Ok(drawing) = full_snapshot() else {
         return false;
     };
     let overrides: std::collections::HashMap<_, _> = drawing.objects.values().find_map(|object| match object {
@@ -1746,6 +1790,77 @@ pub(crate) mod replacement_test_host {
                 other => panic!("unexpected host request: {other:?}"),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod layer_table_tests {
+    use super::*;
+    use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Color, Point};
+    use ocs_plugin_api::shm::{DocumentSnapshotStore, DocumentViewDataV4, EntityViewV4};
+
+    /// A host that shares a small drawing. OCS sends no answer at all to a
+    /// full snapshot too large for one message (its tables and records do
+    /// not count in the shared view): `answers` false plays that.
+    struct Host {
+        view: DocumentSnapshotStore<DocumentViewDataV4>,
+        doc: CadDocument,
+        answers: bool,
+    }
+
+    impl Host {
+        fn new(tab_id: u64, answers: bool) -> Arc<Host> {
+            let mut doc = CadDocument::new();
+            let mut layer = Layer::new("B-XX-VH-GESLOTENVERHARDING_ASFALT-G");
+            layer.color = Color::Index(5);
+            let _ = doc.layers.add(layer);
+            let point = EntityType::Point(Point::default());
+            let mut view = DocumentSnapshotStore::new(tab_id, 1 << 20).unwrap();
+            view.publish(&DocumentViewDataV4 { layers: Vec::new(), app_ids: Vec::new(), entities: vec![EntityViewV4::from(&point)] }).unwrap();
+            Arc::new(Host { view, doc, answers })
+        }
+    }
+
+    impl PluginRequestSender for Host {
+        fn request(&self, req: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+            Ok(match req {
+                PluginRequest::OpenDocumentViewV4 { .. } => PluginResponse::DocumentViewV4 { path: self.view.path().display().to_string(), version: 1 },
+                PluginRequest::CloseDocumentViewV4 { .. } => PluginResponse::Ok,
+                PluginRequest::DocumentSnapshot if self.answers => PluginResponse::Document(Box::new(self.doc.clone().into())),
+                PluginRequest::DocumentSnapshot => loop {
+                    std::thread::park();
+                },
+                other => panic!("unexpected host request: {other:?}"),
+            })
+        }
+    }
+
+    fn on(host: Arc<Host>, tab_id: u64, f: impl FnOnce()) {
+        with_command_context(Target { sender: host, tab_id, unit_factor: 1.0, doc_path: None }, None, None, f);
+    }
+
+    /// The legend of a sheet reads the pens of the drawing's layers (#142).
+    #[test]
+    fn the_layer_table_has_the_pens_of_the_drawing() {
+        on(Host::new(142_001, true), 142_001, || {
+            let table = layer_table().expect("a small drawing comes whole");
+            assert_eq!(table.layers.get("B-XX-VH-GESLOTENVERHARDING_ASFALT-G").unwrap().color, Color::Index(5));
+        });
+    }
+
+    /// A drawing whose snapshot OCS cannot send: no table and no stalled
+    /// command, so a sheet set never stops halfway (#142).
+    #[test]
+    fn a_drawing_too_large_for_one_message_gives_no_layer_table_without_waiting() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let host = Host::new(142_002, false);
+        std::thread::spawn(move || {
+            on(host, 142_002, || {
+                let _ = tx.send((layer_table().is_none(), snapshot().is_err()));
+            })
+        });
+        let read = rx.recv_timeout(std::time::Duration::from_secs(10)).expect("the read waits for an answer that never comes");
+        assert_eq!(read, (true, true));
     }
 }
 
