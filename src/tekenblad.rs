@@ -110,6 +110,28 @@ impl Sheet {
         self.poly(layer, &[(x0, y0), (x1, y0), (x1, y1), (x0, y1)], true);
     }
 
+    /// The legend sample of layer `of` at paper position (`x`, `y`): a short
+    /// line, or a marker for a symbol layer. It sits on the sheet's legend
+    /// layer in the colour, lineweight and linetype of `of`, so removing
+    /// the sheet's AL layers removes the whole sheet (#142).
+    fn sample(&mut self, of: &LayerSpec, x: f64, y: f64) {
+        let spec = self.spec("LEGENDA", Element::G);
+        let mut e = if of.name.ends_with("-S") {
+            emit::marker(self.at(x + 7.0, y), &spec.name, 0.8 * self.k, None)
+        } else {
+            emit::polyline(&[self.at(x + 1.0, y), self.at(x + 13.0, y)], false, true, &spec.name, self.k, None)
+        };
+        let c = e.common_mut();
+        c.color = bridge::nlcs_color(of);
+        c.line_weight = of.lineweight.map_or(LineWeight::Default, LineWeight::from_value);
+        // The layer carries its NLCS linetype only when the drawing could
+        // define it (see `bridge::ensure_nlcs_layer`).
+        if nlcs::linetype_pattern(&of.linetype).is_some() {
+            c.linetype = of.linetype.clone();
+        }
+        self.put(spec, vec![e]);
+    }
+
     /// Text at paper position; `left` aligns left instead of centred.
     fn text(&mut self, layer: &str, x: f64, y: f64, value: &str, mm: f64, left: bool) {
         let spec = self.spec(layer, Element::T);
@@ -162,7 +184,7 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
     north_arrow(&mut s, ma.x1 - 18.0, ma.y1 - 26.0);
     scale_bar(&mut s, ma.x0 + 10.0, ma.y0 + 10.0, opt.scale);
     title_block(&mut s, sx, pw - 10.0, info, opt, paper, &site.crs, &site.label);
-    let shown = legend(&mut s, sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
+    let shown = legend(&mut s, bridge::nlcs_layers(), sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
 
     let mut ents = Vec::new();
     for (spec, e) in s.out {
@@ -299,10 +321,10 @@ fn title_block(s: &mut Sheet, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOpti
     s.text("TEKENBLAD_TITELBLOK", x0 + 2.0, y0 + rows[5] + 3.5, "OpenAEC Foundation — Open CAD Studio", 1.8, true);
 }
 
-/// Legend of the NLCS layers drawn in this session, grouped by main group.
-/// Returns the number of layers shown.
-fn legend(s: &mut Sheet, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
-    let mut layers: Vec<LayerSpec> = bridge::nlcs_layers().into_iter().filter(|l| !l.name.contains("-AL-") && !l.name.ends_with("-T")).collect();
+/// Legend of the NLCS `drawn` layers, grouped by main group. Returns the
+/// number of layers shown.
+fn legend(s: &mut Sheet, drawn: Vec<LayerSpec>, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
+    let mut layers: Vec<LayerSpec> = drawn.into_iter().filter(|l| !l.name.contains("-AL-") && !l.name.ends_with("-T")).collect();
     let key = |l: &LayerSpec| {
         let parts: Vec<&str> = l.name.splitn(5, '-').collect();
         (parts.get(2).copied().unwrap_or("").to_string(), parts.get(3).copied().unwrap_or("").to_string(), l.name.clone())
@@ -334,17 +356,7 @@ fn legend(s: &mut Sheet, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
             y -= row;
             group = g.clone();
         }
-        // The sample sits on the layer itself: its colour, lineweight and
-        // linetype are the layer's. Marked as sheet, so a BGT mutation or a
-        // quantity take-off can leave it out.
-        let (a, b) = (s.at(x + 1.0, y), s.at(x + 13.0, y));
-        let mark = bridge::object_data([("bron", "tekenblad".to_string())]);
-        if l.name.ends_with("-S") {
-            let c = s.at(x + 7.0, y);
-            s.out.push((l.clone(), emit::markers(&[c], &l.name, 0.8 * s.k, Some(&mark))));
-        } else {
-            s.out.push((l.clone(), emit::polylines(&[(vec![a, b], false)], &l.name, s.k, Some(&mark))));
-        }
+        s.sample(l, x, y);
         s.text("LEGENDA", x + 16.0, y, &nlcs::humanize(&obj), 1.8, true);
         y -= row;
         shown += 1;
@@ -394,7 +406,7 @@ impl Parts {
 
     /// Legend of the NLCS layers drawn in this session; the number shown.
     pub fn legend(&mut self, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
-        legend(&mut self.0, x0, x1, y0, y1)
+        legend(&mut self.0, bridge::nlcs_layers(), x0, x1, y0, y1)
     }
 
     /// A scale bar of about 100 mm from (`x`, `y`), labelled "schaal 1:n".
@@ -405,5 +417,47 @@ impl Parts {
     /// The entities per NLCS layer.
     pub fn finish(self) -> Vec<(LayerSpec, Vec<EntityType>)> {
         self.0.out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ocs_plugin_api::host::codec::Color;
+
+    fn drawn(group: &str, name: &str, element: Element) -> LayerSpec {
+        nlcs::layer(nlcs::object_by_name(group, name).expect("NLCS object"), nlcs::Status::B, "XX", element)
+    }
+
+    /// Removing a sheet's AL layers removes the whole sheet: its legend
+    /// samples stay off the content layers they explain, and still look
+    /// like them (#142).
+    #[test]
+    fn legend_samples_sit_on_the_legend_layer_in_the_style_of_their_layer() {
+        let axis = drawn("AM", "AS_WEG", Element::G);
+        let symbol = drawn("GR", "SOORTAANDUIDING", Element::S);
+        let mut cable = drawn("AM", "AS", Element::G);
+        cable.true_color = Some((12, 34, 56));
+        let mut parts = Parts::new([1000.0, 2000.0], 0.5, &NlcsOptions::default());
+        let shown = legend(&mut parts.0, vec![axis.clone(), symbol.clone(), cable.clone()], 0.0, 170.0, 0.0, 200.0);
+        assert_eq!(shown, 3);
+        let out = parts.finish();
+        for (spec, ents) in &out {
+            assert!(spec.name.contains("-AL-"), "sheet part on content layer {}", spec.name);
+            for e in ents {
+                assert_eq!(e.common().layer, spec.name);
+            }
+        }
+        let samples: Vec<&EntityType> = out.iter().filter(|(spec, _)| spec.name == "B-XX-AL-LEGENDA-G").flat_map(|(_, e)| e).collect();
+        assert_eq!(samples.len(), 3, "{:?}", out.iter().map(|(s, e)| (&s.name, e.len())).collect::<Vec<_>>());
+        let look = |e: &EntityType| (e.common().color, e.common().line_weight, e.common().linetype.clone());
+        let lw = |spec: &LayerSpec| LineWeight::from_value(spec.lineweight.expect("NLCS lineweight"));
+        // Sorted by main group and object: AS, AS_WEG, SOORTAANDUIDING.
+        assert_eq!(look(samples[0]), (Color::Rgb { r: 12, g: 34, b: 56 }, lw(&cable), "AM-AS-SO".to_string()));
+        assert_eq!(look(samples[1]), (Color::Index(axis.color), lw(&axis), "AM-AS-SO".to_string()));
+        assert!(matches!(samples[1], EntityType::LwPolyline(_)));
+        assert_eq!(samples[1].common().linetype_scale, 0.5, "paper millimetre linetype");
+        assert!(matches!(samples[2], EntityType::Circle(_)), "a symbol sample is a marker");
+        assert_eq!(look(samples[2]), (Color::Index(symbol.color), lw(&symbol), String::new()));
     }
 }

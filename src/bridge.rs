@@ -466,10 +466,7 @@ pub fn ensure_nlcs_layer(spec: &crate::nlcs::LayerSpec) {
     let linetype = ensure_linetype(tab, &spec.linetype);
     let config = |linetype: Option<String>| LayerConfig {
         name: spec.name.clone(),
-        color: Some(match spec.true_color {
-            Some((r, g, b)) => Color::Rgb { r, g, b },
-            None => Color::Index(spec.color.max(1)),
-        }),
+        color: Some(nlcs_color(spec)),
         linetype,
         lineweight: spec.lineweight.map(LineWeight::from_value),
         description: Some(format!("NLCS object {}", spec.object_id)),
@@ -478,6 +475,14 @@ pub fn ensure_nlcs_layer(spec: &crate::nlcs::LayerSpec) {
     let made = matches!(request(PluginRequest::AddLayer(config(linetype.clone()))), Ok(PluginResponse::OptHandle(Some(_))));
     if !made && linetype.is_some() {
         let _ = request(PluginRequest::AddLayer(config(None)));
+    }
+}
+
+/// The colour of an NLCS layer: its true colour, else its NLCS colour.
+pub fn nlcs_color(spec: &crate::nlcs::LayerSpec) -> Color {
+    match spec.true_color {
+        Some((r, g, b)) => Color::Rgb { r, g, b },
+        None => Color::Index(spec.color.max(1)),
     }
 }
 

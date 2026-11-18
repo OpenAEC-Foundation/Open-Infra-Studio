@@ -308,13 +308,16 @@ pub fn check(doc: &CadDocument, opt: &Options) -> Report {
                 f.repair = Some(Repair::LayerStyle(spec.clone()));
             }
         }
-        // Element properties: ByLayer, except the text class pen of texts.
+        // Element properties: ByLayer, except the text class pen of texts
+        // and the legend samples, which show the pen of the layer they
+        // explain (#142).
+        let samples = parsed.group == "AL" && parsed.object == "LEGENDA" && parsed.element == "G";
         let mut colour = Vec::new();
         let mut weight = Vec::new();
         let mut ltype = Vec::new();
         let mut heights = Vec::new();
         let mut entity_bad = 0usize;
-        for e in elements {
+        for e in elements.iter().filter(|_| !samples) {
             let c = e.common();
             let mm = text_height(e).map(|h| h / paper);
             let class = mm.and_then(nlcs::text_class);
@@ -507,5 +510,30 @@ mod tests {
         assert!(r.repairs().iter().any(|x| matches!(x, Repair::ByLayer(h) if h.len() == 1)));
         assert!(r.score() < 100.0 && r.score() > 0.0);
         assert!(markdown(&r, "test.dwg", &Options::default()).contains("L4 Laagkleur"));
+    }
+
+    /// A legend sample on the sheet's legend layer shows the pen of the
+    /// layer it explains (#142): that is no ByLayer finding to repair.
+    #[test]
+    fn legend_samples_keep_the_pen_of_their_layer() {
+        let mut doc = CadDocument::new();
+        let legend = nlcs::layer(nlcs::object_by_name("AL", "LEGENDA").unwrap(), nlcs::Status::B, "XX", nlcs::Element::G);
+        layer(&mut doc, &legend.name, legend.color, legend.lineweight.unwrap(), &legend.linetype);
+        let mut sample = EntityType::Line(Line::from_points(Vector3::new(0.0, 0.0, 0.0), Vector3::new(10.0, 0.0, 0.0)));
+        let c = sample.common_mut();
+        c.layer = legend.name.clone();
+        c.color = Color::Index(10);
+        c.line_weight = LineWeight::Value(18);
+        c.linetype = "AM-AS-SO".into();
+        let _ = doc.add_entity(sample.clone());
+        // The same pen on a content layer is still a finding.
+        let road = nlcs::layer(nlcs::object_by_name("VH", "GESLOTENVERHARDING_ASFALT").unwrap(), nlcs::Status::B, "XX", nlcs::Element::G);
+        layer(&mut doc, &road.name, road.color, road.lineweight.unwrap(), &road.linetype);
+        sample.common_mut().layer = road.name.clone();
+        let _ = doc.add_entity(sample);
+        let r = check(&doc, &Options::default());
+        assert!(r.findings.iter().all(|f| f.layer != legend.name), "{:?}", r.findings);
+        let on_road: Vec<Rule> = r.findings.iter().filter(|f| f.layer == road.name).map(|f| f.rule).collect();
+        assert_eq!(on_road, [Rule::EntityColor, Rule::EntityLineweight, Rule::EntityLinetype]);
     }
 }

@@ -836,6 +836,8 @@ pub fn build(doc: &CadDocument, site: &Site, opt: &Options) -> Mutation {
             continue;
         }
         let data = object_data(e);
+        // A legend sample a drawing sheet put on its content layer before
+        // the samples moved to the sheet's legend layer (#142).
         if data.get("bron").is_some_and(|b| b == "tekenblad") {
             m.skipped += 1;
             continue;
@@ -1671,7 +1673,8 @@ mod tests {
         let mut doc = CadDocument::new();
         let road = [("objecttype", "wegdeel"), ("functie", "fietspad")];
         let _ = doc.add_entity(rect("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", 0.0, 0.0, 10.0, 10.0, &road));
-        // A legend sample of the drawing sheet, inside the area.
+        // A legend sample an older drawing sheet put on the content layer,
+        // inside the area.
         let _ = doc.add_entity(rect("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", 20.0, 0.0, 30.0, 10.0, &[("bron", "tekenblad")]));
         // Something far outside the project area, without object data.
         let _ = doc.add_entity(rect("N-WE-VH-GESLOTENVERHARDING_ASFALT-G", 900.0, 900.0, 910.0, 910.0, &[]));
