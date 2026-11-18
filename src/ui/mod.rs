@@ -13,6 +13,7 @@ mod infra;
 mod map;
 mod planning;
 
+use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
 
@@ -68,6 +69,8 @@ pub enum UiMsg {
     Picked([f64; 2]),
     /// The import area was set in the drawing; reload the site.
     SiteChanged,
+    /// OCS closed or replaced the drawing in this tab.
+    DrawingClosed(u64),
     /// A KLIC delivery chosen in Open CAD Studio's file dialog.
     Klic(std::path::PathBuf),
     /// A GIS file chosen in Open CAD Studio's file dialog.
@@ -144,13 +147,57 @@ pub fn open(tab: Tab) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Default)]
+struct Workbench {
+    drawings: HashMap<Option<u64>, app::App>,
+}
+
+impl Workbench {
+    fn with_document(
+        &mut self,
+        target: Option<crate::bridge::Target>,
+        site: Option<crate::gis::site::Site>,
+        run: impl FnOnce(&mut app::App),
+    ) {
+        let tab = target.as_ref().map(|target| target.tab_id);
+        let update = || {
+            let app = self.drawings.entry(tab).or_insert_with(app::App::new);
+            app.sync_site(site.clone());
+            run(app);
+        };
+        // Pin reads, writes and new jobs to the drawing whose state is shown
+        // even if a host command attaches another drawing mid-frame.
+        match target {
+            Some(target) => crate::bridge::with_command_context(target, site.clone(), None, update),
+            None => update(),
+        }
+    }
+
+    fn with_active_document(&mut self, run: impl FnOnce(&mut app::App)) {
+        let (target, site) = crate::bridge::workbench_document();
+        self.with_document(target, site, run);
+    }
+
+    fn handle_message(&mut self, ctx: &egui::Context, msg: UiMsg) {
+        match msg {
+            UiMsg::DrawingClosed(tab_id) => { self.drawings.remove(&Some(tab_id)); }
+            UiMsg::SiteChanged => self.with_active_document(|_| {}),
+            _ => self.with_active_document(|app| app.handle_message(ctx, msg)),
+        }
+    }
+}
+
 fn run_workbench(rx: Receiver<UiMsg>) {
-    let mut app = app::App::new();
+    let mut workbench = Workbench::default();
     while let Ok(msg) = rx.recv() {
-        if matches!(msg, UiMsg::SiteChanged) {
-            // A change in the CAD drawing should not open a closed window.
-            app.reload_site();
-            continue;
+        match msg {
+            // These notifications update state without opening a window.
+            UiMsg::SiteChanged => continue,
+            UiMsg::DrawingClosed(tab_id) => {
+                workbench.drawings.remove(&Some(tab_id));
+                continue;
+            }
+            _ => {}
         }
 
         let options = eframe::NativeOptions {
@@ -168,6 +215,8 @@ fn run_workbench(rx: Receiver<UiMsg>) {
                 winit::platform::x11::EventLoopBuilderExtX11::with_any_thread(builder, true);
                 #[cfg(windows)]
                 winit::platform::windows::EventLoopBuilderExtWindows::with_any_thread(builder, true);
+                #[cfg(target_os = "macos")]
+                winit::platform::macos::EventLoopBuilderExtMacOS::with_default_menu(builder, false);
                 let _ = builder;
             })),
             ..Default::default()
@@ -176,12 +225,15 @@ fn run_workbench(rx: Receiver<UiMsg>) {
             "Open Infra GIS",
             options,
             Box::new(|cc| {
-                app.configure_window(&cc.egui_ctx);
+                app::App::configure_window(&cc.egui_ctx);
                 HANDLE.lock().unwrap().ctx = Some(cc.egui_ctx.clone());
-                Ok(Box::new(Window { app: &mut app, rx: &rx, first: Some(msg) }))
+                Ok(Box::new(Window { workbench: &mut workbench, rx: &rx, first: Some(msg) }))
             }),
         );
         HANDLE.lock().unwrap().ctx = None;
+        for app in workbench.drawings.values_mut() {
+            app.reset_window();
+        }
         if let Err(e) = result {
             crate::bridge::error(&format!("GIS-venster kon niet starten: {e}"));
         }
@@ -189,7 +241,7 @@ fn run_workbench(rx: Receiver<UiMsg>) {
 }
 
 struct Window<'a> {
-    app: &'a mut app::App,
+    workbench: &'a mut Workbench,
     rx: &'a Receiver<UiMsg>,
     first: Option<UiMsg>,
 }
@@ -202,12 +254,12 @@ impl eframe::App for Window<'_> {
             return;
         }
         for msg in self.first.take().into_iter().chain(self.rx.try_iter()) {
-            self.app.handle_message(ctx, msg);
+            self.workbench.handle_message(ctx, msg);
         }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.app.ui(ui);
+        self.workbench.with_active_document(|app| app.ui(ui));
     }
 }
 

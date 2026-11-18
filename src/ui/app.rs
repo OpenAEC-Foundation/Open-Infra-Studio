@@ -442,7 +442,6 @@ pub struct App {
     tab: Tab,
     /// Location page edits a draft; the other pages use the saved site.
     draft: Site,
-    draft_tab: Option<u64>,
     saved_draft_base: Option<Site>,
     has_site: bool,
     message: Option<(bool, String)>,
@@ -471,30 +470,54 @@ pub struct App {
 mod close_reopen_tests {
     use super::*;
 
-    #[test]
-    fn a_new_native_window_keeps_the_draft_for_the_same_drawing() {
-        let mut app = App::new();
-        let saved = Site::default();
-        app.set_draft_base(Some(10), Some(saved.clone()));
-        app.draft.label = "Draft area".into();
-        app.draft.width = 375.0;
-        app.map.zoom = 12.0;
+    struct NoRequests;
 
-        for _ in 0..2 {
-            let ctx = egui::Context::default();
-            app.configure_window(&ctx);
-            app.sync_site(Some(10), Some(saved.clone()));
-            assert_eq!(app.draft.label, "Draft area");
-            assert_eq!(app.draft.width, 375.0);
-            assert_eq!(app.map.zoom, 12.0);
+    impl ocs_plugin_api::host::PluginRequestSender for NoRequests {
+        fn request(
+            &self,
+            _: ocs_plugin_api::ipc::protocol::PluginRequest,
+        ) -> Result<ocs_plugin_api::ipc::protocol::PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+            panic!("the workbench test must not contact CAD");
         }
-
-        app.sync_site(Some(11), Some(saved.clone()));
-        assert_eq!(app.draft, saved);
-        app.sync_site(Some(12), None);
-        assert!(!app.has_site);
-        assert_ne!(app.draft.label, "Draft area");
     }
+
+    #[test]
+    fn reopen_keeps_per_drawing_drafts_and_reports_until_cad_closes_the_drawing() {
+        let target = |tab_id| Some(bridge::Target {
+            sender: std::sync::Arc::new(NoRequests),
+            tab_id,
+            unit_factor: 1.0,
+            doc_path: None,
+        });
+        let mut workbench = super::super::Workbench::default();
+        let saved = Site::default();
+        workbench.with_document(target(10), Some(saved.clone()), |app| {
+            app.draft.label = "Draft area".into();
+            app.map.zoom = 12.0;
+            app.controle.report = Some(Report::default());
+            app.reset_window();
+        });
+
+        workbench.with_document(target(11), Some(saved.clone()), |app| {
+            assert_eq!(app.draft, saved);
+            assert!(app.controle.report.is_none());
+        });
+
+        workbench.with_document(target(10), Some(saved.clone()), |app| {
+            assert_eq!(app.draft.label, "Draft area");
+            assert_eq!(app.map.zoom, 12.0);
+            assert!(app.controle.report.is_some());
+        });
+
+        let ctx = egui::Context::default();
+        workbench.handle_message(&ctx, UiMsg::DrawingClosed(10));
+        workbench.with_document(target(10), None, |app| {
+            assert!(!app.has_site);
+            assert_ne!(app.draft.label, "Draft area");
+            assert!(app.controle.report.is_none());
+        });
+    }
+
 }
 
 #[cfg(test)]
@@ -504,7 +527,7 @@ mod qgis_preview_tests {
     fn render(connections: Vec<crate::gis::qgis::Connection>) -> String {
         let context = egui::Context::default();
         let mut app = App::new();
-        app.configure_window(&context);
+        App::configure_window(&context);
         app.srv.qgis = connections.into_iter().map(|c| (c, true)).collect();
         let output = context.run_ui(egui::RawInput::default(), |ui| app.qgis_import(ui));
         let rendered = format!("{:?}", output.shapes);
@@ -575,9 +598,12 @@ mod qgis_preview_tests {
 }
 
 impl App {
-    pub(super) fn configure_window(&mut self, ctx: &egui::Context) {
+    pub(super) fn reset_window(&mut self) {
         self.map.reset_window();
         self.raster.preview_texture = None;
+    }
+
+    pub(super) fn configure_window(ctx: &egui::Context) {
         egui_extras::install_image_loaders(ctx);
         let mut visuals = egui::Visuals::dark();
         visuals.selection.bg_fill = ACCENT;
@@ -597,7 +623,6 @@ impl App {
             has_site: site.is_some(),
             map: MapView::new([draft.lon, draft.lat], 15.0),
             draft,
-            draft_tab: bridge::target().map(|target| target.tab_id),
             saved_draft_base: site,
             fit_pending: true,
             message: None,
@@ -632,11 +657,10 @@ impl App {
     }
 
     pub(super) fn reload_site(&mut self) {
-        self.set_draft_base(bridge::target().map(|target| target.tab_id), bridge::site());
+        self.set_draft_base(bridge::site());
     }
 
-    fn set_draft_base(&mut self, tab: Option<u64>, site: Option<Site>) {
-        self.draft_tab = tab;
+    fn set_draft_base(&mut self, site: Option<Site>) {
         self.saved_draft_base = site;
         self.has_site = self.saved_draft_base.is_some();
         self.draft = self.saved_draft_base.clone()
@@ -644,14 +668,13 @@ impl App {
         self.fit_pending = true;
     }
 
-    fn sync_site(&mut self, tab: Option<u64>, site: Option<Site>) {
-        if self.draft_tab != tab || self.saved_draft_base != site {
-            self.set_draft_base(tab, site);
+    pub(super) fn sync_site(&mut self, site: Option<Site>) {
+        if self.saved_draft_base != site {
+            self.set_draft_base(site);
         }
     }
 
     pub(super) fn handle_message(&mut self, ctx: &egui::Context, msg: UiMsg) {
-        self.sync_site(bridge::target().map(|target| target.tab_id), bridge::site());
         match msg {
             UiMsg::RegionalServices(region) => {
                 self.svc.regional(region);
@@ -676,10 +699,7 @@ impl App {
                     self.coords.xy = q;
                 }
             }
-            UiMsg::SiteChanged => {
-                self.reload_site();
-                return;
-            }
+            UiMsg::SiteChanged | UiMsg::DrawingClosed(_) => return,
             UiMsg::File(path) => {
                 self.tab = Tab::Files;
                 self.files.open(path);

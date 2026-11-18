@@ -12,18 +12,17 @@ pub struct Job<T> {
 
 impl<T: Send + 'static> Job<T> {
     pub fn spawn(label: &str, f: impl FnOnce(&dyn Fn(String)) -> Result<T, String> + Send + 'static) -> Self {
+        let document = crate::bridge::target().map(|target| (target, crate::bridge::site()));
         let result: Slot<T> = Arc::new(Mutex::new(None));
         let status = Arc::new(Mutex::new(label.to_string()));
         let (r, s) = (result.clone(), status.clone());
-        let target = crate::bridge::target();
-        let site = crate::bridge::site();
         std::thread::spawn(move || {
             let progress = |msg: String| {
                 *s.lock().unwrap() = msg;
                 super::repaint();
             };
-            let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match target {
-                Some(target) => crate::bridge::with_command_context(target, site, None, || f(&progress)),
+            let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match document {
+                Some((target, site)) => crate::bridge::with_command_context(target, site, None, || f(&progress)),
                 None => f(&progress),
             }))
                 .unwrap_or_else(|_| Err("interne fout in de import".into()));

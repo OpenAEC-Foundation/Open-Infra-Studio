@@ -5,13 +5,14 @@
 //! import workers use it to add layers and entities while the host stays
 //! responsive. Each import is one undo step.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use ocs_plugin_api::host::{
     codec::{Color, EntityType, Handle, LineWeight},
-    CommandStep, ExtendedDataRecord, HostApi, InteractiveCommand, LayerConfig, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
+    CommandStep, ExtendedDataRecord, HostApi, InteractiveCommand, LayerConfig, PluginRequestError, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
 };
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 
@@ -24,6 +25,38 @@ pub struct Target {
     pub tab_id: u64,
     pub unit_factor: f64,
     pub doc_path: Option<PathBuf>,
+}
+
+struct DrawingSender {
+    sender: Box<dyn PluginRequestSender>,
+    closed: Arc<AtomicBool>,
+}
+
+impl PluginRequestSender for DrawingSender {
+    fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+        if self.closed.load(Ordering::Acquire) {
+            return Err(PluginRequestError(crate::lang::tr(
+                "de doeltekening is gesloten",
+                "the target drawing is closed",
+            ).into()));
+        }
+        self.sender.request(req)
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn closed_drawing_sender_refuses_and_does_not_forward_a_request() {
+    struct NeverSend;
+    impl PluginRequestSender for NeverSend {
+        fn request(&self, _: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+            panic!("a request for a closed drawing reached CAD");
+        }
+    }
+
+    let closed = Arc::new(AtomicBool::new(true));
+    let sender = DrawingSender { sender: Box::new(NeverSend), closed };
+    assert!(sender.request(PluginRequest::PushInfo("probe".into())).is_err());
 }
 
 struct CommandContext { target: Target, site: Option<Site>, reply: Option<String> }
@@ -102,6 +135,7 @@ impl InteractiveCommand for BoundInteractive {
 struct Shared {
     target: Option<Target>,
     site: Option<Site>,
+    drawing_closed: HashMap<u64, Arc<AtomicBool>>,
     /// NLCS layers and linetypes already set up, per tab.
     made: HashSet<(u64, String)>,
     /// The NLCS layers imports drew on, per tab, for the legend.
@@ -136,7 +170,11 @@ pub fn attach(host: &mut dyn HostApi) {
         let mut s = shared().lock().unwrap();
         let same_tab = s.target.as_ref().is_some_and(|t| t.tab_id == tab_id);
         let unit_factor = s.target.as_ref().filter(|_| same_tab).map(|t| t.unit_factor).unwrap_or(1.0);
-        s.target = Some(Target { sender: Arc::from(sender), tab_id, unit_factor, doc_path });
+        let closed = s.drawing_closed.entry(tab_id).or_default().clone();
+        s.target = Some(Target {
+            sender: Arc::new(DrawingSender { sender, closed }),
+            tab_id, unit_factor, doc_path,
+        });
         match stored {
             Some(site) => {
                 site.register_crs();
@@ -155,6 +193,27 @@ pub fn attach(host: &mut dyn HostApi) {
     if let Some(t) = shared().lock().unwrap().target.as_mut() {
         t.unit_factor = f;
     }
+}
+
+/// Invalidate the previous drawing's senders and clear the workbench's
+/// active target if it closed or was replaced in its tab.
+pub fn drawing_closed(tab_id: u64) {
+    let mut state = shared().lock().unwrap();
+    if let Some(closed) = state.drawing_closed.remove(&tab_id) {
+        closed.store(true, Ordering::Release);
+    }
+    if state.target.as_ref().is_some_and(|target| target.tab_id == tab_id) {
+        state.target = None;
+        state.site = None;
+    }
+    drop(state);
+    crate::ui::send(crate::ui::UiMsg::DrawingClosed(tab_id));
+}
+
+/// Read the target and its saved location from the same bridge update.
+pub(crate) fn workbench_document() -> (Option<Target>, Option<Site>) {
+    let state = shared().lock().unwrap();
+    (state.target.clone(), state.site.clone())
 }
 
 /// Drawing units per metre for the tab. The current host exposes INSUNITS
