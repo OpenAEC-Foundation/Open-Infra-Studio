@@ -9,7 +9,7 @@ use crate::gis::caps::{WfsCaps, WfsType, WmsCaps, WmsLayer};
 use crate::gis::raster::{self, Options as RasterOptions};
 use crate::gis::servers::{self, MapServer, ServerKind};
 use crate::gis::site::Site;
-use crate::gis::vector::{self, Feature, Options as VectorOptions};
+use crate::gis::vector::{self, Feature};
 use crate::gis::{caps, osm, wfs};
 
 fn target() -> Result<Target, String> {
@@ -60,22 +60,38 @@ fn write_map(site: &Site, images: &[raster::PlacedImage], layer: &str, unit_fact
     bridge::add_entities_handles(label, entities)
 }
 
-pub fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str, label: &str, style: &VectorStyle) -> Result<usize, String> {
+fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str, label: &str, style: &VectorStyle, with_data: bool) -> Result<usize, String> {
     let t = target()?;
     let to_site = vector::data_to_site(site, data_crs, features)?;
-    let geom = vector::to_drawing(
-        site,
-        features,
-        &*to_site,
-        &VectorOptions { unit_factor: t.unit_factor, clip: style.clip, label_field: style.label_field.clone() },
-    );
-    if geom.is_empty() {
+    let text_h = style.text_m * t.unit_factor;
+    // Preserve the draw order: polylines, point markers, then labels.
+    let mut polylines = Vec::new();
+    let mut markers = Vec::new();
+    let mut labels = Vec::new();
+    for feature in features {
+        let (lines, points) = vector::feature_to_drawing(site, feature, &*to_site, t.unit_factor, style.clip);
+        if lines.is_empty() && points.is_empty() {
+            continue;
+        }
+        let data = with_data.then(|| emit::feature_data(feature)).filter(|record| !record.is_empty());
+        let data = data.as_ref();
+        polylines.extend(lines.iter().map(|(pts, closed)| emit::polyline(pts, *closed, false, layer, 1.0, data)));
+        markers.extend(points.iter().map(|&point| emit::marker(point, layer, text_h * 0.25, data)));
+        if let Some(text) = style.label_field.as_ref().and_then(|key| feature.props.get(key)).and_then(vector::prop_text) {
+            let anchor = lines.first().into_iter().flat_map(|(pts, _)| pts).chain(&points);
+            let (x, y, n) = anchor.fold((0.0, 0.0, 0usize), |(x, y, n), p| (x + p[0], y + p[1], n + 1));
+            let at = [x / n as f64, y / n as f64];
+            labels.push(emit::text(at, &text, text_h, 0.0, layer, data));
+        }
+    }
+    polylines.append(&mut markers);
+    polylines.append(&mut labels);
+    if polylines.is_empty() {
         return Ok(0);
     }
-    let entities = emit::geometry(&geom, layer, style.text_m * t.unit_factor);
     bridge::with_import_undo(label, || {
         bridge::ensure_layer(layer, Color::from_index(style.aci));
-        bridge::add_entities(label, entities)
+        Ok(bridge::add_entities_with_object_data(label, polylines)?.len())
     })
 }
 
@@ -84,9 +100,14 @@ pub fn wfs_fetch(site: &Site, caps: &WfsCaps, ft: &WfsType, limit: usize, progre
 }
 
 pub fn wfs_place(site: &Site, ft: &WfsType, result: &wfs::WfsResult, style: &VectorStyle) -> Result<String, String> {
-    let layer = emit::layer_name("GIS", ft.name.rsplit(':').next().unwrap_or(&ft.name));
-    let n = place_features(site, &result.features, &result.data_crs, &layer, &format!("GIS WFS {}", ft.title), style)?;
+    let message = write_wfs(site, ft, result, style)?;
     bridge::zoom_extents();
+    Ok(message)
+}
+
+fn write_wfs(site: &Site, ft: &WfsType, result: &wfs::WfsResult, style: &VectorStyle) -> Result<String, String> {
+    let layer = emit::layer_name("GIS", ft.name.rsplit(':').next().unwrap_or(&ft.name));
+    let n = place_features(site, &result.features, &result.data_crs, &layer, &format!("GIS WFS {}", ft.title), style, true)?;
     Ok(format!("{n} objecten van {} op laag {layer}.", ft.title))
 }
 
@@ -150,7 +171,7 @@ pub fn osm_place(site: &Site, theme_ids: &[&str], per_theme: &[Vec<Feature>], la
         for (id, features) in theme_ids.iter().zip(per_theme) {
             let Some(theme) = osm::THEMES.iter().find(|t| t.id == *id) else { continue };
             let style = VectorStyle { aci: theme.aci, label_field: labels.then(|| theme.label_tag.map(str::to_string)).flatten(), text_m, clip };
-            let n = place_features(site, features, "EPSG:4326", theme.layer, &format!("GIS OSM {}", theme.label), &style)?;
+            let n = place_features(site, features, "EPSG:4326", theme.layer, &format!("GIS OSM {}", theme.label), &style, false)?;
             summary.push(format!("{}: {n}", theme.label));
         }
         Ok(summary)
@@ -235,11 +256,7 @@ impl PreparedDataset {
                 rasters.extend(write_map(site, &images, &layer, target()?.unit_factor, 0, &label)?);
                 Ok(summary)
             }
-            Self::Vector { features, feature_type, style } => {
-                let layer = emit::layer_name("GIS", feature_type.name.rsplit(':').next().unwrap_or(&feature_type.name));
-                let n = place_features(site, &features.features, &features.data_crs, &layer, &format!("GIS WFS {}", feature_type.title), &style)?;
-                Ok(format!("{n} objecten van {} op laag {layer}.", feature_type.title))
-            }
+            Self::Vector { features, feature_type, style } => write_wfs(site, &feature_type, &features, &style),
         }
     }
 }
@@ -359,4 +376,125 @@ pub(crate) fn prepare_aerial(site: &Site, progress: &dyn Fn(String)) -> Result<P
     let layer = caps.layers.iter().find(|l| l.name == srv.default_layer).or(caps.layers.first()).cloned().ok_or("geen lagen")?;
     let res = (site.width.max(site.height) / 2048.0).max(5.0);
     prepare_wms(site, &srv, &caps, &layer, &RasterOptions { resolution: res, format: "image/jpeg".into() }, progress)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ocs_plugin_api::host::codec::{EntityType, Handle};
+    use ocs_plugin_api::host::{ExtendedDataRecord, PluginRequestError, PluginRequestSender, XDataValue};
+    use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct Drawing {
+        entities: Mutex<Vec<EntityType>>,
+        records_written: Mutex<Vec<(Handle, ExtendedDataRecord)>>,
+    }
+
+    impl PluginRequestSender for Drawing {
+        fn request(&self, request: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+            Ok(match request {
+                PluginRequest::AddEntities(entities) => {
+                    let mut placed = self.entities.lock().unwrap();
+                    let first = placed.len() as u64 + 1;
+                    let handles = (first..first + entities.len() as u64).map(Handle::new).collect();
+                    placed.extend(entities);
+                    PluginResponse::Handles(handles)
+                }
+                PluginRequest::WriteRecord { handle, record } => {
+                    self.records_written.lock().unwrap().push((handle, record));
+                    PluginResponse::Bool(true)
+                }
+                _ => PluginResponse::Ok,
+            })
+        }
+    }
+
+    #[test]
+    fn wfs_bag_pand_carries_source_attributes() {
+        // Synthetic GetFeature response in RD, with the BAG field names.
+        let response = serde_json::json!({
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "properties": { "identificatie": "0503100000000001", "bouwjaar": 1984 },
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[105000, 425000], [105010, 425000], [105010, 425010], [105000, 425000]]]
+                }
+            }]
+        });
+        let site = Site { origin_e: 105000.0, origin_n: 425000.0, ..Site::default() };
+        let ft = WfsType { name: "bag:pand".into(), title: "Pand".into(), crs: vec![site.crs.clone()], bbox: None };
+        let result = wfs::WfsResult { features: vector::parse_geojson(&response), data_crs: site.crs.clone(), truncated: false };
+        let style = VectorStyle { aci: 30, label_field: None, text_m: 1.0, clip: true };
+        let drawing = Arc::new(Drawing::default());
+        let target = Target { sender: drawing.clone(), tab_id: 139, unit_factor: 1.0, doc_path: None };
+
+        bridge::with_command_context(target, None, None, || wfs_place(&site, &ft, &result, &style)).unwrap();
+
+        let placed = drawing.entities.lock().unwrap();
+        assert_eq!(placed.len(), 1);
+        assert!(matches!(&placed[0], EntityType::LwPolyline(p) if p.is_closed));
+        assert_eq!(placed[0].common().layer, "GIS-PAND");
+        let record = placed[0].common().extended_data.get_record(bridge::XDATA_APP)
+            .expect("GIS-PAND must carry OPENINFRA XDATA");
+        assert!(record.values.contains(&XDataValue::String("bouwjaar=1984".into())));
+        assert!(record.values.contains(&XDataValue::String("identificatie=0503100000000001".into())));
+        assert_eq!(*drawing.records_written.lock().unwrap(), vec![(Handle::new(1), record.clone())]);
+    }
+
+    #[test]
+    fn wfs_parts_keep_their_own_attributes_after_clipping() {
+        let response = serde_json::json!({
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": { "name": null },
+                    "geometry": { "type": "LineString", "coordinates": [[1,1],[2,2]] }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "outside" },
+                    "geometry": { "type": "Point", "coordinates": [20,20] }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "road" },
+                    "geometry": { "type": "LineString", "coordinates": [[-1,3],[5,3],[11,3],[11,4],[5,4]] }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "name": "stops", "active": true },
+                    "geometry": { "type": "MultiPoint", "coordinates": [[2,3],[4,3],[20,20]] }
+                }
+            ]
+        });
+        let site = Site { origin_e: 5.0, origin_n: 5.0, width: 10.0, height: 10.0, ..Site::default() };
+        let ft = WfsType { name: "test:features".into(), title: "Test".into(), crs: vec![site.crs.clone()], bbox: None };
+        let result = wfs::WfsResult { features: vector::parse_geojson(&response), data_crs: site.crs.clone(), truncated: false };
+        let style = VectorStyle { aci: 2, label_field: Some("name".into()), text_m: 1.0, clip: true };
+        let drawing = Arc::new(Drawing::default());
+        let target = Target { sender: drawing.clone(), tab_id: 139, unit_factor: 1.0, doc_path: None };
+
+        bridge::with_command_context(target, None, None, || wfs_place(&site, &ft, &result, &style)).unwrap();
+
+        let placed = drawing.entities.lock().unwrap();
+        assert!(matches!(placed.as_slice(), [
+            EntityType::LwPolyline(_), EntityType::LwPolyline(_), EntityType::LwPolyline(_),
+            EntityType::Circle(_), EntityType::Circle(_), EntityType::Text(_), EntityType::Text(_),
+        ]));
+        let records: Vec<_> = placed.iter().map(|entity| entity.common().extended_data.get_record(bridge::XDATA_APP)).collect();
+        assert!(records[0].is_none());
+        let expected = |name: &str| XDataValue::String(format!("name={name}"));
+        for i in [1, 2, 5] {
+            assert_eq!(records[i].unwrap().values, [expected("road")]);
+        }
+        for i in [3, 4, 6] {
+            assert_eq!(records[i].unwrap().values, [XDataValue::String("active=true".into()), expected("stops")]);
+        }
+        assert_eq!(*drawing.records_written.lock().unwrap(), vec![(Handle::new(2), records[1].unwrap().clone())]);
+    }
 }

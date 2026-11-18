@@ -82,4 +82,8 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 
 50. **De Civiel-knoppentest herkent de Engelse vensterkop niet** (#131, Sol ronde 2, [BEVESTIGD] VERVOLG). De toegankelijkheidsproef zoekt uitsluitend `Open Infra · Civiel`. Richting: accepteer ook `Open Infra · Civil` in die herkenningsstap.
 
+81. **WFS en GIS-bestanden herschrijven een objectrecord na plaatsing** (#139, Sol ronde 1, [BEVESTIGD] VERVOLG). De gepinde CAD-host registreert `OPENINFRA` al bij `AddEntities`. De extra `WriteRecord` schrijft de gegevens opnieuw en laat de host de geometriecaches opnieuw opbouwen en een documentwijziging publiceren. Richting: gebruik de gewone batchfuncties en controleer de meegestuurde records in de tests.
+
+82. **De WFS-uitleg vermeldt de lengtebeperking per attribuut niet** (#139, Sol ronde 1, [BEVESTIGD] VERVOLG). De README noemt maximaal 40 niet-lege attributen per feature. De gedeelde encoder kort elke combinatie `key=value` ook af op 255 UTF-8-bytes. Het BAG-id en bouwjaar passen ruim. Richting: verwijs vanuit de WFS-uitleg naar de lengtebeperking.
+
 91. **Kaartvolgorde kan een extra stap vragen bij Ongedaan maken** (#141). OCS 2026.46 sluit een lopende plug-ingroep als de native opdracht `DRAWORDER` een eigen geschiedenisstap opent. Als de kaart achter bestaande objecten moet komen, kan de eerste Undo alleen de tekenvolgorde herstellen. De volgende Undo haalt de volledige import uit de tekening, inclusief alle kaartdelen en hun nieuwe lagen. Voor één stap zou de host een bewerking voor tekenvolgorde moeten aanbieden die aan de lopende plug-ingroep deelneemt.

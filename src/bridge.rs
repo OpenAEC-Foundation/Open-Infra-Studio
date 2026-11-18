@@ -968,6 +968,20 @@ pub fn add_entities(label: &str, entities: Vec<EntityType>) -> Result<usize, Str
     Ok(add_entities_handles(label, entities)?.len())
 }
 
+/// Add entities carrying OPENINFRA records and register their shared APPID once.
+pub(crate) fn add_entities_with_object_data(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
+    let first = entities.iter().enumerate().find_map(|(i, entity)| {
+        entity.common().extended_data.get_record(XDATA_APP).map(|record| (i, record.clone()))
+    });
+    let handles = add_entities_handles(label, entities)?;
+    if let Some((i, record)) = first {
+        if let Some(&handle) = handles.get(i).filter(|handle| !handle.is_null()) {
+            register_object_data(handle, record);
+        }
+    }
+    Ok(handles)
+}
+
 /// Like [`add_entities`], returning the new handles.
 pub fn add_entities_handles(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
     if entities.is_empty() {
