@@ -393,7 +393,7 @@ mod widget_scope_tests {
             key: egui::Key::Z, physical_key: Some(egui::Key::Z),
             pressed: true, repeat: false, modifiers,
         };
-        let input = egui::RawInput { modifiers, events: vec![key], ..Default::default() };
+        let input = egui::RawInput { events: vec![key], ..Default::default() };
         frame(&ctx, &mut workbench, 2, &mut b, input);
         assert_eq!(b, "Concept B");
     }
