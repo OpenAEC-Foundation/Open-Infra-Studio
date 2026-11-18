@@ -1356,7 +1356,7 @@ impl ImportLayers {
 const SCRIPT_COMMANDS_OFF: &str = "running commands from a script is turned off (SCRIPTCOMMANDS = 0); turn it on at the command line with SCRIPTCOMMANDS 1";
 
 /// Return a notice if the host refuses draw order before running the command.
-fn send_to_back(handles: &[Handle]) -> Result<Option<&'static str>, String> {
+fn run_draw_order(handles: &[Handle], command: &str) -> Result<Option<&'static str>, String> {
     let select = |handles| {
         match request(PluginRequest::SetSelection { handles })? {
             PluginResponse::SelectionResult(result) => result,
@@ -1365,7 +1365,7 @@ fn send_to_back(handles: &[Handle]) -> Result<Option<&'static str>, String> {
     };
     let previous = selection()?;
     select(handles.to_vec())?;
-    let moved = run_on_target("DRAWORDER_BACK");
+    let moved = run_on_target(command);
     let restored = select(previous);
     let notice = match moved {
         Ok(()) => None,
@@ -1410,11 +1410,24 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
             .then(|| (c.handle, c.layer.clone()))
     }).collect();
     let current = effective_draw_order(owner);
-    let Some(order) = raster_draw_order(older.iter().map(|(handle, _)| *handle), new, current.as_deref()) else {
+    let moves = raster_draw_order(older.iter().map(|(handle, _)| *handle), new, current.as_deref());
+    if moves.is_empty() {
         return Ok(());
-    };
-    layers.unlock(older.iter().map(|(_, name)| name.clone()))?;
-    let moved = send_to_back(&order);
+    }
+    let moved_handles: HashSet<_> = moves.iter().flat_map(|step| step.handles.iter().copied()).collect();
+    layers.unlock(older.iter().filter(|(handle, _)| moved_handles.contains(handle)).map(|(_, name)| name.clone()))?;
+    let moved = (|| {
+        for step in moves {
+            let command = match step.under {
+                Some(reference) => format!("DRAWORDER UNDER {:X}", reference.value()),
+                None => "DRAWORDER_BACK".to_owned(),
+            };
+            if let Some(notice) = run_draw_order(&step.handles, &command)? {
+                return Ok::<_, String>(Some(notice));
+            }
+        }
+        Ok(None)
+    })();
     if !layers.relock.is_empty() {
         // Native DRAWORDER can close the import group. Record the subsequent
         // lock changes together even when several image layers were reopened.
@@ -1428,13 +1441,19 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
     Ok(())
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct RasterMove {
+    handles: Vec<Handle>,
+    under: Option<Handle>,
+}
+
 fn raster_draw_order(
     older: impl IntoIterator<Item = Handle>,
     new: &[Handle],
-    current: Option<&[Handle]>,
-) -> Option<Vec<Handle>> {
+    current: Option<&[(Handle, u64)]>,
+) -> Vec<RasterMove> {
     let mut remaining: HashSet<_> = older.into_iter().collect();
-    let mut order: Vec<_> = current.into_iter().flatten().copied()
+    let mut order: Vec<_> = current.into_iter().flatten().map(|(handle, _)| *handle)
         .filter(|handle| remaining.remove(handle))
         .collect();
     // A large drawing may not fit in a snapshot. Use handle order for
@@ -1442,11 +1461,36 @@ fn raster_draw_order(
     let mut unknown: Vec<_> = remaining.into_iter().collect();
     unknown.sort_unstable_by_key(|handle| handle.value());
     order.extend(unknown);
+    let old_count = order.len();
     order.extend_from_slice(new);
-    (!current.is_some_and(|current| current.starts_with(&order))).then_some(order)
+    let back = |handles| vec![RasterMove { handles, under: None }];
+    let Some(current) = current else { return back(order) };
+    let current_handles = || current.iter().map(|(handle, _)| *handle);
+    if current_handles().take(order.len()).eq(order.iter().copied()) {
+        return Vec::new();
+    }
+    let rasters: HashSet<_> = order.iter().copied().collect();
+    let Some((vector, sort_key)) = current.iter().find(|(handle, _)| !rasters.contains(handle)).copied() else {
+        return back(order);
+    };
+    if sort_key > order.len() as u64 {
+        return back(order);
+    }
+
+    // With no spare keys below the first vector, BACK can leapfrog vectors.
+    // UNDER preserves the effective order of the selection and its siblings.
+    let under = |handles| RasterMove { handles, under: Some(vector) };
+    if current_handles().filter(|handle| rasters.contains(handle)).eq(order.iter().copied()) {
+        return vec![under(order)];
+    }
+    let new_handles: HashSet<_> = new.iter().copied().collect();
+    if current_handles().filter(|handle| !new_handles.contains(handle)).take(old_count).eq(order[..old_count].iter().copied()) {
+        return vec![under(new.to_vec())];
+    }
+    vec![under(order[..old_count].to_vec()), under(new.to_vec())]
 }
 
-fn effective_draw_order(owner: Handle) -> Option<Vec<Handle>> {
+fn effective_draw_order(owner: Handle) -> Option<Vec<(Handle, u64)>> {
     use ocs_plugin_api::host::codec::objects::ObjectType;
     // Shared views have no sort table. Only request the full snapshot when
     // the shared view puts the drawing comfortably below the IPC frame limit.
@@ -1464,9 +1508,11 @@ fn effective_draw_order(owner: Handle) -> Option<Vec<Handle>> {
     }).unwrap_or_default();
     let mut order: Vec<_> = drawing.entities().filter_map(|entity| {
         let c = entity.common();
-        (c.owner_handle == owner || c.owner_handle.is_null()).then_some(c.handle)
+        (c.owner_handle == owner || c.owner_handle.is_null()).then(|| {
+            (c.handle, overrides.get(&c.handle).copied().unwrap_or_else(|| c.handle.value()))
+        })
     }).collect();
-    order.sort_unstable_by_key(|handle| (overrides.get(handle).copied().unwrap_or_else(|| handle.value()), handle.value()));
+    order.sort_unstable_by_key(|(handle, key)| (*key, handle.value()));
     Some(order)
 }
 
@@ -1597,15 +1643,34 @@ mod tests {
         let new = [new_bottom, new_top];
         let wanted = [older_bottom, older_top, new_bottom, new_top];
 
+        let current = [(older_bottom, 5), (older_top, 6), (vector, 12), (new_bottom, 30), (new_top, 32)];
+        assert_eq!(raster_draw_order(older, &new, Some(&current)), [RasterMove { handles: wanted.to_vec(), under: None }]);
+
+        let current = [(older_bottom, 1), (older_top, 2), (new_bottom, 3), (new_top, 4), (vector, 5)];
+        assert!(raster_draw_order(older, &new, Some(&current)).is_empty());
         assert_eq!(
-            raster_draw_order(older, &new, Some(&[older_bottom, older_top, vector, new_bottom, new_top])),
-            Some(wanted.to_vec()),
+            raster_draw_order(older, &new, None),
+            [RasterMove { handles: [older_top, older_bottom, new_bottom, new_top].to_vec(), under: None }],
         );
+    }
+
+    #[test]
+    fn raster_import_uses_relative_order_when_back_would_collide() {
+        let [older_bottom, older_top, vector, new] = [21, 15, 12, 30].map(Handle::new);
+        let older = [older_top, older_bottom];
+        let under_vector = |handles| RasterMove { handles, under: Some(vector) };
+
+        let current = [(older_bottom, 1), (older_top, 2), (vector, 3), (new, 30)];
+        assert_eq!(raster_draw_order(older, &[new], Some(&current)), [under_vector(vec![older_bottom, older_top, new])]);
+
+        let current = [(older_bottom, 1), (new, 2), (older_top, 3), (vector, 3)];
+        assert_eq!(raster_draw_order(older, &[new], Some(&current)), [under_vector(vec![new])]);
+
+        let current = [(older_bottom, 1), (new, 2), (vector, 3), (older_top, 4)];
         assert_eq!(
-            raster_draw_order(older, &new, Some(&[older_bottom, older_top, new_bottom, new_top, vector])),
-            None,
+            raster_draw_order(older, &[new], Some(&current)),
+            [under_vector(vec![older_bottom, older_top]), under_vector(vec![new])],
         );
-        assert_eq!(raster_draw_order(older, &new, None), Some([older_top, older_bottom, new_bottom, new_top].to_vec()));
     }
 
     #[test]
@@ -1643,7 +1708,7 @@ mod tests {
         let run = |command, restore| {
             let sender = Arc::new(Sender { command, restore, selections: Mutex::default() });
             let target = Target { sender: sender.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
-            let result = with_command_context(target, None, None, || send_to_back(&[Handle::new(2)]));
+            let result = with_command_context(target, None, None, || run_draw_order(&[Handle::new(2)], "DRAWORDER_BACK"));
             assert_eq!(*sender.selections.lock().unwrap(), [vec![Handle::new(2)], vec![Handle::new(1)]]);
             result
         };
