@@ -2129,7 +2129,7 @@ impl App {
         }
         let mut o = hoogte::settings();
         let mut class_on: Vec<bool> = pointcloud::CLASSES.iter()
-            .map(|c| o.cloud.classes.is_empty() || o.cloud.classes.contains(&c.0))
+            .map(|c| o.cloud.keeps_class(c.0))
             .collect();
         group(ui, tr("Tekenen", "Drawing"), |ui| {
             ui.horizontal(|ui| {
@@ -2246,11 +2246,9 @@ impl App {
             });
         });
         // Keep the shared settings in step: the ribbon buttons use them too.
-        o.cloud.classes = if class_on.iter().all(|c| *c) {
-            Vec::new()
-        } else {
+        o.cloud.classes = (!class_on.iter().all(|selected| *selected)).then(|| {
             pointcloud::CLASSES.iter().zip(class_on).filter(|(_, on)| *on).map(|(c, _)| c.0).collect()
-        };
+        });
         hoogte::set_settings(o);
     }
 
@@ -2258,9 +2256,15 @@ impl App {
         let Some(site) = bridge::site() else { return };
         let busy = self.ahn.test.is_some() || self.ahn.run.is_some();
         let any = self.ahn.spots || self.ahn.contours || self.ahn.cloud;
+        let settings = hoogte::settings();
+        let missing_classes = self.ahn.cloud && !settings.cloud.has_selected_classes();
         button_bar(ui, |ui| {
-            if ui.add_enabled(any && !busy, primary_button(tr("OK en importeren", "OK and import"))).clicked() {
-                let (s, opt, spots, contours, cloud) = (site.clone(), hoogte::settings(), self.ahn.spots, self.ahn.contours, self.ahn.cloud);
+            let import = ui.add_enabled(any && !busy && !missing_classes, primary_button(tr("OK en importeren", "OK and import")));
+            if missing_classes {
+                import.clone().on_disabled_hover_text(tr("Kies ten minste één puntenwolkklasse.", "Select at least one point cloud class."));
+            }
+            if import.clicked() {
+                let (s, opt, spots, contours, cloud) = (site.clone(), settings.clone(), self.ahn.spots, self.ahn.contours, self.ahn.cloud);
                 self.ahn.run = Some(Job::spawn("AHN…", move |p| {
                     let mut done = Vec::new();
                     if contours {
@@ -2276,7 +2280,7 @@ impl App {
                 }));
             }
             if ui.add_enabled(!busy, egui::Button::new(tr("Test — hoogtelijnen op de kaart", "Test — contours on map"))).clicked() {
-                let (s, opt) = (site.clone(), hoogte::settings());
+                let (s, opt) = (site.clone(), settings);
                 self.ahn.test = Some(Job::spawn(tr("AHN ophalen…", "Fetching AHN data…"), move |p| {
                     let b = crate::basisdata::rd_bbox(&s)?;
                     let mut grid = ahn::fetch(b, Model::Dtm, opt.contour_cell, p)?;
@@ -2720,7 +2724,7 @@ impl App {
     }
 
     fn civiel_actions(&mut self, ui: &mut egui::Ui) {
-        let busy = self.civiel_run.is_some();
+        let ready = self.civiel_run.is_none() && bridge::target().is_some();
         let mut start: Option<(&'static str, fn(&CivielOptions, &dyn Fn(String)) -> Result<String, String>)> = None;
         button_bar(ui, |ui| {
             use civiel::{as_profiel, landmeten, terrein};
@@ -2734,7 +2738,7 @@ impl App {
                 (tr("Ontwerpprofiel", "Design profile"), |opt, _| as_profiel::design_profile(opt, None, None, None)),
                 (tr("Punten exporteren", "Export points"), |opt, _| landmeten::export(opt, None)),
             ] {
-                if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                if ui.add_enabled(ready, egui::Button::new(label)).clicked() {
                     start = Some((label, f));
                 }
             }

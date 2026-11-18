@@ -174,16 +174,12 @@ impl Workbench {
         run: impl FnOnce(&mut app::App, &mut Option<String>),
     ) {
         let tab = target.as_ref().map(|target| target.tab_id);
-        let update = || {
-            let app = self.drawings.entry(tab).or_insert_with(app::App::new);
-            run(app, &mut self.civiel_offsets);
-        };
         // Pin reads, writes and new jobs to the drawing whose state is shown
         // even if a host command attaches another drawing mid-frame.
-        match target {
-            Some(target) => crate::bridge::with_command_context(target, site.clone(), None, update),
-            None => update(),
-        }
+        crate::bridge::with_workbench_document(target, site, || {
+            let app = self.drawings.entry(tab).or_insert_with(app::App::new);
+            run(app, &mut self.civiel_offsets);
+        });
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) {

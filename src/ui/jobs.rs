@@ -13,7 +13,7 @@ pub struct Job<T> {
 
 impl<T: Send + 'static> Job<T> {
     pub fn spawn(label: &str, f: impl FnOnce(&dyn Fn(String)) -> Result<T, String> + Send + 'static) -> Self {
-        let document = crate::bridge::target().map(|target| (target, crate::bridge::site()));
+        let (target, site) = crate::bridge::workbench_document();
         let result: Slot<T> = Arc::new(Mutex::new(None));
         let status = Arc::new(Mutex::new(label.to_string()));
         let (r, s) = (result.clone(), status.clone());
@@ -22,11 +22,10 @@ impl<T: Send + 'static> Job<T> {
                 *s.lock().unwrap() = msg;
                 super::repaint();
             };
-            let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match document {
-                Some((target, site)) => crate::bridge::with_command_context(target, site, None, || f(&progress)),
-                None => f(&progress),
+            let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                crate::bridge::with_workbench_document(target, site, || f(&progress))
             }))
-                .unwrap_or_else(|_| Err(tr("interne fout in de import", "internal import error").into()));
+            .unwrap_or_else(|_| Err(tr("interne fout in de import", "internal import error").into()));
             *r.lock().unwrap() = Some(out);
             super::repaint();
         });

@@ -80,6 +80,10 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 
 44. **OCS API 23 meldt het oude tab-ID niet af bij herladen na een externe wijziging** (#130, Sol ronde 2, [BEVESTIGD] VERVOLG). De host geeft de vervangende tekening een nieuw ID en meldt alleen `DocumentOpened` voor dat ID. De werkbankstatus en sender voor het oude ID blijven dan geregistreerd. Richting: stuur op de vervangingsroute ook `DocumentTabClosed` voor het oude tab-ID.
 
+45. **AHN-lintacties lezen opties in de worker** (#130, Sol ronde 3, [BEVESTIGD] VERVOLG). Contouren, hoogtepunten, de puntenwolk en profiel nemen een wijziging mee die tussen het lintcommando en de start van de worker valt. Richting: leg de opties vóór het starten van de worker vast.
+
+46. **OCS API 23 kiest de tekening pas na terugkeer van de bestandskiezer** (#130, Sol ronde 3, [BEVESTIGD] VERVOLG). Als de gebruiker van A naar B gaat terwijl de kiezer openstaat, levert OCS B als bron voor File of Klic. Richting: leg in de host het tab-ID vast bij het openen van de kiezer en controleer bij terugkeer of het tabblad nog open is.
+
 47. **Een paar workbenchlabels blijven Nederlands in EN** (#131, Sol ronde 1, [BEVESTIGD] VERVOLG). Voorbeelden zijn `° O` op de kaart, `Laagspanning` bij KLIC, `bestaand` in de hoeveelheidstabel, `XYZ-tegels` in Serverbeheer en zoekbadges zoals `brug` en `kerk`. Richting: vertaal ze bij weergave en gebruik de bestaande codes en waarden voor opslag en verwerking.
 
 48. **De vertaalcontrole ziet alleen directe letterlijken in een aantal widgetaanroepen** (#131, Sol ronde 1, [BEVESTIGD] VERVOLG). De proef mist een letterlijke `checkbox`, raw string en `format!`-label. Een uitgeschreven widgetaanroep in commentaar telt onterecht mee. Er is geen regressietest voor de drie taalneutrale opslagwaarden van de locatie en naamloze tegelserver. Richting: dek de gangbare widgets met een label in een later argument af en toets de opslagwaarden apart.

@@ -59,11 +59,20 @@ fn closed_drawing_sender_refuses_and_does_not_forward_a_request() {
     assert!(sender.request(PluginRequest::PushInfo("probe".into())).is_err());
 }
 
-struct CommandContext { target: Target, site: Option<Site>, reply: Option<String> }
+struct CommandContext { target: Option<Target>, site: Option<Site>, reply: Option<String> }
 thread_local! { static COMMAND_CONTEXT: std::cell::RefCell<Option<CommandContext>> = const { std::cell::RefCell::new(None) }; }
 
 /// Bind a queued worker to its originating document and result ID, even if the active tab changes.
 pub fn with_command_context<R>(target: Target, site: Option<Site>, reply: Option<String>, f: impl FnOnce() -> R) -> R {
+    with_context(Some(target), site, reply, f)
+}
+
+/// Keep a frame or worker bound to its snapshot even when there was no drawing.
+pub(crate) fn with_workbench_document<R>(target: Option<Target>, site: Option<Site>, f: impl FnOnce() -> R) -> R {
+    with_context(target, site, None, f)
+}
+
+fn with_context<R>(target: Option<Target>, site: Option<Site>, reply: Option<String>, f: impl FnOnce() -> R) -> R {
     struct Restore(Option<CommandContext>);
     impl Drop for Restore { fn drop(&mut self) { COMMAND_CONTEXT.with(|c| *c.borrow_mut() = self.0.take()); } }
     let old = COMMAND_CONTEXT.with(|c| c.replace(Some(CommandContext { target, site, reply })));
@@ -89,7 +98,7 @@ pub fn take_reply_id() -> Option<String> {
 /// on their later clicks. Keep that command's context until its final worker.
 pub fn start_interactive(host: &mut dyn HostApi, command: Box<dyn InteractiveCommand>) {
     let Some(target) = target() else { return };
-    let context = CommandContext { target, site: site(), reply: take_reply_id() };
+    let context = CommandContext { target: Some(target), site: site(), reply: take_reply_id() };
     host.start_interactive(Box::new(BoundInteractive { command, context }));
 }
 
@@ -100,7 +109,7 @@ struct BoundInteractive {
 
 impl BoundInteractive {
     fn call<R>(&mut self, f: impl FnOnce(&mut dyn InteractiveCommand) -> R) -> R {
-        with_command_context(self.context.target.clone(), self.context.site.clone(), self.context.reply.take(), || {
+        with_context(self.context.target.clone(), self.context.site.clone(), self.context.reply.take(), || {
             let out = f(self.command.as_mut());
             COMMAND_CONTEXT.with(|c| {
                 let mut c = c.borrow_mut();
@@ -215,7 +224,7 @@ pub fn drawing_closed(tab_id: u64) {
 /// location together when there is no command context.
 pub(crate) fn workbench_document() -> (Option<Target>, Option<Site>) {
     if let Some(document) = COMMAND_CONTEXT.with(|ctx| {
-        ctx.borrow().as_ref().map(|ctx| (Some(ctx.target.clone()), ctx.site.clone()))
+        ctx.borrow().as_ref().map(|ctx| (ctx.target.clone(), ctx.site.clone()))
     }) {
         return document;
     }
@@ -292,7 +301,7 @@ fn record_units(f: f64) {
 }
 
 pub fn target() -> Option<Target> {
-    if let Some(t) = COMMAND_CONTEXT.with(|c| c.borrow().as_ref().map(|v| v.target.clone())) { return Some(t); }
+    if let Some(t) = COMMAND_CONTEXT.with(|c| c.borrow().as_ref().map(|v| v.target.clone())) { return t; }
     shared().lock().unwrap().target.clone()
 }
 
@@ -342,7 +351,11 @@ pub fn save_site(site: &Site) -> Result<(), String> {
             other => return Err(format!("onverwacht antwoord: {other:?}")),
         };
         COMMAND_CONTEXT.with(|c| {
-            if let Some(c) = c.borrow_mut().as_mut().filter(|c| c.target.tab_id == tab) { c.target.unit_factor = f; }
+            if let Some(target) = c.borrow_mut().as_mut()
+                .and_then(|ctx| ctx.target.as_mut()).filter(|target| target.tab_id == tab)
+            {
+                target.unit_factor = f;
+            }
         });
         if let Some(current) = shared().lock().unwrap().target.as_mut().filter(|t| t.tab_id == tab) { current.unit_factor = f; }
         match ask(PluginRequest::RemoveGeoLocation)? {
@@ -1157,6 +1170,47 @@ pub(crate) static COMMAND_TEST_LOCK: Mutex<()> = Mutex::new(());
 #[cfg(test)]
 mod command_worker_tests {
     use super::*;
+    #[test]
+    fn workbench_without_a_drawing_cannot_use_a_later_global_target() {
+        let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        struct NeverSend;
+        impl PluginRequestSender for NeverSend {
+            fn request(&self, _: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                panic!("the documentless workbench contacted CAD");
+            }
+        }
+        struct Restore(Option<Target>, Option<Site>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let mut state = shared().lock().unwrap();
+                state.target = self.0.take();
+                state.site = self.1.take();
+            }
+        }
+
+        let restore = {
+            let mut state = shared().lock().unwrap();
+            Restore(
+                state.target.replace(Target {
+                    sender: Arc::new(NeverSend),
+                    tab_id: 130046,
+                    unit_factor: 1.0,
+                    doc_path: None,
+                }),
+                state.site.replace(Site::default()),
+            )
+        };
+        std::thread::spawn(|| with_workbench_document(None, None, || {
+            assert!(target().is_none());
+            assert!(site().is_none());
+            let (target, site) = workbench_document();
+            assert!(target.is_none() && site.is_none());
+            assert!(request(PluginRequest::PushInfo("probe".into())).is_err());
+        })).join().unwrap();
+        assert_eq!(target().unwrap().tab_id, 130046);
+        drop(restore);
+    }
+
     #[test]
     fn command_worker_keeps_the_originating_drawing_and_site() {
         let _one = COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
