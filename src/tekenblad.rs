@@ -187,11 +187,15 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
     let shown = legend(&mut s, bridge::nlcs_layers(), sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
 
     let mut ents = Vec::new();
+    let mut layers = Vec::new();
     for (spec, e) in s.out {
         bridge::ensure_nlcs_layer(&spec);
+        layers.push(spec.name);
         ents.extend(e);
     }
     let n = bridge::add_entities("NLCS-tekenblad", ents)?;
+    // Its own layer group: a sheet is turned off or removed in one go.
+    bridge::group_layers(&bridge::site_group(Some(site), "Tekenblad"), layers);
     Ok(format!("Tekenblad {paper} liggend, schaal 1:{} — {n} elementen, legenda met {shown} lagen.", opt.scale))
 }
 

@@ -58,12 +58,14 @@ pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64
 }
 
 /// DWG layer names: no `<>/\":;?*|,=` characters, upper case like the rest.
+/// No whitespace either: OCS reads the layers of `LAYERGROUP ADD <group>
+/// <layers>` word by word, so a space becomes `_`.
 pub fn layer_name(prefix: &str, name: &str) -> String {
-    let clean: String = name
+    let clean: String = format!("{prefix}-{name}")
         .chars()
-        .map(|c| if "<>/\\\":;?*|,=`".contains(c) { '-' } else { c })
+        .map(|c| if "<>/\\\":;?*|,=`".contains(c) { '-' } else if c.is_whitespace() { '_' } else { c })
         .collect();
-    let mut s = format!("{prefix}-{clean}").to_uppercase();
+    let mut s = clean.to_uppercase();
     s.truncate(60);
     s
 }
@@ -140,4 +142,16 @@ pub fn label_spot(pts: &[XY]) -> Option<(XY, f64)> {
         .max_by(|a, b| a.2.total_cmp(&b.2))
         .filter(|s| s.2 > 0.0)
         .map(|(a, b, _)| ([(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0], (b[1] - a[1]).atan2(b[0] - a[0])))
+}
+
+#[cfg(test)]
+mod tests {
+    /// A layer name is one word on OCS's command line, so an import's
+    /// layers can be named in its layer group (#143).
+    #[test]
+    fn layer_names_have_no_whitespace() {
+        assert_eq!(super::layer_name("GIS-WMS", "Luchtfoto 2025 (8 cm)"), "GIS-WMS-LUCHTFOTO_2025_(8_CM)");
+        assert_eq!(super::layer_name("GIS", "AHN4 puntenwolk"), "GIS-AHN4_PUNTENWOLK");
+        assert_eq!(super::layer_name("Mijn laag", "a/b"), "MIJN_LAAG-A-B");
+    }
 }

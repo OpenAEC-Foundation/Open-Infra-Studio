@@ -112,7 +112,9 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     for l in &layers {
         bridge::ensure_layer(l, Color::from_index(opt.aci));
     }
-    let handles = bridge::add_imported_entities(&format!("GIS {}", source), out)?;
+    // A file is its own source: its name is the layer group.
+    let file = std::path::Path::new(source).file_name().and_then(|n| n.to_str()).unwrap_or(source);
+    let handles = bridge::add_imported_entities(&format!("GIS {}", source), file, out)?;
     bridge::note_source(source);
     bridge::zoom_extents();
     Ok(data.report(format!(

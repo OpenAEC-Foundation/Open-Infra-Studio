@@ -511,7 +511,7 @@ pub(crate) fn place_with_text(
             },
         );
     }
-    let count = bridge::add_imported_entities("IMRO-plangegevens", rendered.entities)?.len();
+    let count = bridge::add_imported_entities("IMRO-plangegevens", &bridge::site_group(Some(site), "Ruimtelijke plannen"), rendered.entities)?.len();
     bridge::note_source(source);
     bridge::zoom_extents();
     for warning in &data.warnings {

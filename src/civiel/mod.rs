@@ -248,7 +248,8 @@ pub struct Out {
 
 enum LayerWrite<'a> {
     Draw,
-    Import,
+    /// An import into this layer group.
+    Import(&'a str),
     Append(&'a [(ocs_plugin_api::host::codec::Handle, String)]),
 }
 
@@ -274,8 +275,8 @@ impl Out {
         self.write_to(label, LayerWrite::Draw)
     }
 
-    pub(crate) fn write_import(self, label: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
-        self.write_to(label, LayerWrite::Import)
+    pub(crate) fn write_import(self, label: &str, group: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
+        self.write_to(label, LayerWrite::Import(group))
     }
 
     fn append(self, label: &str) -> Result<Vec<ocs_plugin_api::host::codec::Handle>, String> {
@@ -291,7 +292,7 @@ impl Out {
         };
         let handles = match mode {
             LayerWrite::Draw => bridge::add_entities_handles(label, all)?,
-            LayerWrite::Import => bridge::add_imported_entities(label, all)?,
+            LayerWrite::Import(group) => bridge::add_imported_entities(label, group, all)?,
             LayerWrite::Append(originals) => bridge::append_entities(label, all, originals)?,
         };
         // The host registers the XDATA application only through a record write.

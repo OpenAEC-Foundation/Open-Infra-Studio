@@ -91,7 +91,7 @@ pub fn place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) ->
     if entities.is_empty() {
         return Err(tr("geen GWSW-riolering in het importgebied (niet elke gemeente publiceert haar stelsel)", "no GWSW sewer data in the import area (not every municipality publishes its network)").into());
     }
-    let handles = bridge::add_imported_entities(tr("GWSW-riolering", "GWSW sewers"), entities)?;
+    let handles = bridge::add_imported_entities(tr("GWSW-riolering", "GWSW sewers"), &bridge::site_group(Some(site), "GWSW"), entities)?;
     bridge::note_source("GWSW (Stichting RIONED / PDOK, CC0)");
     bridge::zoom_extents();
     let parts: Vec<String> = counts.iter().filter(|(_, n)| *n > 0).map(|(t, n)| format!("{t}: {n}")).collect();

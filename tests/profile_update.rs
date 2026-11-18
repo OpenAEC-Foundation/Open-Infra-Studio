@@ -69,6 +69,7 @@ impl PluginRequestSender for Drawing {
                 *self.grouped.lock().unwrap() = false;
                 PluginResponse::Ok
             }
+            PluginRequest::RunCommand { .. } => PluginResponse::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() })),
             PluginRequest::PushUndo { .. } => {
                 if !*self.grouped.lock().unwrap() {
                     self.undo.lock().unwrap().push(state.clone());

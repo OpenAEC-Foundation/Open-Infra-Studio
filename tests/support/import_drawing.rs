@@ -34,6 +34,7 @@ impl PluginRequestSender for Drawing {
             PluginRequest::ReadXRecord { .. } => PluginResponse::XRecordEntries(Ok(Vec::new())),
             PluginRequest::UpdateXRecord { .. } => PluginResponse::XRecordUpdateResult(Ok(Handle::from(1002u64))),
             PluginRequest::EndUndoGroup | PluginRequest::SetDirty | PluginRequest::BumpGeometry => PluginResponse::Ok,
+            PluginRequest::RunCommand { .. } => PluginResponse::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() })),
             PluginRequest::ExecuteCommand(command) if command == "ZOOMEXTENTS" => PluginResponse::Bool(true),
             other => {
                 let error = format!("onverwacht hostverzoek: {other:?}");

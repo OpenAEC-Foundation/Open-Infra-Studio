@@ -117,18 +117,20 @@ impl Out {
             None => self.layers.push((spec.clone(), e)),
         }
     }
-    fn write(self, label: &str, imported: bool) -> Result<usize, String> {
+    /// Write as one undo step; an import (`group`) as an import in that
+    /// layer group, a drawing as a drawing.
+    fn write(self, label: &str, group: Option<&str>) -> Result<usize, String> {
         let mut all = Vec::new();
         let mut first_data = None;
         for (spec, e) in self.layers {
             bridge::ensure_nlcs_layer(&spec);
-            if !imported && first_data.is_none() {
+            if group.is_none() && first_data.is_none() {
                 first_data = e.iter().find_map(|x| x.common().extended_data.get_record(bridge::XDATA_APP).cloned());
             }
             all.extend(e);
         }
-        if imported {
-            return bridge::add_imported_entities(label, all).map(|h| h.len());
+        if let Some(group) = group {
+            return bridge::add_imported_entities(label, group, all).map(|h| h.len());
         }
         let handles = bridge::add_entities_handles(label, all)?;
         if let (Some(h), Some(r)) = (handles.first(), first_data) {
@@ -228,7 +230,7 @@ pub fn spot_heights(site: &Site, opt: &AhnOptions, progress: &dyn Fn(String)) ->
     if n == 0 {
         return Err(format!("{} {}", src.label(), tr("heeft geen hoogtes in het importgebied", "has no heights in the import area")));
     }
-    let written = out.write(tr("Hoogtepunten", "Spot heights"), true)?;
+    let written = out.write(tr("Hoogtepunten", "Spot heights"), Some(&bridge::site_group(Some(site), src.short())))?;
     bridge::note_source(src.attribution());
     Ok(format!("{n} {} ({} m {}, {}) — {written} {} {}.", tr("hoogtepunten", "spot heights"), step, tr("raster", "grid"), src.label(), tr("elementen op", "entities on"), s_spec.name))
 }
@@ -306,7 +308,7 @@ pub fn contour_lines(site: &Site, opt: &AhnOptions, progress: &dyn Fn(String)) -
     if count == 0 {
         return Err(format!("{} {interval} m ({} {:.2} m)", tr("geen hoogtelijnen met interval", "no contour lines at an interval of"), tr("hoogteverschil", "height range"), range.1 - range.0));
     }
-    let written = out.write(tr("Hoogtelijnen", "Contour lines"), true)?;
+    let written = out.write(tr("Hoogtelijnen", "Contour lines"), Some(&bridge::site_group(Some(site), src.short())))?;
     bridge::note_source(src.attribution());
     Ok(format!(
         "{count} {}, {} – {} m {} {} {} m ({} m {}, {}{}) — {written} {}.",
@@ -530,7 +532,7 @@ pub fn profile(site: &Site, route: &[XY], at: XY, opt: &AhnOptions, progress: &d
         let t = txt(at, &label, 3.5, 0.0, &section_t, false);
         out.put(&section_t, vec![t]);
     }
-    let n = out.write(&format!("{} {name}", tr("Lengteprofiel", "Longitudinal profile")), false)?;
+    let n = out.write(&format!("{} {name}", tr("Lengteprofiel", "Longitudinal profile")), None)?;
     bridge::note_source(src.attribution());
     let missing = stations.iter().filter(|s| s.ground.is_none()).count();
     let mut msg = format!(
@@ -588,7 +590,7 @@ pub fn point_cloud(site: &Site, opt: &AhnOptions, progress: &dyn Fn(String)) -> 
     if path.contains(char::is_whitespace) {
         return Ok(format!("{} punten opgeslagen in {path}. Het pad bevat spaties: koppel het bestand met POINTCLOUDATTACH.", xyz.len()));
     }
-    bridge::attach_imported_cloud(&path, &emit::layer_name("GIS", &format!("{} puntenwolk", c.edition.short())))?;
+    bridge::attach_imported_cloud(&path, &emit::layer_name("GIS", &format!("{} puntenwolk", c.edition.short())), &bridge::site_group(Some(site), "AHN"))?;
     bridge::note_source(&format!("{} puntenwolk (Het Waterschapshuis, CC0)", c.edition.short()));
     Ok(format!(
         "{} puntenwolk: {} punten{} uit {} tegel(s){}, gekoppeld als {}.",

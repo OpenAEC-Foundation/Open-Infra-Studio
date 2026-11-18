@@ -2955,7 +2955,7 @@ pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn
     }
     let originals = original_layers(&doc, used.into_iter().chain(old_labels))?;
     let label = tr("GWSW overnemen", "Take over GWSW");
-    bridge::with_import_layers(label, |layers| layers.remove_originals(&originals))?;
+    bridge::with_import_layers(label, None, |layers| layers.remove_originals(&originals))?;
     let removed = originals.len();
     ground.note_source();
     api::note("elementen", handles_all.len());

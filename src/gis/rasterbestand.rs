@@ -271,7 +271,7 @@ pub fn import_path(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Resul
             let placed = PlacedImage { path: file.clone(), bbox, px: [img.width(), img.height()] };
             let layer = emit::layer_name("GIS", &name);
             bridge::ensure_layer(&layer, ocs_plugin_api::host::codec::Color::ByLayer);
-            let n = bridge::add_imported_entities(&format!("Raster {name}"), emit::images(site, &[placed], &layer, f, 0))?.len();
+            let n = bridge::add_imported_entities(&format!("Raster {name}"), &name, emit::images(site, &[placed], &layer, f, 0))?.len();
             Ok(format!("{name}: {}×{} px geplaatst ({crs}) — {n} element op {layer}.", img.width(), img.height()))
         }
         Raster::Heights { grid, crs } => heights(site, &grid, &crs.unwrap_or_else(|| site.crs.clone()), &name, &dir, f, progress),
@@ -326,7 +326,7 @@ fn heights(site: &Site, grid: &Grid, crs: &str, name: &str, dir: &Path, f: f64, 
             }
         }
     }
-    let n = bridge::add_imported_entities(&format!("Hoogtemodel {name}"), ents)?.len();
+    let n = bridge::add_imported_entities(&format!("Hoogtemodel {name}"), name, ents)?.len();
     Ok(format!(
         "{name}: hoogtemodel {}×{} cellen van {} m, {} tot {} m — reliëf en {count} hoogtelijnen om de {} m ({n} elementen).",
         grid.w,
@@ -425,7 +425,7 @@ fn point_cloud(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Result<St
             p
         ));
     }
-    bridge::attach_imported_cloud(&p, &emit::layer_name("GIS", stem))?;
+    bridge::attach_imported_cloud(&p, &emit::layer_name("GIS", stem), stem)?;
     let thinned = if stride > 1 { crate::civiel::puntenwolk::trf!(", elke {}e", ", every {}th", stride) } else { String::new() };
     Ok(crate::civiel::puntenwolk::trf!(
         "{}: {} van {} punten ({} uit {}{}) gekoppeld als {}.",

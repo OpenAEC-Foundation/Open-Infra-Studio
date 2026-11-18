@@ -107,6 +107,16 @@ The ribbon tab **"Open Infra — GIS"** puts the worldwide tools first. Everythi
 | Output | **Drawing sheet** (Tekenblad) · Servers | Drawing sheet around the import area: frame, title block, legend of the layers used, north arrow, scale bar and coordinate crosses. Manage presets and your own WMS/WFS/XYZ servers. |
 | Library | **Infrastructure** · Vehicles · Catalogue · Swept path | 94 parametric infrastructure items on NLCS layers, checked connectors and regeneration of connected objects; design vehicles and swept paths. |
 
+### Layer groups per import
+
+Each import puts its layers in its own layer group in Open CAD Studio's Layer Manager. Right-click the group in the tree to turn all its layers on or off, freeze or thaw them, or lock or unlock them in one go. Click the group to list only its layers, for instance to delete them together.
+
+- **Name:** the source and the project location, such as `BGT_Grote_Kerk_Dordrecht`, `Kadaster_Grote_Kerk_Dordrecht` or `Tekenblad_Grote_Kerk_Dordrecht`. A file import uses the file name (`wegen.gpkg`), a KLIC delivery its number (`KLIC_23O0123456`).
+- **Importing again**, *BGT update* included, adds new layers to the same group instead of making a second one. A layer used by two imports is in both groups.
+- **Undo:** Open CAD Studio records the group as its own step after the import. The first Ctrl+Z removes the group, the next one the import.
+- **No spaces:** Open CAD Studio reads group and layer names on its command line word by word. Spaces become `_`, also in the layer names Open Infra makes (`GIS-WMS-LUCHTFOTO_2025`). A layer you named with a space stays out of the group, and the command line says so.
+- **Busy:** if another command is running or another drawing is active when the import finishes, the group follows with the next import into that drawing.
+
 ### Infrastructure library and drawing skills
 
 The infrastructure library covers paving, kerbs, sewers and fittings, drainage, utilities, lighting, green spaces, street furniture, signs, annotations and configurable sections. Connections check system, diameter, direction and socket occupancy. Kerbs can follow a surface edge; dependent objects are regenerated when parameters change. The geometry is custom and schematic, classified using NLCS 5.0.2.

@@ -21,7 +21,7 @@ pub fn wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer, op
     let placed = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
     let layer_name = emit::layer_name("GIS-WMS", &layer.title);
     bridge::ensure_layer(&layer_name, Color::from_index(8));
-    let handles = bridge::add_imported_map(&format!("GIS WMS {}", layer.title), emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
+    let handles = bridge::add_imported_map(&format!("GIS WMS {}", layer.title), &bridge::site_group(Some(site), &layer.title), emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
     let n = handles.len();
     bridge::zoom_extents();
     Ok(format!("{n} kaartdeel/delen van {} op laag {layer_name} ({}).", server.name, server.attribution))
@@ -32,7 +32,7 @@ pub fn xyz(site: &Site, server: &MapServer, opt: &RasterOptions, fade: u8, progr
     let placed = raster::import_xyz(site, server, opt, &bridge::image_dir(), progress)?;
     let layer_name = emit::layer_name("GIS", &server.name);
     bridge::ensure_layer(&layer_name, Color::from_index(8));
-    bridge::add_imported_map(&format!("GIS {}", server.name), emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
+    bridge::add_imported_map(&format!("GIS {}", server.name), &bridge::site_group(Some(site), &server.name), emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
     bridge::zoom_extents();
     Ok(format!("{} op laag {layer_name} ({}).", server.name, server.attribution))
 }
@@ -45,7 +45,7 @@ pub struct VectorStyle {
     pub clip: bool,
 }
 
-fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str, label: &str, style: &VectorStyle, with_data: bool) -> Result<usize, String> {
+fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str, label: &str, group: &str, style: &VectorStyle, with_data: bool) -> Result<usize, String> {
     let t = target()?;
     let to_site = vector::data_to_site(site, data_crs, features)?;
     let text_h = style.text_m * t.unit_factor;
@@ -75,7 +75,7 @@ fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str
         return Ok(0);
     }
     bridge::ensure_layer(layer, Color::from_index(style.aci));
-    Ok(bridge::add_imported_entities(label, polylines)?.len())
+    Ok(bridge::add_imported_entities(label, group, polylines)?.len())
 }
 
 pub fn wfs_fetch(site: &Site, caps: &WfsCaps, ft: &WfsType, limit: usize, progress: &dyn Fn(String)) -> Result<wfs::WfsResult, String> {
@@ -84,7 +84,7 @@ pub fn wfs_fetch(site: &Site, caps: &WfsCaps, ft: &WfsType, limit: usize, progre
 
 pub fn wfs_place(site: &Site, ft: &WfsType, result: &wfs::WfsResult, style: &VectorStyle) -> Result<String, String> {
     let layer = emit::layer_name("GIS", ft.name.rsplit(':').next().unwrap_or(&ft.name));
-    let n = place_features(site, &result.features, &result.data_crs, &layer, &format!("GIS WFS {}", ft.title), style, true)?;
+    let n = place_features(site, &result.features, &result.data_crs, &layer, &format!("GIS WFS {}", ft.title), &bridge::site_group(Some(site), &ft.title), style, true)?;
     bridge::zoom_extents();
     Ok(format!("{n} objecten van {} op laag {layer}.", ft.title))
 }
@@ -148,7 +148,7 @@ pub fn osm_place(site: &Site, theme_ids: &[&str], per_theme: &[Vec<Feature>], la
     for (id, features) in theme_ids.iter().zip(per_theme) {
         let Some(theme) = osm::THEMES.iter().find(|t| t.id == *id) else { continue };
         let style = VectorStyle { aci: theme.aci, label_field: labels.then(|| theme.label_tag.map(str::to_string)).flatten(), text_m, clip };
-        let n = place_features(site, features, "EPSG:4326", theme.layer, &format!("GIS OSM {}", theme.label), &style, false)?;
+        let n = place_features(site, features, "EPSG:4326", theme.layer, &format!("GIS OSM {}", theme.label), &bridge::site_group(Some(site), "OSM"), &style, false)?;
         summary.push(format!("{}: {n}", theme.label));
     }
     bridge::zoom_extents();
@@ -331,6 +331,7 @@ mod import_layer_tests {
                 }
                 Q::RemoveEntity { handle } => A::Bool(doc.remove_entity(handle).is_some()),
                 Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup | Q::SetDirty | Q::BumpGeometry => A::Ok,
+                Q::RunCommand { .. } => A::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() })),
                 other => panic!("unexpected host request: {other:?}"),
             })
         }
@@ -340,7 +341,7 @@ mod import_layer_tests {
         let site = Site::default();
         let feature = Feature { points: vec![[site.lon, site.lat]], ..Default::default() };
         let style = VectorStyle { aci: 7, label_field: None, text_m: 1.0, clip: false };
-        place_features(&site, &[feature], "EPSG:4326", layer, "WFS", &style, false)
+        place_features(&site, &[feature], "EPSG:4326", layer, "WFS", "WFS", &style, false)
     }
 
     #[test]

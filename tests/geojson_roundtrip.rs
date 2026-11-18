@@ -12,6 +12,7 @@ impl PluginRequestSender for Drawing {
         Ok(match req {
             Q::AddLayer(_) => A::OptHandle(Some(Handle::from(1000u64))),
             Q::BeginUndoGroup { .. } | Q::EndUndoGroup | Q::SetDirty | Q::BumpGeometry => A::Ok,
+            Q::RunCommand { .. } => A::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() })),
             Q::ModifyLayer(config) if config.locked == Some(true) => A::Bool(true),
             Q::AddEntities(entities) => {
                 let mut all = self.0.lock().unwrap();
