@@ -218,12 +218,17 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
     title_block(&mut s, sx, pw - 10.0, info, opt, paper, &site.crs, &site.label);
     let shown = legend(&mut s, &drawn_layers(), sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
 
-    let mut ents = Vec::new();
-    for (spec, e) in s.out {
-        bridge::ensure_nlcs_layer(&spec);
-        ents.extend(e);
-    }
-    let n = bridge::add_entities("NLCS-tekenblad", ents)?;
+    let label = "NLCS-tekenblad";
+    let n = bridge::with_import_undo(label, || {
+        let mut entities = Vec::new();
+        for (spec, parts) in s.out {
+            bridge::ensure_nlcs_layer(&spec);
+            entities.extend(parts);
+        }
+        // Legend samples use the imported layers for their line styles.
+        // Restore any existing locks without locking the new sheet layers.
+        bridge::append_entities(label, entities, &[]).map(|handles| handles.len())
+    })?;
     Ok(format!("Tekenblad {paper} liggend, schaal 1:{} — {n} elementen, legenda met {shown} lagen.", opt.scale))
 }
 

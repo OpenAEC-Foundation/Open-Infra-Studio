@@ -3,8 +3,6 @@
 use crate::lang::tr;
 use std::sync::{Arc, Mutex};
 
-use eframe::egui;
-
 type Slot<T> = Arc<Mutex<Option<Result<T, String>>>>;
 
 /// A running job with a live status line.
@@ -14,19 +12,22 @@ pub struct Job<T> {
 }
 
 impl<T: Send + 'static> Job<T> {
-    pub fn spawn(ctx: &egui::Context, label: &str, f: impl FnOnce(&dyn Fn(String)) -> Result<T, String> + Send + 'static) -> Self {
+    pub fn spawn(label: &str, f: impl FnOnce(&dyn Fn(String)) -> Result<T, String> + Send + 'static) -> Self {
+        let (target, site) = crate::bridge::workbench_document();
         let result: Slot<T> = Arc::new(Mutex::new(None));
         let status = Arc::new(Mutex::new(label.to_string()));
-        let (r, s, c) = (result.clone(), status.clone(), ctx.clone());
+        let (r, s) = (result.clone(), status.clone());
         std::thread::spawn(move || {
             let progress = |msg: String| {
                 *s.lock().unwrap() = msg;
-                c.request_repaint();
+                super::repaint();
             };
-            let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&progress)))
-                .unwrap_or_else(|_| Err(tr("interne fout in de import", "internal import error").into()));
+            let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                crate::bridge::with_workbench_document(target, site, || f(&progress))
+            }))
+            .unwrap_or_else(|_| Err(tr("interne fout in de import", "internal import error").into()));
             *r.lock().unwrap() = Some(out);
-            c.request_repaint();
+            super::repaint();
         });
         Self { result, status }
     }
