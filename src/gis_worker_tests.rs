@@ -5,12 +5,17 @@ use std::sync::{mpsc, Arc};
 use std::time::Duration;
 use ocs_plugin_api::host::{
     codec::{Document, EntityType, Handle}, DocumentReader, ExtendedDataRecord,
-    PluginRequestError, PluginRequestSender,
+    HostNotification, PluginRequestError, PluginRequestSender,
 };
 use ocs_plugin_api::ipc::protocol::{PluginRequest as Q, PluginResponse as A};
 
 #[derive(Default)]
-struct IdleHost { command: Option<Box<dyn InteractiveCommand>>, drawing: Option<usize>, insunits: Option<i16> }
+struct IdleHost {
+    command: Option<Box<dyn InteractiveCommand>>,
+    drawing: Option<usize>,
+    insunits: Option<i16>,
+    notification: Option<HostNotification>,
+}
 
 /// A drawing without content or GEODATA, for commands that only need a target.
 struct EmptyDrawing;
@@ -28,6 +33,9 @@ impl HostApi for IdleHost {
     fn tab_index(&self) -> usize { self.drawing.unwrap_or(120003) }
     fn plugin_request_sender(&self) -> Option<Box<dyn PluginRequestSender>> {
         self.drawing.map(|_| Box::new(EmptyDrawing) as Box<dyn PluginRequestSender>)
+    }
+    fn try_recv_notification(&mut self) -> Option<(Option<u64>, HostNotification)> {
+        self.notification.take().map(|notification| (None, notification))
     }
     fn document(&self) -> &Document { panic!("geen directe documenttoegang") }
     fn document_mut(&mut self) -> &mut Document { panic!("geen directe documenttoegang") }
@@ -69,6 +77,32 @@ fn live_units_take_precedence_over_the_tab_cache() {
         host.insunits = Some(6);
         assert_eq!(bridge::units(&mut host, 120025, false), 1.0, "attach mag de oude factor niet terugzetten");
     });
+}
+
+#[test]
+fn command_after_open_binds_to_the_replacement_drawing() {
+    let _one = bridge::COMMAND_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    const TAB_ID: u64 = 147001;
+
+    let original = bridge::workbench_test_target(TAB_ID, Box::new(EmptyDrawing));
+    let mut host = IdleHost {
+        drawing: Some(TAB_ID as usize),
+        insunits: Some(6),
+        notification: Some(HostNotification::DocumentOpened { tab_id: TAB_ID }),
+        ..Default::default()
+    };
+    bridge::attach(&mut host);
+    let current = bridge::target().unwrap();
+    let mut plugin = OpenInfra;
+    while let Some((id, notification)) = host.try_recv_notification() {
+        plugin.on_notification(id, notification);
+    }
+
+    assert!(current.sender.request(Q::PushInfo("current drawing".into())).is_ok());
+    assert!(original.sender.request(Q::PushInfo("replaced drawing".into())).is_err());
+
+    plugin.on_notification(None, HostNotification::DocumentTabClosed { tab_id: TAB_ID });
+    assert!(current.sender.request(Q::PushInfo("closed drawing".into())).is_err());
 }
 
 #[test]

@@ -80,15 +80,25 @@ pub struct Options {
     pub edition: Edition,
     /// Point spacing to aim for (m): the COPC level of detail.
     pub spacing: f64,
-    /// ASPRS classes to keep (empty: all).
-    pub classes: Vec<u8>,
+    /// ASPRS classes to keep. None keeps all; an empty list keeps none.
+    pub classes: Option<Vec<u8>>,
     pub max_points: usize,
     pub colouring: Colouring,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { edition: Edition::default(), spacing: 0.25, classes: Vec::new(), max_points: 8_000_000, colouring: Colouring::default() }
+        Self { edition: Edition::default(), spacing: 0.25, classes: None, max_points: 8_000_000, colouring: Colouring::default() }
+    }
+}
+
+impl Options {
+    pub fn keeps_class(&self, class: u8) -> bool {
+        self.classes.as_ref().is_none_or(|classes| classes.contains(&class))
+    }
+
+    pub fn has_selected_classes(&self) -> bool {
+        self.classes.as_ref().is_none_or(|classes| !classes.is_empty())
     }
 }
 
@@ -292,13 +302,15 @@ pub fn stream_ahn(bbox: [f64; 4], edition: Edition, spacing: f64, max_tiles: usi
 
 /// Points of the AHN point cloud inside an RD box.
 pub fn fetch(bbox: [f64; 4], opt: &Options, progress: &dyn Fn(String)) -> Result<Cloud, String> {
+    if !opt.has_selected_classes() {
+        return Err(crate::lang::tr("Kies ten minste één puntenwolkklasse.", "Select at least one point cloud class.").into());
+    }
     let mut cloud = Cloud { fallback_tiles: 0, xyz: Vec::new(), class: Vec::new(), intensity: Vec::new(), rgb: None, truncated: false, tiles: 0 };
     let mut rgb: Vec<[u8; 3]> = Vec::new();
     let mut any_rgb = false;
-    let keep = |c: u8| opt.classes.is_empty() || opt.classes.contains(&c);
     let pass = stream_ahn(bbox, opt.edition, opt.spacing.max(0.05), 16, progress, &mut |s| {
         let class = s.class.unwrap_or(0);
-        if !keep(class) {
+        if !opt.keeps_class(class) {
             return true;
         }
         if cloud.xyz.len() >= opt.max_points {
@@ -606,6 +618,31 @@ fn scan_id(n: usize, lo: [f64; 3]) -> String {
     let a = (lo[0] * 100.0) as u64 ^ (n as u64).rotate_left(17);
     let b = (lo[1] * 100.0) as u64 ^ (lo[2] * 100.0) as u64;
     format!("{{{:08X}-{:04X}-{:04X}-{:04X}-{:012X}}}", a as u32, (a >> 32) as u16, (b >> 48) as u16, b as u16, (b >> 16) & 0xFFFF_FFFF_FFFF)
+}
+
+#[cfg(test)]
+#[test]
+fn empty_class_selection_stays_empty_until_a_class_is_selected() {
+    let mut opt = Options::default();
+    assert!(opt.has_selected_classes());
+    assert!(opt.keeps_class(2) && opt.keeps_class(6));
+
+    opt.classes = Some(vec![2]);
+    assert!(opt.keeps_class(2) && !opt.keeps_class(6));
+    opt.classes.as_mut().unwrap().clear();
+    assert!(!opt.has_selected_classes());
+    assert!(!opt.keeps_class(2) && !opt.keeps_class(6));
+    let result = fetch([104000.0, 425000.0, 105000.0, 426000.0], &opt, &|_| {
+        panic!("an empty class selection started a fetch");
+    });
+    assert_eq!(
+        result.err().as_deref(),
+        Some(crate::lang::tr("Kies ten minste één puntenwolkklasse.", "Select at least one point cloud class.")),
+    );
+
+    opt.classes.as_mut().unwrap().push(6);
+    assert!(opt.has_selected_classes());
+    assert!(!opt.keeps_class(2) && opt.keeps_class(6));
 }
 
 #[cfg(test)]

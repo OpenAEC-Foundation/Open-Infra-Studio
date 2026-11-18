@@ -582,7 +582,7 @@ ocs_plugin_api = { path = "../OpenCADStudio/crates/ocs_plugin_api" }
 ## Platforms
 
 - **Linux** (X11/Wayland) and **Windows**: everything works.
-- **macOS**: the ribbon quick buttons and commands work. The workbench window does not yet, because winit needs the main thread there.
+- **macOS**: the GIS workbench uses the plugin runner’s main thread. The Civiel workbench is available on Linux and Windows.
 
 ## Data sources and licences
 

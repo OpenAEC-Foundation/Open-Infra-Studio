@@ -25,7 +25,7 @@ pub struct InfraPage {
     message: String,
 }
 fn run(command: String) {
-    std::thread::spawn(move || {
+    crate::bridge::spawn_command(move || {
         if let Err(e) = crate::bridge::execute(&command) {
             crate::bridge::error(&e);
         }
