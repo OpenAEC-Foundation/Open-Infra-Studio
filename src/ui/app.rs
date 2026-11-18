@@ -853,7 +853,7 @@ impl App {
             Some(MapEvent::Clicked(ll)) => {
                 self.draft.lon = ll[0];
                 self.draft.lat = ll[1];
-                self.draft.label = tr_format!("Kaartpunt {:.5}, {:.5}", "Map point {:.5}, {:.5}", ll[1], ll[0]);
+                self.draft.label = format!("Kaartpunt {:.5}, {:.5}", ll[1], ll[0]);
                 self.draft.reproject_origin();
             }
             Some(MapEvent::RectDrawn(a, b)) => {
@@ -861,7 +861,7 @@ impl App {
                     self.draft.set_origin(((pa[0] + pb[0]) / 2.0).round(), ((pa[1] + pb[1]) / 2.0).round());
                     self.draft.width = (pa[0] - pb[0]).abs().round().max(10.0);
                     self.draft.height = (pa[1] - pb[1]).abs().round().max(10.0);
-                    self.draft.label = tr_format!("Getekend gebied {} × {} m", "Drawn area {} × {} m", self.draft.width, self.draft.height);
+                    self.draft.label = format!("Getekend gebied {} × {} m", self.draft.width, self.draft.height);
                     self.map.area_mode = false;
                 }
             }
@@ -2691,7 +2691,7 @@ impl App {
                             if !(url.contains("{z}") && url.contains("{x}") && url.contains("{y}")) {
                                 return Err(tr("tegel-URL moet {z}, {x} en {y} bevatten", "tile URL must contain {z}, {x} and {y}").into());
                             }
-                            crate::gis::http::get_image(&url.replace("{z}", "0").replace("{x}", "0").replace("{y}", "0")).map(|_| tr("Tegelserver", "Tile server").to_string())
+                            crate::gis::http::get_image(&url.replace("{z}", "0").replace("{x}", "0").replace("{y}", "0")).map(|_| "Tegelserver".to_string())
                         }
                     }));
                 }
