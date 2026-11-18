@@ -91,6 +91,18 @@ pub fn tr<'a>(nl: &'a str, en: &'a str) -> &'a str {
     }
 }
 
+/// Format a message using the same language choice as `tr`.
+macro_rules! tr_format {
+    ($nl:literal, $en:literal $(, $args:expr)* $(,)?) => {
+        match $crate::lang::current() {
+            $crate::lang::Lang::Nl => format!($nl $(, $args)*),
+            $crate::lang::Lang::En => format!($en $(, $args)*),
+        }
+    };
+}
+
+pub(crate) use tr_format;
+
 #[cfg(test)]
 mod tests {
     use super::*;
