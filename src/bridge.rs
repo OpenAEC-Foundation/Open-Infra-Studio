@@ -1582,7 +1582,10 @@ mod tests {
                     PluginRequest::RunCommand { request: CommandRequest::Run { line } } => {
                         assert_eq!(line, "DRAWORDER_BACK");
                         assert_eq!(*self.selections.lock().unwrap(), [vec![Handle::new(2)]]);
-                        PluginResponse::CommandResult(self.command.map_err(str::to_string))
+                        PluginResponse::CommandResult(self.command.map(|()| ocs_plugin_api::host::CommandOutcome {
+                            status: "completed".into(),
+                            ..Default::default()
+                        }).map_err(str::to_string))
                     }
                     other => panic!("unexpected request: {other:?}"),
                 })
