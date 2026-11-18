@@ -63,6 +63,7 @@ fn closed_drawing_sender_refuses_and_does_not_forward_a_request() {
 struct CommandContext { target: Option<Target>, site: Option<Site>, reply: Option<String> }
 thread_local! { static COMMAND_CONTEXT: std::cell::RefCell<Option<CommandContext>> = const { std::cell::RefCell::new(None) }; }
 thread_local! { static IMPORT_UNDO_OPEN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+thread_local! { static WRITES_HELD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 
 /// Bind a queued worker to its originating document and result ID, even if the active tab changes.
 pub fn with_command_context<R>(target: Target, site: Option<Site>, reply: Option<String>, f: impl FnOnce() -> R) -> R {
@@ -280,7 +281,7 @@ pub fn units(host: &mut dyn HostApi, tab_id: u64, fresh: bool) -> f64 {
     let f = match f.or_else(|| if fresh { None } else { recorded() }) {
         Some(f) => f,
         // The header, but only from a drawing small enough to send whole.
-        None => match view_entities() {
+        None => match view_entities(|_| false) {
             Some((_, _, size)) if size < SNAPSHOT_SAFE => unit_factor_for_insunits(host.document().header.insertion_units as i64),
             _ => recorded().unwrap_or(1.0),
         },
@@ -497,8 +498,13 @@ pub(crate) fn request(req: PluginRequest) -> Result<PluginResponse, String> {
 }
 
 pub fn info(msg: &str) {
-    let _ = request(PluginRequest::PushInfo(format!("[Open Infra] {msg}")));
+    push_info(msg);
     reply(true, msg);
+}
+
+/// A line on the host's command line, without answering a waiting script.
+pub(crate) fn push_info(msg: &str) {
+    let _ = request(PluginRequest::PushInfo(format!("[Open Infra] {msg}")));
 }
 
 pub fn error(msg: &str) {
@@ -570,10 +576,7 @@ pub fn ensure_nlcs_layer(spec: &crate::nlcs::LayerSpec) {
     let linetype = ensure_linetype(&spec.linetype);
     let config = |linetype: Option<String>| LayerConfig {
         name: spec.name.clone(),
-        color: Some(match spec.true_color {
-            Some((r, g, b)) => Color::Rgb { r, g, b },
-            None => Color::Index(spec.color.max(1)),
-        }),
+        color: Some(nlcs_color(spec)),
         linetype,
         lineweight: spec.lineweight.map(LineWeight::from_value),
         description: Some(format!("NLCS object {}", spec.object_id)),
@@ -582,6 +585,14 @@ pub fn ensure_nlcs_layer(spec: &crate::nlcs::LayerSpec) {
     let made = matches!(request(PluginRequest::AddLayer(config(linetype.clone()))), Ok(PluginResponse::OptHandle(Some(_))));
     if !made && linetype.is_some() {
         let _ = request(PluginRequest::AddLayer(config(None)));
+    }
+}
+
+/// The colour of an NLCS layer: its true colour, else its NLCS colour.
+pub fn nlcs_color(spec: &crate::nlcs::LayerSpec) -> Color {
+    match spec.true_color {
+        Some((r, g, b)) => Color::Rgb { r, g, b },
+        None => Color::Index(spec.color.max(1)),
     }
 }
 
@@ -608,8 +619,10 @@ static PARTIAL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::n
 /// The host's shared-memory view of the drawing: the entities and the size
 /// of their encoding, or `None` when the host cannot share it (a drawing
 /// larger than its view segment, 16 MB unless Open CAD Studio is started
-/// with OCS_V4_SNAPSHOT_SEGMENT_SIZE).
-fn view_entities() -> Option<(Vec<EntityType>, Vec<String>, usize)> {
+/// with OCS_V4_SNAPSHOT_SEGMENT_SIZE). The entities and layer names are
+/// read only when `decode` says so for that size: a caller that needs the
+/// size alone skips the work.
+fn view_entities(decode: impl FnOnce(usize) -> bool) -> Option<(Vec<EntityType>, Vec<String>, usize)> {
     use ocs_plugin_api::shm::{DocumentViewDataV4, SharedDocumentReader};
     // A refused view costs the host a full serialisation: after a refusal,
     // do not ask again for a while (drawings rarely shrink).
@@ -631,6 +644,9 @@ fn view_entities() -> Option<(Vec<EntityType>, Vec<String>, usize)> {
         let reader = SharedDocumentReader::<DocumentViewDataV4>::open(std::path::Path::new(&path)).ok()?;
         let p = reader.payload()?;
         let size: usize = p.entities.iter().map(|e| e.data.len()).sum();
+        if !decode(size) {
+            return Some((Vec::new(), Vec::new(), size));
+        }
         let layers = p.layers.iter().map(|l| l.name.as_str().to_string()).collect();
         let entities = p.entities.iter().filter_map(|e| bincode::deserialize::<EntityType>(e.data.as_slice()).ok()).collect();
         Some((entities, layers, size))
@@ -661,8 +677,44 @@ fn document_of(entities: Vec<EntityType>, layers: &[String]) -> ocs_plugin_api::
 /// The whole drawing, if the host can share it (any size up to its view
 /// segment); layers carry names only.
 pub fn view() -> Option<ocs_plugin_api::host::codec::CadDocument> {
-    let (entities, layers, _) = view_entities()?;
+    let (entities, layers, _) = view_entities(|_| true)?;
     Some(document_of(entities, &layers))
+}
+
+/// How long a full snapshot may take. OCS sends no answer at all to one
+/// that does not fit in a message (64 MB), and the drawing's tables and
+/// records do not count in the size of the shared view: without a limit,
+/// such a request would wait forever.
+const SNAPSHOT_WAIT: std::time::Duration = std::time::Duration::from_secs(if cfg!(test) { 1 } else { 60 });
+
+/// The full snapshot of the active tab, or an error when the host does not
+/// send it within [`SNAPSHOT_WAIT`]. Ask it only for a drawing whose shared
+/// view is below [`SNAPSHOT_SAFE`].
+fn full_snapshot() -> Result<Box<ocs_plugin_api::host::Document>, String> {
+    let t = target().ok_or("geen tekening actief — klik eerst in Open CAD Studio op het GIS-tabblad")?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    // A request that never gets its answer keeps this thread, not the command.
+    std::thread::spawn(move || {
+        let _ = tx.send(with_command_context(t, None, None, || request(PluginRequest::DocumentSnapshot)));
+    });
+    match rx.recv_timeout(SNAPSHOT_WAIT) {
+        Ok(Ok(PluginResponse::Document(doc))) => Ok(doc),
+        Ok(Ok(other)) => Err(format!("onverwacht antwoord op de tekeningopvraag: {other:?}")),
+        Ok(Err(e)) => Err(e),
+        Err(_) => Err(crate::lang::tr(
+            "Open CAD Studio stuurde de tekening niet: ze is waarschijnlijk te groot voor één bericht (64 MB)",
+            "Open CAD Studio did not send the drawing: it is probably too large for one message (64 MB)",
+        )
+        .into()),
+    }
+}
+
+/// The drawing's layer table, from a full snapshot: `None` for a drawing
+/// too large for that. The shared view is only measured, not decoded.
+pub fn layer_table() -> Option<ocs_plugin_api::host::codec::tables::Table<ocs_plugin_api::host::codec::tables::Layer>> {
+    view_entities(|_| false).filter(|(_, _, size)| *size < SNAPSHOT_SAFE)?;
+    let doc: ocs_plugin_api::host::codec::CadDocument = (*full_snapshot().ok()?).into();
+    Some(doc.layers)
 }
 
 /// The whole drawing of the active tab, read from a worker or window thread.
@@ -670,13 +722,10 @@ pub fn view() -> Option<ocs_plugin_api::host::codec::CadDocument> {
 /// one from the shared view, whose layers have names only (see [`partial`]).
 /// A drawing too large for both gives an error, never a stalled request.
 pub fn snapshot() -> Result<ocs_plugin_api::host::codec::CadDocument, String> {
-    match view_entities() {
+    match view_entities(|size| size >= SNAPSHOT_SAFE) {
         Some((_, _, size)) if size < SNAPSHOT_SAFE => {
             PARTIAL.store(false, std::sync::atomic::Ordering::Relaxed);
-            match request(PluginRequest::DocumentSnapshot)? {
-                PluginResponse::Document(doc) => Ok((*doc).into()),
-                other => Err(format!("onverwacht antwoord op de tekeningopvraag: {other:?}")),
-            }
+            full_snapshot().map(|doc| (*doc).into())
         }
         Some((entities, layers, _)) => {
             PARTIAL.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -1028,25 +1077,47 @@ pub(crate) fn with_import_undo<R>(label: &str, write: impl FnOnce() -> Result<R,
         let t = target().ok_or("geen tekening actief")?;
         return with_command_context(t, site(), None, || with_import_undo(label, write));
     }
-    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
-    begin_layer_undo(label)?;
-    struct CloseUndo;
-    impl Drop for CloseUndo {
-        fn drop(&mut self) {
-            if IMPORT_UNDO_OPEN.replace(false) {
-                let _ = request(PluginRequest::EndUndoGroup);
+    with_writes_held(|| {
+        begin_layer_undo(label)?;
+        struct CloseUndo;
+        impl Drop for CloseUndo {
+            fn drop(&mut self) {
+                if IMPORT_UNDO_OPEN.replace(false) {
+                    let _ = request(PluginRequest::EndUndoGroup);
+                }
             }
         }
+        IMPORT_UNDO_OPEN.set(true);
+        let _close = CloseUndo;
+        let result = write();
+        let closed = request(PluginRequest::EndUndoGroup).and_then(|response| match response {
+            PluginResponse::Ok => Ok(()),
+            other => Err(format!("EndUndoGroup: {other:?}")),
+        });
+        IMPORT_UNDO_OPEN.set(false);
+        result.and_then(|value| closed.map(|()| value))
+    })
+}
+
+/// Hold the write lock that serialises plug-in writes, without an undo
+/// step: for what must happen together with a write but outside its undo
+/// group, such as switching to the layout it writes in (a switch with the
+/// block editor open closes an open undo group). Nested calls, and
+/// [`with_import_undo`] inside it, join the lock.
+pub(crate) fn with_writes_held<R>(f: impl FnOnce() -> R) -> R {
+    if WRITES_HELD.get() {
+        return f();
     }
-    IMPORT_UNDO_OPEN.set(true);
-    let _close = CloseUndo;
-    let result = write();
-    let closed = request(PluginRequest::EndUndoGroup).and_then(|response| match response {
-        PluginResponse::Ok => Ok(()),
-        other => Err(format!("EndUndoGroup: {other:?}")),
-    });
-    IMPORT_UNDO_OPEN.set(false);
-    result.and_then(|value| closed.map(|()| value))
+    let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+    struct Release;
+    impl Drop for Release {
+        fn drop(&mut self) {
+            WRITES_HELD.set(false);
+        }
+    }
+    WRITES_HELD.set(true);
+    let _release = Release;
+    f()
 }
 
 /// A generous guess of an entity's size on the wire.
@@ -1267,10 +1338,49 @@ pub(crate) fn add_imported_entities(label: &str, entities: Vec<EntityType>) -> R
 
 pub(crate) fn append_entities(label: &str, entities: Vec<EntityType>, originals: &[(Handle, String)]) -> Result<Vec<Handle>, String> {
     with_layer_writes(label, false, |layers| {
-        let handles = layers.write_entities_inner(entities, (!originals.is_empty()).then_some(label))?;
+        let handles = layers.write_entities_inner(entities, Some(label))?;
         layers.remove_originals(originals)?;
         Ok(handles)
     })
+}
+
+/// [`append_entities`] for elements that belong in `space` (the block record
+/// of model space, say). With the block editor open OCS adds to the block
+/// being edited: what it put elsewhere is taken back while its layers are
+/// still open, and the write fails with `elsewhere`.
+pub(crate) fn append_in(label: &str, new: Vec<EntityType>, space: Handle, elsewhere: &str) -> Result<Vec<Handle>, String> {
+    with_layer_writes(label, false, |layers| {
+        let handles = layers.write_entities_inner(new, Some(label))?;
+        let Some(&first) = handles.first() else { return Ok(handles) };
+        match owner(first) {
+            Ok(owner) if owner == space => Ok(handles),
+            Ok(_) => Err(take_back(label, &handles, elsewhere.into())),
+            Err(error) => Err(take_back(label, &handles, error)),
+        }
+    })
+}
+
+/// The block record that owns element `handle`.
+pub(crate) fn owner(handle: Handle) -> Result<Handle, String> {
+    entities(&[handle])?.into_iter().flatten().next().map(|e| e.common().owner_handle).ok_or_else(|| format!("{handle:?}?"))
+}
+
+/// Remove what a failed write added; `error` says why the write failed,
+/// with a request to undo when OCS kept part of it.
+fn take_back(label: &str, handles: &[Handle], error: String) -> String {
+    match remove_entities(label, handles) {
+        Ok(count) if count == handles.len() => error,
+        _ => format!("{error}\n{}", crate::lang::tr(
+            "OCS kon de reeds geplaatste kopieën niet allemaal opruimen. Gebruik Ongedaan maken.",
+            "OCS could not clean up all newly added copies. Use Undo.",
+        )),
+    }
+}
+
+/// Remove `originals` (handle, layer) in one undo step, also from a locked
+/// layer, which is locked again after it.
+pub(crate) fn remove_replaced(label: &str, originals: &[(Handle, String)]) -> Result<(), String> {
+    with_layer_writes(label, false, |layers| layers.remove_originals(originals))
 }
 
 fn send_entities(entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
@@ -1309,12 +1419,17 @@ fn write_import(label: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec
 }
 
 impl ImportLayers {
-    /// Call only after all replacements have been acknowledged by OCS.
+    /// Remove `originals` (handle, layer), opening a locked layer for it. One
+    /// that is gone already counts as removed. A replacement that must keep
+    /// its originals until the new elements are in calls it after them
+    /// ([`append_entities`]).
     pub(crate) fn remove_originals(&mut self, originals: &[(Handle, String)]) -> Result<(), String> {
         self.unlock(originals.iter().map(|(_, layer)| layer.clone()))?;
         for (handle, _) in originals {
             match request(PluginRequest::RemoveEntity { handle: *handle })? {
                 PluginResponse::Bool(true) => {}
+                // Gone already (a user deleted it meanwhile): removed.
+                _ if entities(&[*handle])?.first().is_some_and(Option::is_none) => {}
                 _ => return Err(crate::lang::tr(
                     "OCS kon een origineel object niet verwijderen.",
                     "OCS could not remove an original entity.",
@@ -1335,16 +1450,10 @@ impl ImportLayers {
     fn write_entities_inner(&mut self, entities: Vec<EntityType>, rollback_label: Option<&str>) -> Result<Vec<Handle>, String> {
         let mut handles = Vec::with_capacity(entities.len());
         if let Err(error) = entity_batches(entities, |chunk| self.add(chunk, &mut handles)) {
-            if let Some(label) = rollback_label {
-                match remove_entities(label, &handles) {
-                    Ok(count) if count == handles.len() => {}
-                    _ => return Err(format!("{error}\n{}", crate::lang::tr(
-                        "OCS kon de reeds geplaatste kopieën niet allemaal opruimen. Gebruik Ongedaan maken.",
-                        "OCS could not clean up all newly added copies. Use Undo.",
-                    ))),
-                }
-            }
-            return Err(error);
+            return Err(match rollback_label {
+                Some(label) => take_back(label, &handles, error),
+                None => error,
+            });
         }
         let _ = request(PluginRequest::SetDirty);
         // Force a rebuild after a batch (an image can hide newer lines).
@@ -1436,7 +1545,7 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
     }
     if let Some(message) = moved? {
         crate::civiel::api::note("tekenvolgorde_overgeslagen", message);
-        let _ = request(PluginRequest::PushInfo(format!("[Open Infra] {message}")));
+        push_info(message);
     }
     Ok(())
 }
@@ -1494,10 +1603,10 @@ fn effective_draw_order(owner: Handle) -> Option<Vec<(Handle, u64)>> {
     use ocs_plugin_api::host::codec::objects::ObjectType;
     // Shared views have no sort table. Only request the full snapshot when
     // the shared view puts the drawing comfortably below the IPC frame limit.
-    if !view_entities().is_some_and(|(_, _, bytes)| bytes < SNAPSHOT_SAFE) {
+    if !view_entities(|_| false).is_some_and(|(_, _, bytes)| bytes < SNAPSHOT_SAFE) {
         return None;
     }
-    let Ok(PluginResponse::Document(drawing)) = request(PluginRequest::DocumentSnapshot) else {
+    let Ok(drawing) = full_snapshot() else {
         return None;
     };
     let overrides: std::collections::HashMap<_, _> = drawing.objects.values().find_map(|object| match object {
@@ -1780,11 +1889,65 @@ pub(crate) mod replacement_test_host {
         reject_batch: bool,
         pub reject_profile: bool,
         pub index: Mutex<Vec<XRecordEntry>>,
+        /// Undo groups and record writes, in order.
+        pub log: Mutex<Vec<String>>,
+        /// The current layout (CTAB). OCS adds to a sheet's layout while one
+        /// is current, and to the block being edited while the block editor
+        /// is open (CTAB `Model`, and a switch of layout does not close it
+        /// while the block has unsaved changes): `outside` keeps what went
+        /// outside model space.
+        pub layout: Mutex<String>,
+        pub outside: Mutex<Vec<Handle>>,
+        /// The block editor is open on a block with unsaved changes: a
+        /// switch of layout leaves it open.
+        pub block_edit: bool,
+        /// The block editor is open on a block without changes: a switch of
+        /// layout closes it, then switches. Either way OCS first closes an
+        /// open undo group (`block_edit_delta` → `finish_pending_history`).
+        pub clean_block_edit: Mutex<bool>,
+        /// An undo group is open (OCS ignores an end without one).
+        open: Mutex<bool>,
+        /// Two commands in step: the first two reads of a record wait for
+        /// each other (at most a moment), as two commands started together.
+        pub meet: Option<(Mutex<u32>, std::sync::Condvar)>,
+        /// Elements OCS refuses to remove (as on a layer locked meanwhile).
+        pub refuse: Mutex<Vec<Handle>>,
+        /// A sheet's layout, once current, stays a moment (at most 300 ms)
+        /// before the next request, so another command can switch away
+        /// from it meanwhile.
+        pub hold_sheet: bool,
+        switched: std::sync::Condvar,
     }
 
     impl Drawing {
         pub(crate) fn new(doc: CadDocument, reject_batch: bool) -> Self {
-            Self { doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()) }
+            Self {
+                doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()), log: Mutex::new(Vec::new()),
+                layout: Mutex::new("Model".into()), outside: Mutex::new(Vec::new()), block_edit: false, meet: None, refuse: Mutex::new(Vec::new()),
+                hold_sheet: false, switched: std::sync::Condvar::new(), clean_block_edit: Mutex::new(false), open: Mutex::new(false),
+            }
+        }
+
+        /// A new element, in the current layout or the block being edited.
+        fn add(&self, doc: &mut CadDocument, mut entity: EntityType) -> Handle {
+            let outside = self.block_edit || *self.clean_block_edit.lock().unwrap() || *self.layout.lock().unwrap() != "Model";
+            if outside {
+                entity.common_mut().owner_handle = doc.header.paper_space_block_handle;
+            }
+            let handle = doc.add_entity(entity).unwrap();
+            if outside {
+                self.outside.lock().unwrap().push(handle);
+            }
+            handle
+        }
+
+        fn meet(&self) {
+            if let Some((count, met)) = &self.meet {
+                let mut n = count.lock().unwrap();
+                *n += 1;
+                met.notify_all();
+                let _ = met.wait_timeout_while(n, std::time::Duration::from_millis(300), |n| *n < 2).unwrap();
+            }
         }
     }
 
@@ -1793,6 +1956,26 @@ pub(crate) mod replacement_test_host {
             use PluginRequest as Q;
             use PluginResponse as A;
 
+            if matches!(req, Q::ReadXRecord { .. }) {
+                self.meet();
+            }
+            if let Q::TableOperation { operation: TableOperation::LayoutSetCurrent { name } } = &req {
+                let mut clean = self.clean_block_edit.lock().unwrap();
+                if (self.block_edit || *clean) && std::mem::take(&mut *self.open.lock().unwrap()) {
+                    self.log.lock().unwrap().push("end".into());
+                }
+                *clean = false;
+                drop(clean);
+                if !self.block_edit {
+                    let mut layout = self.layout.lock().unwrap();
+                    layout.clone_from(name);
+                    self.switched.notify_all();
+                    if self.hold_sheet && name != "Model" {
+                        let _ = self.switched.wait_timeout_while(layout, std::time::Duration::from_millis(300), |now| now == name).unwrap();
+                    }
+                }
+                return Ok(A::TableResult(Ok(Handle::NULL)));
+            }
             let mut doc = self.doc.lock().unwrap();
             let locked = |doc: &CadDocument, entity: &EntityType| {
                 doc.layers.get(&entity.common().layer).is_some_and(|layer| layer.is_locked())
@@ -1813,18 +1996,18 @@ pub(crate) mod replacement_test_host {
                 Q::AddEntity(entity) => A::Handle(if locked(&doc, &entity) {
                     Handle::NULL
                 } else {
-                    doc.add_entity(entity).unwrap()
+                    self.add(&mut doc, entity)
                 }),
                 Q::AddEntities(entities) => A::Handles(entities.into_iter().map(|entity| {
                     if self.reject_batch || locked(&doc, &entity)
                         || (self.reject_profile && crate::civiel::data_value(&entity, "rioolprofiel").is_some()) {
                         Handle::NULL
                     } else {
-                        doc.add_entity(entity).unwrap()
+                        self.add(&mut doc, entity)
                     }
                 }).collect()),
                 Q::RemoveEntity { handle } => {
-                    let writable = doc.get_entity(handle).is_some_and(|e| !locked(&doc, e));
+                    let writable = doc.get_entity(handle).is_some_and(|e| !locked(&doc, e)) && !self.refuse.lock().unwrap().contains(&handle);
                     A::Bool(writable && doc.remove_entity(handle).is_some())
                 }
                 Q::WriteRecord { handle, .. } => A::Bool(doc.get_entity(handle).is_some_and(|e| !locked(&doc, e))),
@@ -1834,13 +2017,96 @@ pub(crate) mod replacement_test_host {
                 Q::GetEntitiesBatch { handles } => A::GetEntitiesBatchResult(Ok(handles.iter().map(|h| doc.get_entity(*h).cloned()).collect())),
                 Q::ReadXRecord { .. } => A::XRecordEntries(Ok(self.index.lock().unwrap().clone())),
                 Q::UpdateXRecord { entries, .. } => {
+                    self.log.lock().unwrap().push("record".into());
                     *self.index.lock().unwrap() = entries;
                     A::XRecordUpdateResult(Ok(Handle::new(1002)))
                 }
-                Q::CloseDocumentViewV4 { .. } | Q::SetDirty | Q::BumpGeometry | Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup => A::Ok,
+                Q::BeginUndoGroup { .. } => {
+                    *self.open.lock().unwrap() = true;
+                    self.log.lock().unwrap().push("begin".into());
+                    A::Ok
+                }
+                Q::EndUndoGroup => {
+                    if std::mem::take(&mut *self.open.lock().unwrap()) {
+                        self.log.lock().unwrap().push("end".into());
+                    }
+                    A::Ok
+                }
+                Q::CloseDocumentViewV4 { .. } | Q::SetDirty | Q::BumpGeometry | Q::PushUndo { .. } => A::Ok,
                 other => panic!("unexpected host request: {other:?}"),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod layer_table_tests {
+    use super::*;
+    use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Color, Point};
+    use ocs_plugin_api::shm::{DocumentSnapshotStore, DocumentViewDataV4, EntityViewV4};
+
+    /// A host that shares a small drawing. OCS sends no answer at all to a
+    /// full snapshot too large for one message (its tables and records do
+    /// not count in the shared view): `answers` false plays that.
+    struct Host {
+        view: DocumentSnapshotStore<DocumentViewDataV4>,
+        doc: CadDocument,
+        answers: bool,
+    }
+
+    impl Host {
+        fn new(tab_id: u64, answers: bool) -> Arc<Host> {
+            let mut doc = CadDocument::new();
+            let mut layer = Layer::new("B-XX-VH-GESLOTENVERHARDING_ASFALT-G");
+            layer.color = Color::Index(5);
+            let _ = doc.layers.add(layer);
+            let point = EntityType::Point(Point::default());
+            let mut view = DocumentSnapshotStore::new(tab_id, 1 << 20).unwrap();
+            view.publish(&DocumentViewDataV4 { layers: Vec::new(), app_ids: Vec::new(), entities: vec![EntityViewV4::from(&point)] }).unwrap();
+            Arc::new(Host { view, doc, answers })
+        }
+    }
+
+    impl PluginRequestSender for Host {
+        fn request(&self, req: PluginRequest) -> Result<PluginResponse, ocs_plugin_api::host::PluginRequestError> {
+            Ok(match req {
+                PluginRequest::OpenDocumentViewV4 { .. } => PluginResponse::DocumentViewV4 { path: self.view.path().display().to_string(), version: 1 },
+                PluginRequest::CloseDocumentViewV4 { .. } => PluginResponse::Ok,
+                PluginRequest::DocumentSnapshot if self.answers => PluginResponse::Document(Box::new(self.doc.clone().into())),
+                PluginRequest::DocumentSnapshot => loop {
+                    std::thread::park();
+                },
+                other => panic!("unexpected host request: {other:?}"),
+            })
+        }
+    }
+
+    fn on(host: Arc<Host>, tab_id: u64, f: impl FnOnce()) {
+        with_command_context(Target { sender: host, tab_id, unit_factor: 1.0, doc_path: None }, None, None, f);
+    }
+
+    /// The legend of a sheet reads the pens of the drawing's layers (#142).
+    #[test]
+    fn the_layer_table_has_the_pens_of_the_drawing() {
+        on(Host::new(142_001, true), 142_001, || {
+            let table = layer_table().expect("a small drawing comes whole");
+            assert_eq!(table.get("B-XX-VH-GESLOTENVERHARDING_ASFALT-G").unwrap().color, Color::Index(5));
+        });
+    }
+
+    /// A drawing whose snapshot OCS cannot send: no table and no stalled
+    /// command, so a sheet set never stops halfway (#142).
+    #[test]
+    fn a_drawing_too_large_for_one_message_gives_no_layer_table_without_waiting() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let host = Host::new(142_002, false);
+        std::thread::spawn(move || {
+            on(host, 142_002, || {
+                let _ = tx.send((layer_table().is_none(), snapshot().is_err()));
+            })
+        });
+        let read = rx.recv_timeout(std::time::Duration::from_secs(10)).expect("the read waits for an answer that never comes");
+        assert_eq!(read, (true, true));
     }
 }
 

@@ -3,7 +3,9 @@
 //! RD coordinate crosses — all on the NLCS "AL" (algemeen) layers and sized
 //! for the plot scale.
 
+use ocs_plugin_api::host::codec::tables::{Layer, Table};
 use ocs_plugin_api::host::codec::{EntityType, LineWeight, LwPolyline, Vector2};
+use ocs_plugin_api::host::XDataValue;
 
 use crate::basisdata::NlcsOptions;
 use crate::bridge;
@@ -110,6 +112,29 @@ impl Sheet {
         self.poly(layer, &[(x0, y0), (x1, y0), (x1, y1), (x0, y1)], true);
     }
 
+    /// The legend sample of layer `of` at paper position (`x`, `y`): a short
+    /// line, or a marker for a symbol layer, in the colour, lineweight and
+    /// linetype of `of`. It sits on the sheet's legend layer, so removing
+    /// the sheet's AL layers removes the whole sheet (#142), and is marked
+    /// as sheet for the NLCS check and a BGT mutation.
+    fn sample(&mut self, of: &Layer, x: f64, y: f64) {
+        let spec = self.spec("LEGENDA", Element::G);
+        let mark = bridge::object_data([(SAMPLE.0, SAMPLE.1.to_string())]);
+        let mut e = if of.name.ends_with("-S") {
+            emit::marker(self.at(x + 7.0, y), &spec.name, 0.8 * self.k, Some(&mark))
+        } else {
+            emit::polyline(&[self.at(x + 1.0, y), self.at(x + 13.0, y)], false, true, &spec.name, self.k, Some(&mark))
+        };
+        let c = e.common_mut();
+        c.color = of.color;
+        c.line_weight = match of.line_weight {
+            LineWeight::ByLayer | LineWeight::ByBlock | LineWeight::Default => DEFAULT_WEIGHT,
+            weight => weight,
+        };
+        c.linetype = of.line_type.clone();
+        self.put(spec, vec![e]);
+    }
+
     /// Text at paper position; `left` aligns left instead of centred.
     fn text(&mut self, layer: &str, x: f64, y: f64, value: &str, mm: f64, left: bool) {
         let spec = self.spec(layer, Element::T);
@@ -123,6 +148,69 @@ impl Sheet {
         text_pen(&mut e, mm);
         self.put(spec, vec![e]);
     }
+}
+
+/// The object data that marks a legend sample.
+const SAMPLE: (&str, &str) = ("bron", "tekenblad");
+
+/// Whether `e` is a legend sample of a drawing sheet: its object data's
+/// last `bron` is `tekenblad`, read as other object data (trimmed).
+pub fn is_legend_sample(e: &EntityType) -> bool {
+    e.common().extended_data.get_record(bridge::XDATA_APP).is_some_and(|r| {
+        let sources = r.values.iter().filter_map(|v| match v {
+            XDataValue::String(s) => s.split_once('=').map(|(k, v)| (k.trim(), v.trim())).filter(|(k, _)| *k == SAMPLE.0),
+            _ => None,
+        });
+        sources.last().is_some_and(|(_, v)| v == SAMPLE.1)
+    })
+}
+
+/// The weight of a layer on the default lineweight ("Standaard" in Layer
+/// management): OCS draws it as one screen pixel (0.26 mm), AutoCAD as
+/// LWDEFAULT (0.25 mm unless set). A legend sample cannot keep "Default"
+/// itself: on an element it means the weight of the legend layer.
+pub(crate) const DEFAULT_WEIGHT: LineWeight = LineWeight::Value(25);
+
+/// Whether a legend shows NLCS layer `name`: not the sheet's own layers,
+/// not text layers.
+fn in_legend(name: &str) -> bool {
+    !name.contains("-AL-") && !name.ends_with("-T")
+}
+
+/// The drawing's layers with their pens, for the legend of a sheet: read
+/// before anything is written, so no write waits for it. A drawing too
+/// large to read whole gives `None`, and its legend shows the plug-in's
+/// pens (knownbugs.md 143); a note says so.
+pub fn layer_pens() -> Option<Table<Layer>> {
+    let table = bridge::layer_table();
+    if table.is_none() {
+        bridge::push_info(crate::lang::tr(
+            "De legenda toont de NLCS-pennen: de pennen van de lagen in deze tekening zijn niet te lezen.",
+            "The legend shows the NLCS pens: the pens of the layers in this drawing cannot be read.",
+        ));
+    }
+    table
+}
+
+/// The NLCS layers drawn in this session that a legend shows, each with
+/// its pen in `table` (see [`layer_pens`]): a user or a template may have
+/// given it another pen than the plug-in did.
+pub fn drawn_layers(table: Option<&Table<Layer>>) -> Vec<Layer> {
+    bridge::nlcs_layers().into_iter().filter(|spec| in_legend(&spec.name)).map(|spec| as_drawn(spec, table)).collect()
+}
+
+/// Layer `spec` as `table` has it, else with the pen the plug-in gives it.
+pub(crate) fn as_drawn(spec: LayerSpec, table: Option<&Table<Layer>>) -> Layer {
+    if let Some(layer) = table.and_then(|table| table.get(&spec.name)) {
+        return layer.clone();
+    }
+    let mut layer = Layer::new(&spec.name);
+    layer.color = bridge::nlcs_color(&spec);
+    layer.line_weight = spec.lineweight.map_or(LineWeight::Default, LineWeight::from_value);
+    // Its NLCS linetype only when the drawing can define it (see
+    // `bridge::ensure_nlcs_layer`).
+    layer.line_type = if nlcs::linetype_pattern(&spec.linetype).is_some() { spec.linetype } else { "Continuous".into() };
+    layer
 }
 
 /// NLCS text class: a text's colour and lineweight follow its height.
@@ -140,7 +228,15 @@ fn nice(v: f64) -> f64 {
     [1.0, 2.0, 2.5, 5.0, 10.0].iter().map(|m| m * p).min_by(|a, b| (a - v).abs().total_cmp(&(b - v).abs())).unwrap_or(v)
 }
 
-pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, String> {
+/// The pens for the legend of a sheet on its own (see [`layer_pens`]):
+/// nothing to read when the legend shows no layers.
+pub fn legend_pens() -> Option<Table<Layer>> {
+    bridge::nlcs_layers().iter().any(|spec| in_legend(&spec.name)).then(layer_pens).flatten()
+}
+
+/// Draw the sheet around the project area. `pens`: the drawing's layer
+/// table for the legend, read before the import this sheet may be part of.
+pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo, pens: Option<&Table<Layer>>) -> Result<String, String> {
     let t = bridge::target().ok_or("geen tekening actief")?;
     let f = t.unit_factor;
     let (paper, pw, ph) = paper_for(site, opt.scale);
@@ -162,7 +258,7 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
     north_arrow(&mut s, ma.x1 - 18.0, ma.y1 - 26.0);
     scale_bar(&mut s, ma.x0 + 10.0, ma.y0 + 10.0, opt.scale);
     title_block(&mut s, sx, pw - 10.0, info, opt, paper, &site.crs, &site.label);
-    let shown = legend(&mut s, sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
+    let shown = legend(&mut s, &drawn_layers(pens), sx + 5.0, pw - 15.0, 10.0 + TITLE_H + 5.0, ph - 15.0);
 
     let label = "NLCS-tekenblad";
     let n = bridge::with_import_undo(label, || {
@@ -171,7 +267,6 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
             bridge::ensure_nlcs_layer(&spec);
             entities.extend(parts);
         }
-        // Legend samples use the imported layers for their line styles.
         // Restore any existing locks without locking the new sheet layers.
         bridge::append_entities(label, entities, &[]).map(|handles| handles.len())
     })?;
@@ -304,15 +399,15 @@ fn title_block(s: &mut Sheet, x0: f64, x1: f64, info: &SheetInfo, opt: &NlcsOpti
     s.text("TEKENBLAD_TITELBLOK", x0 + 2.0, y0 + rows[5] + 3.5, "OpenAEC Foundation — Open CAD Studio", 1.8, true);
 }
 
-/// Legend of the NLCS layers drawn in this session, grouped by main group.
-/// Returns the number of layers shown.
-fn legend(s: &mut Sheet, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
-    let mut layers: Vec<LayerSpec> = bridge::nlcs_layers().into_iter().filter(|l| !l.name.contains("-AL-") && !l.name.ends_with("-T")).collect();
-    let key = |l: &LayerSpec| {
+/// Legend of the NLCS `drawn` layers (see [`drawn_layers`]), grouped by
+/// main group. Returns the number of layers shown.
+fn legend(s: &mut Sheet, drawn: &[Layer], x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
+    let mut layers: Vec<&Layer> = drawn.iter().collect();
+    let key = |l: &Layer| {
         let parts: Vec<&str> = l.name.splitn(5, '-').collect();
         (parts.get(2).copied().unwrap_or("").to_string(), parts.get(3).copied().unwrap_or("").to_string(), l.name.clone())
     };
-    layers.sort_by_key(key);
+    layers.sort_by_key(|l| key(l));
     layers.dedup_by(|a, b| {
         let (ka, kb) = (key(a), key(b));
         ka.0 == kb.0 && ka.1 == kb.1
@@ -339,17 +434,7 @@ fn legend(s: &mut Sheet, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
             y -= row;
             group = g.clone();
         }
-        // The sample sits on the layer itself: its colour, lineweight and
-        // linetype are the layer's. Marked as sheet, so a BGT mutation or a
-        // quantity take-off can leave it out.
-        let (a, b) = (s.at(x + 1.0, y), s.at(x + 13.0, y));
-        let mark = bridge::object_data([("bron", "tekenblad".to_string())]);
-        if l.name.ends_with("-S") {
-            let c = s.at(x + 7.0, y);
-            s.out.push((l.clone(), emit::markers(&[c], &l.name, 0.8 * s.k, Some(&mark))));
-        } else {
-            s.out.push((l.clone(), emit::polylines(&[(vec![a, b], false)], &l.name, s.k, Some(&mark))));
-        }
+        s.sample(l, x, y);
         s.text("LEGENDA", x + 16.0, y, &nlcs::humanize(&obj), 1.8, true);
         y -= row;
         shown += 1;
@@ -397,9 +482,10 @@ impl Parts {
     /// Height of the title block (mm).
     pub const TITLE_H: f64 = TITLE_H;
 
-    /// Legend of the NLCS layers drawn in this session; the number shown.
-    pub fn legend(&mut self, x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
-        legend(&mut self.0, x0, x1, y0, y1)
+    /// Legend of the NLCS `drawn` layers (see [`drawn_layers`]); the
+    /// number shown.
+    pub fn legend(&mut self, drawn: &[Layer], x0: f64, x1: f64, y0: f64, y1: f64) -> usize {
+        legend(&mut self.0, drawn, x0, x1, y0, y1)
     }
 
     /// A scale bar of about 100 mm from (`x`, `y`), labelled "schaal 1:n".
@@ -410,5 +496,117 @@ impl Parts {
     /// The entities per NLCS layer.
     pub fn finish(self) -> Vec<(LayerSpec, Vec<EntityType>)> {
         self.0.out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ocs_plugin_api::host::codec::{CadDocument, Color};
+
+    fn drawn(group: &str, name: &str, element: Element) -> LayerSpec {
+        nlcs::layer(nlcs::object_by_name(group, name).expect("NLCS object"), nlcs::Status::B, "XX", element)
+    }
+
+    /// The legend samples of `layers`, in legend order.
+    fn samples(layers: &[Layer]) -> Vec<EntityType> {
+        let mut parts = Parts::new([1000.0, 2000.0], 0.5, &NlcsOptions::default());
+        assert_eq!(parts.legend(layers, 0.0, 170.0, 0.0, 200.0), layers.len());
+        let out = parts.finish();
+        for (spec, ents) in &out {
+            assert!(spec.name.contains("-AL-"), "sheet part on content layer {}", spec.name);
+            for e in ents {
+                assert_eq!(e.common().layer, spec.name);
+            }
+        }
+        let samples: Vec<EntityType> = out.into_iter().filter(|(spec, _)| spec.name == "B-XX-AL-LEGENDA-G").flat_map(|(_, e)| e).collect();
+        assert!(samples.iter().all(is_legend_sample), "marked as sheet");
+        samples
+    }
+
+    fn look(e: &EntityType) -> (Color, LineWeight, String) {
+        (e.common().color, e.common().line_weight, e.common().linetype.clone())
+    }
+
+    /// Removing a sheet's AL layers removes the whole sheet: its legend
+    /// samples stay off the content layers they explain, and still look
+    /// like them (#142).
+    #[test]
+    fn legend_samples_sit_on_the_legend_layer_in_the_style_of_their_layer() {
+        let axis = drawn("AM", "AS_WEG", Element::G);
+        let symbol = drawn("GR", "SOORTAANDUIDING", Element::S);
+        let mut cable = drawn("AM", "AS", Element::G);
+        cable.true_color = Some((12, 34, 56));
+        // Without the drawing's layer table: the pen the plug-in gives.
+        let samples = samples(&[axis.clone(), symbol.clone(), cable.clone()].map(|spec| as_drawn(spec, None)));
+        assert_eq!(samples.len(), 3);
+        let lw = |spec: &LayerSpec| LineWeight::from_value(spec.lineweight.expect("NLCS lineweight"));
+        // Sorted by main group and object: AS, AS_WEG, SOORTAANDUIDING.
+        assert_eq!(look(&samples[0]), (Color::Rgb { r: 12, g: 34, b: 56 }, lw(&cable), "AM-AS-SO".to_string()));
+        assert_eq!(look(&samples[1]), (Color::Index(axis.color), lw(&axis), "AM-AS-SO".to_string()));
+        assert!(matches!(samples[1], EntityType::LwPolyline(_)));
+        assert_eq!(samples[1].common().linetype_scale, 0.5, "paper millimetre linetype");
+        assert!(matches!(samples[2], EntityType::Circle(_)), "a symbol sample is a marker");
+        assert_eq!(look(&samples[2]), (Color::Index(symbol.color), lw(&symbol), "Continuous".to_string()));
+    }
+
+    /// A user or a template gave the asphalt layer another pen than NLCS:
+    /// the legend shows the pen the layer has in the drawing, and still
+    /// sits on the legend layer (#142).
+    #[test]
+    fn a_legend_sample_shows_the_pen_its_layer_has_in_the_drawing() {
+        let asphalt = drawn("VH", "GESLOTENVERHARDING_ASFALT", Element::G);
+        let axis = drawn("AM", "AS_WEG", Element::G);
+        let mut doc = CadDocument::new();
+        let mut layer = Layer::new(&asphalt.name);
+        layer.color = Color::Index(5);
+        layer.line_weight = LineWeight::Value(35);
+        layer.line_type = "DASHED".into();
+        let _ = doc.layers.add(layer);
+        let samples = samples(&[as_drawn(asphalt.clone(), Some(&doc.layers)), as_drawn(axis.clone(), Some(&doc.layers))]);
+        // AM before VH; the axis layer is not in this table: its NLCS pen.
+        assert_eq!(look(&samples[0]), (Color::Index(axis.color), LineWeight::from_value(axis.lineweight.unwrap()), "AM-AS-SO".to_string()));
+        assert_eq!(look(&samples[1]), (Color::Index(5), LineWeight::Value(35), "DASHED".to_string()));
+    }
+
+    /// A sheet mark with spaces around `=`, which the object data of older
+    /// drawings may have: still a legend sample, for the NLCS check and a
+    /// BGT mutation as before (#142).
+    #[test]
+    fn a_mark_with_spaces_is_a_legend_sample_too() {
+        use ocs_plugin_api::host::{codec::Point, ExtendedDataRecord};
+        let mut record = ExtendedDataRecord::new(bridge::XDATA_APP);
+        record.add_value(XDataValue::String(" bron = tekenblad ".into()));
+        let mut sample = EntityType::Point(Point::default());
+        sample.common_mut().extended_data.add_record(record);
+        assert!(is_legend_sample(&sample));
+    }
+
+    /// An element whose object data names its source twice: the last one
+    /// counts, as for the rest of its object data (#142).
+    #[test]
+    fn the_last_source_of_an_element_decides() {
+        use ocs_plugin_api::host::{codec::Point, ExtendedDataRecord};
+        let mut record = ExtendedDataRecord::new(bridge::XDATA_APP);
+        record.add_value(XDataValue::String("bron=tekenblad".into()));
+        record.add_value(XDataValue::String("bron=BGT".into()));
+        let mut element = EntityType::Point(Point::default());
+        element.common_mut().extended_data.add_record(record);
+        assert!(!is_legend_sample(&element));
+    }
+
+    /// A layer on the default lineweight ("Standaard" in Layer management):
+    /// a sample with that weight would take the 0.18 mm of the legend layer
+    /// it sits on. It gets the weight the layer draws with (#142).
+    #[test]
+    fn a_legend_sample_of_a_layer_on_the_default_lineweight_keeps_that_weight() {
+        let asphalt = drawn("VH", "GESLOTENVERHARDING_ASFALT", Element::G);
+        let mut doc = CadDocument::new();
+        let mut layer = Layer::new(&asphalt.name);
+        layer.line_weight = LineWeight::Default;
+        let _ = doc.layers.add(layer);
+        let samples = samples(&[as_drawn(asphalt, Some(&doc.layers))]);
+        assert_eq!(samples[0].common().line_weight, DEFAULT_WEIGHT);
+        assert_eq!(DEFAULT_WEIGHT, LineWeight::Value(25));
     }
 }

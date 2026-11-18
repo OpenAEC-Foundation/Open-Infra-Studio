@@ -19,7 +19,7 @@
 use std::f64::consts::FRAC_PI_2;
 
 use ocs_plugin_api::host::codec::entities::{TextHorizontalAlignment, TextVerticalAlignment, Viewport};
-use ocs_plugin_api::host::codec::{EntityType, Handle, Vector3};
+use ocs_plugin_api::host::codec::{tables::Layer, EntityType, Handle, Vector3};
 use ocs_plugin_api::host::{ExtendedDataRecord, TableOperation, XDataValue, XRecordEntry, XRecordValue};
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 
@@ -473,7 +473,9 @@ struct BackToModel;
 
 impl Drop for BackToModel {
     fn drop(&mut self) {
-        let _ = table(TableOperation::LayoutSetCurrent { name: "Model".into() });
+        // Under the write lock, as every layout switch of a set (see
+        // `write_sheet`), and without an undo step.
+        let _ = bridge::with_writes_held(|| table(TableOperation::LayoutSetCurrent { name: "Model".into() }));
     }
 }
 
@@ -545,6 +547,62 @@ struct Sheets {
     mark: ExtendedDataRecord,
 }
 
+/// The model-space part of `set`, as the index holds it.
+fn indexed(set: &str) -> Vec<Handle> {
+    bridge::index_read().into_iter().filter(|(kind, key, _)| kind == "bladen" && key == set).flat_map(|(_, _, h)| h).collect()
+}
+
+/// Write the model-space part of `set` in place of the one the index holds,
+/// as one undo step with the index. The new part goes first: when OCS
+/// refuses part of it, or puts it where the set's `axis` is not (in the
+/// block being edited), it is taken back and the old set stays as it was.
+/// A locked sheet layer is opened for it and locked again. Should OCS then
+/// refuse to remove an old element, the index holds both parts, so running
+/// the command again replaces them whole. The old set is read under the
+/// same write lock, so two starts at once replace it one after the other.
+fn replace_model(model: Sheets, set: &str, label: &str, axis: Handle) -> Result<Vec<Handle>, String> {
+    let space = bridge::owner(axis)?;
+    // OCS adds to the current layout; the set deletes its sheets' layouts
+    // when it is replaced. Switched under the write lock, as every layout
+    // switch of a set, so no other set switches between this one and its
+    // write; and before the undo step, as a switch with the block editor
+    // open closes an open undo group.
+    bridge::with_writes_held(|| {
+        table(TableOperation::LayoutSetCurrent { name: "Model".into() })?;
+        bridge::with_import_undo(label, || {
+            let mut originals = Vec::new();
+            for chunk in indexed(set).chunks(500) {
+                // Elements a user deleted are gone already.
+                originals.extend(bridge::entities(chunk)?.into_iter().flatten().map(|e| (e.common().handle, e.common().layer.clone())));
+            }
+            let elsewhere = tr(
+                "OCS zette de bladen niet in de modelruimte, waar de as staat (wordt er een blok bewerkt?). Sluit de blokbewerker en probeer het opnieuw.",
+                "OCS did not put the sheets in model space, where the alignment is (is a block being edited?). Close the block editor and try again.",
+            );
+            let handles = bridge::append_in(label, model.out.into_entities(), space, elsewhere)?;
+            let removed = bridge::remove_replaced(label, &originals);
+            let mut index = handles.clone();
+            if removed.is_err() {
+                index.extend(originals.iter().map(|(h, _)| *h));
+            }
+            bridge::index_add("bladen", set, &index, true);
+            removed.map(|()| handles)
+        })
+    })
+}
+
+/// Write the sheet of one layout, in that layout: switched to under the
+/// same write lock, so no other set switches in between, and before the
+/// write's undo step (see [`replace_model`]). A user may have locked a
+/// sheet layer (the legend layer, say): the write opens it and locks it
+/// again, so a set that replaces an older one is never left half made.
+fn write_sheet(paper: Sheets, label: &str, layout: &str) -> Result<(), String> {
+    bridge::with_writes_held(|| {
+        table(TableOperation::LayoutSetCurrent { name: layout.into() }).map_err(|e| format!("layout {layout}: {e}"))?;
+        paper.out.append(label).map(drop)
+    })
+}
+
 impl Sheets {
     fn new(set: &str) -> Sheets {
         Sheets { out: Out::default(), mark: record(&[("bladen", set.to_string())]) }
@@ -590,7 +648,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
     let ctx = Ctx::new(&opt)?;
     let (f, k) = (ctx.f, ctx.k);
     let doc = super::document(&["tin", "as", "ontwerpprofiel"], &req.axis.into_iter().collect::<Vec<_>>())?;
-    let (al, _, _) = as_profiel::axis(&doc, req.axis)?;
+    let (al, axis, _) = as_profiel::axis(&doc, req.axis)?;
     let name = if al.name.is_empty() { "As".to_string() } else { al.name.clone() };
     let design: Option<Vec<Pvi>> = super::corridor::profile_of(&doc, &al.name);
     let lay = sheet_layout(&req.paper);
@@ -628,12 +686,11 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
     }
     let lay = lay.with_profile_height(bands_mm + span * vert.v * 1000.0 / req.scale + 4.0);
 
+    // The pens for the legend, read before the set changes the drawing.
+    let pens = tekenblad::layer_pens();
+
     // Model space: view frames, match lines, profile views.
     let set = format!("{name} {}", req.paper.name);
-    let old: Vec<Handle> = bridge::index_read().into_iter().filter(|(kind, key, _)| kind == "bladen" && *key == set).flat_map(|(_, _, h)| h).collect();
-    if !old.is_empty() {
-        let _ = bridge::remove_entities(&t2(format!("Bladen {name} vervangen"), format!("Replace sheets {name}")), &old);
-    }
     let mut out = Sheets::new(&set);
     // The plan grew into the room the profile leaves: the same centres.
     let frame = Frame { h: lay.plan.h() * k, ..frame };
@@ -697,8 +754,7 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
         draw_profile(&ctx, &al, &samples, design.as_deref(), &view, &rows, &vert, &title, &mut out)?;
         views.push(view);
     }
-    let handles = out.out.write_handles(&t2(format!("Bladen {name}"), format!("Sheets {name}")))?;
-    bridge::index_add("bladen", &set, &handles, true);
+    let handles = replace_model(out, &set, &t2(format!("Bladen {name}"), format!("Sheets {name}")), axis)?;
     // The view frames are for model space only: they do not plot.
     for spec in [&grens, &grens_t] {
         let _ = bridge::request(PluginRequest::ModifyLayer(ocs_plugin_api::host::LayerConfig { name: spec.name.clone(), plottable: Some(false), ..Default::default() }));
@@ -715,6 +771,8 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
     let crs = ctx.site.as_ref().map(|s| s.crs.clone()).unwrap_or_else(|| "—".into());
     let place = ctx.site.as_ref().map(|s| s.label.clone()).unwrap_or_default();
     let mut layouts = Vec::new();
+    // Late, so the layers this set drew are in it too.
+    let legend = tekenblad::drawn_layers(pens.as_ref());
     let made = (|| -> Result<(), String> {
         let _back = BackToModel;
         for (i, view) in views.iter().enumerate() {
@@ -725,7 +783,6 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
             layouts.push(lname.clone());
             table(TableOperation::LayoutSetPage { name: lname.clone(), paper_size: Some([req.paper.w, req.paper.h]), rotation: Some(0), scale: Some([1.0, 1.0]) })
                 .map_err(|e| format!("layout {lname}: {e}"))?;
-            table(TableOperation::LayoutSetCurrent { name: lname.clone() }).map_err(|e| format!("layout {lname}: {e}"))?;
             let info = SheetInfo {
                 project: req.project.clone().unwrap_or_default(),
                 subject: req.subject.clone().unwrap_or_else(|| t2(format!("{name} — situatie en lengteprofiel"), format!("{name} — plan and profile"))),
@@ -733,8 +790,8 @@ pub fn create(opt: &CivielOptions, req: Request, progress: &dyn Fn(String)) -> R
                 ..SheetInfo::default()
             };
             let mut paper = Sheets::new(&set);
-            sheet(&ctx, &req, &lay, &al, &spans, i, view, &vert, &info, &crs, &place, &mut paper)?;
-            paper.out.write(&t2(format!("Blad {} {name}", i + 1), format!("Sheet {} {name}", i + 1)))?;
+            sheet(&ctx, &req, &lay, &al, &spans, i, view, &vert, &info, &crs, &place, &legend, &mut paper)?;
+            write_sheet(paper, &t2(format!("Blad {} {name}", i + 1), format!("Sheet {} {name}", i + 1)), &lname)?;
         }
         Ok(())
     })();
@@ -1061,7 +1118,7 @@ fn ptext(at: XY, value: &str, mm: f64, rot: f64, spec: &LayerSpec, h: TextHorizo
 /// references, and the title column with sheet number, scales, north arrow,
 /// legend and title block.
 #[allow(clippy::too_many_arguments)]
-fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[Span], i: usize, view: &View, vert: &Vertical, info: &SheetInfo, crs: &str, place: &str, out: &mut Sheets) -> Result<(), String> {
+fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[Span], i: usize, view: &View, vert: &Vertical, info: &SheetInfo, crs: &str, place: &str, legend: &[Layer], out: &mut Sheets) -> Result<(), String> {
     let (f, k) = (ctx.f, ctx.k);
     let n = spans.len();
     let sp = &spans[i];
@@ -1093,7 +1150,7 @@ fn sheet(ctx: &Ctx, req: &Request, lay: &SheetLayout, al: &Alignment, spans: &[S
     // Legend above the north arrow.
     let ylg = ysc + 58.0;
     parts.line("TEKENBLAD_DEELKADER", &[(col.x0, ylg), (col.x1, ylg)]);
-    parts.legend(col.x0 + 5.0, col.x1 - 5.0, ylg + 4.0, col.y1 - 4.0);
+    parts.legend(legend, col.x0 + 5.0, col.x1 - 5.0, ylg + 4.0, col.y1 - 4.0);
     for (spec, e) in parts.finish() {
         out.put(&spec, e);
     }
@@ -1217,6 +1274,306 @@ mod tests {
     use std::f64::consts::PI;
 
     use super::*;
+
+    /// A user locked the frame layer of a set: replacing the set leaves one
+    /// set, the old one gone, and the lock in place. The index changes in
+    /// the same undo step, so Ctrl+Z gives back the old set and its index
+    /// together (#142).
+    #[test]
+    fn replacing_a_set_with_a_locked_frame_layer_leaves_one_set_and_the_lock() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Point};
+
+        crate::settings::with_test_file(|| {
+            let spec = |element| crate::nlcs::layer(crate::nlcs::object_by_name("AL", "TEKENBLADGRENS").unwrap(), crate::nlcs::Status::B, "XX", element);
+            let (frame, text) = (spec(Element::G), spec(Element::T));
+            let on = |layer: &str| {
+                let mut point = Point::default();
+                point.common.layer = layer.into();
+                EntityType::Point(point)
+            };
+            let mut doc = CadDocument::new();
+            let mut locked = Layer::new(&frame.name);
+            locked.flags.locked = true;
+            doc.layers.add(locked).unwrap();
+            doc.layers.add(Layer::new(&text.name)).unwrap();
+            let old = [doc.add_entity(on(&frame.name)).unwrap(), doc.add_entity(on(&text.name)).unwrap()];
+            let axis = doc.add_entity(on("0")).unwrap();
+            let drawing = std::sync::Arc::new(Drawing::new(doc, false));
+            let target = bridge::Target { sender: drawing.clone(), tab_id: 142_102, unit_factor: 1.0, doc_path: None };
+            let (new, index) = bridge::with_command_context(target, None, None, || {
+                bridge::index_add("bladen", "As 1 A3", &old, true);
+                drawing.log.lock().unwrap().clear();
+                let mut model = Sheets::new("As 1 A3");
+                model.put(&frame, [on(&frame.name)]);
+                model.put(&text, [on(&text.name)]);
+                (replace_model(model, "As 1 A3", "Bladen As 1", axis).unwrap(), indexed("As 1 A3"))
+            });
+            assert_eq!(*drawing.log.lock().unwrap(), ["begin", "record", "end"]);
+            assert_eq!(index, new);
+            let doc = drawing.doc.lock().unwrap();
+            let left: Vec<_> = doc.model_space_entities().map(|e| e.common().handle).filter(|h| *h != axis).collect();
+            assert_eq!(left.len(), 2, "one set: {left:?}");
+            assert!(new.iter().all(|h| left.contains(h)) && old.iter().all(|h| !left.contains(h)));
+            assert!(doc.layers.get(&frame.name).unwrap().is_locked());
+            assert!(!doc.layers.get(&text.name).unwrap().is_locked());
+        });
+    }
+
+    /// A user locked the legend layer: the sheet of a replaced set is
+    /// written in full, its samples included, and the lock is back after it
+    /// (#142).
+    #[test]
+    fn a_sheet_writes_onto_a_locked_legend_layer_and_locks_it_again() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::{tables::Layer, CadDocument, Point};
+
+        crate::settings::with_test_file(|| {
+            let spec = crate::nlcs::layer(crate::nlcs::object_by_name("AL", "LEGENDA").unwrap(), crate::nlcs::Status::B, "XX", Element::G);
+            let mut doc = CadDocument::new();
+            let mut legend = Layer::new(&spec.name);
+            legend.flags.locked = true;
+            doc.layers.add(legend).unwrap();
+            let drawing = std::sync::Arc::new(Drawing::new(doc, false));
+            let target = bridge::Target { sender: drawing.clone(), tab_id: 142_101, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                let mut paper = Sheets::new("As 1 A3");
+                let mut sample = Point::default();
+                sample.common.layer = spec.name.clone();
+                paper.put(&spec, [EntityType::Point(sample)]);
+                write_sheet(paper, "Blad 1 As 1", "As 1 A3 blad 1").unwrap();
+            });
+            let doc = drawing.doc.lock().unwrap();
+            let sheet: Vec<_> = drawing.outside.lock().unwrap().iter().filter_map(|h| doc.get_entity(*h)).map(|e| e.common().layer.clone()).collect();
+            assert_eq!(sheet, [spec.name.clone()], "the sample is in the sheet's layout");
+            assert!(doc.layers.get(&spec.name).unwrap().is_locked());
+        });
+    }
+
+    /// The frame layer of a sheet set.
+    fn frame_layer() -> LayerSpec {
+        crate::nlcs::layer(crate::nlcs::object_by_name("AL", "TEKENBLADGRENS").unwrap(), crate::nlcs::Status::B, "XX", Element::G)
+    }
+
+    fn point_on(layer: &str) -> EntityType {
+        let mut point = ocs_plugin_api::host::codec::Point::default();
+        point.common.layer = layer.into();
+        EntityType::Point(point)
+    }
+
+    /// A drawing with an axis and set "As 1 A3": `n` points on the frame
+    /// layer, in the index. `f` runs on it with the set and the axis.
+    fn sheet_drawing<R>(
+        n: usize,
+        setup: impl FnOnce(&mut crate::bridge::replacement_test_host::Drawing),
+        f: impl FnOnce(&std::sync::Arc<crate::bridge::replacement_test_host::Drawing>, &[Handle], Handle) -> R,
+    ) -> R {
+        use ocs_plugin_api::host::codec::{tables::Layer, CadDocument};
+        let frame = frame_layer();
+        let mut doc = CadDocument::new();
+        doc.layers.add(Layer::new(&frame.name)).unwrap();
+        let old: Vec<Handle> = (0..n).map(|_| doc.add_entity(point_on(&frame.name)).unwrap()).collect();
+        let axis = doc.add_entity(point_on("0")).unwrap();
+        let mut drawing = crate::bridge::replacement_test_host::Drawing::new(doc, false);
+        setup(&mut drawing);
+        let drawing = std::sync::Arc::new(drawing);
+        let target = bridge::Target { sender: drawing.clone(), tab_id: 142_103, unit_factor: 1.0, doc_path: None };
+        bridge::with_command_context(target, None, None, || {
+            bridge::index_add("bladen", "As 1 A3", &old, true);
+            f(&drawing, &old, axis)
+        })
+    }
+
+    /// The model part of a new "As 1 A3": `n` points on the frame layer.
+    fn new_set(n: usize) -> Sheets {
+        let frame = frame_layer();
+        let mut model = Sheets::new("As 1 A3");
+        model.put(&frame, (0..n).map(|_| point_on(&frame.name)));
+        model
+    }
+
+    /// What is on the frame layer in model space.
+    fn model_space(drawing: &crate::bridge::replacement_test_host::Drawing) -> Vec<Handle> {
+        let frame = frame_layer().name;
+        drawing.doc.lock().unwrap().model_space_entities().filter(|e| e.common().layer == frame).map(|e| e.common().handle).collect()
+    }
+
+    /// Nothing written outside model space stays there.
+    fn nothing_outside(drawing: &crate::bridge::replacement_test_host::Drawing) -> bool {
+        let doc = drawing.doc.lock().unwrap();
+        drawing.outside.lock().unwrap().iter().all(|h| doc.get_entity(*h).is_none())
+    }
+
+    /// OCS refused to remove part of the old set: the command fails, and
+    /// running it again leaves one set, which the index holds (#142).
+    #[test]
+    fn running_a_set_again_after_a_refused_removal_leaves_one_set() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(2, |_| {}, |drawing, old, axis| {
+                drawing.refuse.lock().unwrap().push(old[1]);
+                assert!(replace_model(new_set(2), "As 1 A3", "Bladen As 1", axis).is_err());
+                let index = indexed("As 1 A3");
+                assert!(model_space(drawing).iter().all(|h| index.contains(h)), "every element of the set is in the index");
+                drawing.refuse.lock().unwrap().clear();
+                let new = replace_model(new_set(2), "As 1 A3", "Bladen As 1", axis).unwrap();
+                assert_eq!(model_space(drawing), new);
+                assert_eq!(indexed("As 1 A3"), new);
+            });
+        });
+    }
+
+    /// OCS refused part of the new set: what it took is removed again and
+    /// the old set stays as it was, in the index (#142).
+    #[test]
+    fn a_refused_write_leaves_the_old_set_as_it_was() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(2, |d| d.reject_profile = true, |drawing, old, axis| {
+                let frame = frame_layer();
+                let mut model = new_set(1);
+                let mut refused = point_on(&frame.name);
+                refused.common_mut().extended_data.add_record(record(&[("rioolprofiel", "x".into())]));
+                model.put(&frame, [refused]);
+                assert!(replace_model(model, "As 1 A3", "Bladen As 1", axis).is_err());
+                assert_eq!(model_space(drawing), old);
+                assert_eq!(indexed("As 1 A3"), old);
+            });
+        });
+    }
+
+    /// An element of the old set that is gone by the time it is removed
+    /// counts as removed (#142).
+    #[test]
+    fn an_original_gone_already_counts_as_removed() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(0, |_| {}, |_, _, _| {
+                bridge::remove_replaced("Bladen As 1", &[(Handle::new(0x4242), frame_layer().name)]).unwrap();
+            });
+        });
+    }
+
+    /// Started from a sheet's layout, the set still writes its frames and
+    /// profiles in model space: in that layout, replacing the set would
+    /// delete them with it (#142).
+    #[test]
+    fn a_set_started_from_a_sheet_layout_writes_its_model_part_in_model_space() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(1, |d| *d.layout.get_mut().unwrap() = "As 1 A3 blad 1".into(), |drawing, _, axis| {
+                let new = replace_model(new_set(1), "As 1 A3", "Bladen As 1", axis).unwrap();
+                assert_eq!(*drawing.layout.lock().unwrap(), "Model");
+                assert!(drawing.outside.lock().unwrap().is_empty());
+                assert_eq!(model_space(drawing), new);
+            });
+        });
+    }
+
+    /// The block editor is open with unsaved changes: CTAB says `Model`, but
+    /// OCS adds to the block. The set is refused, nothing stays in the block
+    /// and the old set stays as it was (#142).
+    #[test]
+    fn a_set_written_into_an_open_block_is_taken_back() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(1, |d| d.block_edit = true, |drawing, old, axis| {
+                assert!(replace_model(new_set(1), "As 1 A3", "Bladen As 1", axis).is_err());
+                assert!(nothing_outside(drawing));
+                assert_eq!(model_space(drawing), old);
+                assert_eq!(indexed("As 1 A3"), old);
+            });
+        });
+    }
+
+    /// The block editor is open and a user locked the frame layer: what OCS
+    /// put in the block is taken back while the layer is still open, and the
+    /// lock is back after it (#142).
+    #[test]
+    fn a_set_written_into_an_open_block_on_a_locked_frame_layer_is_taken_back() {
+        let lock = |d: &mut crate::bridge::replacement_test_host::Drawing| {
+            d.block_edit = true;
+            d.doc.get_mut().unwrap().layers.get_mut(&frame_layer().name).unwrap().flags.locked = true;
+        };
+        crate::settings::with_test_file(|| {
+            sheet_drawing(1, lock, |drawing, old, axis| {
+                assert!(replace_model(new_set(1), "As 1 A3", "Bladen As 1", axis).is_err());
+                assert!(nothing_outside(drawing));
+                assert_eq!(model_space(drawing), old);
+                assert_eq!(indexed("As 1 A3"), old);
+                assert!(drawing.doc.lock().unwrap().layers.get(&frame_layer().name).unwrap().is_locked());
+            });
+        });
+    }
+
+    /// The block editor is open on a block without changes: the switch to
+    /// model space closes it, and the set is one undo step with its index,
+    /// as OCS closes an open undo group on that switch (#142).
+    #[test]
+    fn a_set_started_in_an_unchanged_block_editor_is_one_undo_step() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(1, |d| *d.clean_block_edit.get_mut().unwrap() = true, |drawing, _, axis| {
+                drawing.log.lock().unwrap().clear();
+                let new = replace_model(new_set(1), "As 1 A3", "Bladen As 1", axis).unwrap();
+                assert_eq!(*drawing.log.lock().unwrap(), ["begin", "record", "end"]);
+                assert_eq!(model_space(drawing), new);
+                assert!(drawing.outside.lock().unwrap().is_empty());
+            });
+        });
+    }
+
+    /// Back to model space after the sheets: no undo step of its own (#142).
+    #[test]
+    fn going_back_to_model_space_after_the_sheets_leaves_no_undo_step() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(0, |d| *d.layout.get_mut().unwrap() = "As 1 A3 blad 1".into(), |drawing, _, _| {
+                drawing.log.lock().unwrap().clear();
+                drop(BackToModel);
+                assert!(drawing.log.lock().unwrap().is_empty(), "{:?}", drawing.log.lock().unwrap());
+                assert_eq!(*drawing.layout.lock().unwrap(), "Model");
+            });
+        });
+    }
+
+    /// A second set started while the first writes a sheet: the sheet stays
+    /// in its own layout and the second set's model part goes to model
+    /// space (#142).
+    #[test]
+    fn a_set_started_while_another_writes_a_sheet_leaves_that_sheet_in_its_layout() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(1, |d| d.hold_sheet = true, |drawing, _, axis| {
+                let target = bridge::target().unwrap();
+                let first = std::thread::spawn(move || {
+                    bridge::with_command_context(target, None, None, || {
+                        let frame = frame_layer();
+                        let mut paper = Sheets::new("As 2 A3");
+                        paper.put(&frame, [point_on(&frame.name)]);
+                        write_sheet(paper, "Blad 1 As 2", "As 2 A3 blad 1")
+                    })
+                });
+                while *drawing.layout.lock().unwrap() != "As 2 A3 blad 1" {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                let new = replace_model(new_set(1), "As 1 A3", "Bladen As 1", axis).unwrap();
+                first.join().unwrap().unwrap();
+                assert_eq!(drawing.outside.lock().unwrap().len(), 1, "the sheet is in its layout");
+                assert_eq!(model_space(drawing), new);
+            });
+        });
+    }
+
+    /// The command started twice at once (a double click): both read the
+    /// old set, but one at a time replaces it, so one set is left and the
+    /// index holds it (#142).
+    #[test]
+    fn two_sets_started_together_leave_one_set() {
+        crate::settings::with_test_file(|| {
+            sheet_drawing(1, |d| d.meet = Some(Default::default()), |drawing, _, axis| {
+                let (target, set) = (bridge::target().unwrap(), new_set(1));
+                let other = std::thread::spawn(move || {
+                    bridge::with_command_context(target, None, None, || replace_model(set, "As 1 A3", "Bladen As 1", axis).unwrap())
+                });
+                replace_model(new_set(1), "As 1 A3", "Bladen As 1", axis).unwrap();
+                other.join().unwrap();
+                assert_eq!(model_space(drawing), indexed("As 1 A3"));
+            });
+        });
+    }
 
     fn frame(w: f64, h: f64, overlap: f64, max_len: f64, round: f64) -> Frame {
         Frame { w, h, overlap, max_len, round, start: 0.0 }

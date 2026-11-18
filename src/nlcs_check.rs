@@ -308,7 +308,10 @@ pub fn check(doc: &CadDocument, opt: &Options) -> Report {
                 f.repair = Some(Repair::LayerStyle(spec.clone()));
             }
         }
-        // Element properties: ByLayer, except the text class pen of texts.
+        // Element properties: ByLayer, except the text class pen of texts
+        // and a sheet's legend samples, which show the pen of the layer
+        // they explain (#142).
+        let legend = parsed.group == "AL" && parsed.object == "LEGENDA" && parsed.element == "G";
         let mut colour = Vec::new();
         let mut weight = Vec::new();
         let mut ltype = Vec::new();
@@ -320,15 +323,16 @@ pub fn check(doc: &CadDocument, opt: &Options) -> Report {
             let class = mm.and_then(nlcs::text_class);
             let pen_ok = |col: &Color, lw: &LineWeight| class.is_some_and(|(cc, cl)| color_index(col) == Some(cc) && lineweight_value(lw).is_none_or(|v| v == cl));
             let mut bad = false;
-            if !matches!(c.color, Color::ByLayer) && !pen_ok(&c.color, &c.line_weight) {
+            let sample = legend && crate::tekenblad::is_legend_sample(e);
+            if !sample && !matches!(c.color, Color::ByLayer) && !pen_ok(&c.color, &c.line_weight) {
                 colour.push(c.handle);
                 bad = true;
             }
-            if !matches!(c.line_weight, LineWeight::ByLayer) && !pen_ok(&c.color, &c.line_weight) {
+            if !sample && !matches!(c.line_weight, LineWeight::ByLayer) && !pen_ok(&c.color, &c.line_weight) {
                 weight.push(c.handle);
                 bad = true;
             }
-            if !(c.linetype.is_empty() || c.linetype.eq_ignore_ascii_case("ByLayer")) {
+            if !sample && !(c.linetype.is_empty() || c.linetype.eq_ignore_ascii_case("ByLayer")) {
                 ltype.push(c.handle);
                 bad = true;
             }
@@ -507,5 +511,41 @@ mod tests {
         assert!(r.repairs().iter().any(|x| matches!(x, Repair::ByLayer(h) if h.len() == 1)));
         assert!(r.score() < 100.0 && r.score() > 0.0);
         assert!(markdown(&r, "test.dwg", &Options::default()).contains("L4 Laagkleur"));
+    }
+
+    /// A legend sample of a drawing sheet shows the pen of the layer it
+    /// explains (#142): on the legend layer that is no ByLayer finding to
+    /// repair. Everything else on that layer is checked as usual.
+    #[test]
+    fn legend_samples_keep_the_pen_of_their_layer() {
+        let mut doc = CadDocument::new();
+        let legend = nlcs::layer(nlcs::object_by_name("AL", "LEGENDA").unwrap(), nlcs::Status::B, "XX", nlcs::Element::G);
+        layer(&mut doc, &legend.name, legend.color, legend.lineweight.unwrap(), &legend.linetype);
+        let mut sample = EntityType::Line(Line::from_points(Vector3::new(0.0, 0.0, 0.0), Vector3::new(10.0, 0.0, 0.0)));
+        let c = sample.common_mut();
+        c.layer = legend.name.clone();
+        c.color = Color::Index(10);
+        c.line_weight = LineWeight::Value(18);
+        c.linetype = "AM-AS-SO".into();
+        let stroke = sample.clone();
+        sample.common_mut().extended_data.add_record(crate::bridge::object_data([("bron", "tekenblad".to_string())]));
+        let _ = doc.add_entity(sample.clone());
+        // A stroke someone drew there in that pen, and a 4 mm text.
+        let stroke = doc.add_entity(stroke).unwrap();
+        let mut text = EntityType::Text(Text::with_value("LEGENDA", Vector3::new(0.0, 0.0, 0.0)).with_height(2.0));
+        text.common_mut().layer = legend.name.clone();
+        let _ = doc.add_entity(text);
+        // The sample's pen on a content layer is still a finding.
+        let road = nlcs::layer(nlcs::object_by_name("VH", "GESLOTENVERHARDING_ASFALT").unwrap(), nlcs::Status::B, "XX", nlcs::Element::G);
+        layer(&mut doc, &road.name, road.color, road.lineweight.unwrap(), &road.linetype);
+        sample.common_mut().layer = road.name.clone();
+        let _ = doc.add_entity(sample);
+        let r = check(&doc, &Options::default());
+        let on = |name: &str| -> Vec<(Rule, Vec<Handle>)> { r.findings.iter().filter(|f| f.layer == name).map(|f| (f.rule, f.handles.clone())).collect() };
+        let legend_rules: Vec<Rule> = on(&legend.name).into_iter().map(|(rule, _)| rule).collect();
+        assert_eq!(legend_rules, [Rule::EntityColor, Rule::EntityLineweight, Rule::EntityLinetype, Rule::TextHeight], "{:?}", r.findings);
+        assert!(on(&legend.name)[..3].iter().all(|(_, handles)| handles == &[stroke]), "only the unmarked stroke: {:?}", r.findings);
+        let on_road: Vec<Rule> = on(&road.name).into_iter().map(|(rule, _)| rule).collect();
+        assert_eq!(on_road, [Rule::EntityColor, Rule::EntityLineweight, Rule::EntityLinetype]);
     }
 }
