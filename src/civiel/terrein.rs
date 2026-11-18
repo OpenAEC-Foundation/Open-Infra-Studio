@@ -474,14 +474,18 @@ pub fn create(opt: &super::CivielOptions, source: TinSource, progress: &dyn Fn(S
     super::api::note("hoogte_min", zmin / ctx.f);
     super::api::note("hoogte_max", zmax / ctx.f);
     progress("Terrein tekenen…".into());
-    // From AHN (or Terrain Tiles) in that source's layer group (#143).
-    let handles = match group {
-        Some(group) => out.write_from(&name, group)?,
-        None => out.write_handles(&name)?,
-    };
-    let written = handles.len();
+    // From AHN (or Terrain Tiles) in that source's layer group (#143). One
+    // undo step with the drawing's index; the group follows it.
     let status = faces.name.chars().next().unwrap_or('B').to_string();
-    crate::bridge::index_add("tin", &status, &handles[..meshes.min(handles.len())], false);
+    let handles = crate::bridge::with_import_undo(&name, || {
+        let handles = match group {
+            Some(group) => out.write_from(&name, group)?,
+            None => out.write_handles(&name)?,
+        };
+        crate::bridge::index_add("tin", &status, &handles[..meshes.min(handles.len())], false);
+        Ok(handles)
+    })?;
+    let written = handles.len();
     if sel.is_empty() {
         crate::bridge::note_source("AHN4 (PDOK, CC0)");
     }

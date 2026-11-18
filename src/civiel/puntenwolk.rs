@@ -495,10 +495,15 @@ pub fn create_tin(opt: &CivielOptions, v: &TinVraag, progress: &dyn Fn(String)) 
         api::note("opgehaald_mb", g.pass.bytes as f64 / 1e6);
     }
     progress(tr("Terrein tekenen…", "Drawing the terrain…").into());
-    let handles = out.write_from(&name, &bron.invoer.group())?;
-    let written = handles.len();
+    // One undo step with the drawing's index; the layer group follows it
+    // (#143).
     let status = faces_l.name.chars().next().unwrap_or('B').to_string();
-    bridge::index_add("tin", &status, &handles[..meshes.min(handles.len())], false);
+    let handles = bridge::with_import_undo(&name, || {
+        let handles = out.write_from(&name, &bron.invoer.group())?;
+        bridge::index_add("tin", &status, &handles[..meshes.min(handles.len())], false);
+        Ok(handles)
+    })?;
+    let written = handles.len();
     if let Some(a) = bron.attribution() {
         bridge::note_source(&a);
     }

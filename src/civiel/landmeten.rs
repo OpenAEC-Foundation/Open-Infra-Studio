@@ -253,18 +253,27 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions) -> Result<Stri
 }
 
 /// Import a point file; with `codes` the point codes also become linework
-/// and symbols (a second undo step).
+/// and symbols. One undo step, the index included; the layer group
+/// follows it (#143).
 pub fn import_coded(path: &std::path::Path, opt: &super::CivielOptions, codes: Option<CodeOptions>) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let text = String::from_utf8_lossy(&bytes);
     let parsed = parse(&text, opt.format)?;
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let table = codes.map(|c| CodeTable::load(c.table.as_deref())).transpose()?;
     let mut out = Out::default();
     let n = draw(&ctx, &parsed.points, &name, &mut out)?;
-    let handles = out.write_import(&format!("Punten {name}"), "Landmeten")?;
-    let written = handles.len();
-    index_points(&handles, n);
+    let label = format!("Punten {name}");
+    let (written, coded) = crate::bridge::with_import_undo(&label, || {
+        let handles = out.write_import(&label, "Landmeten")?;
+        index_points(&handles, n);
+        let coded = match &table {
+            Some(table) => format!(" {}", apply_codes(&ctx, table, &parsed.points, &name, false)?),
+            None => String::new(),
+        };
+        Ok((handles.len(), coded))
+    })?;
     super::api::note("punten", n);
     super::api::note("formaat", parsed.format.short());
     super::api::note("overgeslagen", parsed.skipped);
@@ -274,13 +283,6 @@ pub fn import_coded(path: &std::path::Path, opt: &super::CivielOptions, codes: O
     } else {
         let (lo, hi) = zs.iter().fold((f64::MAX, f64::MIN), |(a, b), z| (a.min(*z), b.max(*z)));
         format!(", {} tot {} m", nap(lo, 2), nap(hi, 2))
-    };
-    let coded = match codes {
-        Some(c) => {
-            let table = CodeTable::load(c.table.as_deref())?;
-            format!(" {}", apply_codes(&ctx, &table, &parsed.points, &name, false)?)
-        }
-        None => String::new(),
     };
     Ok(format!(
         "{n} punten uit {name} ({}{range}){} — {written} elementen{}.{coded}",
@@ -979,20 +981,24 @@ pub fn draw_codes(ctx: &Ctx, table: &CodeTable, lw: &Linework, points: &[SurveyP
 }
 
 /// Linework and symbols from the codes of `points` (measuring order), one
-/// undo step; the handles go into the drawing's index ("codes"), so
-/// `CIV_CODES_APPLY` can replace them. `replace` removes the earlier
-/// code output first.
+/// undo step with the drawing's index ("codes"), so `CIV_CODES_APPLY` can
+/// replace them; the layer group follows it (#143). `replace` removes the
+/// earlier code output first, in the same step.
 pub fn apply_codes(ctx: &Ctx, table: &CodeTable, points: &[SurveyPoint], source: &str, replace: bool) -> Result<String, String> {
     let lw = linework(table, points);
     let mut out = Out::default();
     let n = draw_codes(ctx, table, &lw, points, source, &mut out)?;
-    let mut removed = 0;
-    if replace {
-        let old: Vec<Handle> = crate::bridge::index_read().into_iter().filter(|(k, _, _)| k == "codes").flat_map(|(_, _, h)| h).collect();
-        removed = crate::bridge::remove_entities(crate::lang::tr("Codes opnieuw", "Codes again"), &old)?;
-    }
-    let handles = if out.is_empty() { Vec::new() } else { out.write_from(&format!("Codes {source}"), "Landmeten")? };
-    crate::bridge::index_add("codes", "", &handles, replace);
+    let label = format!("Codes {source}");
+    let removed = crate::bridge::with_import_undo(&label, || {
+        let mut removed = 0;
+        if replace {
+            let old: Vec<Handle> = crate::bridge::index_read().into_iter().filter(|(k, _, _)| k == "codes").flat_map(|(_, _, h)| h).collect();
+            removed = crate::bridge::remove_entities(&label, &old)?;
+        }
+        let handles = if out.is_empty() { Vec::new() } else { out.write_from(&label, "Landmeten")? };
+        crate::bridge::index_add("codes", "", &handles, replace);
+        Ok(removed)
+    })?;
     let mut per_code: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
     for f in &lw.figures {
         *per_code.entry(table.codes[f.def].code.as_str()).or_default() += 1;
@@ -1077,6 +1083,43 @@ mod tests {
             let drawn: HashSet<String> = doc.model_space_entities().map(|e| e.common().layer.clone()).collect();
             assert!(drawn.len() >= 3, "points, kerb and tree: {drawn:?}");
             assert!(drawn.iter().all(|l| groups[0].1.contains(l)), "{drawn:?} outside {:?}", groups[0].1);
+        });
+    }
+
+    /// A coded survey is one undo step, its index included, and its layer
+    /// group changes once, after it (#143, knownbugs.md 153).
+    #[test]
+    fn a_coded_survey_is_one_undo_step_and_then_its_layer_group() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::CadDocument;
+        crate::settings::with_test_file(|| {
+            let file = std::env::temp_dir().join(format!("ois-143-stap-{}.txt", std::process::id()));
+            std::fs::write(&file, "1;105000;425000;1,0;LTRB1 B\n2;105010;425000;1,0;LTRB1\n3;105005;425005;1,0;SBM Eik 30\n").unwrap();
+            let drawing = std::sync::Arc::new(Drawing::new(CadDocument::new(), false));
+            let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 143_302, unit_factor: 1.0, doc_path: None };
+            crate::bridge::with_command_context(target, None, None, || {
+                import_coded(&file, &super::super::CivielOptions::default(), Some(CodeOptions { table: None })).unwrap();
+            });
+            let _ = std::fs::remove_file(&file);
+            assert_eq!(drawing.steps(), ["begin", "record", "end", "LAYERGROUP ADD Landmeten"]);
+        });
+    }
+
+    /// Applying codes again (`CIV_CODES_APPLY`) is one undo step with its
+    /// removal and index, and the layer group follows it (#143).
+    #[test]
+    fn applying_codes_is_one_undo_step_and_then_its_layer_group() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::CadDocument;
+        crate::settings::with_test_file(|| {
+            let points = parse("1;105000;425000;1,0;LTRB1 B\n2;105010;425000;1,0;LTRB1\n3;105005;425005;1,0;SBM Eik 30\n", Format::Auto).unwrap().points;
+            let drawing = std::sync::Arc::new(Drawing::new(CadDocument::new(), false));
+            let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 143_304, unit_factor: 1.0, doc_path: None };
+            crate::bridge::with_command_context(target, None, None, || {
+                let ctx = Ctx::new(&super::super::CivielOptions::default()).unwrap();
+                apply_codes(&ctx, &CodeTable::load(None).unwrap(), &points, "3 punten", true).unwrap();
+            });
+            assert_eq!(drawing.steps(), ["begin", "record", "end", "LAYERGROUP ADD Landmeten"]);
         });
     }
 

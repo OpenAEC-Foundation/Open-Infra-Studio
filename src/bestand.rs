@@ -72,7 +72,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     let base = emit::clean_name(opt.layer.trim());
     // The name a drawing from before #143 has for it: the layer as typed,
     // the default one with the spaces of the file's name.
-    let old_base = if base == emit::layer_name("GIS", stem) { emit::spaced_layer_name("GIS", stem) } else { opt.layer.clone() };
+    let old_base = if opt.layer.trim() == emit::layer_name("GIS", stem) { emit::spaced_layer_name("GIS", stem) } else { opt.layer.clone() };
     let text_h = opt.text_m * f;
     let mut layers: Vec<String> = Vec::new();
     let mut out: Vec<EntityType> = Vec::new();
@@ -199,6 +199,26 @@ mod tests {
         let old = doc.add_entity(EntityType::Point(point)).unwrap();
         let drawing = Arc::new(Drawing::new(doc, false));
         import(&drawing, 143_202, "wegen west.gpkg", &one_feature(&[("soort", "dicht asfalt")]), |opt| opt.split_by = Some("soort".into()));
+        assert_eq!(groups(&drawing), [group("Bestand-wegen_west", &["GIS-WEGEN_WEST-DICHT_ASFALT"])]);
+        let doc = drawing.doc.lock().unwrap();
+        assert!(!doc.layers.contains("GIS-WEGEN WEST-DICHT ASFALT"));
+        assert_eq!(doc.get_entity(old).unwrap().common().layer, "GIS-WEGEN_WEST-DICHT_ASFALT");
+    }
+
+    /// A typed layer name that, cleaned, is the file's default: a re-import
+    /// still takes over the layers made from the name as typed (#143).
+    #[test]
+    fn a_typed_name_like_the_default_takes_over_its_layers_with_spaces() {
+        let mut doc = CadDocument::new();
+        doc.layers.add(Layer::new("GIS-WEGEN WEST-DICHT ASFALT")).unwrap();
+        let mut point = Point::default();
+        point.common.layer = "GIS-WEGEN WEST-DICHT ASFALT".into();
+        let old = doc.add_entity(EntityType::Point(point)).unwrap();
+        let drawing = Arc::new(Drawing::new(doc, false));
+        import(&drawing, 143_205, "wegen_west.gpkg", &one_feature(&[("soort", "dicht asfalt")]), |opt| {
+            opt.layer = "GIS-WEGEN WEST".into();
+            opt.split_by = Some("soort".into());
+        });
         assert_eq!(groups(&drawing), [group("Bestand-wegen_west", &["GIS-WEGEN_WEST-DICHT_ASFALT"])]);
         let doc = drawing.doc.lock().unwrap();
         assert!(!doc.layers.contains("GIS-WEGEN WEST-DICHT ASFALT"));

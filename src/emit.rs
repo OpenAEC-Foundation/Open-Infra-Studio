@@ -79,8 +79,7 @@ pub(crate) fn spaced_layer_name(prefix: &str, name: &str) -> String {
 
 /// At most 60 bytes, cut between characters.
 fn cut(mut s: String) -> String {
-    let end = (0..=s.len().min(60)).rev().find(|&i| s.is_char_boundary(i)).unwrap_or(0);
-    s.truncate(end);
+    s.truncate(s.floor_char_boundary(60));
     s
 }
 

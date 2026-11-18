@@ -2155,6 +2155,21 @@ pub(crate) mod replacement_test_host {
             handle
         }
 
+        /// The log with repeats folded and each LAYERGROUP line cut to its
+        /// verb and group (NEW, which follows each ADD, left out): undo
+        /// steps, record writes and layer group changes, in order.
+        pub(crate) fn steps(&self) -> Vec<String> {
+            let mut out: Vec<String> = Vec::new();
+            for line in self.log.lock().unwrap().iter() {
+                let step = if line.starts_with("LAYERGROUP") { line.split_whitespace().take(3).collect::<Vec<_>>().join(" ") } else { line.clone() };
+                if step.starts_with("LAYERGROUP NEW") || out.last() == Some(&step) {
+                    continue;
+                }
+                out.push(step);
+            }
+            out
+        }
+
         fn meet(&self) {
             if let Some((count, met)) = &self.meet {
                 let mut n = count.lock().unwrap();
