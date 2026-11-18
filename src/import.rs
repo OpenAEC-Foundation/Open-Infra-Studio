@@ -6,7 +6,8 @@ use ocs_plugin_api::host::codec::Color;
 use crate::bridge::{self, Target};
 use crate::emit;
 use crate::gis::caps::{WfsCaps, WfsType, WmsCaps, WmsLayer};
-use crate::gis::raster::{self, Options as RasterOptions};
+use crate::gis::foto::Photo;
+use crate::gis::raster::{self, Options as RasterOptions, WmsImport};
 use crate::gis::servers::{self, MapServer, ServerKind};
 use crate::gis::site::Site;
 use crate::gis::vector::{self, Feature, Options as VectorOptions};
@@ -18,14 +19,31 @@ fn target() -> Result<Target, String> {
 
 pub fn wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer, opt: &RasterOptions, fade: u8, progress: &dyn Fn(String)) -> Result<String, String> {
     let t = target()?;
-    let placed = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
+    let result = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
+    place_wms(site, server, layer, fade, &t, result)
+}
+
+fn place_wms(site: &Site, server: &MapServer, layer: &WmsLayer, fade: u8, t: &Target, result: WmsImport) -> Result<String, String> {
+    use crate::lang::tr;
     let layer_name = emit::layer_name("GIS-WMS", &layer.title);
     bridge::ensure_layer(&layer_name, Color::from_index(8));
-    let handles = bridge::add_entities_handles(&format!("GIS WMS {}", layer.title), emit::images(site, &placed, &layer_name, t.unit_factor, fade))?;
-    let n = handles.len();
+    let entities = emit::images(site, &[result.image], &layer_name, t.unit_factor, fade);
+    let handles = bridge::add_entities_handles(&format!("GIS WMS {}", layer.title), entities)?;
     bridge::image_to_back(&handles);
     bridge::zoom_extents();
-    Ok(format!("{n} kaartdeel/delen van {} op laag {layer_name} ({}).", server.name, server.attribution))
+    let received = result.parts as usize - result.missing.len();
+    let mut message = format!(
+        "{received}/{} {} {} {} {layer_name} ({}).",
+        result.parts, tr("kaartdelen van", "map parts from"), server.name, tr("op laag", "on layer"), server.attribution
+    );
+    if !result.missing.is_empty() {
+        let missing = result.missing.iter().map(u32::to_string).collect::<Vec<_>>().join(", ");
+        message.push_str(&format!(
+            " {} {missing}.",
+            tr("Let op, WMS-delen ontbreken na opnieuw proberen:", "Warning, WMS parts are missing after retrying:")
+        ));
+    }
+    Ok(message)
 }
 
 pub fn xyz(site: &Site, server: &MapServer, opt: &RasterOptions, fade: u8, progress: &dyn Fn(String)) -> Result<String, String> {
@@ -205,6 +223,9 @@ pub fn run_dataset(site: &Site, data: &Dataset, progress: &dyn Fn(String)) -> Re
     match data {
         Dataset::Raster { server } => {
             let srv = servers::find(server).ok_or_else(|| format!("server {server} onbekend"))?;
+            if *server == "pdok-luchtfoto" {
+                return aerial_wms(site, &srv, Photo::Pdok.finest(), progress);
+            }
             // Large areas: no more pixels than a 4096-wide image (a quick
             // import of 30 km at 25 cm would be billions of pixels).
             let cap = |fine: f64| fine.max(site.width.max(site.height) / 4096.0);
@@ -267,8 +288,20 @@ pub fn aerial(site: &Site, progress: &dyn Fn(String)) -> Result<String, String> 
         return run_dataset(site, &Dataset::Raster { server: "pdok-luchtfoto" }, progress);
     }
     let srv = servers::find("eox-s2-wms").ok_or("server eox-s2-wms onbekend")?;
+    aerial_wms(site, &srv, 10.0, progress)
+}
+
+fn aerial_wms(site: &Site, srv: &MapServer, finest: f64, progress: &dyn Fn(String)) -> Result<String, String> {
+    let t = target()?;
     let caps = caps::fetch_wms(&srv.url)?;
-    let layer = caps.layers.iter().find(|l| l.name == srv.default_layer).or(caps.layers.first()).cloned().ok_or("geen lagen")?;
-    let res = (site.width.max(site.height) / 2048.0).max(5.0);
-    wms(site, &srv, &caps, &layer, &RasterOptions { resolution: res, format: "image/jpeg".into() }, 0, progress)
+    let layer = caps.layers.iter().find(|l| l.name == srv.default_layer)
+        .ok_or_else(|| format!("WMS-laag {} ontbreekt", srv.default_layer))?;
+    let result = raster::import_aerial_wms(site, &caps, layer, finest, &bridge::image_dir(), progress)?;
+    let [west, south, east, north] = result.image.bbox;
+    let [width, height] = result.image.px;
+    let x = format!("{:.3}", (east - west) / f64::from(width));
+    let y = format!("{:.3}", (north - south) / f64::from(height));
+    let resolution = if x == y { x } else { format!("{x} × {y}") };
+    let message = place_wms(site, srv, layer, 0, &t, result)?;
+    Ok(format!("{} {resolution} m/px. {message}", crate::lang::tr("Luchtfoto op", "Aerial photo at")))
 }

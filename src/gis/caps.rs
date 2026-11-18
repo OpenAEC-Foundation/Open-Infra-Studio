@@ -21,6 +21,8 @@ pub struct WmsCaps {
     pub title: String,
     pub get_map_url: String,
     pub formats: Vec<String>,
+    pub max_width: Option<u32>,
+    pub max_height: Option<u32>,
     pub layers: Vec<WmsLayer>,
 }
 
@@ -165,11 +167,15 @@ pub fn parse_wms(url: &str, xml: &str) -> Result<WmsCaps, String> {
     for top in children(capability, "Layer") {
         walk(top, &[], None, 0, &mut layers)?;
     }
+    let service = child(root, "Service");
+    let image_limit = |name| text_of(service, name).parse::<u32>().ok().filter(|&n| n > 0);
     Ok(WmsCaps {
         version,
-        title: text_of(child(root, "Service"), "Title"),
+        title: text_of(service, "Title"),
         get_map_url: same_scheme(url, operation_url(capability, "GetMap")),
         formats,
+        max_width: image_limit("MaxWidth"),
+        max_height: image_limit("MaxHeight"),
         layers,
     })
 }
@@ -252,7 +258,7 @@ mod tests {
     #[test]
     fn wms_layer_extents_and_inheritance() {
         let xml = r#"<WMS_Capabilities version="1.3.0" xmlns="http://www.opengis.net/wms" xmlns:xlink="http://www.w3.org/1999/xlink">
-          <Service><Title>Test</Title></Service>
+          <Service><Title>Test</Title><MaxWidth>2500</MaxWidth><MaxHeight>1200</MaxHeight></Service>
           <Capability>
             <Request><GetMap><Format>image/png</Format><DCPType><HTTP><Get><OnlineResource xlink:href="http://example.org/wms?"/></Get></HTTP></DCPType></GetMap></Request>
             <Layer><Title>Root</Title><CRS>EPSG:25832</CRS><CRS>CRS:84</CRS>
@@ -264,6 +270,7 @@ mod tests {
             </Layer>
           </Capability></WMS_Capabilities>"#;
         let c = parse_wms("https://example.org/wms", xml).unwrap();
+        assert_eq!((c.max_width, c.max_height), (Some(2500), Some(1200)));
         assert_eq!(c.layers.len(), 2);
         assert_eq!(c.layers[0].bbox, Some([5.8, 47.2, 15.1, 55.1]));
         assert_eq!(c.layers[0].crs, vec!["EPSG:25832", "EPSG:4326"]);
