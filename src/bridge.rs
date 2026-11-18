@@ -1744,7 +1744,12 @@ pub(crate) fn attach_imported_cloud(path: &str, layer: &str, group: &str) -> Res
         let restore = current(&previous);
         match result? {
             PluginResponse::CommandResult(Ok(outcome)) if outcome.added == 1 && outcome.error.is_none() => {
-                layers.mark_written(layer);
+                // The command names no handle: the newest element on the
+                // layer is the cloud, the proof for its layer group.
+                match query(serde_json::json!({"layer": layer})).ok().and_then(|found| found.iter().map(|e| e.common().handle).max()) {
+                    Some(cloud) => layers.drew(layer, cloud),
+                    None => layers.mark_written(layer),
+                }
                 restore
             }
             PluginResponse::CommandResult(Ok(outcome)) => {
@@ -1932,6 +1937,8 @@ pub(crate) mod replacement_test_host {
         /// Undo groups and command lines, in order.
         pub log: Mutex<Vec<String>>,
         pub info: Mutex<Vec<String>>,
+        /// CLAYER, where `-POINTCLOUDATTACH` puts its cloud.
+        clayer: Mutex<String>,
     }
 
     impl Drawing {
@@ -1939,6 +1946,7 @@ pub(crate) mod replacement_test_host {
             Self {
                 doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()),
                 groups: Mutex::new(Vec::new()), busy: Mutex::new(0), log: Mutex::new(Vec::new()), info: Mutex::new(Vec::new()),
+                clayer: Mutex::new("0".into()),
             }
         }
 
@@ -2025,10 +2033,29 @@ pub(crate) mod replacement_test_host {
                         return Ok(A::CommandResult(Err("a command is already active; cancel it first".into())));
                     }
                     self.log.lock().unwrap().push(line.clone());
+                    let mut added = 0;
                     if line.starts_with("LAYERGROUP ") {
                         self.layer_group(&doc, &line);
+                    } else if line.starts_with("-POINTCLOUDATTACH ") {
+                        let mut cloud = ocs_plugin_api::host::codec::Point::default();
+                        cloud.common.layer = self.clayer.lock().unwrap().clone();
+                        doc.add_entity(EntityType::Point(cloud)).unwrap();
+                        added = 1;
                     }
-                    A::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() }))
+                    A::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), added, ..Default::default() }))
+                }
+                Q::GetSystemVariable { name } if name == "CLAYER" => {
+                    A::SystemVariable(Some(ocs_plugin_api::host::HostSettingValue::Text(self.clayer.lock().unwrap().clone())))
+                }
+                Q::SetSystemVariable { name, value: ocs_plugin_api::host::HostSettingValue::Text(layer) } if name == "CLAYER" => {
+                    *self.clayer.lock().unwrap() = layer.clone();
+                    A::SystemVariableResult(Ok(ocs_plugin_api::host::HostSettingValue::Text(layer)))
+                }
+                Q::QueryEntities { query } => {
+                    let query: serde_json::Value = serde_json::from_str(&query).unwrap();
+                    let layer = query["layer"].as_str().unwrap();
+                    let entities: Vec<EntityType> = doc.model_space_entities().filter(|e| e.common().layer == layer).cloned().collect();
+                    A::EntityPage(Ok(ocs_plugin_api::host::EntityPage { count: entities.len() as u64, entities, next_offset: None }))
                 }
                 Q::BeginUndoGroup { .. } => {
                     self.log.lock().unwrap().push("begin".into());
@@ -2562,6 +2589,42 @@ mod layer_group_tests {
             *drawing.busy.lock().unwrap() = 0;
             retries_done(143_006);
             assert_eq!(groups(drawing), [("opnieuw".to_string(), vec!["GIS-OPNIEUW".to_string()])]);
+        });
+    }
+
+    /// Maps and features placed together (PDOK, one Ctrl+Z, #141): each
+    /// fills its own group, all after the one undo step (#143).
+    #[test]
+    fn the_datasets_of_one_import_fill_their_groups_after_its_one_undo_step() {
+        in_drawing(143_007, |drawing| {
+            for layer in ["GIS-WMS-LUCHTFOTO", "GIS-OSM_WEGEN"] {
+                ensure_layer(layer, Color::from_index(7));
+            }
+            with_import_layers("PDOK", None, |layers| {
+                // A map through the shared writer, as `PreparedDataset::write`.
+                layers.group = Some("Luchtfoto".into());
+                layers.write_entities(vec![on("GIS-WMS-LUCHTFOTO")])?;
+                layers.group = None;
+                // Features through their own write, which joins the import.
+                add_imported_entities("GIS OSM wegen", "OSM", vec![on("GIS-OSM_WEGEN")])
+            })
+            .unwrap();
+            let log = drawing.log.lock().unwrap().clone();
+            assert_eq!(log[..2], ["begin", "end"], "{log:?}");
+            assert!(log[2..].iter().all(|line| line.starts_with("LAYERGROUP ")), "{log:?}");
+            let mut made = groups(drawing);
+            made.sort();
+            assert_eq!(made, [("Luchtfoto".to_string(), vec!["GIS-WMS-LUCHTFOTO".to_string()]), ("OSM".to_string(), vec!["GIS-OSM_WEGEN".to_string()])]);
+        });
+    }
+
+    /// OCS's own command attaches a point cloud and names no handle: the
+    /// cloud on its layer is the proof for its group (#143).
+    #[test]
+    fn a_point_cloud_fills_its_layer_group() {
+        in_drawing(143_008, |drawing| {
+            attach_imported_cloud("/tmp/ahn5.laz", "GIS-AHN5_PUNTENWOLK", "AHN").unwrap();
+            assert_eq!(groups(drawing), [("AHN".to_string(), vec!["GIS-AHN5_PUNTENWOLK".to_string()])]);
         });
     }
 
