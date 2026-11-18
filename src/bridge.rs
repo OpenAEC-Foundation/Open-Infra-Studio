@@ -1248,10 +1248,7 @@ impl ImportLayers {
     }
 }
 
-fn send_to_back(handles: &[Handle]) -> Result<(), String> {
-    if handles.is_empty() {
-        return Ok(());
-    }
+fn send_to_back(handles: &[Handle]) -> Result<bool, String> {
     let select = |handles| {
         match request(PluginRequest::SetSelection { handles })? {
             PluginResponse::SelectionResult(result) => result,
@@ -1261,7 +1258,13 @@ fn send_to_back(handles: &[Handle]) -> Result<(), String> {
     let previous = selection()?;
     select(handles.to_vec())?;
     let moved = run_on_target("DRAWORDER_BACK");
-    moved.and(select(previous))
+    let restored = select(previous);
+    match moved {
+        // API 23 returns a string for this refusal before running the
+        // command. The actual import has already written its geometry.
+        Err(error) if error == "commands act on the active document; switch to it first" => restored.map(|()| false),
+        result => result.and(restored).map(|()| true),
+    }
 }
 
 /// Keep the new map below vector data and above older images. The host
@@ -1294,9 +1297,17 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
         // Native DRAWORDER can close the import group. Record the subsequent
         // lock changes together even when several image layers were reopened.
         let scope = begin_layer_undo(crate::lang::tr("Kaartlagen vergrendelen", "Lock map layers"));
-        return moved.and(scope);
+        scope?;
     }
-    moved
+    if !moved? {
+        let message = crate::lang::tr(
+            "Kaartbeelden geplaatst. De tekenvolgorde is overgeslagen omdat de tekening niet meer actief is.",
+            "Map images were placed. Draw order was skipped because the drawing is no longer active.",
+        );
+        crate::civiel::api::note("tekenvolgorde_overgeslagen", message);
+        let _ = request(PluginRequest::PushInfo(format!("[Open Infra] {message}")));
+    }
+    Ok(())
 }
 
 fn rasters_already_in_order(owner: Handle, wanted: &[Handle]) -> bool {
@@ -1460,7 +1471,7 @@ mod tests {
                     PluginRequest::RunCommand { request: CommandRequest::Run { line } } => {
                         assert_eq!(line, "DRAWORDER_BACK");
                         assert_eq!(*self.0.lock().unwrap(), [vec![Handle::new(2)]]);
-                        PluginResponse::CommandResult(Err("commands act on the active document".into()))
+                        PluginResponse::CommandResult(Err("commands act on the active document; switch to it first".into()))
                     }
                     other => panic!("unexpected request: {other:?}"),
                 })
@@ -1470,7 +1481,7 @@ mod tests {
         let sender = Arc::new(Sender::default());
         let target = Target { sender: sender.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
         let result = with_command_context(target, None, None, || send_to_back(&[Handle::new(2)]));
-        assert_eq!(result.unwrap_err(), "commands act on the active document");
+        assert!(!result.unwrap(), "an inactive drawing skips draw order");
         assert_eq!(*sender.0.lock().unwrap(), [vec![Handle::new(2)], vec![Handle::new(1)]]);
     }
 
