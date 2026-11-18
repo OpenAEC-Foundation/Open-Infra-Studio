@@ -198,9 +198,10 @@ pub fn geo_origin(site: &Site) -> Result<String, String> {
         e.common_mut().layer = layer.into();
         e.common_mut().color = Color::ByLayer;
     }
-    bridge::with_import_undo("GIS basispunt", || {
+    let label = "GIS basispunt";
+    bridge::with_import_undo(label, || {
         bridge::ensure_layer(layer, Color::from_index(1));
-        bridge::add_imported_entities("GIS basispunt", ents)
+        bridge::append_entities(label, ents, &[])
     })?;
     Ok(format!("Basispunt geplaatst op laag {layer}."))
 }
@@ -421,6 +422,30 @@ mod import_layer_tests {
         let feature = Feature { points: vec![[site.lon, site.lat]], ..Default::default() };
         let style = VectorStyle { aci: 7, label_field: None, text_m: 1.0, clip: false };
         place_features(&site, &[feature], "EPSG:4326", layer, "WFS", &style, false)
+    }
+
+    #[test]
+    fn origin_marker_leaves_new_layer_editable_and_preserves_existing_lock() {
+        crate::settings::with_test_file(|| {
+            assert!(crate::settings::lock_imported_layers());
+            let drawing = Arc::new(Drawing(Mutex::new(CadDocument::new())));
+            let target = Target { sender: drawing.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                let site = Site::default();
+                geo_origin(&site).unwrap();
+                {
+                    let mut doc = drawing.0.lock().unwrap();
+                    assert_eq!(doc.model_space_entities().count(), 4);
+                    let layer = doc.layers.get_mut("GIS-BASISPUNT").unwrap();
+                    assert!(!layer.is_locked(), "a new origin marker must be editable");
+                    layer.flags.locked = true;
+                }
+                geo_origin(&site).unwrap();
+                let doc = drawing.0.lock().unwrap();
+                assert_eq!(doc.model_space_entities().count(), 8);
+                assert!(doc.layers.get("GIS-BASISPUNT").unwrap().is_locked());
+            });
+        });
     }
 
     #[test]
