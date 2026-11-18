@@ -2083,6 +2083,8 @@ pub(crate) mod replacement_test_host {
         pub index: Mutex<Vec<XRecordEntry>>,
         /// Layer groups as OCS's LAYERGROUP keeps them, by layer name.
         pub groups: Mutex<Vec<(String, Vec<String>)>>,
+        /// The block definitions in the drawing.
+        pub blocks: Mutex<HashSet<String>>,
         /// How many commands to refuse as OCS does while another runs.
         pub busy: Mutex<u32>,
         /// Undo groups, record writes and command lines, in order.
@@ -2114,7 +2116,7 @@ pub(crate) mod replacement_test_host {
         pub(crate) fn new(doc: CadDocument, reject_batch: bool) -> Self {
             Self {
                 doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()),
-                groups: Mutex::new(Vec::new()), busy: Mutex::new(0), log: Mutex::new(Vec::new()), info: Mutex::new(Vec::new()),
+                groups: Mutex::new(Vec::new()), blocks: Mutex::new(HashSet::new()), busy: Mutex::new(0), log: Mutex::new(Vec::new()), info: Mutex::new(Vec::new()),
                 clayer: Mutex::new("0".into()), layout: Mutex::new("Model".into()), outside: Mutex::new(Vec::new()), block_edit: false,
                 meet: None, refuse: Mutex::new(Vec::new()), hold_sheet: false, switched: std::sync::Condvar::new(),
             }
@@ -2153,21 +2155,6 @@ pub(crate) mod replacement_test_host {
                 self.outside.lock().unwrap().push(handle);
             }
             handle
-        }
-
-        /// The log with repeats folded and each LAYERGROUP line cut to its
-        /// verb and group (NEW, which follows each ADD, left out): undo
-        /// steps, record writes and layer group changes, in order.
-        pub(crate) fn steps(&self) -> Vec<String> {
-            let mut out: Vec<String> = Vec::new();
-            for line in self.log.lock().unwrap().iter() {
-                let step = if line.starts_with("LAYERGROUP") { line.split_whitespace().take(3).collect::<Vec<_>>().join(" ") } else { line.clone() };
-                if step.starts_with("LAYERGROUP NEW") || out.last() == Some(&step) {
-                    continue;
-                }
-                out.push(step);
-            }
-            out
         }
 
         fn meet(&self) {
@@ -2238,6 +2225,18 @@ pub(crate) mod replacement_test_host {
                 Q::TableOperation { operation: TableOperation::LayerRename { from, to } } => A::TableResult(
                     if doc.layers.contains(&to) { Err(format!("layer {to:?} already exists")) } else { doc.rename_layer(&from, &to).map_err(|e| e.to_string()) },
                 ),
+                Q::TableOperation { operation: TableOperation::BlockModify { name, .. } } => A::TableResult(
+                    if self.blocks.lock().unwrap().contains(&name) { Ok(Handle::new(1003)) } else { Err(format!("block {name:?} not found")) },
+                ),
+                Q::TableOperation { operation: TableOperation::BlockCreate { name, entities, erase_originals, .. } } => {
+                    if erase_originals {
+                        for handle in entities {
+                            doc.remove_entity(handle);
+                        }
+                    }
+                    self.blocks.lock().unwrap().insert(name);
+                    A::TableResult(Ok(Handle::new(1003)))
+                }
                 Q::TableOperation { .. } => A::TableResult(Ok(Handle::new(1001))),
                 Q::OpenDocumentViewV4 { .. } => A::Error("no shared view in the test host".into()),
                 Q::GetSelection => A::Selection(doc.model_space_entities().map(|e| e.common().handle).collect()),

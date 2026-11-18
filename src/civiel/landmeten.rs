@@ -850,19 +850,19 @@ pub fn symbol_shapes(name: &str) -> Vec<SymbolShape> {
 }
 
 /// The block of a symbol, defined once per drawing (layer 0, ByBlock, in
-/// paper millimetres: inserts scale it to the drawing scale).
-fn ensure_symbol(name: &str) -> Result<String, String> {
+/// paper millimetres: inserts scale it to the drawing scale). `made` holds
+/// the blocks this command checked already: an undo can take a block away
+/// between two commands.
+fn ensure_symbol(name: &str, made: &mut HashSet<String>) -> Result<String, String> {
     use ocs_plugin_api::host::codec::{Circle, Color, LineWeight, LwPolyline, Vector2, Vector3};
     use ocs_plugin_api::host::TableOperation;
     use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
-    static MADE: std::sync::Mutex<Option<HashSet<(u64, String)>>> = std::sync::Mutex::new(None);
     let shape = if SYMBOLS.contains(&name.to_ascii_lowercase().as_str()) { name.to_ascii_lowercase() } else { "cirkel".into() };
     let block = format!("OI_SYMBOOL_{}", shape.to_ascii_uppercase());
-    let t = crate::bridge::target().ok_or_else(|| crate::lang::tr("geen tekening actief", "no drawing active").to_string())?;
-    let key = (t.tab_id, block.clone());
-    if MADE.lock().unwrap().get_or_insert_with(HashSet::new).contains(&key) {
+    if made.contains(&block) {
         return Ok(block);
     }
+    let t = crate::bridge::target().ok_or_else(|| crate::lang::tr("geen tekening actief", "no drawing active").to_string())?;
     let table = |op: TableOperation| -> Result<(), String> {
         match t.sender.request(PluginRequest::TableOperation { operation: op }) {
             Ok(PluginResponse::TableResult(Ok(_))) => Ok(()),
@@ -898,7 +898,7 @@ fn ensure_symbol(name: &str) -> Result<String, String> {
         let handles = crate::bridge::add_entities_handles(&format!("Open Infra: {block}"), geometry)?;
         table(TableOperation::BlockCreate { name: block.clone(), entities: handles, base_point: [0.0, 0.0, 0.0], erase_originals: true, description: Some(description) })?;
     }
-    MADE.lock().unwrap().get_or_insert_with(HashSet::new).insert(key);
+    made.insert(block.clone());
     Ok(block)
 }
 
@@ -943,11 +943,12 @@ pub fn draw_codes(ctx: &Ctx, table: &CodeTable, lw: &Linework, points: &[SurveyP
         }
         v
     };
+    let mut made = HashSet::new();
     for (d, i, params) in &lw.symbols {
         let def = &table.codes[*d];
         let p = &points[*i];
         let spec = code_layer(ctx, def, Element::S)?;
-        let block = ensure_symbol(def.symbool.as_deref().unwrap_or("cirkel"))?;
+        let block = ensure_symbol(def.symbool.as_deref().unwrap_or("cirkel"), &mut made)?;
         let at = ctx.to_drawing([p.e, p.n]);
         let ins = Insert::new(block, v3(at, p.z.unwrap_or(0.0) * f)).with_scale(ctx.k, ctx.k, ctx.k);
         let mut e = EntityType::Insert(ins);
@@ -981,23 +982,33 @@ pub fn draw_codes(ctx: &Ctx, table: &CodeTable, lw: &Linework, points: &[SurveyP
 }
 
 /// Linework and symbols from the codes of `points` (measuring order), one
-/// undo step with the drawing's index ("codes"), so `CIV_CODES_APPLY` can
-/// replace them; the layer group follows it (#143). `replace` removes the
-/// earlier code output first, in the same step.
+/// undo step with their symbol blocks and the drawing's index ("codes"), so
+/// `CIV_CODES_APPLY` can replace them; the layer group follows it (#143).
+/// `replace` removes the earlier code output once the new is in, also from
+/// a locked layer. Should OCS refuse that, the index holds both, so
+/// applying the codes again replaces them whole.
 pub fn apply_codes(ctx: &Ctx, table: &CodeTable, points: &[SurveyPoint], source: &str, replace: bool) -> Result<String, String> {
     let lw = linework(table, points);
-    let mut out = Out::default();
-    let n = draw_codes(ctx, table, &lw, points, source, &mut out)?;
     let label = format!("Codes {source}");
-    let removed = crate::bridge::with_import_undo(&label, || {
-        let mut removed = 0;
+    let (n, removed) = crate::bridge::with_import_undo(&label, || {
+        let mut out = Out::default();
+        let n = draw_codes(ctx, table, &lw, points, source, &mut out)?;
+        let mut originals = Vec::new();
         if replace {
             let old: Vec<Handle> = crate::bridge::index_read().into_iter().filter(|(k, _, _)| k == "codes").flat_map(|(_, _, h)| h).collect();
-            removed = crate::bridge::remove_entities(&label, &old)?;
+            for chunk in old.chunks(500) {
+                // Elements a user deleted are gone already.
+                originals.extend(crate::bridge::entities(chunk)?.into_iter().flatten().map(|e| (e.common().handle, e.common().layer.clone())));
+            }
         }
         let handles = if out.is_empty() { Vec::new() } else { out.write_from(&label, "Landmeten")? };
-        crate::bridge::index_add("codes", "", &handles, replace);
-        Ok(removed)
+        let gone = crate::bridge::remove_replaced(&label, &originals);
+        let mut index = handles.clone();
+        if gone.is_err() {
+            index.extend(originals.iter().map(|(h, _)| *h));
+        }
+        crate::bridge::index_add("codes", "", &index, replace);
+        gone.map(|()| (n, originals.len()))
     })?;
     let mut per_code: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
     for f in &lw.figures {
@@ -1101,7 +1112,100 @@ mod tests {
                 import_coded(&file, &super::super::CivielOptions::default(), Some(CodeOptions { table: None })).unwrap();
             });
             let _ = std::fs::remove_file(&file);
-            assert_eq!(drawing.steps(), ["begin", "record", "end", "LAYERGROUP ADD Landmeten"]);
+            let group = "Landmeten B-XX-OG-HOOGTEPUNT-S B-XX-OG-HOOGTEPUNT-T B-XX-GR-BOOM-S B-XX-VH-KANTOPSLUITING_TROTTOIRBAND-G";
+            assert_eq!(*drawing.log.lock().unwrap(), ["begin", "record", "record", "end", &format!("LAYERGROUP ADD {group}"), &format!("LAYERGROUP NEW {group}")]);
+        });
+    }
+
+    /// A coded survey undone whole takes its new symbol blocks with it: a
+    /// next import makes them again, so its symbols show (#143).
+    #[test]
+    fn a_survey_imported_again_after_undo_makes_its_symbol_blocks_again() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::CadDocument;
+        crate::settings::with_test_file(|| {
+            let file = std::env::temp_dir().join(format!("ois-143-boom-{}.txt", std::process::id()));
+            std::fs::write(&file, "3;105005;425005;1,0;SBM Eik 30\n").unwrap();
+            let drawing = std::sync::Arc::new(Drawing::new(CadDocument::new(), false));
+            let import = || {
+                let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 143_305, unit_factor: 1.0, doc_path: None };
+                crate::bridge::with_command_context(target, None, None, || {
+                    import_coded(&file, &super::super::CivielOptions::default(), Some(CodeOptions { table: None })).unwrap();
+                });
+            };
+            import();
+            assert!(drawing.blocks.lock().unwrap().contains("OI_SYMBOOL_BOOM"));
+            // Ctrl+Z of the import: its block definition goes with it.
+            drawing.blocks.lock().unwrap().clear();
+            import();
+            let _ = std::fs::remove_file(&file);
+            assert!(drawing.blocks.lock().unwrap().contains("OI_SYMBOOL_BOOM"), "a tree insert without its block");
+        });
+    }
+
+    /// Applying codes again with the survey's layers locked: the old
+    /// linework goes, the new takes its place in the index, and the layers
+    /// are locked again after it (#143).
+    #[test]
+    fn applying_codes_again_on_locked_layers_replaces_the_old_linework() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::CadDocument;
+        crate::settings::with_test_file(|| {
+            let text = "1;105000;425000;1,0;LTRB1 B\n2;105010;425000;1,0;LTRB1\n";
+            let file = std::env::temp_dir().join(format!("ois-143-band-{}.txt", std::process::id()));
+            std::fs::write(&file, text).unwrap();
+            let drawing = std::sync::Arc::new(Drawing::new(CadDocument::new(), false));
+            let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 143_306, unit_factor: 1.0, doc_path: None };
+            let codes = || crate::bridge::index_read().into_iter().filter(|(k, _, _)| k == "codes").flat_map(|(_, _, h)| h).collect::<Vec<_>>();
+            let (old, new) = crate::bridge::with_command_context(target, None, None, || {
+                import_coded(&file, &super::super::CivielOptions::default(), Some(CodeOptions { table: None })).unwrap();
+                let old = codes();
+                for layer in drawing.doc.lock().unwrap().layers.iter_mut() {
+                    layer.flags.locked = true;
+                }
+                let points = parse(text, Format::Auto).unwrap().points;
+                let ctx = Ctx::new(&super::super::CivielOptions::default()).unwrap();
+                apply_codes(&ctx, &CodeTable::load(None).unwrap(), &points, "2 punten", true).unwrap();
+                (old, codes())
+            });
+            let _ = std::fs::remove_file(&file);
+            let doc = drawing.doc.lock().unwrap();
+            assert!(!old.is_empty() && old.iter().all(|h| doc.get_entity(*h).is_none()), "old linework left");
+            assert!(!new.is_empty() && new.iter().all(|h| doc.get_entity(*h).is_some()));
+            assert!(doc.layers.iter().all(|l| l.is_locked()));
+        });
+    }
+
+    /// Applying codes again while OCS refuses to remove an old line: the
+    /// command fails and the index holds the old and the new linework, so
+    /// applying the codes once more replaces both (#143).
+    #[test]
+    fn applying_codes_again_after_a_refused_removal_keeps_both_in_the_index() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::CadDocument;
+        crate::settings::with_test_file(|| {
+            let text = "1;105000;425000;1,0;LTRB1 B\n2;105010;425000;1,0;LTRB1\n";
+            let file = std::env::temp_dir().join(format!("ois-143-weigert-{}.txt", std::process::id()));
+            std::fs::write(&file, text).unwrap();
+            let drawing = std::sync::Arc::new(Drawing::new(CadDocument::new(), false));
+            let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 143_307, unit_factor: 1.0, doc_path: None };
+            let codes = || crate::bridge::index_read().into_iter().filter(|(k, _, _)| k == "codes").flat_map(|(_, _, h)| h).collect::<Vec<_>>();
+            crate::bridge::with_command_context(target, None, None, || {
+                import_coded(&file, &super::super::CivielOptions::default(), Some(CodeOptions { table: None })).unwrap();
+                let old = codes();
+                drawing.refuse.lock().unwrap().extend(&old);
+                let points = parse(text, Format::Auto).unwrap().points;
+                let ctx = Ctx::new(&super::super::CivielOptions::default()).unwrap();
+                let table = CodeTable::load(None).unwrap();
+                assert!(apply_codes(&ctx, &table, &points, "2 punten", true).is_err());
+                let index = codes();
+                assert!(old.iter().all(|h| index.contains(h)) && index.len() > old.len(), "{old:?} {index:?}");
+                drawing.refuse.lock().unwrap().clear();
+                apply_codes(&ctx, &table, &points, "2 punten", true).unwrap();
+                let doc = drawing.doc.lock().unwrap();
+                assert!(index.iter().all(|h| doc.get_entity(*h).is_none()), "both sets replaced");
+            });
+            let _ = std::fs::remove_file(&file);
         });
     }
 
@@ -1119,7 +1223,8 @@ mod tests {
                 let ctx = Ctx::new(&super::super::CivielOptions::default()).unwrap();
                 apply_codes(&ctx, &CodeTable::load(None).unwrap(), &points, "3 punten", true).unwrap();
             });
-            assert_eq!(drawing.steps(), ["begin", "record", "end", "LAYERGROUP ADD Landmeten"]);
+            let group = "Landmeten B-XX-GR-BOOM-S B-XX-VH-KANTOPSLUITING_TROTTOIRBAND-G";
+            assert_eq!(*drawing.log.lock().unwrap(), ["begin", "record", "end", &format!("LAYERGROUP ADD {group}"), &format!("LAYERGROUP NEW {group}")]);
         });
     }
 

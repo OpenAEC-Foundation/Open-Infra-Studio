@@ -684,7 +684,8 @@ mod tests {
             let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 143_303, unit_factor: 1.0, doc_path: None };
             let options = super::super::CivielOptions { point_labels: false, ..Default::default() };
             crate::bridge::with_command_context(target, None, None, || import(&path, &options, &|_| {}).unwrap());
-            assert_eq!(drawing.steps(), ["begin", "record", "end", "LAYERGROUP ADD LandXML"]);
+            let group = "LandXML B-XX-AM-AS-G B-XX-OG-GRENS-G B-XX-OG-HOOGTEPUNT-S B-XX-OG-TRIANGULATIE-G";
+            assert_eq!(*drawing.log.lock().unwrap(), ["begin", "record", "record", "record", "end", &format!("LAYERGROUP ADD {group}"), &format!("LAYERGROUP NEW {group}")]);
         });
     }
 
