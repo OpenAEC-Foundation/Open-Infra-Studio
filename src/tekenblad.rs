@@ -171,7 +171,9 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo) -> Result<String, 
             bridge::ensure_nlcs_layer(&spec);
             entities.extend(parts);
         }
-        bridge::add_entities(label, entities)
+        // Legend samples use the imported layers for their line styles.
+        // Restore any existing locks without locking the new sheet layers.
+        bridge::append_entities(label, entities, &[]).map(|handles| handles.len())
     })?;
     Ok(format!("Tekenblad {paper} liggend, schaal 1:{} — {n} elementen, legenda met {shown} lagen.", opt.scale))
 }
