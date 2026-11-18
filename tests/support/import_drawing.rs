@@ -31,7 +31,9 @@ impl PluginRequestSender for Drawing {
                 PluginResponse::Handles(handles)
             }
             PluginRequest::WriteRecord { .. } | PluginRequest::SetDirty | PluginRequest::BumpGeometry => PluginResponse::Ok,
-            PluginRequest::ExecuteCommand(command) if command == "ZOOMEXTENTS" => PluginResponse::Bool(true),
+            PluginRequest::RunCommand { request: ocs_plugin_api::host::CommandRequest::Run { line } } if line == "ZOOMEXTENTS" => {
+                PluginResponse::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() }))
+            }
             other => {
                 let error = format!("onverwacht hostverzoek: {other:?}");
                 self.unexpected.lock().unwrap().push(error.clone());

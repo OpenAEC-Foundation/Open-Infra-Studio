@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use ocs_plugin_api::host::{
     codec::{Color, EntityType, Handle, LineWeight},
-    CommandStep, ExtendedDataRecord, HostApi, InteractiveCommand, LayerConfig, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
+    CommandRequest, CommandStep, ExtendedDataRecord, HostApi, InteractiveCommand, LayerConfig, PluginRequestSender, PreviewWire, TableOperation, XDataValue, XRecordEntry, XRecordValue,
 };
 use ocs_plugin_api::ipc::protocol::{PluginRequest, PluginResponse};
 
@@ -1027,41 +1027,91 @@ fn add_entity_chunks(entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
 }
 
 /// Map images are underlays: send them behind the vector data.
-fn send_to_back(handles: &[Handle]) {
-    if handles.is_empty() {
-        return;
-    }
-    if request(PluginRequest::SetSelection { handles: handles.to_vec() }).is_ok() {
-        let _ = request(PluginRequest::ExecuteCommand("DRAWORDER_BACK".into()));
-        let _ = request(PluginRequest::SetSelection { handles: Vec::new() });
-        let _ = request(PluginRequest::BumpGeometry);
-    }
+fn send_to_back(handles: &[Handle]) -> Result<(), String> {
+    let previous = selection()?;
+    let set = |handles: &[Handle]| match request(PluginRequest::SetSelection { handles: handles.to_vec() })? {
+        PluginResponse::SelectionResult(result) => result,
+        other => Err(format!("onverwacht antwoord op selectie: {other:?}")),
+    };
+    set(handles)?;
+    let result = run_on_target("DRAWORDER_BACK");
+    let restored = set(&previous);
+    result.and(restored)
 }
 
 /// A new map image behind the drawing's vectors, but on top of the images
 /// already there (newest map on top: a cadastre overlay over the photo).
-pub fn image_to_back(new: &[Handle]) {
+pub fn image_to_back(new: &[Handle]) -> Result<(), String> {
     if new.is_empty() {
-        return;
+        return Ok(());
     }
-    let Some(drawing) = view() else {
-        send_to_back(new);
-        return;
+    let Some((entities, layers, bytes)) = view_entities() else {
+        return send_to_back(new);
     };
+    if entities.len() == new.len() {
+        return Ok(());
+    }
+    // Only a full snapshot carries SORTENTSTABLE. Keep the existing bounded
+    // shared-view fallback for drawings too large to send in one request.
+    if bytes < SNAPSHOT_SAFE {
+        if let Ok(PluginResponse::Document(drawing)) = request(PluginRequest::DocumentSnapshot) {
+            let drawing = (*drawing).into();
+            if let Some(handles) = raster_order_change(&drawing, new, true) {
+                return send_to_back(&handles);
+            }
+            return Ok(());
+        }
+    }
+    let drawing = document_of(entities, &layers);
+    match raster_order_change(&drawing, new, false) {
+        Some(handles) => send_to_back(&handles),
+        None => Ok(()),
+    }
+}
+
+fn raster_order_change(drawing: &ocs_plugin_api::host::codec::CadDocument, new: &[Handle], has_sort_table: bool) -> Option<Vec<Handle>> {
+    use ocs_plugin_api::host::codec::objects::ObjectType;
     let imported: HashSet<_> = new.iter().copied().collect();
     let mut existing = drawing.model_space_entities().filter(|entity| !imported.contains(&entity.common().handle)).peekable();
     if existing.peek().is_none() {
-        return;
+        return None;
     }
-    // One native DRAWORDER step. Its BACK command uses the order supplied
-    // by SetSelection, so older images go below the new tiles.
     let mut images: Vec<_> = existing.filter_map(|entity| match entity {
         EntityType::RasterImage(_) => Some(entity.common().handle),
         _ => None,
     }).collect();
     images.sort_unstable_by_key(|handle| handle.value());
     images.extend_from_slice(new);
-    send_to_back(&images);
+    if has_sort_table {
+        let overrides: std::collections::HashMap<_, _> = drawing.objects.values().find_map(|object| match object {
+            ObjectType::SortEntitiesTable(table) if table.block_owner_handle == drawing.header.model_space_block_handle => {
+                Some(table.entries().map(|entry| (entry.entity_handle, entry.sort_handle.value())).collect())
+            }
+            _ => None,
+        }).unwrap_or_default();
+        let mut order: Vec<_> = drawing.model_space_entities().map(|entity| entity.common().handle).collect();
+        order.sort_unstable_by_key(|handle| (overrides.get(handle).copied().unwrap_or_else(|| handle.value()), handle.value()));
+        if order.starts_with(&images) {
+            return None;
+        }
+    }
+    Some(images)
+}
+
+fn run_on_target(line: &str) -> Result<(), String> {
+    match request(PluginRequest::RunCommand { request: CommandRequest::Run { line: line.into() } })? {
+        PluginResponse::CommandResult(result) => {
+            let result = result?;
+            if let Some(error) = result.error {
+                return Err(error);
+            }
+            if result.status != "completed" {
+                return Err(format!("Open CAD Studio heeft '{line}' niet voltooid"));
+            }
+            Ok(())
+        }
+        other => Err(format!("onverwacht antwoord op '{line}': {other:?}")),
+    }
 }
 
 /// Run a command line in the active drawing (tokens answer its prompts).
@@ -1073,7 +1123,7 @@ pub fn execute(command: &str) -> Result<(), String> {
 }
 
 pub fn zoom_extents() {
-    let _ = request(PluginRequest::ExecuteCommand("ZOOMEXTENTS".into()));
+    let _ = run_on_target("ZOOMEXTENTS");
 }
 
 /// A file beside the drawing (`<tekening>_<suffix>`), or in the plugin's
@@ -1118,6 +1168,37 @@ pub fn image_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draw_order_refusal_restores_selection() {
+        use ocs_plugin_api::host::PluginRequestError;
+
+        #[derive(Default)]
+        struct Sender(Mutex<Vec<Vec<Handle>>>);
+        impl PluginRequestSender for Sender {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                Ok(match req {
+                    PluginRequest::GetSelection => PluginResponse::Selection(vec![Handle::new(1)]),
+                    PluginRequest::SetSelection { handles } => {
+                        self.0.lock().unwrap().push(handles);
+                        PluginResponse::SelectionResult(Ok(()))
+                    }
+                    PluginRequest::RunCommand { request: CommandRequest::Run { line } } => {
+                        assert_eq!(line, "DRAWORDER_BACK");
+                        assert_eq!(*self.0.lock().unwrap(), [vec![Handle::new(2)]]);
+                        PluginResponse::CommandResult(Err("commands act on the active document".into()))
+                    }
+                    other => panic!("unexpected request: {other:?}"),
+                })
+            }
+        }
+
+        let sender = Arc::new(Sender::default());
+        let target = Target { sender: sender.clone(), tab_id: 141, unit_factor: 1.0, doc_path: None };
+        let result = with_command_context(target, None, None, || send_to_back(&[Handle::new(2)]));
+        assert_eq!(result.unwrap_err(), "commands act on the active document");
+        assert_eq!(*sender.0.lock().unwrap(), [vec![Handle::new(2)], vec![Handle::new(1)]]);
+    }
 
     #[test]
     fn entity_chunks_share_one_undo_group() {

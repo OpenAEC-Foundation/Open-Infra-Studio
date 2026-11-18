@@ -87,3 +87,7 @@ Follow-up items from reviews that do not block a merge. Each item names the PR i
 82. **De WFS-uitleg vermeldt de lengtebeperking per attribuut niet** (#139, Sol ronde 1, [BEVESTIGD] VERVOLG). De README noemt maximaal 40 niet-lege attributen per feature. De gedeelde encoder kort elke combinatie `key=value` ook af op 255 UTF-8-bytes. Het BAG-id en bouwjaar passen ruim. Richting: verwijs vanuit de WFS-uitleg naar de lengtebeperking.
 
 91. **Kaartvolgorde kan een extra stap vragen bij Ongedaan maken** (#141). OCS 2026.46 sluit een lopende plug-ingroep als de native opdracht `DRAWORDER` een eigen geschiedenisstap opent. Als de kaart achter bestaande objecten moet komen, kan de eerste Undo alleen de tekenvolgorde herstellen. De volgende Undo haalt de volledige import uit de tekening, inclusief alle kaartdelen en hun nieuwe lagen. Voor één stap zou de host een bewerking voor tekenvolgorde moeten aanbieden die aan de lopende plug-ingroep deelneemt.
+
+92. **Een volgend tekenblad kan verwijderde NLCS-lagen in de legenda tonen** (#141, Sol ronde 1, [BEVESTIGD] VERVOLG). Na het ongedaan maken van een BGT-import blijven de lagen in de sessiecache. Een daarna gemaakt tekenblad kan die lagen opsommen. Richting is de legenda baseren op de lagen die nog in de tekening staan.
+
+93. **NLCS++ gebruikt twee mutexen rond dezelfde import** (#141, Sol ronde 1, [BEVESTIGD] VERVOLG). De buitenste ongedaanmaakgroep serialiseert de import al. De aparte mutex in `keep_relations` kan weg zolang alle wijzigingen van het relatierecord binnen die groep blijven.

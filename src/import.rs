@@ -46,7 +46,7 @@ fn place_map(site: &Site, images: &[raster::PlacedImage], layer: &str, unit_fact
     bridge::with_import_undo(label, || {
         let handles = write_map(site, images, layer, unit_factor, fade, label)?;
         // DRAWORDER can close the held step, so it must be the last mutation.
-        bridge::image_to_back(&handles);
+        bridge::image_to_back(&handles)?;
         Ok(handles.len())
     })
 }
@@ -315,7 +315,7 @@ pub(crate) fn place_datasets(site: &Site, label: &str, origin: bool, datasets: V
         for dataset in datasets {
             messages.push(dataset.write(site, &mut rasters)?);
         }
-        bridge::image_to_back(&rasters);
+        bridge::image_to_back(&rasters)?;
         Ok(messages)
     })?;
     bridge::zoom_extents();
