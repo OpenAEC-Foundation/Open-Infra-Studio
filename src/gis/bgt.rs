@@ -10,27 +10,28 @@ pub const API: &str = "https://api.pdok.nl/lv/bgt/ogc/v1";
 pub struct Group {
     pub id: &'static str,
     pub label: &'static str,
+    pub label_en: &'static str,
     pub collections: &'static [&'static str],
     pub default_on: bool,
 }
 
 pub const GROUPS: &[Group] = &[
-    Group { id: "wegen", label: "Wegdelen en ondersteunende wegdelen", collections: &["wegdeel", "ondersteunendwegdeel"], default_on: true },
-    Group { id: "terrein", label: "Begroeide en onbegroeide terreindelen", collections: &["begroeidterreindeel", "onbegroeidterreindeel"], default_on: true },
-    Group { id: "water", label: "Waterdelen", collections: &["waterdeel", "ondersteunendwaterdeel"], default_on: true },
-    Group { id: "gebouwen", label: "Panden en overige bouwwerken", collections: &["pand", "overigbouwwerk", "gebouwinstallatie"], default_on: true },
-    Group { id: "kunstwerken", label: "Kunstwerken (bruggen, tunnels, duikers, keermuren)", collections: &["overbruggingsdeel", "tunneldeel", "kunstwerkdeel_vlak", "kunstwerkdeel_lijn", "kunstwerkdeel_punt"], default_on: true },
-    Group { id: "scheidingen", label: "Scheidingen (muren, hekken, kademuren)", collections: &["scheiding_vlak", "scheiding_lijn", "overigescheiding"], default_on: true },
-    Group { id: "spoor", label: "Spoor", collections: &["spoor"], default_on: true },
+    Group { id: "wegen", label: "Wegdelen en ondersteunende wegdelen", label_en: "Road sections and supporting road areas", collections: &["wegdeel", "ondersteunendwegdeel"], default_on: true },
+    Group { id: "terrein", label: "Begroeide en onbegroeide terreindelen", label_en: "Vegetated and unvegetated land", collections: &["begroeidterreindeel", "onbegroeidterreindeel"], default_on: true },
+    Group { id: "water", label: "Waterdelen", label_en: "Water areas", collections: &["waterdeel", "ondersteunendwaterdeel"], default_on: true },
+    Group { id: "gebouwen", label: "Panden en overige bouwwerken", label_en: "Buildings and other structures", collections: &["pand", "overigbouwwerk", "gebouwinstallatie"], default_on: true },
+    Group { id: "kunstwerken", label: "Kunstwerken (bruggen, tunnels, duikers, keermuren)", label_en: "Structures (bridges, tunnels, culverts, retaining walls)", collections: &["overbruggingsdeel", "tunneldeel", "kunstwerkdeel_vlak", "kunstwerkdeel_lijn", "kunstwerkdeel_punt"], default_on: true },
+    Group { id: "scheidingen", label: "Scheidingen (muren, hekken, kademuren)", label_en: "Barriers (walls, fences, quay walls)", collections: &["scheiding_vlak", "scheiding_lijn", "overigescheiding"], default_on: true },
+    Group { id: "spoor", label: "Spoor", label_en: "Railways", collections: &["spoor"], default_on: true },
     Group {
         id: "inrichting",
-        label: "Inrichtingselementen (palen, putten, kasten, borden, masten, meubilair)",
+        label: "Inrichtingselementen (palen, putten, kasten, borden, masten, meubilair)", label_en: "Street assets (posts, chambers, cabinets, signs, masts, furniture)",
         collections: &["weginrichtingselement_vlak", "weginrichtingselement_lijn", "weginrichtingselement_punt", "waterinrichtingselement_lijn", "waterinrichtingselement_punt", "straatmeubilair", "paal", "put", "kast", "bord", "mast", "sensor_punt", "sensor_lijn", "bak", "installatie"],
         default_on: false,
     },
-    Group { id: "vegetatie", label: "Vegetatieobjecten (bomen, hagen)", collections: &["vegetatieobject_vlak", "vegetatieobject_lijn", "vegetatieobject_punt"], default_on: false },
-    Group { id: "labels", label: "Straatnamen en huisnummers", collections: &["openbareruimtelabel", "pand_nummeraanduiding"], default_on: true },
-    Group { id: "kruinlijnen", label: "Kruinlijnen (taluds)", collections: &["wegdeel_kruinlijn", "ondersteunendwegdeel_kruinlijn", "begroeidterreindeel_kruinlijn", "onbegroeidterreindeel_kruinlijn"], default_on: false },
+    Group { id: "vegetatie", label: "Vegetatieobjecten (bomen, hagen)", label_en: "Vegetation features (trees, hedges)", collections: &["vegetatieobject_vlak", "vegetatieobject_lijn", "vegetatieobject_punt"], default_on: false },
+    Group { id: "labels", label: "Straatnamen en huisnummers", label_en: "Street names and house numbers", collections: &["openbareruimtelabel", "pand_nummeraanduiding"], default_on: true },
+    Group { id: "kruinlijnen", label: "Kruinlijnen (taluds)", label_en: "Crest lines (slopes)", collections: &["wegdeel_kruinlijn", "ondersteunendwegdeel_kruinlijn", "begroeidterreindeel_kruinlijn", "onbegroeidterreindeel_kruinlijn"], default_on: false },
 ];
 
 pub fn is_label(collection: &str) -> bool {
