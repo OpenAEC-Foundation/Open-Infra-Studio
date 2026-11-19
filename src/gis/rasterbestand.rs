@@ -269,11 +269,11 @@ pub fn import_path(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Resul
             let file = dir.join(format!("{name}.png"));
             img.save(&file).map_err(|e| format!("{}: {e}", file.display()))?;
             let placed = PlacedImage { path: file.clone(), bbox, px: [img.width(), img.height()] };
-            let layer = emit::layer_name("GIS", &name);
+            let layer = bridge::gis_layer("GIS", &name);
             let label = format!("Raster {name}");
             let n = bridge::with_import_undo(&label, || {
                 bridge::ensure_layer(&layer, ocs_plugin_api::host::codec::Color::ByLayer);
-                Ok(bridge::add_imported_entities(&label, emit::images(site, &[placed], &layer, f, 0))?.len())
+                Ok(bridge::add_imported_entities(&label, &format!("Bestand-{name}"), emit::images(site, &[placed], &layer, f, 0))?.len())
             })?;
             Ok(format!("{name}: {}×{} px geplaatst ({crs}) — {n} element op {layer}.", img.width(), img.height()))
         }
@@ -301,7 +301,7 @@ fn heights(site: &Site, grid: &Grid, crs: &str, name: &str, dir: &Path, f: f64, 
     let (shade, sbbox) = to_site(site, shade, bbox, crs)?;
     let file = dir.join(format!("{name}_relief.png"));
     shade.save(&file).map_err(|e| format!("{}: {e}", file.display()))?;
-    let relief_layer = emit::layer_name("GIS", &format!("{name} relief"));
+    let relief_layer = bridge::gis_layer("GIS", &format!("{name} relief"));
     let mut ents = emit::images(site, &[PlacedImage { path: file, bbox: sbbox, px: [shade.width(), shade.height()] }], &relief_layer, f, 0);
     // Contours: about twenty levels over the range.
     let interval = crate::civiel::nice_step(((hi - lo) / 20.0).max(0.01));
@@ -331,7 +331,7 @@ fn heights(site: &Site, grid: &Grid, crs: &str, name: &str, dir: &Path, f: f64, 
     let n = bridge::with_import_undo(&label, || {
         bridge::ensure_layer(&relief_layer, ocs_plugin_api::host::codec::Color::ByLayer);
         bridge::ensure_nlcs_layer(&spec);
-        Ok(bridge::add_imported_entities(&label, ents)?.len())
+        Ok(bridge::add_imported_entities(&label, &format!("Bestand-{name}"), ents)?.len())
     })?;
     Ok(format!(
         "{name}: hoogtemodel {}×{} cellen van {} m, {} tot {} m — reliëf en {count} hoogtelijnen om de {} m ({n} elementen).",
@@ -431,7 +431,7 @@ fn point_cloud(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Result<St
             p
         ));
     }
-    bridge::attach_imported_cloud(&p, &emit::layer_name("GIS", stem))?;
+    bridge::attach_imported_cloud(&p, &bridge::gis_layer("GIS", stem), &format!("Bestand-{stem}"))?;
     let thinned = if stride > 1 { crate::civiel::puntenwolk::trf!(", elke {}e", ", every {}th", stride) } else { String::new() };
     Ok(crate::civiel::puntenwolk::trf!(
         "{}: {} van {} punten ({} uit {}{}) gekoppeld als {}.",

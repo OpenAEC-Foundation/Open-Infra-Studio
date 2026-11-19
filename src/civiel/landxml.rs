@@ -314,25 +314,31 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions, progress: &dyn
             if a.spirals > 0 { format!(", {} overgangsbogen", a.spirals) } else { String::new() }
         ));
     }
-    let handles = out.write_import(&format!("LandXML {file}"))?;
+    // One undo step with the drawing's object index; the layer group
+    // follows it (#143).
+    let label = format!("LandXML {file}");
+    let handles = crate::bridge::with_import_undo(&label, || {
+        let handles = out.write_import(&label, "LandXML")?;
+        // Into the drawing's object index: points first, then the surfaces'
+        // meshes (each surface's outline follows on its own layer), axes last.
+        super::landmeten::index_points(&handles, n_points);
+        if let Some((status, _)) = surfaces.first() {
+            // Point labels vary in number: find the meshes among the new entities.
+            let mesh_total: usize = surfaces.iter().map(|s| s.1).sum();
+            let found = crate::bridge::entities(&handles).unwrap_or_default();
+            let meshes: Vec<Handle> = handles.iter().zip(found).filter(|(_, e)| matches!(e, Some(ocs_plugin_api::host::codec::EntityType::Mesh(_)))).map(|(h, _)| *h).take(mesh_total).collect();
+            crate::bridge::index_add("tin", status, &meshes, false);
+        }
+        // The axes were put last, on their own layer: their handles end the list.
+        for (a, h) in x.alignments.iter().zip(&handles[handles.len().saturating_sub(x.alignments.len())..]) {
+            crate::bridge::index_add("as", &a.name, &[*h], true);
+        }
+        Ok(handles)
+    })?;
     let n = handles.len();
     super::api::note("punten", x.points.len());
     super::api::note("oppervlakken", x.surfaces.iter().map(|(n, f)| serde_json::json!({"naam": n, "driehoeken": f.len()})).collect::<Vec<_>>());
-    // The axes were put last, on their own layer: their handles end the list.
     let axes = &handles[handles.len().saturating_sub(x.alignments.len())..];
-    // Into the drawing's object index: points first, then the surfaces'
-    // meshes (each surface's outline follows on its own layer), axes last.
-    super::landmeten::index_points(&handles, n_points);
-    if let Some((status, _)) = surfaces.first() {
-        // Point labels vary in number: find the meshes among the new entities.
-        let mesh_total: usize = surfaces.iter().map(|s| s.1).sum();
-        let found = crate::bridge::entities(&handles).unwrap_or_default();
-        let meshes: Vec<Handle> = handles.iter().zip(found).filter(|(_, e)| matches!(e, Some(ocs_plugin_api::host::codec::EntityType::Mesh(_)))).map(|(h, _)| *h).take(mesh_total).collect();
-        crate::bridge::index_add("tin", status, &meshes, false);
-    }
-    for (a, h) in x.alignments.iter().zip(axes) {
-        crate::bridge::index_add("as", &a.name, &[*h], true);
-    }
     super::api::note("assen", x.alignments.iter().zip(axes).map(|(a, h)| serde_json::json!({"naam": a.name, "handle": super::api::handle_text(*h), "beginstation": a.start})).collect::<Vec<_>>());
     let hint = if x.alignments.is_empty() { "" } else { " Selecteer een as en klik op As voor de stationering." };
     Ok(format!("{file}: {} — {n} elementen.{hint}", parts.join(", ")))
@@ -664,6 +670,24 @@ pub fn export(opt: &super::CivielOptions, path: Option<std::path::PathBuf>, all:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A LandXML import is one undo step, the index of its points, surface
+    /// and axis included, and its layer group follows it (#143,
+    /// knownbugs.md 153).
+    #[test]
+    fn a_landxml_import_registers_its_axis_before_its_layer_group() {
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::codec::CadDocument;
+        crate::settings::with_test_file(|| {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/landxml/site.xml");
+            let drawing = std::sync::Arc::new(Drawing::new(CadDocument::new(), false));
+            let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 143_303, unit_factor: 1.0, doc_path: None };
+            let options = super::super::CivielOptions { point_labels: false, ..Default::default() };
+            crate::bridge::with_command_context(target, None, None, || import(&path, &options, &|_| {}).unwrap());
+            let group = "LandXML B-XX-AM-AS-G B-XX-OG-GRENS-G B-XX-OG-HOOGTEPUNT-S B-XX-OG-TRIANGULATIE-G";
+            assert_eq!(*drawing.log.lock().unwrap(), ["begin", "record", "record", "record", "end", &format!("LAYERGROUP ADD {group}"), &format!("LAYERGROUP NEW {group}")]);
+        });
+    }
 
     const SITE: &str = include_str!("../../tests/fixtures/landxml/site.xml");
 

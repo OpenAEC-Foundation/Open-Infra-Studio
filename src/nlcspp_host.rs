@@ -117,9 +117,10 @@ pub fn import(site: &Site, path: &std::path::Path, unit_factor: f64) -> Result<S
         drawn += 1;
         *kinds.entry(o.kind.clone()).or_insert(0) += 1;
     }
-    let (n, layers) = batch.write_with("NLCS++", |_| keep_relations(&import, &kept))?;
+    let file = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let (n, layers) = batch.write_with("NLCS++", "NLCS++", |_| keep_relations(&import, &kept))?;
     drawn += kept.len();
-    crate::bridge::note_source(&format!("NLCS++ {}", path.file_name().and_then(|n| n.to_str()).unwrap_or("")));
+    crate::bridge::note_source(&format!("NLCS++ {file}"));
     let top: Vec<String> = {
         let mut v: Vec<(&String, &usize)> = kinds.iter().collect();
         v.sort_by(|a, b| b.1.cmp(a.1));

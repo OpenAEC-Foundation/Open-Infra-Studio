@@ -20,8 +20,8 @@ fn target() -> Result<Target, String> {
 pub fn wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer, opt: &RasterOptions, fade: u8, progress: &dyn Fn(String)) -> Result<String, String> {
     let t = target()?;
     let result = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
-    let layer_name = emit::layer_name("GIS-WMS", &layer.title);
-    place_map(site, std::slice::from_ref(&result.image), &layer_name, t.unit_factor, fade, &format!("GIS WMS {}", layer.title))?;
+    let layer_name = bridge::gis_layer("GIS-WMS", &layer.title);
+    place_map(site, std::slice::from_ref(&result.image), &layer_name, &format!("WMS-{}", layer.title), t.unit_factor, fade, &format!("GIS WMS {}", layer.title))?;
     bridge::zoom_extents();
     Ok(wms_summary(server, &layer_name, &result))
 }
@@ -46,8 +46,8 @@ fn wms_summary(server: &MapServer, layer: &str, result: &WmsImport) -> String {
 pub fn xyz(site: &Site, server: &MapServer, opt: &RasterOptions, fade: u8, progress: &dyn Fn(String)) -> Result<String, String> {
     let t = target()?;
     let placed = raster::import_xyz(site, server, opt, &bridge::image_dir(), progress)?;
-    let layer_name = emit::layer_name("GIS", &server.name);
-    place_map(site, &placed, &layer_name, t.unit_factor, fade, &format!("GIS {}", server.name))?;
+    let layer_name = bridge::gis_layer("GIS", &server.name);
+    place_map(site, &placed, &layer_name, &format!("XYZ-{}", server.name), t.unit_factor, fade, &format!("GIS {}", server.name))?;
     bridge::zoom_extents();
     Ok(format!("{} op laag {layer_name} ({}).", server.name, server.attribution))
 }
@@ -60,15 +60,17 @@ pub struct VectorStyle {
     pub clip: bool,
 }
 
-fn place_map(site: &Site, images: &[raster::PlacedImage], layer: &str, unit_factor: f64, fade: u8, label: &str) -> Result<usize, String> {
+#[allow(clippy::too_many_arguments)]
+fn place_map(site: &Site, images: &[raster::PlacedImage], layer: &str, group: &str, unit_factor: f64, fade: u8, label: &str) -> Result<usize, String> {
     bridge::with_import_undo(label, || {
         bridge::ensure_layer(layer, Color::from_index(8));
         let entities = emit::images(site, images, layer, unit_factor, fade);
-        Ok(bridge::add_imported_map(label, entities)?.len())
+        Ok(bridge::add_imported_map(label, group, entities)?.len())
     })
 }
 
-fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str, label: &str, style: &VectorStyle, with_data: bool) -> Result<usize, String> {
+#[allow(clippy::too_many_arguments)]
+fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str, label: &str, group: &str, style: &VectorStyle, with_data: bool) -> Result<usize, String> {
     let t = target()?;
     let to_site = vector::data_to_site(site, data_crs, features)?;
     let text_h = style.text_m * t.unit_factor;
@@ -99,7 +101,7 @@ fn place_features(site: &Site, features: &[Feature], data_crs: &str, layer: &str
     }
     bridge::with_import_undo(label, || {
         bridge::ensure_layer(layer, Color::from_index(style.aci));
-        Ok(bridge::add_imported_entities(label, polylines)?.len())
+        Ok(bridge::add_imported_entities(label, group, polylines)?.len())
     })
 }
 
@@ -114,8 +116,9 @@ pub fn wfs_place(site: &Site, ft: &WfsType, result: &wfs::WfsResult, style: &Vec
 }
 
 fn write_wfs(site: &Site, ft: &WfsType, result: &wfs::WfsResult, style: &VectorStyle) -> Result<String, String> {
-    let layer = emit::layer_name("GIS", ft.name.rsplit(':').next().unwrap_or(&ft.name));
-    let n = place_features(site, &result.features, &result.data_crs, &layer, &format!("GIS WFS {}", ft.title), style, true)?;
+    let name = ft.name.rsplit(':').next().unwrap_or(&ft.name);
+    let layer = bridge::gis_layer("GIS", name);
+    let n = place_features(site, &result.features, &result.data_crs, &layer, &format!("GIS WFS {}", ft.title), &format!("WFS-{name}"), style, true)?;
     Ok(format!("{n} objecten van {} op laag {layer}.", ft.title))
 }
 
@@ -179,7 +182,7 @@ pub fn osm_place(site: &Site, theme_ids: &[&str], per_theme: &[Vec<Feature>], la
         for (id, features) in theme_ids.iter().zip(per_theme) {
             let Some(theme) = osm::THEMES.iter().find(|t| t.id == *id) else { continue };
             let style = VectorStyle { aci: theme.aci, label_field: labels.then(|| theme.label_tag.map(str::to_string)).flatten(), text_m, clip };
-            let n = place_features(site, features, "EPSG:4326", theme.layer, &format!("GIS OSM {}", theme.label), &style, false)?;
+            let n = place_features(site, features, "EPSG:4326", theme.layer, &format!("GIS OSM {}", theme.label), "OSM", &style, false)?;
             summary.push(format!("{}: {n}", theme.label));
         }
         Ok(summary)
@@ -219,7 +222,8 @@ pub fn geo_origin(site: &Site) -> Result<String, String> {
     let label = "GIS basispunt";
     bridge::with_import_undo(label, || {
         bridge::ensure_layer(layer, Color::from_index(1));
-        bridge::append_entities(label, ents, &[])
+        // No layer group: the marker belongs to the project, not to a source.
+        bridge::append_entities(label, None, ents, &[])
     })?;
     Ok(format!("Basispunt geplaatst op laag {layer}."))
 }
@@ -254,17 +258,23 @@ pub const PDOK: &[Catalogued] = &[
 ];
 
 pub(crate) enum PreparedDataset {
-    Map { images: Vec<raster::PlacedImage>, layer: String, label: String, summary: String },
+    /// `group`: the layer group of the map.
+    Map { images: Vec<raster::PlacedImage>, layer: String, group: String, label: String, summary: String },
     Vector { features: wfs::WfsResult, feature_type: WfsType, style: VectorStyle },
 }
 
 impl PreparedDataset {
     fn write(self, site: &Site, layers: &mut bridge::ImportLayers, rasters: &mut Vec<Handle>) -> Result<String, String> {
         match self {
-            Self::Map { images, layer, summary, .. } => {
+            Self::Map { images, layer, group, summary, .. } => {
                 let entities = emit::images(site, &images, &layer, target()?.unit_factor, 0);
                 bridge::ensure_layer(&layer, Color::from_index(8));
-                rasters.extend(layers.write_entities(entities)?);
+                // One writer for all datasets (one undo step): its group
+                // for this map only.
+                let other = layers.group.replace(group);
+                let written = layers.write_entities(entities);
+                layers.group = other;
+                rasters.extend(written?);
                 Ok(summary)
             }
             Self::Vector { features, feature_type, style } => write_wfs(site, &feature_type, &features, &style),
@@ -286,10 +296,10 @@ pub(crate) fn prepare_dataset(site: &Site, data: &Dataset, progress: &dyn Fn(Str
             if srv.kind == ServerKind::Xyz {
                 let opt = RasterOptions { resolution: cap(0.5), format: "image/png".into() };
                 let images = raster::import_xyz(site, &srv, &opt, &bridge::image_dir(), progress)?;
-                let layer = emit::layer_name("GIS", &srv.name);
+                let layer = bridge::gis_layer("GIS", &srv.name);
                 let label = format!("GIS {}", srv.name);
                 let summary = format!("{} op laag {layer} ({}).", srv.name, srv.attribution);
-                return Ok(PreparedDataset::Map { images, layer, label, summary });
+                return Ok(PreparedDataset::Map { images, layer, group: format!("XYZ-{}", srv.name), label, summary });
             }
             let caps = caps::fetch_wms(&srv.url)?;
             let layer = caps.layers.iter().find(|l| l.name == srv.default_layer).or(caps.layers.first()).cloned().ok_or("geen lagen")?;
@@ -314,7 +324,7 @@ fn prepare_wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer
 }
 
 fn prepared_wms(server: &MapServer, layer: &WmsLayer, result: WmsImport, aerial: bool) -> PreparedDataset {
-    let name = emit::layer_name("GIS-WMS", &layer.title);
+    let name = bridge::gis_layer("GIS-WMS", &layer.title);
     let label = format!("GIS WMS {}", layer.title);
     let mut summary = wms_summary(server, &name, &result);
     if aerial {
@@ -325,14 +335,15 @@ fn prepared_wms(server: &MapServer, layer: &WmsLayer, result: WmsImport, aerial:
         let resolution = if x == y { x } else { format!("{x} × {y}") };
         summary = format!("{} {resolution} m/px. {summary}", crate::lang::tr("Luchtfoto op", "Aerial photo at"));
     }
-    PreparedDataset::Map { images: vec![result.image], layer: name, label, summary }
+    PreparedDataset::Map { images: vec![result.image], layer: name, group: format!("WMS-{}", layer.title), label, summary }
 }
 
 pub(crate) fn place_datasets(site: &Site, label: &str, origin: bool, datasets: Vec<PreparedDataset>) -> Result<Vec<String>, String> {
     if !origin && datasets.is_empty() {
         return Ok(Vec::new());
     }
-    let messages = bridge::with_import_layers(label, |layers| {
+    // Each dataset fills its own layer group (`PreparedDataset::write`).
+    let messages = bridge::with_import_layers(label, None, |layers| {
         let mut messages = Vec::new();
         let mut rasters = Vec::new();
         for dataset in datasets {
@@ -452,6 +463,7 @@ mod import_layer_tests {
                 }
                 Q::RemoveEntity { handle } => A::Bool(doc.remove_entity(handle).is_some()),
                 Q::PushUndo { .. } | Q::BeginUndoGroup { .. } | Q::EndUndoGroup | Q::SetDirty | Q::BumpGeometry => A::Ok,
+                Q::RunCommand { .. } => A::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() })),
                 other => panic!("unexpected host request: {other:?}"),
             })
         }
@@ -461,7 +473,76 @@ mod import_layer_tests {
         let site = Site::default();
         let feature = Feature { points: vec![[site.lon, site.lat]], ..Default::default() };
         let style = VectorStyle { aci: 7, label_field: None, text_m: 1.0, clip: false };
-        place_features(&site, &[feature], "EPSG:4326", layer, "WFS", &style, false)
+        place_features(&site, &[feature], "EPSG:4326", layer, "WFS", "WFS", &style, false)
+    }
+
+    /// A map of a PDOK import fills its own layer group through the writer
+    /// the import's datasets share (#143).
+    #[test]
+    fn a_prepared_map_fills_its_own_layer_group() {
+        use crate::bridge::replacement_test_host::Drawing as Host;
+        crate::settings::with_test_file(|| {
+            let host = Arc::new(Host::new(CadDocument::new(), false));
+            let target = Target { sender: host.clone(), tab_id: 143_101, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                let image = raster::PlacedImage { path: "luchtfoto.png".into(), bbox: [0.0, 0.0, 10.0, 10.0], px: [10, 10] };
+                let map = PreparedDataset::Map {
+                    images: vec![image],
+                    layer: "GIS-WMS-LUCHTFOTO".into(),
+                    group: "Luchtfoto".into(),
+                    label: "GIS WMS Luchtfoto".into(),
+                    summary: String::new(),
+                };
+                bridge::with_import_layers("PDOK", None, |layers| map.write(&Site::default(), layers, &mut Vec::new())).unwrap();
+            });
+            assert_eq!(host.groups.lock().unwrap().clone(), [("Luchtfoto".to_string(), vec!["GIS-WMS-LUCHTFOTO".to_string()])]);
+        });
+    }
+
+    /// A feature type named like a fixed source keeps its own layer group:
+    /// OCS compares group names without case (#143).
+    #[test]
+    fn a_feature_type_named_like_a_source_keeps_its_own_layer_group() {
+        use crate::bridge::replacement_test_host::Drawing as Host;
+        crate::settings::with_test_file(|| {
+            let host = Arc::new(Host::new(CadDocument::new(), false));
+            host.groups.lock().unwrap().push(("BGT".into(), vec!["B-XX-WE-RIJBAAN-G".into()]));
+            let target = Target { sender: host.clone(), tab_id: 143_102, unit_factor: 1.0, doc_path: None };
+            let site = Site::default();
+            bridge::with_command_context(target, None, None, || {
+                let ft = WfsType { name: "bgt:bgt".into(), title: "BGT".into(), crs: vec![], bbox: None };
+                let feature = Feature { points: vec![[site.lon, site.lat]], ..Default::default() };
+                let result = wfs::WfsResult { features: vec![feature], data_crs: "EPSG:4326".into(), truncated: false };
+                write_wfs(&site, &ft, &result, &VectorStyle { aci: 7, label_field: None, text_m: 1.0, clip: false }).unwrap();
+            });
+            let groups = host.groups.lock().unwrap().clone();
+            assert_eq!(groups, [("BGT".to_string(), vec!["B-XX-WE-RIJBAAN-G".to_string()]), ("WFS-bgt".to_string(), vec!["GIS-BGT".to_string()])]);
+        });
+    }
+
+    /// A map in a drawing from before #143 draws on its old layer with
+    /// spaces as it is, renames nothing, and names that layer (#143).
+    #[test]
+    fn a_map_draws_on_its_old_layer_with_spaces() {
+        use crate::bridge::replacement_test_host::Drawing as Host;
+        use ocs_plugin_api::host::codec::tables::Layer;
+        crate::settings::with_test_file(|| {
+            let mut doc = CadDocument::new();
+            doc.layers.add(Layer::new("GIS-WMS-LUCHTFOTO 2025")).unwrap();
+            let host = Arc::new(Host::new(doc, false));
+            let target = Target { sender: host.clone(), tab_id: 143_104, unit_factor: 1.0, doc_path: None };
+            bridge::with_command_context(target, None, None, || {
+                let server = servers::find("pdok-luchtfoto").unwrap();
+                let layer = WmsLayer { name: server.default_layer.clone(), title: "Luchtfoto 2025".into(), crs: vec![], bbox: None };
+                let image = raster::PlacedImage { path: "luchtfoto.png".into(), bbox: [0.0, 0.0, 10.0, 10.0], px: [10, 10] };
+                let map = prepared_wms(&server, &layer, WmsImport { image, parts: 1, missing: vec![] }, false);
+                let summary = bridge::with_import_layers("PDOK", None, |layers| map.write(&Site::default(), layers, &mut Vec::new())).unwrap();
+                assert!(summary.contains("GIS-WMS-LUCHTFOTO 2025 "), "{summary}");
+            });
+            let doc = host.doc.lock().unwrap();
+            assert!(!doc.layers.contains("GIS-WMS-LUCHTFOTO_2025"));
+            assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == "GIS-WMS-LUCHTFOTO 2025").count(), 1);
+        });
     }
 
     #[test]
@@ -473,9 +554,11 @@ mod import_layer_tests {
             parts: 3,
             missing: vec![2],
         };
-        let PreparedDataset::Map { images, summary, .. } = prepared_wms(&server, &layer, result, true) else {
+        let PreparedDataset::Map { images, summary, group, .. } = prepared_wms(&server, &layer, result, true) else {
             panic!("an aerial import must prepare a map");
         };
+        // A map's group names its kind: never the group of a fixed source (#143).
+        assert_eq!(group, format!("WMS-{}", server.name));
         assert_eq!(images.len(), 1);
         assert_eq!(images[0].px, [2000, 1500]);
         assert!(summary.contains("0.080 m/px."));

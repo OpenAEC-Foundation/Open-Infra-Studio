@@ -67,15 +67,16 @@ impl Batch {
         self.entities.extend(ents);
     }
 
-    pub(crate) fn write(self, label: &str) -> Result<(usize, usize), String> {
+    /// Write as one import; its layers go into layer group `group`.
+    pub(crate) fn write(self, label: &str, group: &str) -> Result<(usize, usize), String> {
         if self.entities.is_empty() {
             return Ok((0, 0));
         }
-        self.write_with(label, |_| Ok(()))
+        self.write_with(label, group, |_| Ok(()))
     }
 
-    pub(crate) fn write_with(self, label: &str, finish: impl FnOnce(&mut bridge::ImportLayers) -> Result<(), String>) -> Result<(usize, usize), String> {
-        bridge::with_import_layers(label, |layers| {
+    pub(crate) fn write_with(self, label: &str, group: &str, finish: impl FnOnce(&mut bridge::ImportLayers) -> Result<(), String>) -> Result<(usize, usize), String> {
+        bridge::with_import_layers(label, Some(group), |layers| {
             for spec in self.layers.values() {
                 bridge::ensure_nlcs_layer(spec);
             }
@@ -185,7 +186,7 @@ pub(crate) fn bgt_place_with(
     let (n, layers) = if batch.entities.is_empty() {
         (0, 0)
     } else {
-        batch.write_with("BGT (NLCS)", |layers| finish(layers, &prepared))?
+        batch.write_with("BGT (NLCS)", "BGT", |layers| finish(layers, &prepared))?
     };
     bridge::note_source("BGT (PDOK, CC0)");
     let mut msg = format!("BGT: {total} objecten → {n} elementen op {layers} NLCS-lagen.");
@@ -255,7 +256,7 @@ pub fn cadastre_place(site: &Site, data: &Cadastre, opt: &NlcsOptions) -> Result
         let d = data_pairs(opt.object_data, &[("bron", "BRK".into()), ("objecttype", "perceel".into()), ("kadastrale_aanduiding", aanduiding), ("gemeente", get("kadastrale_gemeente_waarde")), ("grootte_m2", get("kadastrale_grootte_waarde")), ("lokaal_id", get("identificatie_lokaal_id"))]);
         batch.push(&text_spec, vec![emit::text(at, &number, opt.paper(1.8, f), emit::readable(rot), &text_spec.name, d.as_ref())]);
     }
-    let (n, _) = batch.write("Kadastrale kaart (NLCS)")?;
+    let (n, _) = batch.write("Kadastrale kaart (NLCS)", "Kadaster")?;
     bridge::note_source("BRK kadastrale kaart (Kadaster, CC BY 4.0)");
     Ok(format!("Kadastrale kaart: {} grenzen en {} perceelnummers ({n} elementen) op {}.", data.boundaries.len(), data.parcels.len(), line_spec.name))
 }
@@ -360,7 +361,7 @@ pub fn klic_place(site: &Site, lev: &klic::Levering, opt: &KlicOptions) -> Resul
     }
     let (ev, details) = klic_extras(site, lev, opt, &*to_site, &mut batch);
     drawn += ev + details;
-    let (n, layers) = batch.write(&format!("KLIC {}", lev.meldnummer))?;
+    let (n, layers) = batch.write(&format!("KLIC {}", lev.meldnummer), "KLIC")?;
     bridge::note_source(&format!("KLIC-levering {} (Kadaster)", lev.meldnummer));
     let mut extra = String::new();
     if ev > 0 {

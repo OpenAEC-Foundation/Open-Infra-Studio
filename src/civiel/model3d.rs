@@ -434,7 +434,7 @@ pub fn bag3d(opt: &super::CivielOptions, lod: Lod, max: usize, style: BagStyle, 
         }
     }
     progress("3D BAG tekenen…".into());
-    let n = out.write_import(&format!("3D BAG LoD {}", lod.code()))?.len();
+    let n = out.write_import(&format!("3D BAG LoD {}", lod.code()), "3D BAG")?.len();
     crate::bridge::note_source("3D BAG (TU Delft 3D geoinformation, CC BY 4.0)");
     if photo.is_some() {
         crate::bridge::note_source("Luchtfoto (Beeldmateriaal.nl / PDOK, CC BY 4.0)");
@@ -620,7 +620,7 @@ pub fn photo_terrain(opt: &super::CivielOptions, cell: Option<f64>, photo: Optio
         quads += m.faces();
         out.put(&layer, m.finish(&layer.name, Some(Color::Rgb { r, g, b: bl }), Some(&d)));
     }
-    let n = out.write_import("Terrein met luchtfoto")?.len();
+    let n = out.write_import("Terrein met luchtfoto", "Terrein met luchtfoto")?.len();
     crate::bridge::note_source(bron.attribution());
     crate::bridge::note_source(&foto.attribution());
     let (lo, hi) = grid.range().unwrap_or((0.0, 0.0));
@@ -1019,7 +1019,7 @@ pub fn bgt3d(opt: &super::CivielOptions, groups: &[String], with_buildings: bool
         }
     }
     progress("BGT in 3D tekenen…".into());
-    let n = out.write_import("BGT in 3D")?.len();
+    let n = out.write_import("BGT in 3D", "BGT")?.len();
     crate::bridge::note_source("BGT (PDOK, CC0)");
     crate::bridge::note_source(bron.attribution());
     super::api::note("objecten", total);
@@ -1385,7 +1385,8 @@ pub fn citygml(opt: &super::CivielOptions, path: &std::path::Path, style: BagSty
     }
     progress("CityGML tekenen…".into());
     let json = path.to_string_lossy().to_ascii_lowercase().contains(".json");
-    let n = out.write_import(if json { "CityJSON" } else { "CityGML" })?.len();
+    let kind = if json { "CityJSON" } else { "CityGML" };
+    let n = out.write_import(kind, kind)?.len();
     if let Some(b) = &bron {
         crate::bridge::note_source(b.attribution());
     }
@@ -1591,7 +1592,7 @@ pub fn klic3d(opt: &super::CivielOptions, path: &std::path::Path, scale: f64, pr
         return Err(format!("KLIC {}: geen kabels of leidingen in het projectgebied", lev.meldnummer));
     }
     progress("KLIC in 3D tekenen…".into());
-    let n = out.write_import(&format!("KLIC {} in 3D", lev.meldnummer))?.len();
+    let n = out.write_import(&format!("KLIC {} in 3D", lev.meldnummer), "KLIC")?.len();
     crate::bridge::note_source(&format!("KLIC-levering {} (Kadaster)", lev.meldnummer));
     crate::bridge::note_source(bron.attribution());
     super::api::note("leidingen", tubes);

@@ -267,8 +267,10 @@ pub fn draw(site: &Site, opt: &NlcsOptions, info: &SheetInfo, pens: Option<&Tabl
             bridge::ensure_nlcs_layer(&spec);
             entities.extend(parts);
         }
-        // Restore any existing locks without locking the new sheet layers.
-        bridge::append_entities(label, entities, &[]).map(|handles| handles.len())
+        // In its own layer group, so a sheet is turned off or removed in one
+        // go (#143). Not locked, as a sheet is edited after it is drawn;
+        // existing locks are restored.
+        bridge::append_entities(label, Some("Tekenblad"), entities, &[]).map(|handles| handles.len())
     })?;
     Ok(format!("Tekenblad {paper} liggend, schaal 1:{} — {n} elementen, legenda met {shown} lagen.", opt.scale))
 }

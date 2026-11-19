@@ -1120,7 +1120,7 @@ impl Uit {
     fn write(self, label: &str, originals: Option<&[(Handle, String)]>) -> Result<Written, String> {
         let tags = self.tags_in_order();
         let handles = match originals {
-            Some(originals) => self.out.write_to(label, super::LayerWrite::Append(originals))?,
+            Some(originals) => self.out.write_to(label, super::LayerWrite::Append(None, originals))?,
             None => self.out.write_handles(label)?,
         };
         let pairs = tags.into_iter().zip(handles.iter().copied()).collect();
@@ -1916,7 +1916,7 @@ pub fn bijwerken(opt: &super::CivielOptions, naam: Option<String>, w: Wijziging,
         let mut entities = plan.out.into_entities();
         let plan_len = entities.len();
         entities.extend(profile.into_entities());
-        let mut handles = bridge::append_entities(&t!("{} bijwerken", "Update {}", g.net.naam), entities, &originals)?;
+        let mut handles = bridge::append_entities(&t!("{} bijwerken", "Update {}", g.net.naam), None, entities, &originals)?;
         let profile_handles = handles.split_off(plan_len);
         let pairs: Vec<_> = tags.into_iter().zip(handles.iter().copied()).collect();
         let (handles, puts, pipes) = index_net(&g, handles, pairs);
@@ -2206,7 +2206,7 @@ pub fn profiel(opt: &super::CivielOptions, naam: Option<String>, van: Option<Str
     let mut out = Out::default();
     let (at, len, _) = draw_profile(&ctx, &g.net, &path, &mut ground, opt, at, &mut out)?;
     let originals = original_layers(&doc, old)?;
-    let hs = out.write_to(&t!("Lengteprofiel {}", "Length profile {}", g.net.naam), super::LayerWrite::Append(&originals))?;
+    let hs = out.write_to(&t!("Lengteprofiel {}", "Length profile {}", g.net.naam), super::LayerWrite::Append(None, &originals))?;
     bridge::index_add("rioolprofiel", &g.net.naam, &hs, true);
     ground.note_source();
     let names: Vec<String> = std::iter::once(g.net.putten[g.net.leidingen[path[0]].van].naam.clone()).chain(path.iter().map(|i| g.net.putten[g.net.leidingen[*i].naar].naam.clone())).collect();
@@ -2955,7 +2955,7 @@ pub fn van_gwsw(opt: &super::CivielOptions, naam: Option<String>, progress: &dyn
     }
     let originals = original_layers(&doc, used.into_iter().chain(old_labels))?;
     let label = tr("GWSW overnemen", "Take over GWSW");
-    bridge::with_import_layers(label, |layers| layers.remove_originals(&originals))?;
+    bridge::with_import_layers(label, None, |layers| layers.remove_originals(&originals))?;
     let removed = originals.len();
     ground.note_source();
     api::note("elementen", handles_all.len());

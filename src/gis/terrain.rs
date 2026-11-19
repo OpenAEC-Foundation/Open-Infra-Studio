@@ -72,6 +72,14 @@ impl Source {
         }
     }
 
+    /// The source's name for a planner: the layer group of its imports.
+    pub fn short(&self) -> &'static str {
+        match self.kind {
+            Kind::Ahn => "AHN",
+            Kind::Terrarium => "Terrain Tiles",
+        }
+    }
+
     /// For the title block's list of sources.
     pub fn attribution(&self) -> &'static str {
         match self.kind {

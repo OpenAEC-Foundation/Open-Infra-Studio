@@ -162,7 +162,7 @@ fn update_drawing(
                 })
                 .collect();
             let label = tr("BGT bijwerken: vervallen objecten", "BGT update: removed objects");
-            bridge::with_import_layers(label, |layers| {
+            bridge::with_import_layers(label, None, |layers| {
                 layers.unlock(vanished.iter().map(|h| entities[h].common().layer.clone())
                     .chain(std::iter::once(vanished_layer().to_owned())))?;
                 if bridge::update_entities(label, moved)? > 0 {

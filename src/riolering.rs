@@ -95,7 +95,7 @@ pub fn place(site: &Site, data: &[(String, Vec<Feature>)], opt: &NlcsOptions) ->
         for spec in &layers {
             bridge::ensure_nlcs_layer(spec);
         }
-        bridge::add_imported_entities(label, entities)
+        bridge::add_imported_entities(label, "GWSW", entities)
     })?;
     bridge::note_source("GWSW (Stichting RIONED / PDOK, CC0)");
     bridge::zoom_extents();

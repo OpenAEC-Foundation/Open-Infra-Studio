@@ -449,13 +449,13 @@ pub fn create(opt: &super::CivielOptions, source: TinSource, progress: &dyn Fn(S
     if source == TinSource::Ahn {
         sel.clear();
     }
-    let (points, source) = if sel.is_empty() {
+    let (points, source, group) = if sel.is_empty() {
         let bron = super::hoogtebron(&ctx)?;
         progress(format!("{} ophalen…", bron.label()));
         let pts = bron.grid_points(&ctx, opt.ahn_spacing.max(0.5), progress)?;
-        (pts, format!("{} om de {} m", bron.label(), opt.ahn_spacing))
+        (pts, format!("{} om de {} m", bron.label(), opt.ahn_spacing), Some(bron.src.short()))
     } else {
-        (points_from(&doc, &sel), format!("{} geselecteerde elementen", sel.len()))
+        (points_from(&doc, &sel), format!("{} geselecteerde elementen", sel.len()), None)
     };
     progress(format!("Driehoeken maken van {} punten…", points.len()));
     let max_edge = if sel.is_empty() { opt.ahn_spacing * 3.0 } else { opt.max_edge } * ctx.f;
@@ -474,10 +474,18 @@ pub fn create(opt: &super::CivielOptions, source: TinSource, progress: &dyn Fn(S
     super::api::note("hoogte_min", zmin / ctx.f);
     super::api::note("hoogte_max", zmax / ctx.f);
     progress("Terrein tekenen…".into());
-    let handles = out.write_handles(&name)?;
-    let written = handles.len();
+    // From AHN (or Terrain Tiles) in that source's layer group (#143). One
+    // undo step with the drawing's index; the group follows it.
     let status = faces.name.chars().next().unwrap_or('B').to_string();
-    crate::bridge::index_add("tin", &status, &handles[..meshes.min(handles.len())], false);
+    let handles = crate::bridge::with_import_undo(&name, || {
+        let handles = match group {
+            Some(group) => out.write_from(&name, group)?,
+            None => out.write_handles(&name)?,
+        };
+        crate::bridge::index_add("tin", &status, &handles[..meshes.min(handles.len())], false);
+        Ok(handles)
+    })?;
+    let written = handles.len();
     if sel.is_empty() {
         crate::bridge::note_source("AHN4 (PDOK, CC0)");
     }

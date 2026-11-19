@@ -526,5 +526,5 @@ fn write_plan(target: &bridge::Target, layers: &BTreeMap<String, [u8; 3]>, entit
             },
         );
     }
-    Ok(bridge::add_imported_entities("IMRO-plangegevens", entities)?.len())
+    Ok(bridge::add_imported_entities("IMRO-plangegevens", "Ruimtelijke plannen", entities)?.len())
 }

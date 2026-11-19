@@ -148,7 +148,7 @@ pub fn overview(opt: &CivielOptions, kinds: &[Kind], progress: &dyn Fn(String)) 
     if ids.is_empty() {
         return Err("geen sonderingen of boringen in de BRO voor het projectgebied (alleen Nederland)".into());
     }
-    let n = out.write_import("BRO sonderingen en boringen")?.len();
+    let n = out.write_import("BRO sonderingen en boringen", "BRO")?.len();
     crate::bridge::note_source("BRO sonderingen en boringen (TNO / BRO, CC0)");
     super::api::note("objecten", ids);
     Ok(format!("BRO: {} — {n} elementen op MO-ONDERZOEK_SONDERING en _BORING.", counts.join(", ")))
@@ -324,7 +324,7 @@ pub fn columns(opt: &CivielOptions, req: &Request, progress: &dyn Fn(String)) ->
         });
     }
     progress("Sonderingen in 3D tekenen…".into());
-    let n = out.write_import("BRO sonderingen 3D")?.len();
+    let n = out.write_import("BRO sonderingen 3D", "BRO")?.len();
     crate::bridge::note_source("BRO sonderingen en boringen (TNO / BRO, CC0)");
     if let Some(b) = &bron {
         crate::bridge::note_source(b.attribution());

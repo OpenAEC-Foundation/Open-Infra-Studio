@@ -159,6 +159,7 @@ impl PluginRequestSender for Drawing {
             | PluginRequest::EndUndoGroup
             | PluginRequest::SetDirty
             | PluginRequest::BumpGeometry => PluginResponse::Ok,
+            PluginRequest::RunCommand { .. } => PluginResponse::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() })),
             other => {
                 return Err(PluginRequestError(format!(
                     "onverwacht hostverzoek: {other:?}"

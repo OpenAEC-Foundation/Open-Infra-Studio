@@ -57,14 +57,29 @@ pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64
         .collect()
 }
 
-/// DWG layer names: no `<>/\":;?*|,=` characters, upper case like the rest.
+/// Characters a DWG layer name may not have.
+const NOT_IN_NAMES: &str = "<>/\\\":;?*|,=`";
+
+/// A layer or layer group name: no `<>/\":;?*|,=` characters and no
+/// whitespace, as OCS reads `LAYERGROUP ADD <group> <layers>` word by word.
+pub(crate) fn clean_name(name: &str) -> String {
+    name.chars().map(|c| if NOT_IN_NAMES.contains(c) { '-' } else if c.is_whitespace() { '_' } else { c }).collect()
+}
+
+/// DWG layer names (see [`clean_name`]), upper case like the rest.
 pub fn layer_name(prefix: &str, name: &str) -> String {
-    let clean: String = name
-        .chars()
-        .map(|c| if "<>/\\\":;?*|,=`".contains(c) { '-' } else { c })
-        .collect();
-    let mut s = format!("{prefix}-{clean}").to_uppercase();
-    s.truncate(60);
+    cut(clean_name(&format!("{prefix}-{name}")).to_uppercase())
+}
+
+/// The name [`layer_name`] gave before #143, spaces kept.
+pub(crate) fn spaced_layer_name(prefix: &str, name: &str) -> String {
+    let clean: String = name.chars().map(|c| if NOT_IN_NAMES.contains(c) { '-' } else { c }).collect();
+    cut(format!("{prefix}-{clean}").to_uppercase())
+}
+
+/// At most 60 bytes, cut between characters.
+fn cut(mut s: String) -> String {
+    s.truncate(s.floor_char_boundary(60));
     s
 }
 
@@ -174,5 +189,27 @@ mod tests {
         let back = back.unwrap();
         let with_data: Vec<bool> = back.model_space_entities().map(|e| e.common().extended_data.get_record(XDATA_APP).is_some()).collect();
         assert_eq!(with_data, [false, true]);
+    }
+
+    /// A layer name is one word on OCS's command line, so an import's
+    /// layers can be named in its layer group (#143).
+    #[test]
+    fn layer_names_have_no_whitespace() {
+        assert_eq!(super::layer_name("GIS-WMS", "Luchtfoto 2025 (8 cm)"), "GIS-WMS-LUCHTFOTO_2025_(8_CM)");
+        assert_eq!(super::layer_name("GIS", "AHN4 puntenwolk"), "GIS-AHN4_PUNTENWOLK");
+        assert_eq!(super::layer_name("Mijn laag", "a/b"), "MIJN_LAAG-A-B");
+        // Drawings from before #143 kept the spaces.
+        assert_eq!(super::spaced_layer_name("GIS-WMS", "Luchtfoto 2025 (8 cm)"), "GIS-WMS-LUCHTFOTO 2025 (8 CM)");
+        assert_eq!(super::spaced_layer_name("GIS", "a/b"), "GIS-A-B");
+    }
+
+    /// A long name is cut to 60 bytes on a character boundary: a non-breaking
+    /// space (two bytes) becomes `_` (one), so `É` straddles byte 60 (#143).
+    #[test]
+    fn a_long_name_is_cut_between_characters() {
+        let name = format!("{}\u{a0}Éé", "a".repeat(54));
+        let cut = super::layer_name("GIS", &name);
+        assert_eq!(cut, format!("GIS-{}_", "A".repeat(54)));
+        assert!(super::spaced_layer_name("GIS", &name).len() <= 60);
     }
 }

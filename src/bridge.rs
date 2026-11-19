@@ -152,6 +152,10 @@ struct Shared {
     nlcs_layers: Vec<(u64, crate::nlcs::LayerSpec)>,
     /// Data sources of the imports, per tab, for the title block.
     sources: Vec<(u64, String)>,
+    /// Layer groups imports still have to make (#143).
+    layer_groups: Vec<WaitingGroup>,
+    /// Drawings with a worker that asks OCS again for their layer groups.
+    group_retries: HashSet<u64>,
 }
 
 fn shared() -> &'static Mutex<Shared> {
@@ -226,6 +230,7 @@ pub fn drawing_closed(tab_id: u64) {
     if let Some(sender) = state.drawing_senders.remove(&tab_id) {
         sender.closed.store(true, Ordering::Release);
     }
+    state.layer_groups.retain(|group| group.tab != tab_id);
     if state.target.as_ref().is_some_and(|target| target.tab_id == tab_id) {
         state.target = None;
         state.site = None;
@@ -1095,6 +1100,10 @@ pub(crate) fn with_import_undo<R>(label: &str, write: impl FnOnce() -> Result<R,
             other => Err(format!("EndUndoGroup: {other:?}")),
         });
         IMPORT_UNDO_OPEN.set(false);
+        // OCS's LAYERGROUP closes a held undo group: the import's layer
+        // groups follow its step, with the write lock still held (#143,
+        // knownbugs.md 153).
+        flush_layer_groups();
         result.and_then(|value| closed.map(|()| value))
     })
 }
@@ -1200,6 +1209,10 @@ pub(crate) struct ImportLayers {
     relock: BTreeMap<String, String>,
     auto_lock: bool,
     registered: bool,
+    /// The layer group of what this write draws next (#143).
+    pub(crate) group: Option<String>,
+    /// Per layer group, the layers drawn on, each with one element drawn there.
+    members: BTreeMap<String, BTreeMap<String, (String, Handle)>>,
 }
 
 impl ImportLayers {
@@ -1238,6 +1251,14 @@ impl ImportLayers {
         }
     }
 
+    fn drew(&mut self, layer: &str, handle: Handle) {
+        self.mark_written(layer);
+        if let Some(group) = &self.group {
+            let layers = self.members.entry(group.clone()).or_default();
+            layers.entry(normalize_name(layer)).or_insert_with(|| (layer.to_owned(), handle));
+        }
+    }
+
     fn add(&mut self, chunk: Vec<EntityType>, added: &mut Vec<Handle>) -> Result<(), String> {
         let mut handles = send_entities(chunk.clone())?;
         let start = added.len();
@@ -1246,7 +1267,7 @@ impl ImportLayers {
             .filter_map(|(i, h)| h.is_null().then_some(i)).collect();
         for (entity, handle) in chunk.iter().zip(&handles) {
             if !handle.is_null() {
-                self.mark_written(&entity.common().layer);
+                self.drew(&entity.common().layer, *handle);
                 self.writable.insert(normalize_name(&entity.common().layer));
             }
         }
@@ -1260,7 +1281,7 @@ impl ImportLayers {
                 for (i, handle) in retry.into_iter().zip(send_entities(entities)?) {
                     handles[i] = handle;
                     if !handle.is_null() {
-                        self.mark_written(&chunk[i].common().layer);
+                        self.drew(&chunk[i].common().layer, handle);
                     }
                 }
                 // Keep the original input order, including the successful retries.
@@ -1289,16 +1310,21 @@ impl ImportLayers {
     }
 }
 
+/// Write an import as one undo step. The layers it draws on go into layer
+/// group `group` (see [`layer_group_name`]); `None` for a write that only
+/// removes or moves what an earlier import drew.
 pub(crate) fn with_import_layers<R>(
     label: &str,
+    group: Option<&str>,
     write: impl FnOnce(&mut ImportLayers) -> Result<R, String>,
 ) -> Result<R, String> {
-    with_layer_writes(label, crate::settings::lock_imported_layers(), write)
+    with_layer_writes(label, crate::settings::lock_imported_layers(), group, write)
 }
 
 fn with_layer_writes<R>(
     label: &str,
     auto_lock: bool,
+    group: Option<&str>,
     write: impl FnOnce(&mut ImportLayers) -> Result<R, String>,
 ) -> Result<R, String> {
     with_import_undo(label, || {
@@ -1307,6 +1333,8 @@ fn with_layer_writes<R>(
             relock: BTreeMap::new(),
             auto_lock,
             registered: false,
+            group: group.map(str::to_owned),
+            members: BTreeMap::new(),
         };
         let result = write(&mut layers);
         let mut errors = Vec::new();
@@ -1314,6 +1342,11 @@ fn with_layer_writes<R>(
             if let Err(error) = change_layer_lock(&name, true) {
                 errors.push(error);
             }
+        }
+        // Made once the import's undo step is closed (`with_import_undo`),
+        // also after a failed write: what it drew stays in the drawing.
+        for (group, drawn) in layers.members {
+            queue_layer_group(&group, drawn.into_values());
         }
         if errors.is_empty() {
             return result;
@@ -1332,12 +1365,185 @@ fn begin_layer_undo(label: &str) -> Result<(), String> {
     }
 }
 
-pub(crate) fn add_imported_entities(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
-    write_import(label, entities, false)
+/// A layer group an import still has to make (#143).
+struct WaitingGroup {
+    tab: u64,
+    name: String,
+    /// The import's layers, each with one element it drew there.
+    layers: Vec<(String, Handle)>,
+    /// OCS refused it before: the drawing was not active, or busy.
+    deferred: bool,
 }
 
-pub(crate) fn append_entities(label: &str, entities: Vec<EntityType>, originals: &[(Handle, String)]) -> Result<Vec<Handle>, String> {
-    with_layer_writes(label, false, |layers| {
+/// The layer of a GIS import ([`emit::layer_name`]), see [`import_layer`].
+pub(crate) fn gis_layer(prefix: &str, raw: &str) -> String {
+    import_layer(&crate::emit::layer_name(prefix, raw), &crate::emit::spaced_layer_name(prefix, raw))
+}
+
+/// The layer an import draws on: `name`, unless the drawing has only `old`,
+/// the layer with spaces an import made before #143. That one is drawn on
+/// as it is, as on main: `LAYERGROUP` cannot name it, so it stays out of the
+/// group, and no import renames a layer (#143).
+pub(crate) fn import_layer(name: &str, old: &str) -> String {
+    let old = old.trim();
+    if old != name && !layer_exists(name) && layer_exists(old) { old.into() } else { name.into() }
+}
+
+/// Whether the drawing has layer `name`: OCS refuses to rename one to its
+/// own name, without a change, and says so only for a layer it has.
+fn layer_exists(name: &str) -> bool {
+    let rename = TableOperation::LayerRename { from: name.into(), to: name.into() };
+    matches!(request(PluginRequest::TableOperation { operation: rename }), Ok(PluginResponse::TableResult(Err(e))) if e != format!("layer {name:?} does not exist"))
+}
+
+/// A layer group's name: cleaned as a layer name ([`emit::clean_name`]).
+/// OCS compares group names without case, so a source named by its data
+/// has its kind in front (`Bestand-bgt`, `WMS-Luchtfoto_2025`, `XYZ-…`,
+/// `WFS-pand`) and never takes the group of a fixed source (`BGT`).
+pub(crate) fn layer_group_name(raw: &str) -> String {
+    crate::emit::clean_name(raw.trim()).chars().take(60).collect()
+}
+
+fn queue_layer_group(group: &str, layers: impl IntoIterator<Item = (String, Handle)>) {
+    let Some(tab) = target().map(|t| t.tab_id) else { return };
+    let name = layer_group_name(group);
+    let layers: Vec<(String, Handle)> = layers.into_iter().collect();
+    if name.is_empty() || layers.is_empty() {
+        return;
+    }
+    let mut s = shared().lock().unwrap();
+    match s.layer_groups.iter_mut().find(|g| g.tab == tab && g.name.eq_ignore_ascii_case(&name)) {
+        // A new import into a waiting group: its elements are the proof now.
+        Some(waiting) => {
+            for (layer, handle) in layers {
+                match waiting.layers.iter_mut().find(|(w, _)| normalize_name(w) == normalize_name(&layer)) {
+                    Some(known) => known.1 = handle,
+                    None => waiting.layers.push((layer, handle)),
+                }
+            }
+            waiting.deferred = false;
+        }
+        None => s.layer_groups.push(WaitingGroup { tab, name, layers, deferred: false }),
+    }
+}
+
+/// The command lines for group `group`: ADD fills a group that exists, NEW
+/// makes one that does not (each refuses the other case without a change).
+/// Layer names with whitespace cannot be named on the line and stay out.
+fn layer_group_lines(group: &str, layers: &[String]) -> Vec<String> {
+    let names: Vec<&str> = layers.iter().map(String::as_str).filter(|l| !l.contains(char::is_whitespace)).collect();
+    if names.is_empty() {
+        return Vec::new();
+    }
+    let names = names.join(" ");
+    vec![format!("LAYERGROUP ADD {group} {names}"), format!("LAYERGROUP NEW {group} {names}")]
+}
+
+/// How long a worker waits before it asks OCS again for a waiting group.
+const GROUP_RETRY: std::time::Duration = std::time::Duration::from_millis(if cfg!(test) { 20 } else { 2000 });
+
+/// Make the waiting layer groups of the target drawing. API 23 offers layer
+/// groups only through the LAYERGROUP command, which closes a held undo
+/// group and records its own step: call this with [`WRITING`] held, after
+/// the import's undo group closed. OCS runs a command only in the active
+/// drawing and while no other command runs: until then a worker asks again.
+/// A group whose import is no longer in the drawing (undone) lapses.
+fn flush_layer_groups() {
+    use crate::lang::{tr, tr_format};
+
+    let Some(target) = target() else { return };
+    let tab = target.tab_id;
+    let waiting: Vec<WaitingGroup> = {
+        let mut s = shared().lock().unwrap();
+        let (mine, rest) = std::mem::take(&mut s.layer_groups).into_iter().partition(|g| g.tab == tab);
+        s.layer_groups = rest;
+        mine
+    };
+    let mut again = Vec::new();
+    for mut group in waiting {
+        let name = group.name.clone();
+        if group.deferred && !still_drawn(&group.layers) {
+            push_info(&tr_format!(
+                "Laaggroep {name} vervalt: de import staat niet meer in de tekening.",
+                "Layer group {name} lapses: the import is no longer in the drawing.",
+            ));
+            continue;
+        }
+        let layers: Vec<String> = group.layers.iter().map(|(l, _)| l.clone()).collect();
+        let skipped = layers.iter().filter(|l| l.contains(char::is_whitespace)).count();
+        match layer_group_lines(&name, &layers).into_iter().try_for_each(run_quiet) {
+            Ok(()) if skipped > 0 => push_info(&tr_format!(
+                "{skipped} laag/lagen met een spatie in de naam staan niet in laaggroep {name}.",
+                "{skipped} layer(s) with a space in the name are not in layer group {name}.",
+            )),
+            Ok(()) => {}
+            Err(e) if e.contains("already active") || e.contains("active document") => {
+                if !group.deferred {
+                    push_info(&tr_format!(
+                        "Laaggroep {name} volgt zodra deze tekening actief is en er geen opdracht loopt.",
+                        "Layer group {name} follows once this drawing is active and no command runs.",
+                    ));
+                }
+                group.deferred = true;
+                again.push(group);
+            }
+            Err(e) => push_info(&format!("{} {name}: {e}", tr("Laaggroep niet gemaakt:", "Layer group not made:"))),
+        }
+    }
+    if again.is_empty() {
+        return;
+    }
+    let mut s = shared().lock().unwrap();
+    s.layer_groups.extend(again);
+    if s.group_retries.insert(tab) {
+        drop(s);
+        std::thread::spawn(move || with_command_context(target, None, None, retry_layer_groups));
+    }
+}
+
+/// Ask OCS again for the target drawing's waiting layer groups until none
+/// is left: the user may return to the drawing or end a command any time.
+fn retry_layer_groups() {
+    let Some(tab) = target().map(|t| t.tab_id) else { return };
+    loop {
+        std::thread::sleep(GROUP_RETRY);
+        let _one = WRITING.lock().unwrap_or_else(|e| e.into_inner());
+        {
+            let mut s = shared().lock().unwrap();
+            if !s.layer_groups.iter().any(|g| g.tab == tab) {
+                s.group_retries.remove(&tab);
+                return;
+            }
+        }
+        flush_layer_groups();
+    }
+}
+
+/// Whether one of these elements is still in the drawing.
+fn still_drawn(layers: &[(String, Handle)]) -> bool {
+    let handles: Vec<Handle> = layers.iter().map(|(_, h)| *h).collect();
+    entities(&handles).map_or(true, |found| found.iter().any(Option::is_some))
+}
+
+fn run_quiet(line: String) -> Result<(), String> {
+    use ocs_plugin_api::host::CommandRequest;
+    match request(PluginRequest::RunCommand { request: CommandRequest::RunQuiet { line } }) {
+        Ok(PluginResponse::CommandResult(Ok(outcome))) if outcome.error.is_none() && outcome.status == "completed" => Ok(()),
+        Ok(PluginResponse::CommandResult(Ok(outcome))) => Err(outcome.error.unwrap_or(outcome.status)),
+        Ok(PluginResponse::CommandResult(Err(error))) | Err(error) => Err(error),
+        Ok(other) => Err(format!("{other:?}")),
+    }
+}
+
+pub(crate) fn add_imported_entities(label: &str, group: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
+    write_import(label, group, entities, false)
+}
+
+/// Add to the drawing as one undo step without locking the layers (a
+/// sheet, a design, a terrain from an outside source); `group` is the
+/// layer group of what it draws (#143), `originals` what it replaces.
+pub(crate) fn append_entities(label: &str, group: Option<&str>, entities: Vec<EntityType>, originals: &[(Handle, String)]) -> Result<Vec<Handle>, String> {
+    with_layer_writes(label, false, group, |layers| {
         let handles = layers.write_entities_inner(entities, Some(label))?;
         layers.remove_originals(originals)?;
         Ok(handles)
@@ -1349,13 +1555,13 @@ pub(crate) fn append_entities(label: &str, entities: Vec<EntityType>, originals:
 /// being edited: what it put elsewhere is taken back while its layers are
 /// still open, and the write fails with `elsewhere`.
 pub(crate) fn append_in(label: &str, new: Vec<EntityType>, space: Handle, elsewhere: &str) -> Result<Vec<Handle>, String> {
-    with_layer_writes(label, false, |layers| {
+    with_layer_writes(label, false, None, |layers| {
         let handles = layers.write_entities_inner(new, Some(label))?;
         let Some(&first) = handles.first() else { return Ok(handles) };
         match owner(first) {
             Ok(owner) if owner == space => Ok(handles),
-            Ok(_) => Err(take_back(label, &handles, elsewhere.into())),
-            Err(error) => Err(take_back(label, &handles, error)),
+            Ok(_) => Err(layers.take_back(label, &handles, elsewhere.into())),
+            Err(error) => Err(layers.take_back(label, &handles, error)),
         }
     })
 }
@@ -1365,22 +1571,11 @@ pub(crate) fn owner(handle: Handle) -> Result<Handle, String> {
     entities(&[handle])?.into_iter().flatten().next().map(|e| e.common().owner_handle).ok_or_else(|| format!("{handle:?}?"))
 }
 
-/// Remove what a failed write added; `error` says why the write failed,
-/// with a request to undo when OCS kept part of it.
-fn take_back(label: &str, handles: &[Handle], error: String) -> String {
-    match remove_entities(label, handles) {
-        Ok(count) if count == handles.len() => error,
-        _ => format!("{error}\n{}", crate::lang::tr(
-            "OCS kon de reeds geplaatste kopieën niet allemaal opruimen. Gebruik Ongedaan maken.",
-            "OCS could not clean up all newly added copies. Use Undo.",
-        )),
-    }
-}
 
 /// Remove `originals` (handle, layer) in one undo step, also from a locked
 /// layer, which is locked again after it.
 pub(crate) fn remove_replaced(label: &str, originals: &[(Handle, String)]) -> Result<(), String> {
-    with_layer_writes(label, false, |layers| layers.remove_originals(originals))
+    with_layer_writes(label, false, None, |layers| layers.remove_originals(originals))
 }
 
 fn send_entities(entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
@@ -1401,15 +1596,15 @@ fn confirmed_entities(handles: Vec<Handle>) -> Result<Vec<Handle>, String> {
     Ok(handles)
 }
 
-pub(crate) fn add_imported_map(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
-    write_import(label, entities, true)
+pub(crate) fn add_imported_map(label: &str, group: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
+    write_import(label, group, entities, true)
 }
 
-fn write_import(label: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec<Handle>, String> {
+fn write_import(label: &str, group: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec<Handle>, String> {
     if entities.is_empty() {
         return Ok(Vec::new());
     }
-    with_import_layers(label, |layers| {
+    with_import_layers(label, Some(group), |layers| {
         let handles = layers.write_entities(entities)?;
         if map {
             image_to_back(&handles, layers)?;
@@ -1443,6 +1638,24 @@ impl ImportLayers {
         Ok(())
     }
 
+    /// Remove what a failed write added; `error` says why the write failed,
+    /// with a request to undo when OCS kept part of it. Taken back whole, a
+    /// layer only these drew on joins no group.
+    fn take_back(&mut self, label: &str, handles: &[Handle], error: String) -> String {
+        match remove_entities(label, handles) {
+            Ok(count) if count == handles.len() => {
+                for layers in self.members.values_mut() {
+                    layers.retain(|_, (_, drawn)| !handles.contains(drawn));
+                }
+                error
+            }
+            _ => format!("{error}\n{}", crate::lang::tr(
+                "OCS kon de reeds geplaatste kopieën niet allemaal opruimen. Gebruik Ongedaan maken.",
+                "OCS could not clean up all newly added copies. Use Undo.",
+            )),
+        }
+    }
+
     pub(crate) fn write_entities(&mut self, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
         self.write_entities_inner(entities, None)
     }
@@ -1451,7 +1664,7 @@ impl ImportLayers {
         let mut handles = Vec::with_capacity(entities.len());
         if let Err(error) = entity_batches(entities, |chunk| self.add(chunk, &mut handles)) {
             return Err(match rollback_label {
-                Some(label) => take_back(label, &handles, error),
+                Some(label) => self.take_back(label, &handles, error),
                 None => error,
             });
         }
@@ -1643,12 +1856,12 @@ fn run_on_target(line: &str) -> Result<(), String> {
 
 /// Attach a point cloud on its own layer. OCS's native command always uses
 /// the current layer and creates the definition and reactor itself.
-pub(crate) fn attach_imported_cloud(path: &str, layer: &str) -> Result<(), String> {
+pub(crate) fn attach_imported_cloud(path: &str, layer: &str, group: &str) -> Result<(), String> {
     use ocs_plugin_api::host::{CommandRequest, HostSettingValue};
     use crate::lang::tr;
 
     let label = tr("Puntenwolk importeren", "Import point cloud");
-    with_import_layers(label, |layers| {
+    with_import_layers(label, Some(group), |layers| {
         ensure_layer(layer, Color::from_index(7));
         layers.unlock([layer.to_owned()])?;
         let get = PluginRequest::GetSystemVariable { name: "CLAYER".into() };
@@ -1671,7 +1884,12 @@ pub(crate) fn attach_imported_cloud(path: &str, layer: &str) -> Result<(), Strin
         let restore = current(&previous);
         match result? {
             PluginResponse::CommandResult(Ok(outcome)) if outcome.added == 1 && outcome.error.is_none() => {
-                layers.mark_written(layer);
+                // The command names no handle: the newest element on the
+                // layer is the cloud, the proof for its layer group.
+                match query(serde_json::json!({"layer": layer})).ok().and_then(|found| found.iter().map(|e| e.common().handle).max()) {
+                    Some(cloud) => layers.drew(layer, cloud),
+                    None => layers.mark_written(layer),
+                }
                 restore
             }
             PluginResponse::CommandResult(Ok(outcome)) => {
@@ -1889,8 +2107,17 @@ pub(crate) mod replacement_test_host {
         reject_batch: bool,
         pub reject_profile: bool,
         pub index: Mutex<Vec<XRecordEntry>>,
-        /// Undo groups and record writes, in order.
+        /// Layer groups as OCS's LAYERGROUP keeps them, by layer name.
+        pub groups: Mutex<Vec<(String, Vec<String>)>>,
+        /// The block definitions in the drawing: description, explodable.
+        pub blocks: Mutex<HashMap<String, (String, bool)>>,
+        /// How many commands to refuse as OCS does while another runs.
+        pub busy: Mutex<u32>,
+        /// Undo groups, record writes and command lines, in order.
         pub log: Mutex<Vec<String>>,
+        pub info: Mutex<Vec<String>>,
+        /// CLAYER, where `-POINTCLOUDATTACH` puts its cloud.
+        clayer: Mutex<String>,
         /// The current layout (CTAB). OCS adds to a sheet's layout while one
         /// is current, and to the block being edited while the block editor
         /// is open (CTAB `Model`, and a switch of layout does not close it
@@ -1922,9 +2149,33 @@ pub(crate) mod replacement_test_host {
     impl Drawing {
         pub(crate) fn new(doc: CadDocument, reject_batch: bool) -> Self {
             Self {
-                doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()), log: Mutex::new(Vec::new()),
-                layout: Mutex::new("Model".into()), outside: Mutex::new(Vec::new()), block_edit: false, meet: None, refuse: Mutex::new(Vec::new()),
-                hold_sheet: false, switched: std::sync::Condvar::new(), clean_block_edit: Mutex::new(false), open: Mutex::new(false),
+                doc: Mutex::new(doc), reject_batch, reject_profile: false, index: Mutex::new(Vec::new()),
+                groups: Mutex::new(Vec::new()), blocks: Mutex::new(HashMap::new()), busy: Mutex::new(0), log: Mutex::new(Vec::new()), info: Mutex::new(Vec::new()),
+                clayer: Mutex::new("0".into()), layout: Mutex::new("Model".into()), outside: Mutex::new(Vec::new()), block_edit: false,
+                meet: None, refuse: Mutex::new(Vec::new()), hold_sheet: false, switched: std::sync::Condvar::new(),
+                clean_block_edit: Mutex::new(false), open: Mutex::new(false),
+            }
+        }
+
+        /// `LAYERGROUP ADD|NEW <group> <layers>` as OCS 2026.46 runs it:
+        /// ADD only into a group that exists, NEW only for one that does
+        /// not, layers that do not exist left out.
+        fn layer_group(&self, doc: &CadDocument, line: &str) {
+            let mut words = line.split_whitespace().skip(1);
+            let (verb, name) = (words.next().unwrap_or(""), words.next().unwrap_or(""));
+            let layers = words.filter(|l| doc.layers.contains(l)).map(str::to_string);
+            let mut groups = self.groups.lock().unwrap();
+            let group = groups.iter_mut().find(|(g, _)| g.eq_ignore_ascii_case(name));
+            match (verb, group) {
+                ("ADD", Some((_, members))) => {
+                    for layer in layers {
+                        if !members.contains(&layer) {
+                            members.push(layer);
+                        }
+                    }
+                }
+                ("NEW", None) => groups.push((name.to_string(), layers.collect())),
+                _ => {}
             }
         }
 
@@ -2011,6 +2262,44 @@ pub(crate) mod replacement_test_host {
                     A::Bool(writable && doc.remove_entity(handle).is_some())
                 }
                 Q::WriteRecord { handle, .. } => A::Bool(doc.get_entity(handle).is_some_and(|e| !locked(&doc, e))),
+                // As OCS: refused without a change when it cannot rename.
+                // As OCS: a layer that does not exist first, then a name
+                // that stays the same.
+                Q::TableOperation { operation: TableOperation::LayerRename { from, to } } => A::TableResult(if !doc.layers.contains(&from) {
+                    Err(format!("layer {from:?} does not exist"))
+                } else if from == to {
+                    Err("the new layer name is the same as the current one".into())
+                } else if doc.layers.contains(&to) {
+                    Err(format!("layer {to:?} already exists"))
+                } else {
+                    doc.rename_layer(&from, &to).map_err(|e| e.to_string())
+                }),
+                // As OCS: a block that does not exist first, then a change of
+                // nothing.
+                Q::TableOperation { operation: TableOperation::BlockModify { name, description, explodable, scale_uniformly } } => {
+                    A::TableResult(match self.blocks.lock().unwrap().get_mut(&name) {
+                        None => Err(format!("block {name:?} does not exist")),
+                        Some(_) if description.is_none() && explodable.is_none() && scale_uniformly.is_none() => Err("no block properties to change".into()),
+                        Some(block) => {
+                            if let Some(text) = description {
+                                block.0 = text;
+                            }
+                            if let Some(value) = explodable {
+                                block.1 = value;
+                            }
+                            Ok(Handle::new(1003))
+                        }
+                    })
+                }
+                Q::TableOperation { operation: TableOperation::BlockCreate { name, entities, erase_originals, description, .. } } => {
+                    if erase_originals {
+                        for handle in entities {
+                            doc.remove_entity(handle);
+                        }
+                    }
+                    self.blocks.lock().unwrap().insert(name, (description.unwrap_or_default(), true));
+                    A::TableResult(Ok(Handle::new(1003)))
+                }
                 Q::TableOperation { .. } => A::TableResult(Ok(Handle::new(1001))),
                 Q::OpenDocumentViewV4 { .. } => A::Error("no shared view in the test host".into()),
                 Q::GetSelection => A::Selection(doc.model_space_entities().map(|e| e.common().handle).collect()),
@@ -2021,6 +2310,40 @@ pub(crate) mod replacement_test_host {
                     *self.index.lock().unwrap() = entries;
                     A::XRecordUpdateResult(Ok(Handle::new(1002)))
                 }
+                Q::RunCommand { request: ocs_plugin_api::host::CommandRequest::Run { line } } if line == "ZOOMEXTENTS" => {
+                    A::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), ..Default::default() }))
+                }
+                Q::RunCommand { request: ocs_plugin_api::host::CommandRequest::RunQuiet { line } } => {
+                    let mut busy = self.busy.lock().unwrap();
+                    if *busy > 0 {
+                        *busy -= 1;
+                        return Ok(A::CommandResult(Err("a command is already active; cancel it first".into())));
+                    }
+                    self.log.lock().unwrap().push(line.clone());
+                    let mut added = 0;
+                    if line.starts_with("LAYERGROUP ") {
+                        self.layer_group(&doc, &line);
+                    } else if line.starts_with("-POINTCLOUDATTACH ") {
+                        let mut cloud = ocs_plugin_api::host::codec::Point::default();
+                        cloud.common.layer = self.clayer.lock().unwrap().clone();
+                        doc.add_entity(EntityType::Point(cloud)).unwrap();
+                        added = 1;
+                    }
+                    A::CommandResult(Ok(ocs_plugin_api::host::CommandOutcome { status: "completed".into(), added, ..Default::default() }))
+                }
+                Q::GetSystemVariable { name } if name == "CLAYER" => {
+                    A::SystemVariable(Some(ocs_plugin_api::host::HostSettingValue::Text(self.clayer.lock().unwrap().clone())))
+                }
+                Q::SetSystemVariable { name, value: ocs_plugin_api::host::HostSettingValue::Text(layer) } if name == "CLAYER" => {
+                    *self.clayer.lock().unwrap() = layer.clone();
+                    A::SystemVariableResult(Ok(ocs_plugin_api::host::HostSettingValue::Text(layer)))
+                }
+                Q::QueryEntities { query } => {
+                    let query: serde_json::Value = serde_json::from_str(&query).unwrap();
+                    let layer = query["layer"].as_str().unwrap();
+                    let entities: Vec<EntityType> = doc.model_space_entities().filter(|e| e.common().layer == layer).cloned().collect();
+                    A::EntityPage(Ok(ocs_plugin_api::host::EntityPage { count: entities.len() as u64, entities, next_offset: None }))
+                }
                 Q::BeginUndoGroup { .. } => {
                     *self.open.lock().unwrap() = true;
                     self.log.lock().unwrap().push("begin".into());
@@ -2030,6 +2353,10 @@ pub(crate) mod replacement_test_host {
                     if std::mem::take(&mut *self.open.lock().unwrap()) {
                         self.log.lock().unwrap().push("end".into());
                     }
+                    A::Ok
+                }
+                Q::PushInfo(message) => {
+                    self.info.lock().unwrap().push(message);
                     A::Ok
                 }
                 Q::CloseDocumentViewV4 { .. } | Q::SetDirty | Q::BumpGeometry | Q::PushUndo { .. } => A::Ok,
@@ -2438,5 +2765,223 @@ mod command_worker_tests {
         assert!(matches!(&entries[0].value, XRecordValue::String(v) if v.contains("Weigering")), "SITE B is geschreven");
         let Some(PluginRequest::PushError(warning)) = seen.last() else { unreachable!() };
         assert!(warning.contains("EPSG:9999") && warning.contains("GEODATA"), "{warning}");
+    }
+}
+
+#[cfg(test)]
+mod layer_group_tests {
+    use super::replacement_test_host::Drawing;
+    use super::*;
+    use ocs_plugin_api::host::codec::{CadDocument, Point};
+
+    fn on(layer: &str) -> EntityType {
+        let mut point = Point::default();
+        point.common.layer = layer.into();
+        EntityType::Point(point)
+    }
+
+    fn in_drawing(tab_id: u64, test: impl FnOnce(&Arc<Drawing>)) {
+        crate::settings::with_test_file(|| {
+            let drawing = Arc::new(Drawing::new(CadDocument::new(), false));
+            let target = Target { sender: drawing.clone(), tab_id, unit_factor: 1.0, doc_path: None };
+            with_command_context(target, None, None, || test(&drawing));
+        });
+    }
+
+    /// Wait until no worker asks OCS again for drawing `tab`'s groups.
+    fn retries_done(tab: u64) {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while shared().lock().unwrap().group_retries.contains(&tab) {
+            assert!(std::time::Instant::now() < until, "layer group retries of tab {tab} did not end");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+
+    fn groups(drawing: &Drawing) -> Vec<(String, Vec<String>)> {
+        drawing.groups.lock().unwrap().clone()
+    }
+
+    /// OCS refused part of a write, which is taken back: what it drew is no
+    /// proof of a layer group, so none is made (#143).
+    #[test]
+    fn a_write_taken_back_makes_no_layer_group() {
+        crate::settings::with_test_file(|| {
+            let mut drawing = Drawing::new(CadDocument::new(), false);
+            drawing.reject_profile = true;
+            let drawing = Arc::new(drawing);
+            let target = Target { sender: drawing.clone(), tab_id: 143_009, unit_factor: 1.0, doc_path: None };
+            with_command_context(target, None, None, || {
+                ensure_layer("B-XX-AL-TEKENBLADGRENS-G", Color::from_index(7));
+                let mut refused = on("B-XX-AL-TEKENBLADGRENS-G");
+                refused.common_mut().extended_data.add_record(object_data([("rioolprofiel", "x".to_string())]));
+                assert!(append_entities("Tekenblad", Some("Tekenblad"), vec![on("B-XX-AL-TEKENBLADGRENS-G"), refused], &[]).is_err());
+            });
+            assert!(groups(&drawing).is_empty(), "{:?}", groups(&drawing));
+        });
+    }
+
+    /// Each import fills the layer group of its source (#143), after its
+    /// undo step: OCS's LAYERGROUP closes a held undo group.
+    #[test]
+    fn an_import_fills_its_own_layer_group_and_a_reimport_the_same_one() {
+        in_drawing(143_001, |drawing| {
+            for layer in ["B-XX-WE-RIJBAAN-G", "B-XX-WE-RIJBAAN-T", "B-XX-WE-FIETSPAD-G", "B-XX-KG-PERCEEL-G"] {
+                ensure_layer(layer, Color::from_index(7));
+            }
+            add_imported_entities("BGT (NLCS)", "BGT", vec![on("B-XX-WE-RIJBAAN-T"), on("B-XX-WE-RIJBAAN-G")]).unwrap();
+            assert_eq!(drawing.log.lock().unwrap()[..4], [
+                "begin",
+                "end",
+                "LAYERGROUP ADD BGT B-XX-WE-RIJBAAN-G B-XX-WE-RIJBAAN-T",
+                "LAYERGROUP NEW BGT B-XX-WE-RIJBAAN-G B-XX-WE-RIJBAAN-T",
+            ]);
+            // Again into existing layers and one new layer: still one group.
+            add_imported_entities("BGT (NLCS)", "BGT", vec![on("B-XX-WE-RIJBAAN-G"), on("B-XX-WE-FIETSPAD-G")]).unwrap();
+            add_imported_entities("Kadastrale kaart (NLCS)", "Kadaster", vec![on("B-XX-KG-PERCEEL-G")]).unwrap();
+            assert_eq!(groups(drawing), [
+                ("BGT".to_string(), vec!["B-XX-WE-RIJBAAN-G".to_string(), "B-XX-WE-RIJBAAN-T".into(), "B-XX-WE-FIETSPAD-G".into()]),
+                ("Kadaster".to_string(), vec!["B-XX-KG-PERCEEL-G".to_string()]),
+            ]);
+            assert!(drawing.info.lock().unwrap().is_empty());
+        });
+    }
+
+    /// OCS refuses LAYERGROUP while the drawing is not the active one or the
+    /// user runs a command: the group follows once OCS takes it, without
+    /// waiting for another import.
+    #[test]
+    fn a_waiting_layer_group_follows_once_the_drawing_is_free() {
+        in_drawing(143_002, |drawing| {
+            ensure_layer("GIS-WMS-LUCHTFOTO", Color::from_index(7));
+            *drawing.busy.lock().unwrap() = 3;
+            add_imported_entities("GIS WMS Luchtfoto", "Luchtfoto", vec![on("GIS-WMS-LUCHTFOTO")]).unwrap();
+            retries_done(143_002);
+            assert_eq!(groups(drawing), [("Luchtfoto".to_string(), vec!["GIS-WMS-LUCHTFOTO".to_string()])]);
+            let info = drawing.info.lock().unwrap();
+            assert_eq!(info.len(), 1, "one note, not one per attempt: {info:?}");
+            assert!(info[0].contains("Luchtfoto"), "{info:?}");
+        });
+    }
+
+    /// An import undone while its group waits: the group lapses, and does
+    /// not come along with a later import.
+    #[test]
+    fn a_waiting_layer_group_lapses_when_its_import_is_undone() {
+        in_drawing(143_003, |drawing| {
+            for layer in ["GIS-TABWISSEL", "GIS-ONVERWANT"] {
+                ensure_layer(layer, Color::from_index(7));
+            }
+            *drawing.busy.lock().unwrap() = u32::MAX;
+            let drawn = add_imported_entities("GIS tabwissel.csv", "tabwissel", vec![on("GIS-TABWISSEL")]).unwrap();
+            drawing.doc.lock().unwrap().remove_entity(drawn[0]);
+            *drawing.busy.lock().unwrap() = 0;
+            retries_done(143_003);
+            assert!(groups(drawing).is_empty(), "{:?}", groups(drawing));
+            add_imported_entities("GIS onverwant.csv", "onverwant", vec![on("GIS-ONVERWANT")]).unwrap();
+            assert_eq!(groups(drawing), [("onverwant".to_string(), vec!["GIS-ONVERWANT".to_string()])]);
+            let info = drawing.info.lock().unwrap();
+            assert!(info.iter().any(|m| m.contains("tabwissel") && (m.contains("vervalt") || m.contains("lapses"))), "{info:?}");
+        });
+    }
+
+    /// Imported again while its group waits, and the first elements gone
+    /// after that (as when a re-import replaces them): the group follows the
+    /// new import and does not lapse.
+    #[test]
+    fn a_reimport_into_a_waiting_group_keeps_it() {
+        in_drawing(143_006, |drawing| {
+            ensure_layer("GIS-OPNIEUW", Color::from_index(7));
+            *drawing.busy.lock().unwrap() = u32::MAX;
+            let first = add_imported_entities("GIS opnieuw.csv", "opnieuw", vec![on("GIS-OPNIEUW")]).unwrap();
+            add_imported_entities("GIS opnieuw.csv", "opnieuw", vec![on("GIS-OPNIEUW")]).unwrap();
+            drawing.doc.lock().unwrap().remove_entity(first[0]);
+            *drawing.busy.lock().unwrap() = 0;
+            retries_done(143_006);
+            assert_eq!(groups(drawing), [("opnieuw".to_string(), vec!["GIS-OPNIEUW".to_string()])]);
+        });
+    }
+
+    /// Maps and features placed together (PDOK, one Ctrl+Z, #141): each
+    /// fills its own group, all after the one undo step (#143).
+    #[test]
+    fn the_datasets_of_one_import_fill_their_groups_after_its_one_undo_step() {
+        in_drawing(143_007, |drawing| {
+            for layer in ["GIS-WMS-LUCHTFOTO", "GIS-OSM_WEGEN"] {
+                ensure_layer(layer, Color::from_index(7));
+            }
+            with_import_layers("PDOK", None, |layers| {
+                // A map through the shared writer, as `PreparedDataset::write`.
+                layers.group = Some("Luchtfoto".into());
+                layers.write_entities(vec![on("GIS-WMS-LUCHTFOTO")])?;
+                layers.group = None;
+                // Features through their own write, which joins the import.
+                add_imported_entities("GIS OSM wegen", "OSM", vec![on("GIS-OSM_WEGEN")])
+            })
+            .unwrap();
+            let log = drawing.log.lock().unwrap().clone();
+            assert_eq!(log[..2], ["begin", "end"], "{log:?}");
+            assert!(log[2..].iter().all(|line| line.starts_with("LAYERGROUP ")), "{log:?}");
+            let mut made = groups(drawing);
+            made.sort();
+            assert_eq!(made, [("Luchtfoto".to_string(), vec!["GIS-WMS-LUCHTFOTO".to_string()]), ("OSM".to_string(), vec!["GIS-OSM_WEGEN".to_string()])]);
+        });
+    }
+
+    /// OCS's own command attaches a point cloud and names no handle: the
+    /// cloud on its layer is the proof for its group (#143).
+    #[test]
+    fn a_point_cloud_fills_its_layer_group() {
+        in_drawing(143_008, |drawing| {
+            attach_imported_cloud("/tmp/ahn5.laz", "GIS-AHN5_PUNTENWOLK", "AHN").unwrap();
+            assert_eq!(groups(drawing), [("AHN".to_string(), vec!["GIS-AHN5_PUNTENWOLK".to_string()])]);
+        });
+    }
+
+    /// A drawing from before #143 has its GIS layer with spaces: a re-import
+    /// draws on it as it is, which a layer group cannot hold, and says so. A
+    /// drawing with the layer without spaces, or with neither, gets that one.
+    /// No layer is renamed (#143).
+    #[test]
+    fn a_reimport_draws_on_a_layer_with_spaces_from_before() {
+        in_drawing(143_004, |drawing| {
+            assert_eq!(gis_layer("GIS", "legacy punt"), "GIS-LEGACY_PUNT");
+            ensure_layer("GIS-LEGACY PUNT", Color::from_index(7));
+            let layer = gis_layer("GIS", "legacy punt");
+            assert_eq!(layer, "GIS-LEGACY PUNT");
+            add_imported_entities("GIS legacy punt.csv", "legacy punt", vec![on(&layer)]).unwrap();
+            assert!(groups(drawing).is_empty());
+            assert!(drawing.info.lock().unwrap().iter().any(|line| line.contains("legacy_punt")), "{:?}", drawing.info.lock().unwrap());
+            ensure_layer("GIS-LEGACY_PUNT", Color::from_index(7));
+            assert_eq!(gis_layer("GIS", "legacy punt"), "GIS-LEGACY_PUNT");
+            assert!(drawing.doc.lock().unwrap().layers.contains("GIS-LEGACY PUNT"));
+        });
+    }
+
+    /// A sheet or a terrain from an outside source goes into its group but
+    /// stays unlocked for the next edit, also with imported layers locked.
+    #[test]
+    fn an_appended_write_groups_its_layers_without_locking_them() {
+        in_drawing(143_005, |drawing| {
+            assert!(crate::settings::lock_imported_layers());
+            ensure_layer("B-XX-AL-TEKENBLAD_KADER-G", Color::from_index(7));
+            append_entities("NLCS-tekenblad", Some("Tekenblad"), vec![on("B-XX-AL-TEKENBLAD_KADER-G")], &[]).unwrap();
+            assert!(!drawing.doc.lock().unwrap().layers.get("B-XX-AL-TEKENBLAD_KADER-G").unwrap().is_locked());
+            assert_eq!(groups(drawing), [("Tekenblad".to_string(), vec!["B-XX-AL-TEKENBLAD_KADER-G".to_string()])]);
+        });
+    }
+
+    /// Named as the layers are: sources whose layers differ keep apart, and
+    /// a name is one word on OCS's command line.
+    #[test]
+    fn layer_groups_are_named_like_the_layers_of_their_source() {
+        assert_eq!(layer_group_name("weg,west"), "weg-west");
+        assert_eq!(layer_group_name("weg_west"), "weg_west");
+        assert_eq!(crate::emit::layer_name("GIS", "weg,west"), "GIS-WEG-WEST");
+        assert_eq!(layer_group_name(" Luchtfoto 2025 (8 cm) "), "Luchtfoto_2025_(8_cm)");
+        assert_eq!(layer_group_name(&"x".repeat(80)).len(), 60);
+        // A layer with a space cannot be named; the rest still is.
+        let lines = layer_group_lines("G", &["A".into(), "Mijn wegen".into(), "B".into()]);
+        assert_eq!(lines, ["LAYERGROUP ADD G A B", "LAYERGROUP NEW G A B"]);
+        assert!(layer_group_lines("G", &["Mijn wegen".into()]).is_empty());
     }
 }
