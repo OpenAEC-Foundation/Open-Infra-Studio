@@ -972,13 +972,13 @@ pub fn design_options(opt: &super::CivielOptions, keep_status: bool) -> super::C
     o
 }
 
-/// "Kantlijn 3": one more than the highest number under this index kind.
 /// The name given with `NAAM=`, or the next free default (`Plateau 3`).
 /// `NAAM=` without a value is no name (#155).
 fn name_or(name: Option<String>, kind: &str, prefix: &str) -> String {
     name.filter(|n| !n.trim().is_empty()).unwrap_or_else(|| next_name(kind, prefix))
 }
 
+/// "Kantlijn 3": one more than the highest number under this index kind.
 fn next_name(kind: &str, prefix: &str) -> String {
     let n = bridge::index_read()
         .into_iter()
@@ -2026,10 +2026,18 @@ mod tests {
     /// an empty OPENINFRA record, which makes a DWG unreadable (#155).
     #[test]
     fn an_empty_name_is_no_name() {
-        assert_eq!(name_or(Some(String::new()), "grading", "Plateau"), "Plateau 1");
-        assert_eq!(name_or(Some(" ".into()), "grading", "Talud"), "Talud 1");
-        assert_eq!(name_or(None, "kantlijn", "Kantlijn"), "Kantlijn 1");
-        assert_eq!(name_or(Some("Kavel 3".into()), "grading", "Plateau"), "Kavel 3");
+        use crate::bridge::replacement_test_host::Drawing;
+        use ocs_plugin_api::host::XRecordEntry;
+        // A drawing of its own, so no other test's drawing answers (#155).
+        let drawing = std::sync::Arc::new(Drawing::new(ocs_plugin_api::host::codec::CadDocument::new(), false));
+        *drawing.index.lock().unwrap() = vec![XRecordEntry::string(1, "grading\tPlateau 2\t1A")];
+        let target = bridge::Target { sender: drawing, tab_id: 155_001, unit_factor: 1.0, doc_path: None };
+        bridge::with_command_context(target, None, None, || {
+            assert_eq!(name_or(Some(String::new()), "grading", "Plateau"), "Plateau 3");
+            assert_eq!(name_or(Some(" ".into()), "grading", "Talud"), "Talud 1");
+            assert_eq!(name_or(None, "kantlijn", "Kantlijn"), "Kantlijn 1");
+            assert_eq!(name_or(Some("Kavel 3".into()), "grading", "Plateau"), "Kavel 3");
+        });
     }
 
     #[test]
