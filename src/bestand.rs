@@ -74,8 +74,9 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     // the default one with the spaces of the file's name.
     let old_base = if opt.layer.trim() == emit::layer_name("GIS", stem) { emit::spaced_layer_name("GIS", stem) } else { opt.layer.clone() };
     let text_h = opt.text_m * f;
-    // Each layer's name without spaces, with the layer drawn on.
-    let mut layers: Vec<(String, String)> = Vec::new();
+    let mut layers: Vec<String> = Vec::new();
+    // Each value's layer from before #143, with the layer drawn on.
+    let mut chosen: Vec<(String, String)> = Vec::new();
     let mut out: Vec<EntityType> = Vec::new();
     let mut n_features = 0;
     for (i, feat) in data.features.iter().enumerate() {
@@ -88,15 +89,18 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         }
         n_features += 1;
         let value = opt.split_by.as_ref().and_then(|k| feat.props.get(k)).and_then(emit::attribute_text);
-        let name = value.as_deref().map_or_else(|| base.clone(), |v| emit::layer_name(&base, v));
-        let layer = match layers.iter().find(|(n, _)| *n == name) {
+        let old = value.as_deref().map_or_else(|| old_base.clone(), |v| emit::spaced_layer_name(&old_base, v));
+        let layer = match chosen.iter().find(|(o, _)| *o == old) {
             Some((_, layer)) => layer.clone(),
             None => {
-                let layer = bridge::import_layer(&name, &value.as_deref().map_or_else(|| old_base.clone(), |v| emit::spaced_layer_name(&old_base, v)));
-                layers.push((name, layer.clone()));
+                let layer = bridge::import_layer(&value.as_deref().map_or_else(|| base.clone(), |v| emit::layer_name(&base, v)), &old);
+                chosen.push((old, layer.clone()));
                 layer
             }
         };
+        if !layers.contains(&layer) {
+            layers.push(layer.clone());
+        }
         let record = emit::feature_data(feat);
         out.extend(emit::polylines(&lines, &layer, 1.0, Some(&record)));
         out.extend(emit::markers(&points, &layer, text_h * 0.25, Some(&record)));
@@ -121,8 +125,8 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
     }
     let label = format!("GIS {source}");
     let handles = bridge::with_import_undo(&label, || {
-        for (_, layer) in &layers {
-            bridge::ensure_layer(layer, Color::from_index(opt.aci));
+        for l in &layers {
+            bridge::ensure_layer(l, Color::from_index(opt.aci));
         }
         // A file is its own source: its layers are named after it, so is its group.
         bridge::add_imported_entities(&label, &format!("Bestand-{stem}"), out)
@@ -137,7 +141,7 @@ pub fn place(site: &Site, data: &FileData, opt: &FileOptions, source: &str, prog
         source,
         handles.len(),
         tr("elementen op", "entities on"),
-        if layers.len() == 1 { layers[0].1.clone() } else { format!("{} {}", layers.len(), tr("lagen", "layers")) }
+        if layers.len() == 1 { layers[0].clone() } else { format!("{} {}", layers.len(), tr("lagen", "layers")) }
     )))
 }
 
@@ -275,6 +279,24 @@ mod tests {
         assert!(!doc.layers.contains("Ontwerp_wegen"));
         assert_eq!(doc.get_entity(line).unwrap().common().layer, "Ontwerp wegen");
         assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == "Ontwerp wegen").count(), 2);
+    }
+
+    /// Two values that differ only in a space and an underscore: the one
+    /// whose layer from before #143 exists draws on it, the other on its own
+    /// layer without spaces, whichever comes first in the file (#143).
+    #[test]
+    fn values_that_differ_only_in_a_space_keep_their_own_layer() {
+        for (tab, values) in [(143_207, ["dicht asfalt", "dicht_asfalt"]), (143_208, ["dicht_asfalt", "dicht asfalt"])] {
+            let mut doc = CadDocument::new();
+            doc.layers.add(Layer::new("GIS-WEGEN-DICHT ASFALT")).unwrap();
+            let drawing = Arc::new(Drawing::new(doc, false));
+            import(&drawing, tab, "wegen.csv", &per_value(&values), |opt| opt.split_by = Some("soort".into()));
+            assert_eq!(groups(&drawing), [group("Bestand-wegen", &["GIS-WEGEN-DICHT_ASFALT"])], "{values:?}");
+            let doc = drawing.doc.lock().unwrap();
+            for layer in ["GIS-WEGEN-DICHT ASFALT", "GIS-WEGEN-DICHT_ASFALT"] {
+                assert_eq!(doc.model_space_entities().filter(|e| e.common().layer == layer).count(), 1, "{layer} {values:?}");
+            }
+        }
     }
 
     /// A layer name typed with a space: the import draws on it without the

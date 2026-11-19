@@ -258,17 +258,15 @@ pub const PDOK: &[Catalogued] = &[
 ];
 
 pub(crate) enum PreparedDataset {
-    /// `group`: the layer group of the map; `old_layer`: its layer's name in
-    /// a drawing from before #143 ([`bridge::import_layer`]).
-    Map { images: Vec<raster::PlacedImage>, layer: String, old_layer: String, group: String, label: String, summary: String },
+    /// `group`: the layer group of the map.
+    Map { images: Vec<raster::PlacedImage>, layer: String, group: String, label: String, summary: String },
     Vector { features: wfs::WfsResult, feature_type: WfsType, style: VectorStyle },
 }
 
 impl PreparedDataset {
     fn write(self, site: &Site, layers: &mut bridge::ImportLayers, rasters: &mut Vec<Handle>) -> Result<String, String> {
         match self {
-            Self::Map { images, layer, old_layer, group, summary, .. } => {
-                let layer = bridge::import_layer(&layer, &old_layer);
+            Self::Map { images, layer, group, summary, .. } => {
                 let entities = emit::images(site, &images, &layer, target()?.unit_factor, 0);
                 bridge::ensure_layer(&layer, Color::from_index(8));
                 // One writer for all datasets (one undo step): its group
@@ -298,10 +296,10 @@ pub(crate) fn prepare_dataset(site: &Site, data: &Dataset, progress: &dyn Fn(Str
             if srv.kind == ServerKind::Xyz {
                 let opt = RasterOptions { resolution: cap(0.5), format: "image/png".into() };
                 let images = raster::import_xyz(site, &srv, &opt, &bridge::image_dir(), progress)?;
-                let (layer, old_layer) = (emit::layer_name("GIS", &srv.name), emit::spaced_layer_name("GIS", &srv.name));
+                let layer = bridge::gis_layer("GIS", &srv.name);
                 let label = format!("GIS {}", srv.name);
                 let summary = format!("{} op laag {layer} ({}).", srv.name, srv.attribution);
-                return Ok(PreparedDataset::Map { images, layer, old_layer, group: format!("XYZ-{}", srv.name), label, summary });
+                return Ok(PreparedDataset::Map { images, layer, group: format!("XYZ-{}", srv.name), label, summary });
             }
             let caps = caps::fetch_wms(&srv.url)?;
             let layer = caps.layers.iter().find(|l| l.name == srv.default_layer).or(caps.layers.first()).cloned().ok_or("geen lagen")?;
@@ -326,7 +324,7 @@ fn prepare_wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer
 }
 
 fn prepared_wms(server: &MapServer, layer: &WmsLayer, result: WmsImport, aerial: bool) -> PreparedDataset {
-    let name = emit::layer_name("GIS-WMS", &layer.title);
+    let name = bridge::gis_layer("GIS-WMS", &layer.title);
     let label = format!("GIS WMS {}", layer.title);
     let mut summary = wms_summary(server, &name, &result);
     if aerial {
@@ -337,7 +335,7 @@ fn prepared_wms(server: &MapServer, layer: &WmsLayer, result: WmsImport, aerial:
         let resolution = if x == y { x } else { format!("{x} × {y}") };
         summary = format!("{} {resolution} m/px. {summary}", crate::lang::tr("Luchtfoto op", "Aerial photo at"));
     }
-    PreparedDataset::Map { images: vec![result.image], layer: name, old_layer: emit::spaced_layer_name("GIS-WMS", &layer.title), group: format!("WMS-{}", layer.title), label, summary }
+    PreparedDataset::Map { images: vec![result.image], layer: name, group: format!("WMS-{}", layer.title), label, summary }
 }
 
 pub(crate) fn place_datasets(site: &Site, label: &str, origin: bool, datasets: Vec<PreparedDataset>) -> Result<Vec<String>, String> {
@@ -491,7 +489,6 @@ mod import_layer_tests {
                 let map = PreparedDataset::Map {
                     images: vec![image],
                     layer: "GIS-WMS-LUCHTFOTO".into(),
-                    old_layer: "GIS-WMS-LUCHTFOTO".into(),
                     group: "Luchtfoto".into(),
                     label: "GIS WMS Luchtfoto".into(),
                     summary: String::new(),
@@ -524,7 +521,7 @@ mod import_layer_tests {
     }
 
     /// A map in a drawing from before #143 draws on its old layer with
-    /// spaces as it is, and renames nothing (#143).
+    /// spaces as it is, renames nothing, and names that layer (#143).
     #[test]
     fn a_map_draws_on_its_old_layer_with_spaces() {
         use crate::bridge::replacement_test_host::Drawing as Host;
@@ -539,7 +536,8 @@ mod import_layer_tests {
                 let layer = WmsLayer { name: server.default_layer.clone(), title: "Luchtfoto 2025".into(), crs: vec![], bbox: None };
                 let image = raster::PlacedImage { path: "luchtfoto.png".into(), bbox: [0.0, 0.0, 10.0, 10.0], px: [10, 10] };
                 let map = prepared_wms(&server, &layer, WmsImport { image, parts: 1, missing: vec![] }, false);
-                bridge::with_import_layers("PDOK", None, |layers| map.write(&Site::default(), layers, &mut Vec::new())).unwrap();
+                let summary = bridge::with_import_layers("PDOK", None, |layers| map.write(&Site::default(), layers, &mut Vec::new())).unwrap();
+                assert!(summary.contains("GIS-WMS-LUCHTFOTO 2025 "), "{summary}");
             });
             let doc = host.doc.lock().unwrap();
             assert!(!doc.layers.contains("GIS-WMS-LUCHTFOTO_2025"));
