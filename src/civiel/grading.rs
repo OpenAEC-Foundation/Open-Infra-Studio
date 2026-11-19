@@ -973,6 +973,12 @@ pub fn design_options(opt: &super::CivielOptions, keep_status: bool) -> super::C
 }
 
 /// "Kantlijn 3": one more than the highest number under this index kind.
+/// The name given with `NAAM=`, or the next free default (`Plateau 3`).
+/// `NAAM=` without a value is no name (#155).
+fn name_or(name: Option<String>, kind: &str, prefix: &str) -> String {
+    name.filter(|n| !n.trim().is_empty()).unwrap_or_else(|| next_name(kind, prefix))
+}
+
 fn next_name(kind: &str, prefix: &str) -> String {
     let n = bridge::index_read()
         .into_iter()
@@ -1152,7 +1158,7 @@ pub fn feature_line(opt: &super::CivielOptions, req: FeatureRequest, progress: &
             (line.pts.clone(), tr("eigen hoogtes", "own heights").into())
         }
     };
-    let name = req.name.unwrap_or_else(|| next_name("kantlijn", "Kantlijn"));
+    let name = name_or(req.name, "kantlijn", "Kantlijn");
     let spec = ctx.layer("OG", "BREUKLIJN", Element::G)?;
     let spec_t = ctx.layer("OG", "BREUKLIJN", Element::T)?;
     let data = feature_data(&name, &source, &pts, line.closed, f);
@@ -1631,7 +1637,7 @@ pub fn plateau(opt: &super::CivielOptions, req: PlateauRequest, progress: &dyn F
     if g.rays.iter().all(|r| r.end == End::NoGround) {
         return Err(ground.error().unwrap_or_else(|| tf!("geen maaiveld rond het plateau ({})", "no ground around the plateau ({})", ground.label())));
     }
-    let name = req.name.unwrap_or_else(|| next_name("grading", "Plateau"));
+    let name = name_or(req.name, "grading", "Plateau");
     let missing = g.rays.iter().filter(|r| matches!(r.end, End::Reach | End::NoGround)).count();
     let data = record(&[
         ("grading", name.clone()),
@@ -1767,7 +1773,7 @@ pub fn slope(opt: &super::CivielOptions, req: SlopeRequest, progress: &dyn Fn(St
             _ => tr("het talud heeft geen breedte: ligt de rand al op dat peil?", "the slope has no width: is the edge already at that level?").into(),
         });
     }
-    let name = req.name.unwrap_or_else(|| next_name("grading", "Talud"));
+    let name = name_or(req.name, "grading", "Talud");
     let data = record(&[
         ("grading", name.clone()),
         ("soort", "talud".into()),
@@ -2013,6 +2019,17 @@ mod tests {
 
     fn square(x0: f64, y0: f64, w: f64, z: f64) -> Vec<P3> {
         vec![[x0, y0, z], [x0 + w, y0, z], [x0 + w, y0 + w, z], [x0, y0 + w, z]]
+    }
+
+    /// `NAAM=` without a value is no name: a plateau, slope or edge line
+    /// gets the next default, so a design surface of its own never carries
+    /// an empty OPENINFRA record, which makes a DWG unreadable (#155).
+    #[test]
+    fn an_empty_name_is_no_name() {
+        assert_eq!(name_or(Some(String::new()), "grading", "Plateau"), "Plateau 1");
+        assert_eq!(name_or(Some(" ".into()), "grading", "Talud"), "Talud 1");
+        assert_eq!(name_or(None, "kantlijn", "Kantlijn"), "Kantlijn 1");
+        assert_eq!(name_or(Some("Kavel 3".into()), "grading", "Plateau"), "Kavel 3");
     }
 
     #[test]
