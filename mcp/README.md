@@ -9,10 +9,10 @@ De server leest het resultaat van elk commando terug. Het is één Python-bestan
 
 ## Hoe het werkt
 
-- **Vensters:** elk Open CAD Studio-venster meldt zich in `<config>/OpenCADStudio/automation/<sessie>.json` met poort, token en pid. De server vindt die vensters zelf; je hoeft niets in te stellen.
-- **Een venster kiezen:** `oi_sessions` met `select` (sessie-id, pid of tekeningnaam), of de omgevingsvariabele `OI_SESSION`.
+- **Vensters:** elk Open CAD Studio-venster meldt zich in `<config>/OpenCADStudio/automation/<sessie>.json` met poort, token en pid. De server vindt die vensters zelf; je hoeft niets in te stellen. Draait Open CAD Studio als flatpak, dan is `<config>` op Linux `~/.var/app/io.github.HakanSeven12.OpenCadStudio/config`; de server kijkt ook daar.
+- **Een venster kiezen:** `oi_sessions` met `select` (sessie-id, pid of tekeningnaam), of de omgevingsvariabele `OI_SESSION`. Vindt die geen venster, dan weigert de server de opdracht; hij kiest dan geen ander venster.
 - **Commando's:** de server stuurt Open Infra-commando's mét `ID=<naam>`. De plugin schrijft het resultaat naar `<config>/OpenCADStudio/open-infra/api/<naam>.json`, als `{ "ok", "message", "data" }`. De server wacht daarop en geeft `data` terug als `structuredContent` (handles, lengtes, volumes enzovoort).
-- **Alternatief via REST:** zet `OI_REST_PORT` en `OCS_API_TOKEN` voor een venster dat met `--http <poort>` is gestart.
+- **Alternatief via REST:** zet `OI_REST_PORT` en `OCS_API_TOKEN` voor een venster dat met `--http <poort>` is gestart. Die route kent de antwoordmap van de flatpak niet; gebruik voor een flatpak de automatische ontdekking.
 - **Coördinaten:** projectcoördinaten in meters, in het CRS van de projectlocatie. In Nederland is dat RD.
 
 ## Installeren
