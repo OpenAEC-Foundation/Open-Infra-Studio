@@ -1,15 +1,26 @@
-**Next release — English command names and drawing GEODATA**
+**New in 2026.48.0 — Open CAD Studio v2026.47, drawing location and import fixes**
 
-- **Commands**: the GIS and Civiel command names are now English; the old names remain aliases. Standalone buttons saved in the Quick Access Toolbar keep working. A menu button you pinned shows its default option after the update; choose your option again.
-- **GEODATA in the drawing itself** (#8): storing the project location (`GIS_SITE`, the location window, `GIS_AREA`, the KLIC area, the project region) now also sets the drawing's own GEODATA object, through the plugin API of Open CAD Studio v2026.46. A plain save then gives a DWG that AutoCAD, Civil 3D and BricsCAD open with its location and coordinate system. Open Infra's record `OPENINFRA/SITE` stays leading: when Open CAD Studio refuses the coordinate system, the location is still stored and one error line warns that GEODATA could not be updated. The previous GEODATA is removed before setting the new location, so a refused CRS leaves no old location and a change of drawing units gets the current scale. The record and GEODATA are one undo step.
+- **Requires Open CAD Studio v2026.47 or newer** (#161, plugin API 28). Neither the GIS nor the Civiel plugin loads in older versions. For Open CAD Studio v2026.46, download [Open Infra Studio v2026.47.0](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.47.0).
+- **Commands** (#128): the GIS and Civiel command names are now English. The old names remain aliases. Standalone buttons saved in the Quick Access Toolbar keep working. A menu button you pinned shows its default option after the update. Choose your option again.
+- **GEODATA in the drawing itself** (#129, #8): storing the project location now also sets the drawing's GEODATA with the current drawing units. An ordinary save carries the location and coordinate system into the DWG for AutoCAD, Civil 3D and BricsCAD. If Open CAD Studio refuses the coordinate system, Open Infra still stores the project location, removes any old GEODATA and shows a warning. The project location and GEODATA are one undo step.
 - **Existing drawings**: a drawing whose location was set before this release gets GEODATA at the next change of its location. Opening it changes nothing.
 - **`GIS_GEODATA`** stays as an export: it writes a copy (DWG or DXF) with GEODATA, for a drawing you do not want to change.
+- **GIS workbench** (#130, #131, #147): close and reopen the workbench with its settings and preview kept for each drawing. The fixed controls and messages follow the Dutch or English language setting. GIS and Civiel commands can run immediately after a drawing opens.
+- **Sharper aerial photos and continuous WMS maps** (#133, #134): PDOK aerial imports use the 8 cm source resolution where the import size allows. Adjacent WMS tiles share a pixel grid so they meet without gaps. Unavailable parts are reported and left transparent.
+- **Imported layers and Undo** (#136, #141): imported layers are locked by default, with a setting under **Localisation → Application**. Undo removes the drawing objects from an import together. Map stacking can take a separate Undo step.
+- **WFS object data** (#139): imported features carry their source fields, such as the construction year and identifier of a BAG building, under **Properties → Extended Data**.
+- **Drawing sheet legends** (#142): samples go on the sheet's legend layer and show the colour, lineweight and linetype of the layer they describe. Removing the sheet's layers now removes its samples too.
+- **Map stacking** (#145): importing another map keeps the order of existing rasters. The new map goes above the old maps and behind the vector objects.
+- **Saving imported geometry** (#153, #155 partly): importing an attribute-free GIS file, such as a CSV with only x and y, no longer writes empty object data that makes the saved DWG unreadable. An unnamed plateau, slope or edge line gets a default name. Saving an existing DXF with empty object data as DWG still needs a codec fix.
+- **MCP and Flatpak** (#157): the MCP server finds Open CAD Studio windows installed through Flatpak on Linux. If a configured window name matches none of the open windows, the server reports the problem.
+- **Point clouds** (#158): files with spaces in the path attach on their GIS layer. Open Infra places the new cloud at the world origin even when the drawing uses a moved coordinate system. A cloud that the host attaches locked can still require manual correction (known bug 177).
+- **Decimal values in layer names** (#160): imported names show `0.5m` as a decimal value. Re-importing a map can rename its old `0-5m` layer in place.
 
 **New in 2026.47.0 — Open CAD Studio v2026.46 and safer managed MCP files**
 
 - **Open CAD Studio v2026.46** (#125): both plugins are built against the v2026.46 plugin API (API 23). They do not load in older Open CAD Studio versions. 2026.46.1 was the corresponding build for v2026.45 (#122).
 - **MCP server in managed mode** (#103, `OPENAEC_BEHEERD=1`): every file path stays inside the work folder `OPENAEC_MAP`, including through symbolic links, hard links, injected command arguments and files the plugins write beside the drawing. Only the commands of the exposed tools run, and each command stays with the drawing it started on. Plain save sends the checked path to Open CAD Studio. Saving requires Open CAD Studio v2026.46 or newer: from that version the host keeps its check for a file changed on disk and its edit lock when a save names its path. Saving over another existing file is refused.
-- **Known limitations**: review follow-ups are recorded in `knownbugs.md` (items 30 to 34).
+- **Known limitations**: review follow-ups are recorded in `knownbugs.md` (items 32 to 34).
 
 **New in 2026.46.0 — geotechnics and import/export fixes**
 
@@ -26,13 +37,11 @@
 - **MCP over HTTP** (#101): binding outside loopback requires a token. Requests check Host, Origin and JSON content type; loopback detection no longer resolves hostnames twice. External deployments must set `OI_MCP_TOKEN` and any required `OI_MCP_HOSTS` or `OI_MCP_ORIGINS` entries.
 - **Known limitations** (#115 and the fixes above): review follow-ups are recorded in `knownbugs.md`.
 
-Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.46** (plugin API 23), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab.
-
-**Note:** this release is built for Open CAD Studio **v2026.46** (plugin API 23) and does not load in older versions. Open CAD Studio refuses a plugin whose API is newer than its own, or whose exchanged data has a different shape, so update Open Infra together with Open CAD Studio.
+Open Infra Studio — open-source GIS and civil design for **Open CAD Studio v2026.47** (plugin API 28), for infrastructure and civil engineering anywhere in the world. It is a free alternative to commercial civil-CAD and desktop-GIS suites: project location and coordinate systems worldwide, web map services and OpenStreetMap, and civil design from survey points and TIN to alignments, corridors and earthworks, all scriptable and agent-ready. Plus deep integration with Dutch base data (BGT, BRK, KLIC, AHN, 3D BAG) and the NLCS drawing standard. Two plugins: the **GIS** ribbon tab and the **Civiel** (civil) ribbon tab.
 
 **Installing**
 
-1. Update Open CAD Studio to [v2026.46](https://github.com/HakanSeven12/OpenCADStudio/releases/tag/v2026.46).
+1. Update Open CAD Studio to [v2026.47](https://github.com/HakanSeven12/OpenCADStudio/releases/tag/v2026.47) or a newer version with the same plugin compatibility.
 2. **GIS plugin:** in Open CAD Studio, run `PLUGINS` (Plugin Manager), pick **Open Infra Studio** from the list (or choose *Add a repository* and enter `OpenAEC-Foundation/Open-Infra-Studio`), pick this release and click *Install*. By hand: put `openaec.open-infra-<platform>` and `plugin.toml` from this release in `<config>/OpenCADStudio/plugins/openaec.open-infra/`.
 3. **Civiel plugin:** unzip `open-infra-civiel-<platform>.zip` into `<config>/OpenCADStudio/plugins/`. That gives the folder `openaec.open-infra-civiel` with its library and `plugin.toml`.
 4. Restart Open CAD Studio. The ribbon shows the tabs **GIS** and **Civiel**.

@@ -527,7 +527,18 @@ Open CAD Studio runs plugins out-of-process and has no dialog API for plugins, s
 
 ## Installing
 
-Use Open CAD Studio's **Plugin Manager** (`PLUGINS`): Open Infra Studio is in its list of plugins. Pick it and install the [latest release](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/latest); in an older Open CAD Studio, choose *Add a repository* and enter `OpenAEC-Foundation/Open-Infra-Studio`. This installs the GIS plugin.
+Choose the Open Infra Studio download that matches your Open CAD Studio version. Open CAD Studio checks the plugin API and the format of the data exchanged with the plugin.
+
+| Open CAD Studio | Open Infra Studio download |
+| --- | --- |
+| v2026.47 (API 28) | [v2026.48.0](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.48.0) |
+| v2026.46 (API 23) | [v2026.47.0](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.47.0) |
+| v2026.45 (API 16) | [v2026.46.1](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.46.1) |
+| v2026.44 | [v2026.46.0](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.46.0) or v2026.45.1–v2026.45.4 |
+| v2026.43 | [v2026.45.0](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.45.0) or v2026.44.3–v2026.44.5 |
+| v2026.42 | [v2026.44.2](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.44.2) or earlier |
+
+To install the GIS plugin, open the **Plugin Manager** (`PLUGINS`), select **Open Infra Studio**, and pick the release from the table. If Open Infra Studio is missing from the list, choose *Add a repository* and enter `OpenAEC-Foundation/Open-Infra-Studio`.
 
 Or install by hand:
 1. Download `openaec.open-infra-<platform>` and `plugin.toml` from the release.
@@ -536,7 +547,7 @@ Or install by hand:
 
 The Civiel plugin comes as `open-infra-civiel-<platform>.zip` in the same release: unzip it into `<config>/OpenCADStudio/plugins/` (it holds the folder `openaec.open-infra-civiel`) and restart. `<config>` is `%APPDATA%` on Windows, `~/.config` on Linux and `~/Library/Application Support` on macOS.
 
-Release numbers follow Open CAD Studio's calendar numbering. The current code is built for **Open CAD Studio v2026.47** (plugin API 28) and does not load in older versions; 2026.47.0 was for v2026.46 (API 23), 2026.46.1 for v2026.45 (API 16), 2026.45.1 to 2026.46.0 for v2026.44, 2026.44.3 to 2026.45.0 for v2026.43 and 2026.44.2 and earlier for v2026.42. A host refuses a plugin whose API is newer than its own, or whose exchanged data has a different shape. Each Open Infra release is therefore pinned to the latest Open CAD Studio release.
+Release numbers follow Open CAD Studio's calendar numbering. Each Open Infra release is pinned to the latest Open CAD Studio release available when it is built.
 
 ## Building
 
