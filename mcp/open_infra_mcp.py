@@ -287,7 +287,7 @@ def sessions():
         st = _rest(port, token, "/state", timeout=5)
         if "document_id" in st:
             out.append({"kind": "rest", "session_id": f"rest:{port}", "port": port, "token": token, "pid": None,
-                        "version": st.get("version"), "document_id": st.get("document_id")})
+                        "version": st.get("version"), "document_id": st.get("document_id"), "document": _document(st)})
         return out
     paths = [(p, results, host_pid) for folder, results, host_pid in automation_dirs()
              for p in glob.glob(os.path.join(folder, "*.json"))]
@@ -307,13 +307,18 @@ def sessions():
             continue
         if "document_id" not in st:
             continue
-        docs = st.get("documents") or []
-        cur = next((x for x in docs if x.get("id") == st.get("document_id")), {}) if isinstance(docs, list) else {}
         out.append({"kind": "automation", "session_id": d.get("session_id"), "port": d["port"], "token": d["token"],
                     "pid": d.get("pid") if host_pid else None, "results": results,
                     "version": st.get("version"), "document_id": st.get("document_id"),
-                    "document": cur.get("path") or cur.get("name") or cur.get("title")})
+                    "document": _document(st)})
     return out
+
+
+def _document(st):
+    """The path or name of a window's current drawing, from its state."""
+    docs = st.get("documents") or []
+    cur = next((x for x in docs if x.get("id") == st.get("document_id")), {}) if isinstance(docs, list) else {}
+    return cur.get("path") or cur.get("name") or cur.get("title")
 
 
 class Ocs:
@@ -547,8 +552,10 @@ def t_sessions(a):
     live = sessions()
     if a.get("select"):
         OCS.pick(a["select"], live)
-    # The window the next command goes to, by the same rule.
-    cur = OCS.session if OCS.session in live else None
+    # The window the next command goes to: the chosen one while it lives
+    # (its current drawing may have changed), else by the same rule.
+    chosen = (OCS.session or {}).get("session_id")
+    cur = next((s for s in live if s["session_id"] == chosen), None)
     if cur is None and live:
         try:
             cur = OCS.pick(live=live)
@@ -1055,14 +1062,16 @@ def t_view(a):
 @tool("oi_capture", "Capture the drawing viewport as PNG (returned as an image). region = [xmin, ymin, xmax, ymax] in drawing coordinates.",
       {"region": {"type": "array", "items": NUM, "minItems": 4, "maxItems": 4}, "max_dimension": NUM, "path": STR})
 def t_capture(a):
-    path = _file(a) or os.path.join(results_dir(OCS.session or OCS.pick()), "capture-" + uuid.uuid4().hex[:8] + ".png")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    body = {"path": path}
-    if a.get("region"):
-        body.update({"view": "region", "bounds": [float(v) for v in a["region"]]})
-    if a.get("max_dimension"):
-        body["max_dimension"] = int(a["max_dimension"])
-    r = OCS.request_active("capture", body, timeout=180)
+    # The image path and the request go to one window.
+    with OCS.lock:
+        path = _file(a) or os.path.join(results_dir(OCS.session or OCS.pick()), "capture-" + uuid.uuid4().hex[:8] + ".png")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        body = {"path": path}
+        if a.get("region"):
+            body.update({"view": "region", "bounds": [float(v) for v in a["region"]]})
+        if a.get("max_dimension"):
+            body["max_dimension"] = int(a["max_dimension"])
+        r = OCS.request_active("capture", body, timeout=180)
     if r.get("ok") is False:
         raise OcsError(f"capture: {r.get('error')}")
     # The window writes the image after answering.

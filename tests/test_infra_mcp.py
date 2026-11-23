@@ -130,6 +130,38 @@ class SessionChoiceTest(unittest.TestCase):
         self.assertEqual(mcp.t_sessions({})['selected'], 'f')
 
 
+class TabSwitchTest(unittest.TestCase):
+    """Sol, round 2 of #164: a chosen window stays chosen when its current
+    drawing changes, in the list and for the next save."""
+
+    def test_the_chosen_window_survives_a_tab_switch(self):
+        docs = {'old': '/p/Weg.dwg', 'new': '/p/Brug.dwg'}
+        sent = []
+
+        def windows():
+            return [{'kind': 'automation', 'session_id': sid, 'port': port, 'token': 't', 'pid': None, 'document_id': 1, 'document': docs[sid]}
+                    for sid, port in (('new', 2), ('old', 1))]
+
+        def exchange(desc, request, timeout=120):
+            if request['op'] == 'state':
+                return {'document_id': 1, 'documents': [{'id': 1, 'path': docs[desc['session_id']]}]}
+            sent.append((desc['session_id'], request))
+            return {'ok': True}
+
+        for p in (patch.object(mcp, 'sessions', side_effect=windows), patch.object(mcp, '_exchange', exchange),
+                  patch.object(mcp.OCS, 'session', None), patch.dict(os.environ, {}, clear=False)):
+            p.start()
+            self.addCleanup(p.stop)
+        os.environ.pop('OI_SESSION', None)
+        self.assertFalse(mcp.call_tool('oi_sessions', {'select': 'Weg.dwg'})['isError'])
+        docs['old'] = '/p/Kruising.dwg'
+        listed = mcp.call_tool('oi_sessions', {})
+        self.assertFalse(listed['isError'])
+        self.assertIn('"selected": "old"', listed['content'][0]['text'])
+        self.assertFalse(mcp.call_tool('oi_save', {})['isError'])
+        self.assertEqual([sid for sid, _ in sent], ['old'])
+
+
 class SuperCloudTest(unittest.TestCase):
     """Route B of the SuperCloud contract (OpenAEC-Blueprint docs/supercloud-koppeling.md, #75)."""
 
