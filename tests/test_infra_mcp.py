@@ -100,7 +100,34 @@ class FlatpakTest(unittest.TestCase):
 
         [window] = mcp.sessions()
         self.assertEqual((window['session_id'], window['pid'], window['results']), ('w', None, str(results)))
-        self.assertTrue(mcp.OCS.run('GIS_STATUS', timeout=5)['ok'])
+        self.assertTrue(mcp.t_status({})['ok'])
+
+
+class SessionChoiceTest(unittest.TestCase):
+    """Sol, round 1 of #164: with a native and a flatpak window, OI_SESSION
+    that matches neither is an error, and oi_sessions names the window the
+    next command goes to."""
+
+    def setUp(self):
+        native = {'kind': 'automation', 'session_id': 'n', 'port': 1, 'token': 't', 'pid': 41, 'document': '/p/Brug.dwg'}
+        flatpak = {'kind': 'automation', 'session_id': 'f', 'port': 2, 'token': 't', 'pid': None, 'document': '/p/Kruising.dwg', 'results': '/f/api'}
+        self.live = [flatpak, native]
+        for p in (patch.object(mcp, 'sessions', return_value=self.live), patch.object(mcp.OCS, 'session', None)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_an_unmatched_oi_session_is_refused(self):
+        with patch.dict(os.environ, {'OI_SESSION': 'Weg.dwg'}):
+            with self.assertRaisesRegex(mcp.OcsError, 'Weg.dwg'):
+                mcp.OCS.pick()
+            self.assertIsNone(mcp.t_sessions({})['selected'])
+
+    def test_oi_sessions_names_the_window_a_command_uses(self):
+        with patch.dict(os.environ, {'OI_SESSION': '41'}):
+            self.assertEqual(mcp.t_sessions({})['selected'], 'n')
+            self.assertEqual(mcp.OCS.pick()['session_id'], 'n')
+        mcp.OCS.session = None
+        self.assertEqual(mcp.t_sessions({})['selected'], 'f')
 
 
 class SuperCloudTest(unittest.TestCase):

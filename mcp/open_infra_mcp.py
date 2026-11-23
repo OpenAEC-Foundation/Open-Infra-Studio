@@ -323,15 +323,17 @@ class Ocs:
         # state through request(), so re-entry on the same thread is needed.
         self.lock = threading.RLock()
 
-    def pick(self, select=None):
+    def pick(self, select=None, live=None):
+        """The window `select` or OI_SESSION names, else the newest. A name
+        that matches no window is an error, never another window."""
         with self.lock:
-            live = sessions()
+            live = sessions() if live is None else live
             want = select or os.environ.get("OI_SESSION")
             if want:
                 match = [s for s in live if want in (s["session_id"], str(s["pid"]), str(s["port"])) or (s.get("document") and want.lower() in str(s["document"]).lower())]
-                if select and not match:
-                    raise OcsError(f"geen venster '{select}'; kies uit: " + ", ".join(f"{s['session_id']} ({s.get('document')})" for s in live))
-                live = match or live
+                if not match:
+                    raise OcsError(f"geen venster '{want}'; kies uit: " + ", ".join(f"{s['session_id']} ({s.get('document')})" for s in live))
+                live = match
             if not live:
                 raise OcsError("Geen Open CAD Studio-venster gevonden. Start Open CAD Studio (met de Open Infra-plugins).")
             self.session = live[0]
@@ -404,8 +406,10 @@ class Ocs:
     def run(self, cmd, timeout=900):
         """An Open Infra command; waits for its JSON answer."""
         rid = "mcp" + uuid.uuid4().hex[:12]
-        path = os.path.join(results_dir(self.session or self.pick()), rid + ".json")
-        r = self.request_active("run", {"cmd": f"{cmd} ID={rid}"})
+        with self.lock:
+            r = self.request_active("run", {"cmd": f"{cmd} ID={rid}"})
+            # The window that took the command (a lost connection can resend it).
+            path = os.path.join(results_dir(self.session), rid + ".json")
         # A busy window answers "still running"; the command goes on and
         # its result file comes when it is done.
         busy = "may continue" in str(r.get("error") or "") or r.get("status") in ("pending", "running", "accepted")
@@ -540,10 +544,16 @@ def t_infra_update(a):
 @tool("oi_sessions", "List the running Open CAD Studio windows; `select` picks one by session id, pid or drawing name.",
       {"select": STR})
 def t_sessions(a):
-    if a.get("select"):
-        OCS.pick(a["select"])
     live = sessions()
-    cur = OCS.session or (live[0] if live else None)
+    if a.get("select"):
+        OCS.pick(a["select"], live)
+    # The window the next command goes to, by the same rule.
+    cur = OCS.session if OCS.session in live else None
+    if cur is None and live:
+        try:
+            cur = OCS.pick(live=live)
+        except OcsError:
+            cur = None
     return {"sessions": [{k: s.get(k) for k in ("session_id", "pid", "version", "document_id", "document")} for s in live],
             "selected": cur and cur["session_id"]}
 
