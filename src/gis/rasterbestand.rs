@@ -423,14 +423,6 @@ fn point_cloud(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Result<St
     crate::civiel::api::note("crs", crs.clone());
     crate::civiel::api::note("rcs", file.to_string_lossy().into_owned());
     let p = file.to_string_lossy().into_owned();
-    if p.contains(char::is_whitespace) {
-        return Ok(crate::civiel::puntenwolk::trf!(
-            "{} punten opgeslagen in {}. Het pad bevat spaties: koppel het bestand met POINTCLOUDATTACH.",
-            "{} points saved in {}. The path holds spaces: attach the file with POINTCLOUDATTACH.",
-            xyz.len(),
-            p
-        ));
-    }
     bridge::attach_imported_cloud(&p, &emit::layer_name("GIS", stem))?;
     let thinned = if stride > 1 { crate::civiel::puntenwolk::trf!(", elke {}e", ", every {}th", stride) } else { String::new() };
     Ok(crate::civiel::puntenwolk::trf!(
