@@ -535,7 +535,7 @@ Choose the Open Infra Studio download that matches your Open CAD Studio version.
 | v2026.46 (API 23) | [v2026.47.0](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.47.0) |
 | v2026.45 (API 16) | [v2026.46.1](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.46.1) |
 | v2026.44 | [v2026.46.0](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.46.0) or v2026.45.1–v2026.45.4 |
-| v2026.43 | [v2026.45.0](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.45.0) or v2026.44.3–v2026.44.5 |
+| v2026.43 | Windows: [v2026.44.5](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.44.5) (GIS DLL and Civiel ZIP). Linux and macOS: [v2026.45.0](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.45.0). |
 | v2026.42 | [v2026.44.2](https://github.com/OpenAEC-Foundation/Open-Infra-Studio/releases/tag/v2026.44.2) or earlier |
 
 To install the GIS plugin, open the **Plugin Manager** (`PLUGINS`), select **Open Infra Studio**, and pick the release from the table. If Open Infra Studio is missing from the list, choose *Add a repository* and enter `OpenAEC-Foundation/Open-Infra-Studio`.
