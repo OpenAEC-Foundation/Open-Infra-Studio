@@ -11,8 +11,8 @@ repository = "https://github.com/OpenAEC-Foundation/Open-Infra-Studio"
 crate-type = ["cdylib"]
 
 [dependencies]
-# Same released host API as GIS; API 23 checks the codec wire schema.
-ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "8b4d27046040b27eb07d3faed7b7472bd7bdaea9", features = ["host"] }
+# Same released host API as GIS; API 28 checks the codec wire schema.
+ocs_plugin_api = { git = "https://github.com/HakanSeven12/OpenCADStudio", rev = "8e5f39f6ee0468a7e29260d57b5390d7d01207e8", features = ["host"] }
 # The engine, without the GIS plugin's entry points.
 open-infra = { path = "..", default-features = false }
 serde_json = "1"
