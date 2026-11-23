@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +34,9 @@ class ReleaseSourceTest(unittest.TestCase):
         self.assertIn('ref: ${{ needs.source.outputs.commit }}', publish)
         self.assertLess(publish.index('actions/download-artifact@'),
                         publish.index('softprops/action-gh-release@'))
+        self.assertLess(publish.index('Refuse to modify a published release'),
+                        publish.index('softprops/action-gh-release@'))
+        self.assertIn('digest-mismatch: error', publish)
         self.assertIn('fail_on_unmatched_files: true', publish)
 
         platforms = {
@@ -53,6 +57,32 @@ class ReleaseSourceTest(unittest.TestCase):
                               'openaec-signing-fingerprint.txt'])
             expected.extend(f'release-assets/{library}/{name}' for name in files)
         self.assertCountEqual(publish.split('files: |\n')[1].split(), expected)
+
+    def test_published_release_guard(self):
+        workflow = WORKFLOW.read_text(encoding='utf-8')
+        step = workflow.split('\n      - name: Refuse to modify a published release\n', 1)[1]
+        step = step.split('\n      - ', 1)[0]
+        script = textwrap.dedent(step.split('        run: |\n', 1)[1])
+        cases = [
+            ('new tag', '[{"id":1,"tag_name":"v1","draft":false}]', '0', 0),
+            ('draft', '[{"id":2,"tag_name":"v2","draft":true}]', '0', 0),
+            ('published on later page',
+             '[{"id":1,"tag_name":"v1","draft":false}]\n'
+             '[{"id":2,"tag_name":"v2","draft":false}]', '0', 1),
+            ('API failure', '[]', '1', 1),
+        ]
+        with tempfile.TemporaryDirectory() as folder:
+            gh = Path(folder) / 'gh'
+            gh.write_text('#!/bin/sh\nprintf "%s\\n" "$RELEASES"\nexit "$API_STATUS"\n')
+            gh.chmod(0o755)
+            for name, releases, api_status, expected in cases:
+                with self.subTest(name=name):
+                    env = dict(os.environ, PATH=f'{folder}:{os.environ["PATH"]}',
+                               GITHUB_REPOSITORY='test/repo', RELEASE_TAG='v2',
+                               RELEASES=releases, API_STATUS=api_status)
+                    result = subprocess.run(['bash', '-c', script], env=env,
+                                            capture_output=True, text=True)
+                    self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
 
     def check_commit(self, merged):
         workflow = WORKFLOW.read_text(encoding='utf-8')

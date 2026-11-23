@@ -247,6 +247,8 @@ jobs:
   publish:
     needs: [source, build]
     runs-on: ubuntu-latest
+    concurrency:
+      group: open-infra-release-${{ github.ref }}
     permissions:
       contents: write
     steps:
@@ -254,9 +256,22 @@ jobs:
         with:
           ref: ${{ needs.source.outputs.commit }}
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           path: release-assets/
+          digest-mismatch: error
+      - name: Refuse to modify a published release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          published=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+            jq -r --arg tag "$RELEASE_TAG" '.[] | select(.tag_name == $tag and .draft == false) | .id')
+          if [ -n "$published" ]; then
+            echo "::error::Release $RELEASE_TAG is already published"
+            exit 1
+          fi
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
