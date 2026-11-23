@@ -1502,5 +1502,5 @@ mod gis_worker_tests;
 #[cfg(test)]
 #[test]
 fn released_host_wire_schema() {
-    assert_eq!(ocs_plugin_api::version_info::wire_schema(), "ffa5d441fec79097");
+    assert_eq!(ocs_plugin_api::version_info::wire_schema(), "881bf427fc05e972");
 }
