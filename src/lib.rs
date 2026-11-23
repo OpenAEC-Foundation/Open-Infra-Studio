@@ -1497,7 +1497,7 @@ mod macos_plugin {
 #[cfg(test)]
 mod gis_worker_tests;
 
-// OCS v2026.46, revision 8b4d27046040; the released host schema (see #122).
+// OCS v2026.47, revision 8e5f39f6ee04; the released host schema (see #122).
 // Runs in the offline lane and in every release platform before publication.
 #[cfg(test)]
 #[test]

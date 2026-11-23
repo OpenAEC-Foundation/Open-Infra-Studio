@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('host_api', ROOT / 'scripts/check_host_api.py')
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
-REV = '8b4d27046040b27eb07d3faed7b7472bd7bdaea9'
-API = 23
+REV = '8e5f39f6ee0468a7e29260d57b5390d7d01207e8'
+API = 28
 
 
 class HostApiTest(unittest.TestCase):
