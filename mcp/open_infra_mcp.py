@@ -9,7 +9,8 @@ API, and reads each command's outcome back: the plugins write it to
 
 Every Open CAD Studio window is found through its automation descriptor
 (<config>/OpenCADStudio/automation/*.json: port, token, pid); no setup is
-needed. OI_SESSION picks a window (session id, pid or drawing name);
+needed. On Linux <config> is also that of the flatpak
+(~/.var/app/io.github.HakanSeven12.OpenCadStudio/config). OI_SESSION picks a window (session id, pid or drawing name);
 OI_REST_PORT with OCS_API_TOKEN uses a window's REST API (--http) instead.
 
 Coordinates are project coordinates: metres in the project CRS (RD,
@@ -54,8 +55,26 @@ def config_dir():
     return os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
 
 
+# The flatpak keeps its own <config>; a window there also writes its
+# results there (#157).
+FLATPAK_CONFIG = os.path.expanduser("~/.var/app/io.github.HakanSeven12.OpenCadStudio/config")
 AUTOMATION = os.path.join(config_dir(), "OpenCADStudio", "automation")
 RESULTS = os.path.join(config_dir(), "OpenCADStudio", "open-infra", "api")
+
+
+def automation_dirs():
+    """(automation folder, results folder, whether its pids are the host's)."""
+    dirs = [(AUTOMATION, RESULTS, True)]
+    if sys.platform not in ("win32", "darwin"):
+        # A flatpak window writes its pid inside the sandbox (2, say).
+        dirs.append((os.path.join(FLATPAK_CONFIG, "OpenCADStudio", "automation"),
+                     os.path.join(FLATPAK_CONFIG, "OpenCADStudio", "open-infra", "api"), False))
+    return dirs
+
+
+def results_dir(session):
+    """Where the window's Open Infra plugins write their answers."""
+    return (session or {}).get("results") or RESULTS
 
 
 class OcsError(Exception):
@@ -201,7 +220,7 @@ def _guard(ocs, op, body):
             raise OcsError("de tekening staat niet in de werkmap: open er een met infra_open, of sla deze op met infra_opslaan en een pad")
     for key in ("path", "template"):
         v = body.get(key)
-        own_capture = op == "capture" and os.path.dirname(str(v)) == RESULTS and os.path.basename(str(v)).startswith("capture-")
+        own_capture = op == "capture" and os.path.dirname(str(v)) == results_dir(ocs.session) and os.path.basename(str(v)).startswith("capture-")
         if v and not own_capture:
             body[key] = confine(v)
     return body
@@ -270,14 +289,17 @@ def sessions():
             out.append({"kind": "rest", "session_id": f"rest:{port}", "port": port, "token": token, "pid": None,
                         "version": st.get("version"), "document_id": st.get("document_id")})
         return out
-    paths = sorted(glob.glob(os.path.join(AUTOMATION, "*.json")), key=os.path.getmtime, reverse=True)
-    for p in paths:
+    paths = [(p, results, host_pid) for folder, results, host_pid in automation_dirs()
+             for p in glob.glob(os.path.join(folder, "*.json"))]
+    paths.sort(key=lambda entry: os.path.getmtime(entry[0]), reverse=True)
+    for p, results, host_pid in paths:
         try:
             with open(p) as f:
                 d = json.load(f)
         except (OSError, ValueError):
             continue
-        if not d.get("port") or not d.get("token") or not _alive(d.get("pid")):
+        # A sandbox pid says nothing here; the state request below tells.
+        if not d.get("port") or not d.get("token") or (host_pid and not _alive(d.get("pid"))):
             continue
         try:
             st = _exchange(d, {"op": "state"}, timeout=3)
@@ -287,7 +309,8 @@ def sessions():
             continue
         docs = st.get("documents") or []
         cur = next((x for x in docs if x.get("id") == st.get("document_id")), {}) if isinstance(docs, list) else {}
-        out.append({"kind": "automation", "session_id": d.get("session_id"), "port": d["port"], "token": d["token"], "pid": d.get("pid"),
+        out.append({"kind": "automation", "session_id": d.get("session_id"), "port": d["port"], "token": d["token"],
+                    "pid": d.get("pid") if host_pid else None, "results": results,
                     "version": st.get("version"), "document_id": st.get("document_id"),
                     "document": cur.get("path") or cur.get("name") or cur.get("title")})
     return out
@@ -381,7 +404,7 @@ class Ocs:
     def run(self, cmd, timeout=900):
         """An Open Infra command; waits for its JSON answer."""
         rid = "mcp" + uuid.uuid4().hex[:12]
-        path = os.path.join(RESULTS, rid + ".json")
+        path = os.path.join(results_dir(self.session or self.pick()), rid + ".json")
         r = self.request_active("run", {"cmd": f"{cmd} ID={rid}"})
         # A busy window answers "still running"; the command goes on and
         # its result file comes when it is done.
@@ -1022,7 +1045,7 @@ def t_view(a):
 @tool("oi_capture", "Capture the drawing viewport as PNG (returned as an image). region = [xmin, ymin, xmax, ymax] in drawing coordinates.",
       {"region": {"type": "array", "items": NUM, "minItems": 4, "maxItems": 4}, "max_dimension": NUM, "path": STR})
 def t_capture(a):
-    path = _file(a) or os.path.join(RESULTS, "capture-" + uuid.uuid4().hex[:8] + ".png")
+    path = _file(a) or os.path.join(results_dir(OCS.session or OCS.pick()), "capture-" + uuid.uuid4().hex[:8] + ".png")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     body = {"path": path}
     if a.get("region"):

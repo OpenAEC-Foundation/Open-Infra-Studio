@@ -1,6 +1,10 @@
 """MCP requests use the same public command contract as the desktop UI."""
 import importlib.util
+import json
+import os
 from pathlib import Path
+import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -60,6 +64,43 @@ class InfraMcpTest(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+
+@unittest.skipIf(sys.platform in ('win32', 'darwin'), 'the flatpak is Linux only')
+class FlatpakTest(unittest.TestCase):
+    """#157: a flatpak window describes itself in its own <config>, with the
+    pid inside the sandbox, and writes its results there."""
+
+    def test_a_flatpak_window_is_found_and_answers_in_its_own_folder(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        native, flatpak = Path(tmp.name, 'config'), Path(tmp.name, 'flatpak')
+        automation = flatpak / 'OpenCADStudio' / 'automation'
+        automation.mkdir(parents=True)
+        results = flatpak / 'OpenCADStudio' / 'open-infra' / 'api'
+        (automation / 'w.json').write_text(json.dumps({'session_id': 'w', 'pid': 2, 'port': 5, 'token': 't'}))
+        state = {'version': '2026.47', 'document_id': 1, 'documents': [{'id': 1, 'path': '/p/OIS leerproject.dwg'}]}
+
+        def exchange(desc, request, timeout=120):
+            if request['op'] == 'run':
+                rid = request['cmd'].rsplit('ID=', 1)[1]
+                results.mkdir(parents=True, exist_ok=True)
+                (results / f'{rid}.json').write_text(json.dumps({'ok': True}))
+                return {'ok': True}
+            return state
+
+        for p in (patch.object(mcp, 'AUTOMATION', str(native / 'OpenCADStudio' / 'automation')),
+                  patch.object(mcp, 'RESULTS', str(native / 'OpenCADStudio' / 'open-infra' / 'api')),
+                  patch.object(mcp, 'FLATPAK_CONFIG', str(flatpak)),
+                  patch.object(mcp, '_exchange', exchange),
+                  patch.object(mcp, '_alive', return_value=False),
+                  patch.object(mcp.OCS, 'session', None)):
+            p.start()
+            self.addCleanup(p.stop)
+
+        [window] = mcp.sessions()
+        self.assertEqual((window['session_id'], window['pid'], window['results']), ('w', None, str(results)))
+        self.assertTrue(mcp.OCS.run('GIS_STATUS', timeout=5)['ok'])
 
 
 class SuperCloudTest(unittest.TestCase):
