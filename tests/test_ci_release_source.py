@@ -22,6 +22,38 @@ class ReleaseSourceTest(unittest.TestCase):
         for action in re.findall(r'uses: ([^\s]+)', workflow):
             self.assertRegex(action, r'@[0-9a-f]{40}$')
 
+    def test_release_publishes_only_the_complete_platform_matrix(self):
+        workflow = WORKFLOW.read_text(encoding='utf-8')
+        build, publish = workflow.split('\n  publish:\n')
+        self.assertNotIn('contents: write', build)
+        self.assertNotIn('action-gh-release', build)
+        self.assertIn('name: ${{ matrix.asset }}', build)
+        self.assertIn('needs: [source, build]', publish)
+        self.assertNotRegex(publish, r'(?m)^    (if|continue-on-error):')
+        self.assertIn('ref: ${{ needs.source.outputs.commit }}', publish)
+        self.assertLess(publish.index('actions/download-artifact@'),
+                        publish.index('softprops/action-gh-release@'))
+        self.assertIn('fail_on_unmatched_files: true', publish)
+
+        platforms = {
+            'linux-x86_64': 'so',
+            'linux-aarch64': 'so',
+            'windows-x86_64': 'dll',
+            'macos-aarch64': 'dylib',
+        }
+        expected = []
+        for platform, extension in platforms.items():
+            library = f'openaec.open-infra-{platform}.{extension}'
+            archive = f'open-infra-civiel-{platform}.zip'
+            files = [library, archive]
+            if platform.startswith('linux-'):
+                files.extend([f'{library}.asc', f'{archive}.asc'])
+            if platform == 'linux-x86_64':
+                files.extend(['plugin.toml', 'openaec-signing-public-key.asc',
+                              'openaec-signing-fingerprint.txt'])
+            expected.extend(f'release-assets/{library}/{name}' for name in files)
+        self.assertCountEqual(publish.split('files: |\n')[1].split(), expected)
+
     def check_commit(self, merged):
         workflow = WORKFLOW.read_text(encoding='utf-8')
         match = re.search(r'      - name: Require a release commit from main\n.*?        run: \|\n(.*?)(?=\n  build:)', workflow, re.S)
