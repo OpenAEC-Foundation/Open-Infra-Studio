@@ -273,7 +273,7 @@ pub fn import_path(site: &Site, path: &Path, progress: &dyn Fn(String)) -> Resul
             let label = format!("Raster {name}");
             let n = bridge::with_import_undo(&label, || {
                 bridge::ensure_layer(&layer, ocs_plugin_api::host::codec::Color::ByLayer);
-                Ok(bridge::add_imported_entities(&label, emit::images(site, &[placed], &layer, f, 0))?.len())
+                Ok(bridge::add_imported_entities(&label, emit::images(site, &[placed], &layer, f, 0, bridge::next_map_level(f)?))?.len())
             })?;
             Ok(format!("{name}: {}×{} px geplaatst ({crs}) — {n} element op {layer}.", img.width(), img.height()))
         }
@@ -302,7 +302,7 @@ fn heights(site: &Site, grid: &Grid, crs: &str, name: &str, dir: &Path, f: f64, 
     let file = dir.join(format!("{name}_relief.png"));
     shade.save(&file).map_err(|e| format!("{}: {e}", file.display()))?;
     let relief_layer = emit::layer_name("GIS", &format!("{name} relief"));
-    let mut ents = emit::images(site, &[PlacedImage { path: file, bbox: sbbox, px: [shade.width(), shade.height()] }], &relief_layer, f, 0);
+    let mut ents = emit::images(site, &[PlacedImage { path: file, bbox: sbbox, px: [shade.width(), shade.height()] }], &relief_layer, f, 0, bridge::next_map_level(f)?);
     // Contours: about twenty levels over the range.
     let interval = crate::civiel::nice_step(((hi - lo) / 20.0).max(0.01));
     let levels = ahn::levels((lo, hi), interval);

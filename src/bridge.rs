@@ -1499,6 +1499,26 @@ fn run_draw_order(handles: &[Handle], command: &str) -> Result<Option<&'static s
     restored.map(|()| notice)
 }
 
+/// Height step between map images, in metres.
+const MAP_LEVEL_M: f64 = 0.01;
+
+/// The height of the next map image: one step above the highest earlier
+/// map (an image on a `GIS-` layer), the first at 0. A shaded 3D view then
+/// shows them in the order they are drawn instead of mixing two images in
+/// one plane (#159). A step of 1 cm stays well above the host's depth
+/// precision in a parallel view of a project area.
+pub(crate) fn next_map_level(unit_factor: f64) -> Result<f64, String> {
+    let maps = query(serde_json::json!({"type": "RASTERIMAGE"}))?;
+    let top = maps
+        .iter()
+        .filter_map(|e| match e {
+            EntityType::RasterImage(image) if image.common.layer.starts_with("GIS-") => Some(image.insertion_point.z),
+            _ => None,
+        })
+        .reduce(f64::max);
+    Ok(top.map_or(0.0, |z| z + MAP_LEVEL_M * unit_factor))
+}
+
 /// Keep the new map below vector data and above older images. The host
 /// excludes locked entities from DRAWORDER, so reopen the older image layers
 /// for this part of the same import and restore their original lock state.
@@ -1780,6 +1800,37 @@ mod tests {
             raster_draw_order(older, &[new], Some(&current)),
             [under_vector(vec![older_bottom, older_top]), under_vector(vec![new])],
         );
+    }
+
+    /// #159: a new map lies one step above the highest earlier map; images
+    /// on other layers do not count, and the first map stays at 0.
+    #[test]
+    fn a_new_map_lies_one_step_above_the_highest_map() {
+        use ocs_plugin_api::host::codec::{entities::RasterImage, Vector3};
+        use ocs_plugin_api::host::EntityPage;
+
+        struct Host(Vec<EntityType>);
+        impl PluginRequestSender for Host {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                let PluginRequest::QueryEntities { query } = req else { panic!("unexpected request: {req:?}") };
+                assert!(query.contains(r#""type":"RASTERIMAGE""#), "{query}");
+                Ok(PluginResponse::EntityPage(Ok(EntityPage { count: self.0.len() as u64, entities: self.0.clone(), next_offset: None })))
+            }
+        }
+        let image = |layer: &str, z: f64| {
+            let mut image = RasterImage::with_size("kaart.png", Vector3::new(0.0, 0.0, z), 10.0, 10.0, 10.0, 10.0);
+            image.common.layer = layer.into();
+            EntityType::RasterImage(image)
+        };
+        let level = |images: Vec<EntityType>, unit_factor: f64| {
+            let target = Target { sender: Arc::new(Host(images)), tab_id: 159, unit_factor, doc_path: None };
+            with_command_context(target, None, None, || next_map_level(unit_factor)).unwrap()
+        };
+        assert_eq!(level(Vec::new(), 1.0), 0.0);
+        assert_eq!(level(vec![image("LOGO", 0.0)], 1.0), 0.0);
+        let maps = || vec![image("GIS-WMS-LUCHTFOTO", 0.0), image("GIS-WMS-AHN", 0.01), image("LOGO", 5.0)];
+        assert!((level(maps(), 1.0) - 0.02).abs() < 1e-12);
+        assert!((level(vec![image("GIS-WMS-LUCHTFOTO", 10.0)], 1000.0) - 20.0).abs() < 1e-9);
     }
 
     #[test]

@@ -63,7 +63,7 @@ pub struct VectorStyle {
 fn place_map(site: &Site, images: &[raster::PlacedImage], layer: &str, unit_factor: f64, fade: u8, label: &str) -> Result<usize, String> {
     bridge::with_import_undo(label, || {
         bridge::ensure_layer(layer, Color::from_index(8));
-        let entities = emit::images(site, images, layer, unit_factor, fade);
+        let entities = emit::images(site, images, layer, unit_factor, fade, bridge::next_map_level(unit_factor)?);
         Ok(bridge::add_imported_map(label, entities)?.len())
     })
 }
@@ -262,7 +262,8 @@ impl PreparedDataset {
     fn write(self, site: &Site, layers: &mut bridge::ImportLayers, rasters: &mut Vec<Handle>) -> Result<String, String> {
         match self {
             Self::Map { images, layer, summary, .. } => {
-                let entities = emit::images(site, &images, &layer, target()?.unit_factor, 0);
+                let unit_factor = target()?.unit_factor;
+                let entities = emit::images(site, &images, &layer, unit_factor, 0, bridge::next_map_level(unit_factor)?);
                 bridge::ensure_layer(&layer, Color::from_index(8));
                 rasters.extend(layers.write_entities(entities)?);
                 Ok(summary)

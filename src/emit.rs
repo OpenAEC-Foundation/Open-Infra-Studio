@@ -33,8 +33,9 @@ pub(crate) fn feature_data(feature: &Feature) -> ExtendedDataRecord {
     crate::bridge::object_data(pairs.take(40))
 }
 
-/// IMAGE entities for downloaded map tiles (lower-left insertion, Y north).
-pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64, fade: u8) -> Vec<EntityType> {
+/// IMAGE entities for downloaded map tiles (lower-left insertion, Y north),
+/// at height `z` in drawing units (see `bridge::next_map_level`).
+pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64, fade: u8, z: f64) -> Vec<EntityType> {
     placed
         .iter()
         .map(|p| {
@@ -42,7 +43,7 @@ pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64
             let ur = site.to_drawing([p.bbox[2], p.bbox[3]], unit_factor);
             let mut img = RasterImage::with_size(
                 &p.path.to_string_lossy(),
-                Vector3::new(ll[0], ll[1], 0.0),
+                Vector3::new(ll[0], ll[1], z),
                 p.px[0] as f64,
                 p.px[1] as f64,
                 ur[0] - ll[0],
