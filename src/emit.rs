@@ -57,14 +57,36 @@ pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64
         .collect()
 }
 
-/// DWG layer names: no `<>/\":;?*|,=` characters, upper case like the rest.
 /// Layer for imported data: `PREFIX-NAME` in capitals, at most 60 bytes.
-/// Characters a layer name cannot hold become '-'. A comma can, so the PDOK
-/// title "… 0,5m" keeps reading as half a metre (#160).
+/// Characters a DWG layer name cannot hold (`<>/\":;?*|,=` and the
+/// backquote) become '-', except a decimal comma: it becomes a point, so the
+/// PDOK title "… 0,5m" keeps reading as half a metre (#160).
 pub fn layer_name(prefix: &str, name: &str) -> String {
-    let clean: String = name
-        .chars()
-        .map(|c| if "<>/\\\":;?*|=`".contains(c) { '-' } else { c })
+    build_layer_name(prefix, name, true)
+}
+
+/// The name [`layer_name`] gave before #160, when it differs: a decimal
+/// comma became '-' ("… 0-5M").
+pub fn layer_name_before_160(prefix: &str, name: &str) -> Option<String> {
+    let old = build_layer_name(prefix, name, false);
+    (old != layer_name(prefix, name)).then_some(old)
+}
+
+fn build_layer_name(prefix: &str, name: &str, decimal_point: bool) -> String {
+    let chars: Vec<char> = name.chars().collect();
+    let digit = |i: Option<usize>| i.and_then(|i| chars.get(i)).is_some_and(char::is_ascii_digit);
+    let clean: String = chars
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| {
+            if decimal_point && c == ',' && digit(i.checked_sub(1)) && digit(Some(i + 1)) {
+                '.'
+            } else if "<>/\\\":;?*|,=`".contains(c) {
+                '-'
+            } else {
+                c
+            }
+        })
         .collect();
     let mut s = format!("{prefix}-{clean}").to_uppercase();
     // A cut inside a character (ë, é, …) would panic.
@@ -184,16 +206,17 @@ mod tests {
         assert_eq!(with_data, [false, true]);
     }
 
-    /// "0,5m" means half a metre: the comma stays (#160). Characters a layer
-    /// name cannot hold still become '-'; a long name is cut on a whole
-    /// character.
+    /// "0,5m" means half a metre: the decimal comma becomes a point (#160).
+    /// Other commas and characters a layer name cannot hold still become
+    /// '-'; a long name is cut on a whole character.
     #[test]
-    fn a_layer_name_keeps_the_decimal_comma() {
-        assert_eq!(
-            layer_name("GIS-WMS", "Digital Terrain Model (DTM) 0,5m"),
-            "GIS-WMS-DIGITAL TERRAIN MODEL (DTM) 0,5M"
-        );
-        assert_eq!(layer_name("GIS", "a<b>c/d\\e\"f:g;h?i*j|k=l`m"), "GIS-A-B-C-D-E-F-G-H-I-J-K-L-M");
+    fn a_layer_name_keeps_the_decimal_comma_as_a_point() {
+        let title = "Digital Terrain Model (DTM) 0,5m";
+        assert_eq!(layer_name("GIS-WMS", title), "GIS-WMS-DIGITAL TERRAIN MODEL (DTM) 0.5M");
+        assert_eq!(layer_name_before_160("GIS-WMS", title).as_deref(), Some("GIS-WMS-DIGITAL TERRAIN MODEL (DTM) 0-5M"));
+        assert_eq!(layer_name("GIS", "Kabels, leidingen 1,5,"), "GIS-KABELS- LEIDINGEN 1.5-");
+        assert_eq!(layer_name_before_160("GIS", "Luchtfoto 8 cm"), None);
+        assert_eq!(layer_name("GIS", "a<b>c/d\\e\"f:g;h?i*j|k=l`m,n"), "GIS-A-B-C-D-E-F-G-H-I-J-K-L-M-N");
         let long = layer_name("GIS", &format!("{}ë", "x".repeat(55)));
         assert_eq!(long, format!("GIS-{}", "X".repeat(55)));
     }

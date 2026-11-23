@@ -554,18 +554,19 @@ pub fn split_id(cmd: &str) -> (String, Option<String>) {
 }
 
 pub fn ensure_layer(name: &str, color: Color) {
-    adopt_dashed_layer(name);
     let _ = request(PluginRequest::AddLayer(LayerConfig { name: name.into(), color: Some(color), ..Default::default() }));
 }
 
-/// Until #160 `emit::layer_name` turned a comma into '-'. Rename the layer of
-/// such an earlier import, with its entities, so a re-import does not leave
-/// a second layer. Without that layer, or with the new one already there,
-/// the host refuses and nothing changes.
-fn adopt_dashed_layer(name: &str) {
-    if name.contains(',') {
-        let operation = TableOperation::LayerRename { from: name.replace(',', "-"), to: name.into() };
-        let _ = request(PluginRequest::TableOperation { operation });
+/// Rename the layer an earlier import made under the name from before #160
+/// to `new`, with its entities, so a re-import keeps one layer. Without that
+/// layer, or with `new` already there, nothing changes.
+pub(crate) fn adopt_layer(old: &str, new: &str) -> Result<(), String> {
+    let operation = TableOperation::LayerRename { from: old.into(), to: new.into() };
+    match request(PluginRequest::TableOperation { operation })? {
+        PluginResponse::TableResult(Ok(_)) => Ok(()),
+        PluginResponse::TableResult(Err(e)) if e.contains("does not exist") || e.contains("already exists") => Ok(()),
+        PluginResponse::TableResult(Err(e)) => Err(format!("{old} → {new}: {e}")),
+        other => Err(format!("LayerRename: {other:?}")),
     }
 }
 
@@ -1794,38 +1795,28 @@ mod tests {
         );
     }
 
-    /// A layer from before #160 ("… 0-5M") is renamed to the new name before
-    /// the import adds it; a name without a comma asks nothing extra.
+    /// The rename of a layer from before #160 passes when there is nothing
+    /// to rename, and reports any other refusal.
     #[test]
-    fn ensure_layer_takes_over_the_dashed_layer_of_an_earlier_import() {
-        #[derive(Default)]
-        struct Sender(Mutex<Vec<String>>);
+    fn adopt_layer_reports_only_a_real_refusal() {
+        struct Sender(&'static str);
         impl PluginRequestSender for Sender {
             fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
-                let mut seen = self.0.lock().unwrap();
-                Ok(match req {
-                    PluginRequest::TableOperation { operation: TableOperation::LayerRename { from, to } } => {
-                        seen.push(format!("rename {from} -> {to}"));
-                        PluginResponse::TableResult(Ok(Handle::new(7)))
-                    }
-                    PluginRequest::AddLayer(config) => {
-                        seen.push(format!("add {}", config.name));
-                        PluginResponse::OptHandle(None)
-                    }
-                    other => panic!("unexpected request: {other:?}"),
-                })
+                let PluginRequest::TableOperation { operation: TableOperation::LayerRename { from, to } } = req else {
+                    panic!("unexpected request: {req:?}");
+                };
+                assert_eq!((from.as_str(), to.as_str()), ("GIS-WMS-DTM 0-5M", "GIS-WMS-DTM 0.5M"));
+                Ok(PluginResponse::TableResult(if self.0.is_empty() { Ok(Handle::new(7)) } else { Err(self.0.into()) }))
             }
         }
-        let sender = Arc::new(Sender::default());
-        let target = Target { sender: sender.clone(), tab_id: 160, unit_factor: 1.0, doc_path: None };
-        with_command_context(target, None, None, || {
-            ensure_layer("GIS-WMS-DTM 0,5M", Color::from_index(8));
-            ensure_layer("GIS-WMS-LUCHTFOTO", Color::from_index(8));
-        });
-        assert_eq!(
-            *sender.0.lock().unwrap(),
-            ["rename GIS-WMS-DTM 0-5M -> GIS-WMS-DTM 0,5M", "add GIS-WMS-DTM 0,5M", "add GIS-WMS-LUCHTFOTO"]
-        );
+        let adopt = |answer| {
+            let target = Target { sender: Arc::new(Sender(answer)), tab_id: 160, unit_factor: 1.0, doc_path: None };
+            with_command_context(target, None, None, || adopt_layer("GIS-WMS-DTM 0-5M", "GIS-WMS-DTM 0.5M"))
+        };
+        assert_eq!(adopt(""), Ok(()));
+        assert_eq!(adopt(r#"layer "GIS-WMS-DTM 0-5M" does not exist"#), Ok(()));
+        assert_eq!(adopt(r#"layer "GIS-WMS-DTM 0.5M" already exists"#), Ok(()));
+        assert!(adopt("the layer could not be renamed").is_err());
     }
 
     #[test]

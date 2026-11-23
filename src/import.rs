@@ -21,7 +21,8 @@ pub fn wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer, op
     let t = target()?;
     let result = raster::import_wms(site, caps, layer, opt, &bridge::image_dir(), progress)?;
     let layer_name = emit::layer_name("GIS-WMS", &layer.title);
-    place_map(site, std::slice::from_ref(&result.image), &layer_name, t.unit_factor, fade, &format!("GIS WMS {}", layer.title))?;
+    let former = emit::layer_name_before_160("GIS-WMS", &layer.title);
+    place_map(site, std::slice::from_ref(&result.image), &layer_name, former.as_deref(), t.unit_factor, fade, &format!("GIS WMS {}", layer.title))?;
     bridge::zoom_extents();
     Ok(wms_summary(server, &layer_name, &result))
 }
@@ -47,9 +48,19 @@ pub fn xyz(site: &Site, server: &MapServer, opt: &RasterOptions, fade: u8, progr
     let t = target()?;
     let placed = raster::import_xyz(site, server, opt, &bridge::image_dir(), progress)?;
     let layer_name = emit::layer_name("GIS", &server.name);
-    place_map(site, &placed, &layer_name, t.unit_factor, fade, &format!("GIS {}", server.name))?;
+    let former = emit::layer_name_before_160("GIS", &server.name);
+    place_map(site, &placed, &layer_name, former.as_deref(), t.unit_factor, fade, &format!("GIS {}", server.name))?;
     bridge::zoom_extents();
     Ok(format!("{} op laag {layer_name} ({}).", server.name, server.attribution))
+}
+
+/// The layer of a map, taking over its layer from before #160 first.
+fn ensure_map_layer(layer: &str, former: Option<&str>) -> Result<(), String> {
+    if let Some(old) = former {
+        bridge::adopt_layer(old, layer)?;
+    }
+    bridge::ensure_layer(layer, Color::from_index(8));
+    Ok(())
 }
 
 pub struct VectorStyle {
@@ -60,9 +71,9 @@ pub struct VectorStyle {
     pub clip: bool,
 }
 
-fn place_map(site: &Site, images: &[raster::PlacedImage], layer: &str, unit_factor: f64, fade: u8, label: &str) -> Result<usize, String> {
+fn place_map(site: &Site, images: &[raster::PlacedImage], layer: &str, former: Option<&str>, unit_factor: f64, fade: u8, label: &str) -> Result<usize, String> {
     bridge::with_import_undo(label, || {
-        bridge::ensure_layer(layer, Color::from_index(8));
+        ensure_map_layer(layer, former)?;
         let entities = emit::images(site, images, layer, unit_factor, fade);
         Ok(bridge::add_imported_map(label, entities)?.len())
     })
@@ -254,16 +265,17 @@ pub const PDOK: &[Catalogued] = &[
 ];
 
 pub(crate) enum PreparedDataset {
-    Map { images: Vec<raster::PlacedImage>, layer: String, label: String, summary: String },
+    /// `former`: the layer's name from before #160, when it differs.
+    Map { images: Vec<raster::PlacedImage>, layer: String, former: Option<String>, label: String, summary: String },
     Vector { features: wfs::WfsResult, feature_type: WfsType, style: VectorStyle },
 }
 
 impl PreparedDataset {
     fn write(self, site: &Site, layers: &mut bridge::ImportLayers, rasters: &mut Vec<Handle>) -> Result<String, String> {
         match self {
-            Self::Map { images, layer, summary, .. } => {
+            Self::Map { images, layer, former, summary, .. } => {
                 let entities = emit::images(site, &images, &layer, target()?.unit_factor, 0);
-                bridge::ensure_layer(&layer, Color::from_index(8));
+                ensure_map_layer(&layer, former.as_deref())?;
                 rasters.extend(layers.write_entities(entities)?);
                 Ok(summary)
             }
@@ -287,9 +299,10 @@ pub(crate) fn prepare_dataset(site: &Site, data: &Dataset, progress: &dyn Fn(Str
                 let opt = RasterOptions { resolution: cap(0.5), format: "image/png".into() };
                 let images = raster::import_xyz(site, &srv, &opt, &bridge::image_dir(), progress)?;
                 let layer = emit::layer_name("GIS", &srv.name);
+                let former = emit::layer_name_before_160("GIS", &srv.name);
                 let label = format!("GIS {}", srv.name);
                 let summary = format!("{} op laag {layer} ({}).", srv.name, srv.attribution);
-                return Ok(PreparedDataset::Map { images, layer, label, summary });
+                return Ok(PreparedDataset::Map { images, layer, former, label, summary });
             }
             let caps = caps::fetch_wms(&srv.url)?;
             let layer = caps.layers.iter().find(|l| l.name == srv.default_layer).or(caps.layers.first()).cloned().ok_or("geen lagen")?;
@@ -315,6 +328,7 @@ fn prepare_wms(site: &Site, server: &MapServer, caps: &WmsCaps, layer: &WmsLayer
 
 fn prepared_wms(server: &MapServer, layer: &WmsLayer, result: WmsImport, aerial: bool) -> PreparedDataset {
     let name = emit::layer_name("GIS-WMS", &layer.title);
+    let former = emit::layer_name_before_160("GIS-WMS", &layer.title);
     let label = format!("GIS WMS {}", layer.title);
     let mut summary = wms_summary(server, &name, &result);
     if aerial {
@@ -325,7 +339,7 @@ fn prepared_wms(server: &MapServer, layer: &WmsLayer, result: WmsImport, aerial:
         let resolution = if x == y { x } else { format!("{x} × {y}") };
         summary = format!("{} {resolution} m/px. {summary}", crate::lang::tr("Luchtfoto op", "Aerial photo at"));
     }
-    PreparedDataset::Map { images: vec![result.image], layer: name, label, summary }
+    PreparedDataset::Map { images: vec![result.image], layer: name, former, label, summary }
 }
 
 pub(crate) fn place_datasets(site: &Site, label: &str, origin: bool, datasets: Vec<PreparedDataset>) -> Result<Vec<String>, String> {
