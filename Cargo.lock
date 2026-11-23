@@ -44,7 +44,7 @@ dependencies = [
 [[package]]
 name = "acadrust"
 version = "0.6.8"
-source = "git+https://github.com/hakanaktt/acadrust.git?rev=f946e8d#f946e8d0c15508c4581b228a1efe44c18dc96234"
+source = "git+https://github.com/hakanaktt/acadrust.git?rev=14f7da106cdd20fac94ffbdc238e3012bbe4a553#14f7da106cdd20fac94ffbdc238e3012bbe4a553"
 dependencies = [
  "anyhow",
  "bitflags 2.13.2",
@@ -64,6 +64,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "web-time",
+ "whichever",
 ]
 
 [[package]]
@@ -2721,7 +2722,7 @@ dependencies = [
 [[package]]
 name = "ocs_plugin_api"
 version = "0.2.1"
-source = "git+https://github.com/HakanSeven12/OpenCADStudio?rev=8b4d27046040b27eb07d3faed7b7472bd7bdaea9#8b4d27046040b27eb07d3faed7b7472bd7bdaea9"
+source = "git+https://github.com/HakanSeven12/OpenCADStudio?rev=8e5f39f6ee0468a7e29260d57b5390d7d01207e8#8e5f39f6ee0468a7e29260d57b5390d7d01207e8"
 dependencies = [
  "bincode",
  "cargo-lock",
@@ -2800,7 +2801,7 @@ dependencies = [
 [[package]]
 name = "opencaddocument"
 version = "0.1.0"
-source = "git+https://github.com/HakanSeven12/opencaddocument.git?rev=ae40a59#ae40a5921f678aa94bf143aaf39d01e739db58bb"
+source = "git+https://github.com/HakanSeven12/opencaddocument.git?rev=663bc3a1a2075f939eadafd7fb16683de39a473f#663bc3a1a2075f939eadafd7fb16683de39a473f"
 dependencies = [
  "acadrust 0.6.8",
  "serde",
@@ -4673,6 +4674,26 @@ dependencies = [
  "raw-window-handle",
  "static_assertions",
  "web-sys",
+]
+
+[[package]]
+name = "whichever"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68887c9512981e597d730f1d95b2eb6abdd53385e4e76c35a95e7121e16232b0"
+dependencies = [
+ "whichever-macros",
+]
+
+[[package]]
+name = "whichever-macros"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb15ad553239d9fdefac12e31e16c7682dc62a2106ba035aec69c5dd15835a7b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
 ]
 
 [[package]]
