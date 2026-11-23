@@ -556,12 +556,13 @@ def t_sessions(a):
     live = sessions()
     if a.get("select"):
         OCS.pick(a["select"], live)
-    # The window the next command goes to: the chosen one while it lives
-    # (its current drawing may have changed), else by the same rule. Only
-    # `select` makes a choice stick; listing changes nothing.
-    chosen = (OCS.session or {}).get("session_id")
-    cur = next((s for s in live if s["session_id"] == chosen), None)
-    if cur is None:
+    # The window the next command goes to: the chosen one (its current
+    # drawing may have changed; none once it is closed, as the next command
+    # then refuses), else what pick() would choose. Only `select` makes a
+    # choice stick; listing changes nothing.
+    if OCS.session:
+        cur = next((s for s in live if s["session_id"] == OCS.session["session_id"]), None)
+    else:
         try:
             cur = _choose(live, os.environ.get("OI_SESSION"))
         except OcsError:

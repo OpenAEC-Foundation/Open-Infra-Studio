@@ -185,6 +185,41 @@ class TabSwitchTest(unittest.TestCase):
         self.assertFalse(mcp.call_tool('oi_save', {})['isError'])
         self.assertEqual(sent, ['brug'])
 
+    def test_a_closed_chosen_window_is_not_shown_as_selected(self):
+        """Sol, round 4: after the chosen window closes, the list names no
+        window, and the next save refuses instead of going elsewhere."""
+        windows = [{'kind': 'automation', 'session_id': sid, 'port': port, 'token': 't', 'pid': None, 'document_id': 1, 'document': f'/p/{doc}'}
+                   for sid, port, doc in (('brug', 2, 'Brug.dwg'), ('weg', 1, 'Weg.dwg'))]
+        sent = []
+
+        def exchange(desc, request, timeout=120):
+            if desc['session_id'] not in [w['session_id'] for w in windows]:
+                raise ConnectionRefusedError('closed')
+            if request['op'] == 'state':
+                return {'document_id': 1, 'documents': [{'id': 1, 'path': desc['document']}]}
+            sent.append(desc['session_id'])
+            return {'ok': True}
+
+        for p in (patch.object(mcp, 'sessions', side_effect=lambda: list(windows)), patch.object(mcp, '_exchange', exchange),
+                  patch.object(mcp.OCS, 'session', None), patch.dict(os.environ, {}, clear=False)):
+            p.start()
+            self.addCleanup(p.stop)
+        os.environ.pop('OI_SESSION', None)
+        self.assertFalse(mcp.call_tool('oi_sessions', {'select': 'Weg.dwg'})['isError'])
+        del windows[1]
+        self.assertIn('"selected": null', mcp.call_tool('oi_sessions', {})['content'][0]['text'])
+        self.assertTrue(mcp.call_tool('oi_save', {})['isError'])
+        self.assertEqual(sent, [])
+
+
+class RestSessionTest(unittest.TestCase):
+    def test_a_rest_window_carries_its_drawing_name(self):
+        """OI_SESSION=<drawing> picks a REST window too (Sol, round 4)."""
+        state = {'version': '2026.47', 'document_id': 3, 'documents': [{'id': 3, 'path': '/p/Weg.dwg'}]}
+        with patch.dict(os.environ, {'OI_REST_PORT': '7000', 'OCS_API_TOKEN': 't', 'OI_SESSION': 'Weg.dwg'}), \
+                patch.object(mcp, '_rest', return_value=state), patch.object(mcp.OCS, 'session', None):
+            self.assertEqual(mcp.OCS.pick()['document'], '/p/Weg.dwg')
+
 
 class SuperCloudTest(unittest.TestCase):
     """Route B of the SuperCloud contract (OpenAEC-Blueprint docs/supercloud-koppeling.md, #75)."""
