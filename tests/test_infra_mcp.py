@@ -1,6 +1,10 @@
 """MCP requests use the same public command contract as the desktop UI."""
 import importlib.util
+import json
+import os
 from pathlib import Path
+import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -60,6 +64,161 @@ class InfraMcpTest(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+
+@unittest.skipIf(sys.platform in ('win32', 'darwin'), 'the flatpak is Linux only')
+class FlatpakTest(unittest.TestCase):
+    """#157: a flatpak window describes itself in its own <config>, with the
+    pid inside the sandbox, and writes its results there."""
+
+    def test_a_flatpak_window_is_found_and_answers_in_its_own_folder(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        native, flatpak = Path(tmp.name, 'config'), Path(tmp.name, 'flatpak')
+        automation = flatpak / 'OpenCADStudio' / 'automation'
+        automation.mkdir(parents=True)
+        results = flatpak / 'OpenCADStudio' / 'open-infra' / 'api'
+        (automation / 'w.json').write_text(json.dumps({'session_id': 'w', 'pid': 2, 'port': 5, 'token': 't'}))
+        state = {'version': '2026.47', 'document_id': 1, 'documents': [{'id': 1, 'path': '/p/OIS leerproject.dwg'}]}
+
+        def exchange(desc, request, timeout=120):
+            if request['op'] == 'run':
+                rid = request['cmd'].rsplit('ID=', 1)[1]
+                results.mkdir(parents=True, exist_ok=True)
+                (results / f'{rid}.json').write_text(json.dumps({'ok': True}))
+                return {'ok': True}
+            return state
+
+        for p in (patch.object(mcp, 'AUTOMATION', str(native / 'OpenCADStudio' / 'automation')),
+                  patch.object(mcp, 'RESULTS', str(native / 'OpenCADStudio' / 'open-infra' / 'api')),
+                  patch.object(mcp, 'FLATPAK_CONFIG', str(flatpak)),
+                  patch.object(mcp, '_exchange', exchange),
+                  patch.object(mcp, '_alive', return_value=False),
+                  patch.object(mcp.OCS, 'session', None)):
+            p.start()
+            self.addCleanup(p.stop)
+
+        [window] = mcp.sessions()
+        self.assertEqual((window['session_id'], window['pid'], window['results']), ('w', None, str(results)))
+        self.assertTrue(mcp.t_status({})['ok'])
+
+
+class SessionChoiceTest(unittest.TestCase):
+    """Sol, round 1 of #164: with a native and a flatpak window, OI_SESSION
+    that matches neither is an error, and oi_sessions names the window the
+    next command goes to."""
+
+    def setUp(self):
+        native = {'kind': 'automation', 'session_id': 'n', 'port': 1, 'token': 't', 'pid': 41, 'document': '/p/Brug.dwg'}
+        flatpak = {'kind': 'automation', 'session_id': 'f', 'port': 2, 'token': 't', 'pid': None, 'document': '/p/Kruising.dwg', 'results': '/f/api'}
+        self.live = [flatpak, native]
+        for p in (patch.object(mcp, 'sessions', return_value=self.live), patch.object(mcp.OCS, 'session', None)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_an_unmatched_oi_session_is_refused(self):
+        with patch.dict(os.environ, {'OI_SESSION': 'Weg.dwg'}):
+            with self.assertRaisesRegex(mcp.OcsError, 'Weg.dwg'):
+                mcp.OCS.pick()
+            self.assertIsNone(mcp.t_sessions({})['selected'])
+
+    def test_oi_sessions_names_the_window_a_command_uses(self):
+        with patch.dict(os.environ, {'OI_SESSION': '41'}):
+            self.assertEqual(mcp.t_sessions({})['selected'], 'n')
+            self.assertEqual(mcp.OCS.pick()['session_id'], 'n')
+        mcp.OCS.session = None
+        self.assertEqual(mcp.t_sessions({})['selected'], 'f')
+
+
+class TabSwitchTest(unittest.TestCase):
+    """Sol, round 2 of #164: a chosen window stays chosen when its current
+    drawing changes, in the list and for the next save."""
+
+    def test_the_chosen_window_survives_a_tab_switch(self):
+        docs = {'old': '/p/Weg.dwg', 'new': '/p/Brug.dwg'}
+        sent = []
+
+        def windows():
+            return [{'kind': 'automation', 'session_id': sid, 'port': port, 'token': 't', 'pid': None, 'document_id': 1, 'document': docs[sid]}
+                    for sid, port in (('new', 2), ('old', 1))]
+
+        def exchange(desc, request, timeout=120):
+            if request['op'] == 'state':
+                return {'document_id': 1, 'documents': [{'id': 1, 'path': docs[desc['session_id']]}]}
+            sent.append((desc['session_id'], request))
+            return {'ok': True}
+
+        for p in (patch.object(mcp, 'sessions', side_effect=windows), patch.object(mcp, '_exchange', exchange),
+                  patch.object(mcp.OCS, 'session', None), patch.dict(os.environ, {}, clear=False)):
+            p.start()
+            self.addCleanup(p.stop)
+        os.environ.pop('OI_SESSION', None)
+        self.assertFalse(mcp.call_tool('oi_sessions', {'select': 'Weg.dwg'})['isError'])
+        docs['old'] = '/p/Kruising.dwg'
+        listed = mcp.call_tool('oi_sessions', {})
+        self.assertFalse(listed['isError'])
+        self.assertIn('"selected": "old"', listed['content'][0]['text'])
+        self.assertFalse(mcp.call_tool('oi_save', {})['isError'])
+        self.assertEqual([sid for sid, _ in sent], ['old'])
+
+
+    def test_listing_alone_chooses_nothing(self):
+        """Sol, round 3: a list without `select` does not fix the window; a
+        window opened after it gets the first command, as on main."""
+        windows = [{'kind': 'automation', 'session_id': 'weg', 'port': 1, 'token': 't', 'pid': None, 'document_id': 1, 'document': '/p/Weg.dwg'}]
+        sent = []
+
+        def exchange(desc, request, timeout=120):
+            if request['op'] == 'state':
+                return {'document_id': 1, 'documents': [{'id': 1, 'path': desc['document']}]}
+            sent.append(desc['session_id'])
+            return {'ok': True}
+
+        for p in (patch.object(mcp, 'sessions', side_effect=lambda: list(windows)), patch.object(mcp, '_exchange', exchange),
+                  patch.object(mcp.OCS, 'session', None), patch.dict(os.environ, {}, clear=False)):
+            p.start()
+            self.addCleanup(p.stop)
+        os.environ.pop('OI_SESSION', None)
+        self.assertIn('"selected": "weg"', mcp.call_tool('oi_sessions', {})['content'][0]['text'])
+        self.assertIsNone(mcp.OCS.session)
+        windows.insert(0, {'kind': 'automation', 'session_id': 'brug', 'port': 2, 'token': 't', 'pid': None, 'document_id': 1, 'document': '/p/Brug.dwg'})
+        self.assertFalse(mcp.call_tool('oi_save', {})['isError'])
+        self.assertEqual(sent, ['brug'])
+
+    def test_a_closed_chosen_window_is_not_shown_as_selected(self):
+        """Sol, round 4: after the chosen window closes, the list names no
+        window, and the next save refuses instead of going elsewhere."""
+        windows = [{'kind': 'automation', 'session_id': sid, 'port': port, 'token': 't', 'pid': None, 'document_id': 1, 'document': f'/p/{doc}'}
+                   for sid, port, doc in (('brug', 2, 'Brug.dwg'), ('weg', 1, 'Weg.dwg'))]
+        sent = []
+
+        def exchange(desc, request, timeout=120):
+            if desc['session_id'] not in [w['session_id'] for w in windows]:
+                raise ConnectionRefusedError('closed')
+            if request['op'] == 'state':
+                return {'document_id': 1, 'documents': [{'id': 1, 'path': desc['document']}]}
+            sent.append(desc['session_id'])
+            return {'ok': True}
+
+        for p in (patch.object(mcp, 'sessions', side_effect=lambda: list(windows)), patch.object(mcp, '_exchange', exchange),
+                  patch.object(mcp.OCS, 'session', None), patch.dict(os.environ, {}, clear=False)):
+            p.start()
+            self.addCleanup(p.stop)
+        os.environ.pop('OI_SESSION', None)
+        self.assertFalse(mcp.call_tool('oi_sessions', {'select': 'Weg.dwg'})['isError'])
+        del windows[1]
+        self.assertIn('"selected": null', mcp.call_tool('oi_sessions', {})['content'][0]['text'])
+        self.assertTrue(mcp.call_tool('oi_save', {})['isError'])
+        self.assertEqual(sent, [])
+
+
+class RestSessionTest(unittest.TestCase):
+    def test_a_rest_window_carries_its_drawing_name(self):
+        """OI_SESSION=<drawing> picks a REST window too (Sol, round 4)."""
+        state = {'version': '2026.47', 'document_id': 3, 'documents': [{'id': 3, 'path': '/p/Weg.dwg'}]}
+        with patch.dict(os.environ, {'OI_REST_PORT': '7000', 'OCS_API_TOKEN': 't', 'OI_SESSION': 'Weg.dwg'}), \
+                patch.object(mcp, '_rest', return_value=state), patch.object(mcp.OCS, 'session', None):
+            self.assertEqual(mcp.OCS.pick()['document'], '/p/Weg.dwg')
 
 
 class SuperCloudTest(unittest.TestCase):
