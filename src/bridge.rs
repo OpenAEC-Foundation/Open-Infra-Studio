@@ -557,6 +557,19 @@ pub fn ensure_layer(name: &str, color: Color) {
     let _ = request(PluginRequest::AddLayer(LayerConfig { name: name.into(), color: Some(color), ..Default::default() }));
 }
 
+/// Rename the layer an earlier import made under the name from before #160
+/// to `new`, with its entities, so a re-import keeps one layer. Without that
+/// layer, or with `new` already there, nothing changes.
+pub(crate) fn adopt_layer(old: &str, new: &str) -> Result<(), String> {
+    let operation = TableOperation::LayerRename { from: old.into(), to: new.into() };
+    match request(PluginRequest::TableOperation { operation })? {
+        PluginResponse::TableResult(Ok(_)) => Ok(()),
+        PluginResponse::TableResult(Err(e)) if e.contains("does not exist") || e.contains("already exists") => Ok(()),
+        PluginResponse::TableResult(Err(e)) => Err(format!("{old} → {new}: {e}")),
+        other => Err(format!("LayerRename: {other:?}")),
+    }
+}
+
 /// Application name of the object data (XDATA) on imported entities.
 pub const XDATA_APP: &str = "OPENINFRA";
 
@@ -1780,6 +1793,30 @@ mod tests {
             raster_draw_order(older, &[new], Some(&current)),
             [under_vector(vec![older_bottom, older_top]), under_vector(vec![new])],
         );
+    }
+
+    /// The rename of a layer from before #160 passes when there is nothing
+    /// to rename, and reports any other refusal.
+    #[test]
+    fn adopt_layer_reports_only_a_real_refusal() {
+        struct Sender(&'static str);
+        impl PluginRequestSender for Sender {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                let PluginRequest::TableOperation { operation: TableOperation::LayerRename { from, to } } = req else {
+                    panic!("unexpected request: {req:?}");
+                };
+                assert_eq!((from.as_str(), to.as_str()), ("GIS-WMS-DTM 0-5M", "GIS-WMS-DTM 0.5M"));
+                Ok(PluginResponse::TableResult(if self.0.is_empty() { Ok(Handle::new(7)) } else { Err(self.0.into()) }))
+            }
+        }
+        let adopt = |answer| {
+            let target = Target { sender: Arc::new(Sender(answer)), tab_id: 160, unit_factor: 1.0, doc_path: None };
+            with_command_context(target, None, None, || adopt_layer("GIS-WMS-DTM 0-5M", "GIS-WMS-DTM 0.5M"))
+        };
+        assert_eq!(adopt(""), Ok(()));
+        assert_eq!(adopt(r#"layer "GIS-WMS-DTM 0-5M" does not exist"#), Ok(()));
+        assert_eq!(adopt(r#"layer "GIS-WMS-DTM 0.5M" already exists"#), Ok(()));
+        assert!(adopt("the layer could not be renamed").is_err());
     }
 
     #[test]
