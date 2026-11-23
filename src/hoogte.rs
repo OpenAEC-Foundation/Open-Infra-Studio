@@ -587,9 +587,6 @@ pub fn point_cloud(site: &Site, opt: &AhnOptions, progress: &dyn Fn(String)) -> 
     progress(format!("Puntenwolk schrijven ({:.0} MB)…", xyz.len() as f64 * 20.0 / 1e6));
     pointcloud::write_rcs(&file, &xyz, &cols, &inten)?;
     let path = file.to_string_lossy().into_owned();
-    if path.contains(char::is_whitespace) {
-        return Ok(format!("{} punten opgeslagen in {path}. Het pad bevat spaties: koppel het bestand met POINTCLOUDATTACH.", xyz.len()));
-    }
     bridge::attach_imported_cloud(&path, &emit::layer_name("GIS", &format!("{} puntenwolk", c.edition.short())))?;
     bridge::note_source(&format!("{} puntenwolk (Het Waterschapshuis, CC0)", c.edition.short()));
     Ok(format!(

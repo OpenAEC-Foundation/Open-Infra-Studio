@@ -1641,53 +1641,60 @@ fn run_on_target(line: &str) -> Result<(), String> {
     }
 }
 
-/// Attach a point cloud on its own layer. OCS's native command always uses
-/// the current layer and creates the definition and reactor itself.
+/// Attach a point cloud on its own layer, at the drawing origin. OCS's
+/// native command creates the definition and reactor itself, but finishes
+/// on the current layer and placed the AHN cloud about 21 m off (#158).
+/// The new cloud is therefore set on `layer`, at 0,0,0 with the world axes
+/// and scale 1: where the points were written.
 pub(crate) fn attach_imported_cloud(path: &str, layer: &str) -> Result<(), String> {
-    use ocs_plugin_api::host::{CommandRequest, HostSettingValue};
     use crate::lang::tr;
 
+    // The command line keeps a quoted path whole; a quote inside cannot be.
+    if path.contains('"') {
+        return Err(format!("{}: {path}", tr("Het pad bevat een aanhalingsteken: koppel het bestand met POINTCLOUDATTACH", "The path holds a quote: attach the file with POINTCLOUDATTACH")));
+    }
     let label = tr("Puntenwolk importeren", "Import point cloud");
     with_import_layers(label, |layers| {
         ensure_layer(layer, Color::from_index(7));
         layers.unlock([layer.to_owned()])?;
-        let get = PluginRequest::GetSystemVariable { name: "CLAYER".into() };
-        let PluginResponse::SystemVariable(Some(HostSettingValue::Text(previous))) = request(get)? else {
-            return Err(tr("OCS gaf de huidige laag niet terug", "OCS did not return the current layer").into());
+        let before: HashSet<Handle> = point_clouds()?.iter().map(|e| e.common().handle).collect();
+        let line = format!("-POINTCLOUDATTACH \"{path}\" 0,0,0 1 0");
+        let outcome = match request(PluginRequest::RunCommand { request: CommandRequest::RunQuiet { line } })? {
+            PluginResponse::CommandResult(Ok(outcome)) => outcome,
+            PluginResponse::CommandResult(Err(error)) => return Err(error),
+            other => return Err(format!("POINTCLOUDATTACH: {other:?}")),
         };
-        let current = |name: &str| {
-            match request(PluginRequest::SetSystemVariable {
-                name: "CLAYER".into(), value: HostSettingValue::Text(name.into()),
-            })? {
-                PluginResponse::SystemVariableResult(Ok(_)) => Ok(()),
-                PluginResponse::SystemVariableResult(Err(error)) => Err(error),
-                other => Err(format!("CLAYER: {other:?}")),
-            }
-        };
-        current(layer)?;
-        let result = request(PluginRequest::RunCommand {
-            request: CommandRequest::RunQuiet { line: format!("-POINTCLOUDATTACH {path} 0,0,0 1 0") },
-        });
-        let restore = current(&previous);
-        match result? {
-            PluginResponse::CommandResult(Ok(outcome)) if outcome.added == 1 && outcome.error.is_none() => {
-                layers.mark_written(layer);
-                restore
-            }
-            PluginResponse::CommandResult(Ok(outcome)) => {
-                restore?;
-                Err(outcome.error.unwrap_or_else(|| tr("OCS heeft de puntenwolk niet gekoppeld", "OCS did not attach the point cloud").into()))
-            }
-            PluginResponse::CommandResult(Err(error)) => {
-                restore?;
-                Err(error)
-            }
-            other => {
-                restore?;
-                Err(format!("POINTCLOUDATTACH: {other:?}"))
-            }
+        if outcome.added != 1 || outcome.error.is_some() {
+            return Err(outcome.error.unwrap_or_else(|| tr("OCS heeft de puntenwolk niet gekoppeld", "OCS did not attach the point cloud").into()));
         }
+        let mut cloud = point_clouds()?
+            .into_iter()
+            .find(|e| !before.contains(&e.common().handle))
+            .ok_or_else(|| tr("OCS gaf de gekoppelde puntenwolk niet terug", "OCS did not return the attached point cloud").to_string())?;
+        place_cloud(&mut cloud, layer);
+        update_entities(label, vec![cloud])?;
+        layers.mark_written(layer);
+        Ok(())
     })
+}
+
+fn point_clouds() -> Result<Vec<EntityType>, String> {
+    query(serde_json::json!({"type": "Point Cloud"}))
+}
+
+/// On `layer`, at the origin with the world axes and scale 1.
+fn place_cloud(cloud: &mut EntityType, layer: &str) {
+    use ocs_plugin_api::host::codec::{entities::ExtendedEntityData, Vector3};
+
+    cloud.common_mut().layer = layer.to_owned();
+    if let EntityType::Extended(extended) = cloud {
+        if let ExtendedEntityData::PointCloudEx(data) = &mut extended.data {
+            data.ucs_origin = Vector3::ZERO;
+            data.ucs_x_direction = Vector3::UNIT_X;
+            data.ucs_y_direction = Vector3::UNIT_Y;
+            data.ucs_z_direction = Vector3::UNIT_Z;
+        }
+    }
 }
 
 /// Run a command line in the active drawing (tokens answer its prompts).
@@ -1780,6 +1787,110 @@ mod tests {
             raster_draw_order(older, &[new], Some(&current)),
             [under_vector(vec![older_bottom, older_top]), under_vector(vec![new])],
         );
+    }
+
+    /// #158: a path with a space goes quoted, and the new cloud ends on its
+    /// own layer at the origin, whatever the command made of it (layer 0,
+    /// about 21 m off).
+    #[test]
+    fn an_attached_cloud_is_put_on_its_layer_at_the_origin() {
+        use ocs_plugin_api::host::codec::entities::{EntityCommon, ExtendedEntity, ExtendedEntityData, PointCloudExData};
+        use ocs_plugin_api::host::codec::Vector3;
+        use ocs_plugin_api::host::{CommandOutcome, EntityPage};
+
+        fn cloud(handle: u64, origin: Vector3) -> EntityType {
+            let mut common = EntityCommon::new();
+            common.handle = Handle::new(handle);
+            common.layer = "0".into();
+            EntityType::Extended(Box::new(ExtendedEntity {
+                common,
+                data: ExtendedEntityData::PointCloudEx(PointCloudExData {
+                    class_version: 1,
+                    extents_min: Vector3::ZERO,
+                    extents_max: Vector3::new(883.0, 294.0, 30.0),
+                    ucs_origin: origin,
+                    ucs_x_direction: Vector3::UNIT_X,
+                    ucs_y_direction: Vector3::UNIT_Y,
+                    ucs_z_direction: Vector3::UNIT_Z,
+                    locked: false,
+                    definition_handle: Handle::NULL,
+                    reactor_handle: Handle::NULL,
+                    name: "ahn5".into(),
+                    show_intensity: false,
+                    show_cropping: true,
+                    hidden_scans: Vec::new(),
+                    hidden_regions: Vec::new(),
+                    stylization_type: 1,
+                    intensity_color_scheme: String::new(),
+                    current_color_scheme: String::new(),
+                    classification_color_scheme: String::new(),
+                    elevation_min: 0.0,
+                    elevation_max: 0.0,
+                    intensity_min: 0,
+                    intensity_max: 100,
+                    intensity_out_of_range_behavior: 1,
+                    elevation_out_of_range_behavior: 1,
+                    elevation_apply_to_fixed_range: false,
+                    intensity_as_gradient: true,
+                    elevation_as_gradient: false,
+                    croppings: Vec::new(),
+                }),
+            }))
+        }
+
+        #[derive(Default)]
+        struct Host {
+            clouds: Mutex<Vec<EntityType>>,
+            lines: Mutex<Vec<String>>,
+            updated: Mutex<Vec<EntityType>>,
+        }
+        impl PluginRequestSender for Host {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                Ok(match req {
+                    PluginRequest::RunCommand { request: CommandRequest::RunQuiet { line } } => {
+                        self.lines.lock().unwrap().push(line);
+                        self.clouds.lock().unwrap().push(cloud(0xE13, Vector3::new(-18.8, -10.66, 0.0)));
+                        PluginResponse::CommandResult(Ok(CommandOutcome { status: "completed".into(), added: 1, ..Default::default() }))
+                    }
+                    PluginRequest::QueryEntities { query } => {
+                        assert!(query.contains(r#""type":"Point Cloud""#), "{query}");
+                        let entities = self.clouds.lock().unwrap().clone();
+                        PluginResponse::EntityPage(Ok(EntityPage { count: entities.len() as u64, entities, next_offset: None }))
+                    }
+                    PluginRequest::UpdateEntitiesTransaction { entities, .. } => {
+                        self.updated.lock().unwrap().extend(entities);
+                        PluginResponse::EntityTransactionResult(Ok(()))
+                    }
+                    PluginRequest::AddLayer(_) => PluginResponse::OptHandle(None),
+                    PluginRequest::AddEntity(_) => PluginResponse::Handle(Handle::new(0xF00)),
+                    // Relocking an imported layer, when the setting is on.
+                    PluginRequest::RemoveEntity { .. } | PluginRequest::ModifyLayer(_) => PluginResponse::Bool(true),
+                    PluginRequest::BeginUndoGroup { .. } | PluginRequest::EndUndoGroup | PluginRequest::SetDirty | PluginRequest::BumpGeometry => PluginResponse::Ok,
+                    other => panic!("unexpected request: {other:?}"),
+                })
+            }
+        }
+
+        let host = Arc::new(Host::default());
+        // An earlier cloud of the same drawing stays as it is.
+        host.clouds.lock().unwrap().push(cloud(0xA0, Vector3::new(5.0, 5.0, 0.0)));
+        let target = Target { sender: host.clone(), tab_id: 158, unit_factor: 1.0, doc_path: None };
+        let path = "/home/x/OIS leerproject_GIS/ahn5.rcs";
+        with_command_context(target, None, None, || attach_imported_cloud(path, "GIS-AHN5 PUNTENWOLK")).unwrap();
+
+        assert_eq!(*host.lines.lock().unwrap(), [r#"-POINTCLOUDATTACH "/home/x/OIS leerproject_GIS/ahn5.rcs" 0,0,0 1 0"#]);
+        let updated = host.updated.lock().unwrap();
+        assert_eq!(updated.len(), 1);
+        assert_eq!(updated[0].common().handle, Handle::new(0xE13));
+        assert_eq!(updated[0].common().layer, "GIS-AHN5 PUNTENWOLK");
+        let EntityType::Extended(extended) = &updated[0] else { panic!("not a point cloud") };
+        let ExtendedEntityData::PointCloudEx(data) = &extended.data else { panic!("not a point cloud") };
+        assert_eq!(data.ucs_origin, Vector3::ZERO);
+        drop(updated);
+
+        let refused = Target { sender: Arc::new(Host::default()), tab_id: 158, unit_factor: 1.0, doc_path: None };
+        let quoted = with_command_context(refused, None, None, || attach_imported_cloud("/home/x/a\"b.rcs", "GIS-X"));
+        assert!(quoted.unwrap_err().contains("POINTCLOUDATTACH"));
     }
 
     #[test]
