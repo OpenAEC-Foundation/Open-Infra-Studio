@@ -51,8 +51,6 @@ jobs:
 
   build:
     needs: source
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -62,21 +60,12 @@ jobs:
             civiel: libopen_infra_civiel.so
             asset: openaec.open-infra-linux-x86_64.so
             zip: open-infra-civiel-linux-x86_64.zip
-            # plugin.toml is identical for every platform; one job ships it,
-            # with the OpenPGP signatures and the public key.
-            extra: |
-              dist/plugin.toml
-              dist/*.asc
-              dist/openaec-signing-fingerprint.txt
           # ARM Linux, for the OpenAEC SuperCloud's streamed desktops (#75).
           - os: ubuntu-22.04-arm
             lib: libopen_infra.so
             civiel: libopen_infra_civiel.so
             asset: openaec.open-infra-linux-aarch64.so
             zip: open-infra-civiel-linux-aarch64.zip
-            extra: |
-              dist/openaec.open-infra-linux-aarch64.so.asc
-              dist/open-infra-civiel-linux-aarch64.zip.asc
           - os: windows-latest
             lib: open_infra.dll
             civiel: open_infra_civiel.dll
@@ -252,14 +241,56 @@ jobs:
         with:
           name: ${{ matrix.asset }}
           path: dist/
+          if-no-files-found: error
+          overwrite: true
+
+  publish:
+    needs: [source, build]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: open-infra-release-${{ github.ref }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.source.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          path: release-assets/
+          digest-mismatch: error
+      - name: Refuse to modify a published release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          published=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+            jq -r --arg tag "$RELEASE_TAG" '.[] | select(.tag_name == $tag and .draft == false) | .id')
+          if [ -n "$published" ]; then
+            echo "::error::Release $RELEASE_TAG is already published"
+            exit 1
+          fi
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        if: env.RELEASE_TAG != ''
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: Open Infra Studio ${{ env.RELEASE_TAG }}
           body_path: RELEASE_NOTES.md
           fail_on_unmatched_files: true
           files: |
-            dist/${{ matrix.asset }}
-            dist/${{ matrix.zip }}
-            ${{ matrix.extra }}
+            release-assets/openaec.open-infra-linux-x86_64.so/openaec.open-infra-linux-x86_64.so
+            release-assets/openaec.open-infra-linux-x86_64.so/openaec.open-infra-linux-x86_64.so.asc
+            release-assets/openaec.open-infra-linux-x86_64.so/open-infra-civiel-linux-x86_64.zip
+            release-assets/openaec.open-infra-linux-x86_64.so/open-infra-civiel-linux-x86_64.zip.asc
+            release-assets/openaec.open-infra-linux-x86_64.so/plugin.toml
+            release-assets/openaec.open-infra-linux-x86_64.so/openaec-signing-public-key.asc
+            release-assets/openaec.open-infra-linux-x86_64.so/openaec-signing-fingerprint.txt
+            release-assets/openaec.open-infra-linux-aarch64.so/openaec.open-infra-linux-aarch64.so
+            release-assets/openaec.open-infra-linux-aarch64.so/openaec.open-infra-linux-aarch64.so.asc
+            release-assets/openaec.open-infra-linux-aarch64.so/open-infra-civiel-linux-aarch64.zip
+            release-assets/openaec.open-infra-linux-aarch64.so/open-infra-civiel-linux-aarch64.zip.asc
+            release-assets/openaec.open-infra-windows-x86_64.dll/openaec.open-infra-windows-x86_64.dll
+            release-assets/openaec.open-infra-windows-x86_64.dll/open-infra-civiel-windows-x86_64.zip
+            release-assets/openaec.open-infra-macos-aarch64.dylib/openaec.open-infra-macos-aarch64.dylib
+            release-assets/openaec.open-infra-macos-aarch64.dylib/open-infra-civiel-macos-aarch64.zip
