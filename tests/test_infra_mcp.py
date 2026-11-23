@@ -162,6 +162,30 @@ class TabSwitchTest(unittest.TestCase):
         self.assertEqual([sid for sid, _ in sent], ['old'])
 
 
+    def test_listing_alone_chooses_nothing(self):
+        """Sol, round 3: a list without `select` does not fix the window; a
+        window opened after it gets the first command, as on main."""
+        windows = [{'kind': 'automation', 'session_id': 'weg', 'port': 1, 'token': 't', 'pid': None, 'document_id': 1, 'document': '/p/Weg.dwg'}]
+        sent = []
+
+        def exchange(desc, request, timeout=120):
+            if request['op'] == 'state':
+                return {'document_id': 1, 'documents': [{'id': 1, 'path': desc['document']}]}
+            sent.append(desc['session_id'])
+            return {'ok': True}
+
+        for p in (patch.object(mcp, 'sessions', side_effect=lambda: list(windows)), patch.object(mcp, '_exchange', exchange),
+                  patch.object(mcp.OCS, 'session', None), patch.dict(os.environ, {}, clear=False)):
+            p.start()
+            self.addCleanup(p.stop)
+        os.environ.pop('OI_SESSION', None)
+        self.assertIn('"selected": "weg"', mcp.call_tool('oi_sessions', {})['content'][0]['text'])
+        self.assertIsNone(mcp.OCS.session)
+        windows.insert(0, {'kind': 'automation', 'session_id': 'brug', 'port': 2, 'token': 't', 'pid': None, 'document_id': 1, 'document': '/p/Brug.dwg'})
+        self.assertFalse(mcp.call_tool('oi_save', {})['isError'])
+        self.assertEqual(sent, ['brug'])
+
+
 class SuperCloudTest(unittest.TestCase):
     """Route B of the SuperCloud contract (OpenAEC-Blueprint docs/supercloud-koppeling.md, #75)."""
 

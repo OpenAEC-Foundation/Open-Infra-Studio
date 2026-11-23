@@ -321,6 +321,20 @@ def _document(st):
     return cur.get("path") or cur.get("name") or cur.get("title")
 
 
+def _choose(live, want):
+    """The window `want` names (session id, pid, port or drawing name), else
+    the newest. A name that matches no window is an error, never another
+    window. Chooses only: the caller decides whether it sticks."""
+    if want:
+        match = [s for s in live if want in (s["session_id"], str(s["pid"]), str(s["port"])) or (s.get("document") and want.lower() in str(s["document"]).lower())]
+        if not match:
+            raise OcsError(f"geen venster '{want}'; kies uit: " + ", ".join(f"{s['session_id']} ({s.get('document')})" for s in live))
+        live = match
+    if not live:
+        raise OcsError("Geen Open CAD Studio-venster gevonden. Start Open CAD Studio (met de Open Infra-plugins).")
+    return live[0]
+
+
 class Ocs:
     def __init__(self):
         self.session = None
@@ -329,19 +343,9 @@ class Ocs:
         self.lock = threading.RLock()
 
     def pick(self, select=None, live=None):
-        """The window `select` or OI_SESSION names, else the newest. A name
-        that matches no window is an error, never another window."""
+        """Choose the window for the next commands (see `_choose`)."""
         with self.lock:
-            live = sessions() if live is None else live
-            want = select or os.environ.get("OI_SESSION")
-            if want:
-                match = [s for s in live if want in (s["session_id"], str(s["pid"]), str(s["port"])) or (s.get("document") and want.lower() in str(s["document"]).lower())]
-                if not match:
-                    raise OcsError(f"geen venster '{want}'; kies uit: " + ", ".join(f"{s['session_id']} ({s.get('document')})" for s in live))
-                live = match
-            if not live:
-                raise OcsError("Geen Open CAD Studio-venster gevonden. Start Open CAD Studio (met de Open Infra-plugins).")
-            self.session = live[0]
+            self.session = _choose(sessions() if live is None else live, select or os.environ.get("OI_SESSION"))
             return self.session
 
     def request(self, op, body=None, timeout=120):
@@ -553,12 +557,13 @@ def t_sessions(a):
     if a.get("select"):
         OCS.pick(a["select"], live)
     # The window the next command goes to: the chosen one while it lives
-    # (its current drawing may have changed), else by the same rule.
+    # (its current drawing may have changed), else by the same rule. Only
+    # `select` makes a choice stick; listing changes nothing.
     chosen = (OCS.session or {}).get("session_id")
     cur = next((s for s in live if s["session_id"] == chosen), None)
-    if cur is None and live:
+    if cur is None:
         try:
-            cur = OCS.pick(live=live)
+            cur = _choose(live, os.environ.get("OI_SESSION"))
         except OcsError:
             cur = None
     return {"sessions": [{k: s.get(k) for k in ("session_id", "pid", "version", "document_id", "document")} for s in live],
