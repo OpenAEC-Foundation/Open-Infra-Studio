@@ -58,13 +58,21 @@ pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64
 }
 
 /// DWG layer names: no `<>/\":;?*|,=` characters, upper case like the rest.
+/// Layer for imported data: `PREFIX-NAME` in capitals, at most 60 bytes.
+/// Characters a layer name cannot hold become '-'. A comma can, so the PDOK
+/// title "… 0,5m" keeps reading as half a metre (#160).
 pub fn layer_name(prefix: &str, name: &str) -> String {
     let clean: String = name
         .chars()
-        .map(|c| if "<>/\\\":;?*|,=`".contains(c) { '-' } else { c })
+        .map(|c| if "<>/\\\":;?*|=`".contains(c) { '-' } else { c })
         .collect();
     let mut s = format!("{prefix}-{clean}").to_uppercase();
-    s.truncate(60);
+    // A cut inside a character (ë, é, …) would panic.
+    let mut end = s.len().min(60);
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s.truncate(end);
     s
 }
 
@@ -174,5 +182,19 @@ mod tests {
         let back = back.unwrap();
         let with_data: Vec<bool> = back.model_space_entities().map(|e| e.common().extended_data.get_record(XDATA_APP).is_some()).collect();
         assert_eq!(with_data, [false, true]);
+    }
+
+    /// "0,5m" means half a metre: the comma stays (#160). Characters a layer
+    /// name cannot hold still become '-'; a long name is cut on a whole
+    /// character.
+    #[test]
+    fn a_layer_name_keeps_the_decimal_comma() {
+        assert_eq!(
+            layer_name("GIS-WMS", "Digital Terrain Model (DTM) 0,5m"),
+            "GIS-WMS-DIGITAL TERRAIN MODEL (DTM) 0,5M"
+        );
+        assert_eq!(layer_name("GIS", "a<b>c/d\\e\"f:g;h?i*j|k=l`m"), "GIS-A-B-C-D-E-F-G-H-I-J-K-L-M");
+        let long = layer_name("GIS", &format!("{}ë", "x".repeat(55)));
+        assert_eq!(long, format!("GIS-{}", "X".repeat(55)));
     }
 }
