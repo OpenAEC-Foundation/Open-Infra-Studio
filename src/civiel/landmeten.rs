@@ -470,6 +470,10 @@ pub struct CodeTable {
     /// Where the table came from (not in the file).
     #[serde(skip)]
     pub bron: String,
+    /// Warnings about definitions skipped on read (an empty code), reported
+    /// with the command's result.
+    #[serde(skip)]
+    pub waarschuwingen: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -512,6 +516,22 @@ impl CodeTable {
 
     pub fn parse(text: &str, bron: &str) -> Result<CodeTable, String> {
         let mut t: CodeTable = serde_json::from_str(text).map_err(|e| t!("codetabel {bron} onleesbaar: {e}", "code table {bron} unreadable: {e}"))?;
+        // An empty code matches every line number in `read` (`starts_with("")`),
+        // which puts an empty record on a symbol and makes the DWG unreadable
+        // (#155): skip it with a warning instead of refusing the whole table,
+        // which would stop an import after the points are already written.
+        let mut empty = 0;
+        t.codes.retain(|c| {
+            if c.code.trim().is_empty() {
+                empty += 1;
+                false
+            } else {
+                true
+            }
+        });
+        if empty > 0 {
+            t.waarschuwingen.push(t!("{empty} lege code(s) overgeslagen", "{empty} empty code(s) skipped"));
+        }
         if t.codes.is_empty() {
             return Err(t!("codetabel {bron} heeft geen codes", "code table {bron} has no codes"));
         }
@@ -955,7 +975,11 @@ pub fn draw_codes(ctx: &Ctx, table: &CodeTable, lw: &Linework, points: &[SurveyP
         let c = e.common_mut();
         c.layer = spec.name.clone();
         c.color = ocs_plugin_api::host::codec::Color::ByLayer;
-        c.extended_data.add_record(record(&pairs));
+        // Only a record with values: an empty one makes the DWG unreadable (#155).
+        let d = record(&pairs);
+        if !d.is_empty() {
+            c.extended_data.add_record(d);
+        }
         out.put(&spec, [e]);
         n.symbols += 1;
     }
@@ -1011,9 +1035,10 @@ pub fn apply_codes(ctx: &Ctx, table: &CodeTable, points: &[SurveyPoint], source:
     };
     let single = if lw.single > 0 { t!(", {} lijn(en) van één punt overgeslagen", ", {} single-point line(s) skipped", lw.single) } else { String::new() };
     let replaced = if removed > 0 { t!(", {removed} oude elementen vervangen", ", {removed} old elements replaced") } else { String::new() };
+    let skipped = if table.waarschuwingen.is_empty() { String::new() } else { format!("; {}", table.waarschuwingen.join("; ")) };
     Ok(t!(
-        "Codes ({}): {} lijnen, {} symbolen, {} teksten{single}{replaced}{unknown}.",
-        "Codes ({}): {} lines, {} symbols, {} texts{single}{replaced}{unknown}.",
+        "Codes ({}): {} lijnen, {} symbolen, {} teksten{single}{replaced}{unknown}{skipped}.",
+        "Codes ({}): {} lines, {} symbols, {} texts{single}{replaced}{unknown}{skipped}.",
         table.bron,
         n.lines,
         n.symbols,
@@ -1185,5 +1210,112 @@ mod tests {
         // OC: a single point on an arc between its neighbours.
         let lw = linework(&t, &[ring("LKAS", 0), ring("LKAS OC", 2), ring("LKAS", 4)]);
         assert!(lw.figures[0].points().iter().all(|q| (q[0].hypot(q[1]) - 10.0).abs() < 1e-9));
+    }
+
+    /// A code table with an empty code skips that definition: `123` would
+    /// read as a line number behind the empty code (`starts_with("")`) and
+    /// put an empty OPENINFRA record on a symbol, which makes the DWG
+    /// unreadable (#155, #153). The valid codes still load, so an import
+    /// does not stop halfway after the points are already written.
+    #[test]
+    fn a_code_table_skips_an_empty_code() {
+        let with_empty = r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"","soort":"punt"},{"code":"SBM","soort":"punt"}]}"#;
+        let t = CodeTable::parse(with_empty, "test").unwrap();
+        assert_eq!(t.codes.len(), 1);
+        assert_eq!(t.codes[0].code, "SBM");
+        // Only empty codes: still refused, there is nothing to process.
+        let only_empty = r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"","soort":"punt"}]}"#;
+        assert!(CodeTable::parse(only_empty, "test").is_err());
+        let ok = r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"SBM","soort":"punt"}]}"#;
+        assert!(CodeTable::parse(ok, "test").is_ok());
+    }
+
+    /// `CIV_POINTS_IMPORT CODES=JA` with a PENZD line `,105000,425000,1,123`
+    /// (empty point number): its symbol gets no empty record, while a symbol
+    /// with real values keeps its record (#155, knownbug 171).
+    #[test]
+    fn a_symbol_gets_a_record_only_when_it_has_values() {
+        use crate::bridge::replacement_test_host::Drawing;
+        // A drawing of its own, so no other test's drawing answers.
+        let drawing = std::sync::Arc::new(Drawing::new(ocs_plugin_api::host::codec::CadDocument::new(), false));
+        let target = crate::bridge::Target { sender: drawing, tab_id: 171_001, unit_factor: 1.0, doc_path: None };
+        crate::bridge::with_command_context(target, None, None, || {
+            let ctx = Ctx::new(&crate::civiel::CivielOptions::default()).unwrap();
+            // Built directly: `CodeTable::parse` would skip the empty code.
+            let stuurcodes = Stuurcodes {
+                begin: vec!["B".into()],
+                einde: vec!["E".into()],
+                sluiten: vec!["CLS".into()],
+                vervolg: Vec::new(),
+                boog: vec!["BC".into()],
+                einde_boog: vec!["EC".into()],
+                boogpunt: vec!["OC".into()],
+                scheiding: "/".into(),
+                lijnnummers: true,
+            };
+            let def = |code: &str| CodeDef { code: code.into(), soort: "punt".into(), omschrijving: String::new(), nlcs: None, laag: Some("OI-TEST".into()), symbool: None, attributen: Vec::new() };
+            let table = CodeTable { versie: 1, toelichting: String::new(), stuurcodes, codes: vec![def(""), def("SBM")], bron: "test".into(), waarschuwingen: Vec::new() };
+            let points = vec![
+                SurveyPoint { name: "".into(), e: 105000.0, n: 425000.0, z: Some(1.0), code: "123".into() },
+                SurveyPoint { name: "2".into(), e: 105010.0, n: 425005.0, z: Some(1.0), code: "SBM".into() },
+            ];
+            let lw = linework(&table, &points);
+            let mut out = Out::default();
+            draw_codes(&ctx, &table, &lw, &points, "test", &mut out).unwrap();
+            let entities: Vec<&EntityType> = out.layers.iter().flat_map(|(_, es)| es.iter()).collect();
+            assert_eq!(entities.len(), 2);
+            for e in &entities {
+                if let Some(r) = e.common().extended_data.get_record(crate::bridge::XDATA_APP) {
+                    assert!(!r.is_empty(), "leeg record op een symbool: {r:?}");
+                }
+            }
+            let sbm = entities
+                .iter()
+                .filter_map(|e| e.common().extended_data.get_record(crate::bridge::XDATA_APP))
+                .find(|r| r.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "code=SBM")))
+                .expect("symbool met echte waarden verloor zijn record");
+            assert!(sbm.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "puntnummer=2")));
+        });
+    }
+
+    /// `CIV_POINTS_IMPORT CODES=JA` with a PENZD file and a code table with an
+    /// empty code next to `SBM`: the import does not stop (the points are
+    /// already written by then), the SBM symbol is drawn with its record, no
+    /// empty record is written, and the result warns about the skipped empty
+    /// code (#155, knownbug 171, fixronde 1).
+    #[test]
+    fn import_coded_skips_an_empty_code_with_a_warning() {
+        use crate::bridge::replacement_test_host::Drawing;
+        let dir = std::env::temp_dir().join(format!("oi-landmeten-171-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let points_file = dir.join("punten.csv");
+        let table_file = dir.join("codes.json");
+        // PENZD: `,105000,425000,1,123` has an empty point number and code `123`.
+        std::fs::write(&points_file, ",105000,425000,1,123\n2,105010,425005,1,SBM\n").unwrap();
+        std::fs::write(&table_file, r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"","soort":"punt"},{"code":"SBM","soort":"punt","laag":"OI-TEST"}]}"#).unwrap();
+        // A drawing of its own, so no other test's drawing answers.
+        let drawing = std::sync::Arc::new(Drawing::new(ocs_plugin_api::host::codec::CadDocument::new(), false));
+        let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 171_002, unit_factor: 1.0, doc_path: None };
+        let r = crate::bridge::with_command_context(target, None, None, || {
+            import_coded(&points_file, &crate::civiel::CivielOptions::default(), Some(CodeOptions { table: Some(table_file.clone()) }))
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        let msg = r.unwrap();
+        assert!(msg.contains("lege code") || msg.contains("empty code"), "geen waarschuwing over de lege code: {msg}");
+        let doc = drawing.doc.lock().unwrap();
+        let entities: Vec<_> = doc.model_space_entities().collect();
+        // The SBM symbol is there with its values; the `123` point gets no
+        // symbol (its would-be empty code is skipped, `123` is unknown).
+        let inserts: Vec<_> = entities.iter().filter(|e| matches!(e, EntityType::Insert(_))).collect();
+        assert_eq!(inserts.len(), 1, "geen of te veel symbolen: {msg}");
+        let rec = inserts[0].common().extended_data.get_record(crate::bridge::XDATA_APP).expect("SBM-symbool zonder record");
+        assert!(rec.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "code=SBM")));
+        assert!(rec.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "puntnummer=2")));
+        // No empty OPENINFRA record anywhere.
+        for e in &entities {
+            if let Some(r) = e.common().extended_data.get_record(crate::bridge::XDATA_APP) {
+                assert!(!r.is_empty(), "leeg record op een element: {r:?}");
+            }
+        }
     }
 }
