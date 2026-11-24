@@ -253,12 +253,19 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions) -> Result<Stri
 }
 
 /// Import a point file; with `codes` the point codes also become linework
-/// and symbols (a second undo step).
+/// and symbols (a second undo step). Like the other imports, every input is
+/// read and checked before the first write (`Out` only buffers,
+/// `write_import` writes): a refused code table leaves no points behind
+/// (#181).
 pub fn import_coded(path: &std::path::Path, opt: &super::CivielOptions, codes: Option<CodeOptions>) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let text = String::from_utf8_lossy(&bytes);
     let parsed = parse(&text, opt.format)?;
+    let table = match &codes {
+        Some(c) => Some(CodeTable::load(c.table.as_deref())?),
+        None => None,
+    };
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut out = Out::default();
     let n = draw(&ctx, &parsed.points, &name, &mut out)?;
@@ -275,11 +282,8 @@ pub fn import_coded(path: &std::path::Path, opt: &super::CivielOptions, codes: O
         let (lo, hi) = zs.iter().fold((f64::MAX, f64::MIN), |(a, b), z| (a.min(*z), b.max(*z)));
         format!(", {} tot {} m", nap(lo, 2), nap(hi, 2))
     };
-    let coded = match codes {
-        Some(c) => {
-            let table = CodeTable::load(c.table.as_deref())?;
-            format!(" {}", apply_codes(&ctx, &table, &parsed.points, &name, false)?)
-        }
+    let coded = match &table {
+        Some(t) => format!(" {}", apply_codes(&ctx, t, &parsed.points, &name, false)?),
         None => String::new(),
     };
     Ok(format!(
@@ -1279,10 +1283,11 @@ mod tests {
     }
 
     /// `CIV_POINTS_IMPORT CODES=JA` with a PENZD file and a code table with an
-    /// empty code next to `SBM`: the import does not stop (the points are
-    /// already written by then), the SBM symbol is drawn with its record, no
-    /// empty record is written, and the result warns about the skipped empty
-    /// code (#155, knownbug 171, fixronde 1).
+    /// empty code next to `SBM`: the import does not stop, the SBM symbol is
+    /// drawn with its record, no empty record is written, both survey points
+    /// stand in the drawing exactly once (also the one with code `123`), and
+    /// the result warns about the skipped empty code (#155, knownbug 171,
+    /// fixronde 1; #182).
     #[test]
     fn import_coded_skips_an_empty_code_with_a_warning() {
         use crate::bridge::replacement_test_host::Drawing;
@@ -1317,5 +1322,44 @@ mod tests {
                 assert!(!r.is_empty(), "leeg record op een element: {r:?}");
             }
         }
+        // Both survey points stand exactly once, also the point with code
+        // `123` (#182).
+        let points: Vec<_> = entities.iter().filter(|e| matches!(e, EntityType::Point(_))).collect();
+        assert_eq!(points.len(), 2, "beide meetpunten precies één keer in de tekening: {msg}");
+        let mut per_code: HashMap<String, usize> = HashMap::new();
+        for e in &points {
+            let code = crate::civiel::data_value(e, "code").unwrap_or_default();
+            *per_code.entry(code).or_default() += 1;
+        }
+        assert_eq!(per_code.get("123"), Some(&1), "punt met code 123 staat niet precies één keer: {per_code:?}");
+        assert_eq!(per_code.get("SBM"), Some(&1), "SBM-punt staat niet precies één keer: {per_code:?}");
+    }
+
+    /// `CIV_POINTS_IMPORT CODES=JA` with a code table that has only empty
+    /// codes: the table is loaded and checked before the first write, so the
+    /// import refuses it and leaves no points in the drawing (#181).
+    #[test]
+    fn import_coded_refuses_an_all_empty_code_table_before_writing() {
+        use crate::bridge::replacement_test_host::Drawing;
+        let dir = std::env::temp_dir().join(format!("oi-landmeten-181-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let points_file = dir.join("punten.csv");
+        let table_file = dir.join("codes.json");
+        // PENZD: two points, codes `123` and `SBM`.
+        std::fs::write(&points_file, ",105000,425000,1,123\n2,105010,425005,1,SBM\n").unwrap();
+        // Only empty codes: `parse` refuses the table.
+        std::fs::write(&table_file, r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"","soort":"punt"},{"code":"  ","soort":"punt"}]}"#).unwrap();
+        // A drawing of its own, so no other test's drawing answers.
+        let drawing = std::sync::Arc::new(Drawing::new(ocs_plugin_api::host::codec::CadDocument::new(), false));
+        let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 181_001, unit_factor: 1.0, doc_path: None };
+        let r = crate::bridge::with_command_context(target, None, None, || {
+            import_coded(&points_file, &crate::civiel::CivielOptions::default(), Some(CodeOptions { table: Some(table_file.clone()) }))
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        let err = r.expect_err("een codetabel met alleen lege codes wordt geweigerd");
+        assert!(err.contains("geen codes") || err.contains("no codes"), "fout noemt de lege codetabel niet: {err}");
+        let doc = drawing.doc.lock().unwrap();
+        let n = doc.model_space_entities().filter(|e| matches!(e, EntityType::Point(_))).count();
+        assert_eq!(n, 0, "een geweigerde codetabel liet {n} meetpunt(en) in de tekening staan");
     }
 }
