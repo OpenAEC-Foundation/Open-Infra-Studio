@@ -515,6 +515,11 @@ impl CodeTable {
         if t.codes.is_empty() {
             return Err(t!("codetabel {bron} heeft geen codes", "code table {bron} has no codes"));
         }
+        // An empty code matches every line number in `read` (`starts_with("")`),
+        // which puts an empty record on a symbol and makes the DWG unreadable (#155).
+        if t.codes.iter().any(|c| c.code.trim().is_empty()) {
+            return Err(t!("codetabel {bron} heeft een lege code", "code table {bron} has an empty code"));
+        }
         t.bron = bron.to_string();
         Ok(t)
     }
@@ -955,7 +960,11 @@ pub fn draw_codes(ctx: &Ctx, table: &CodeTable, lw: &Linework, points: &[SurveyP
         let c = e.common_mut();
         c.layer = spec.name.clone();
         c.color = ocs_plugin_api::host::codec::Color::ByLayer;
-        c.extended_data.add_record(record(&pairs));
+        // Only a record with values: an empty one makes the DWG unreadable (#155).
+        let d = record(&pairs);
+        if !d.is_empty() {
+            c.extended_data.add_record(d);
+        }
         out.put(&spec, [e]);
         n.symbols += 1;
     }
