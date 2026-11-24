@@ -1196,13 +1196,20 @@ mod tests {
         assert!(lw.figures[0].points().iter().all(|q| (q[0].hypot(q[1]) - 10.0).abs() < 1e-9));
     }
 
-    /// A code table with an empty code is refused: `123` would read as a
-    /// line number behind that empty code and put an empty OPENINFRA
-    /// record on a symbol, which makes the DWG unreadable (#155, #153).
+    /// A code table with an empty code skips that definition: `123` would
+    /// read as a line number behind the empty code (`starts_with("")`) and
+    /// put an empty OPENINFRA record on a symbol, which makes the DWG
+    /// unreadable (#155, #153). The valid codes still load, so an import
+    /// does not stop halfway after the points are already written.
     #[test]
-    fn a_code_table_with_an_empty_code_is_refused() {
+    fn a_code_table_skips_an_empty_code() {
         let with_empty = r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"","soort":"punt"},{"code":"SBM","soort":"punt"}]}"#;
-        assert!(CodeTable::parse(with_empty, "test").is_err());
+        let t = CodeTable::parse(with_empty, "test").unwrap();
+        assert_eq!(t.codes.len(), 1);
+        assert_eq!(t.codes[0].code, "SBM");
+        // Only empty codes: still refused, there is nothing to process.
+        let only_empty = r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"","soort":"punt"}]}"#;
+        assert!(CodeTable::parse(only_empty, "test").is_err());
         let ok = r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"SBM","soort":"punt"}]}"#;
         assert!(CodeTable::parse(ok, "test").is_ok());
     }
@@ -1253,5 +1260,46 @@ mod tests {
                 .expect("symbool met echte waarden verloor zijn record");
             assert!(sbm.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "puntnummer=2")));
         });
+    }
+
+    /// `CIV_POINTS_IMPORT CODES=JA` with a PENZD file and a code table with an
+    /// empty code next to `SBM`: the import does not stop (the points are
+    /// already written by then), the SBM symbol is drawn with its record, no
+    /// empty record is written, and the result warns about the skipped empty
+    /// code (#155, knownbug 171, fixronde 1).
+    #[test]
+    fn import_coded_skips_an_empty_code_with_a_warning() {
+        use crate::bridge::replacement_test_host::Drawing;
+        let dir = std::env::temp_dir().join(format!("oi-landmeten-171-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let points_file = dir.join("punten.csv");
+        let table_file = dir.join("codes.json");
+        // PENZD: `,105000,425000,1,123` has an empty point number and code `123`.
+        std::fs::write(&points_file, ",105000,425000,1,123\n2,105010,425005,1,SBM\n").unwrap();
+        std::fs::write(&table_file, r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"","soort":"punt"},{"code":"SBM","soort":"punt","laag":"OI-TEST"}]}"#).unwrap();
+        // A drawing of its own, so no other test's drawing answers.
+        let drawing = std::sync::Arc::new(Drawing::new(ocs_plugin_api::host::codec::CadDocument::new(), false));
+        let target = crate::bridge::Target { sender: drawing.clone(), tab_id: 171_002, unit_factor: 1.0, doc_path: None };
+        let r = crate::bridge::with_command_context(target, None, None, || {
+            import_coded(&points_file, &crate::civiel::CivielOptions::default(), Some(CodeOptions { table: Some(table_file.clone()) }))
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        let msg = r.unwrap();
+        assert!(msg.contains("lege code") || msg.contains("empty code"), "geen waarschuwing over de lege code: {msg}");
+        let doc = drawing.doc.lock().unwrap();
+        let entities: Vec<_> = doc.model_space_entities().collect();
+        // The SBM symbol is there with its values; the `123` point gets no
+        // symbol (its would-be empty code is skipped, `123` is unknown).
+        let inserts: Vec<_> = entities.iter().filter(|e| matches!(e, EntityType::Insert(_))).collect();
+        assert_eq!(inserts.len(), 1, "geen of te veel symbolen: {msg}");
+        let rec = inserts[0].common().extended_data.get_record(crate::bridge::XDATA_APP).expect("SBM-symbool zonder record");
+        assert!(rec.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "code=SBM")));
+        assert!(rec.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "puntnummer=2")));
+        // No empty OPENINFRA record anywhere.
+        for e in &entities {
+            if let Some(r) = e.common().extended_data.get_record(crate::bridge::XDATA_APP) {
+                assert!(!r.is_empty(), "leeg record op een element: {r:?}");
+            }
+        }
     }
 }
