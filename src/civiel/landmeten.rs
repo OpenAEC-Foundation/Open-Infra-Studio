@@ -1239,7 +1239,7 @@ mod tests {
             }
             let sbm = entities
                 .iter()
-                .find_map(|e| e.common().extended_data.get_record(crate::bridge::XDATA_APP))
+                .filter_map(|e| e.common().extended_data.get_record(crate::bridge::XDATA_APP))
                 .find(|r| r.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "code=SBM")))
                 .expect("symbool met echte waarden verloor zijn record");
             assert!(sbm.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "puntnummer=2")));
