@@ -253,12 +253,19 @@ pub fn import(path: &std::path::Path, opt: &super::CivielOptions) -> Result<Stri
 }
 
 /// Import a point file; with `codes` the point codes also become linework
-/// and symbols (a second undo step).
+/// and symbols (a second undo step). Like the other imports, every input is
+/// read and checked before the first write (`Out` only buffers,
+/// `write_import` writes): a refused code table leaves no points behind
+/// (#181).
 pub fn import_coded(path: &std::path::Path, opt: &super::CivielOptions, codes: Option<CodeOptions>) -> Result<String, String> {
     let ctx = Ctx::new(opt)?;
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let text = String::from_utf8_lossy(&bytes);
     let parsed = parse(&text, opt.format)?;
+    let table = match &codes {
+        Some(c) => Some(CodeTable::load(c.table.as_deref())?),
+        None => None,
+    };
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut out = Out::default();
     let n = draw(&ctx, &parsed.points, &name, &mut out)?;
@@ -275,11 +282,8 @@ pub fn import_coded(path: &std::path::Path, opt: &super::CivielOptions, codes: O
         let (lo, hi) = zs.iter().fold((f64::MAX, f64::MIN), |(a, b), z| (a.min(*z), b.max(*z)));
         format!(", {} tot {} m", nap(lo, 2), nap(hi, 2))
     };
-    let coded = match codes {
-        Some(c) => {
-            let table = CodeTable::load(c.table.as_deref())?;
-            format!(" {}", apply_codes(&ctx, &table, &parsed.points, &name, false)?)
-        }
+    let coded = match &table {
+        Some(t) => format!(" {}", apply_codes(&ctx, t, &parsed.points, &name, false)?),
         None => String::new(),
     };
     Ok(format!(
