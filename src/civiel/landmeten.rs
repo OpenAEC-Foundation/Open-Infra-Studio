@@ -470,6 +470,10 @@ pub struct CodeTable {
     /// Where the table came from (not in the file).
     #[serde(skip)]
     pub bron: String,
+    /// Warnings about definitions skipped on read (an empty code), reported
+    /// with the command's result.
+    #[serde(skip)]
+    pub waarschuwingen: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -512,13 +516,24 @@ impl CodeTable {
 
     pub fn parse(text: &str, bron: &str) -> Result<CodeTable, String> {
         let mut t: CodeTable = serde_json::from_str(text).map_err(|e| t!("codetabel {bron} onleesbaar: {e}", "code table {bron} unreadable: {e}"))?;
+        // An empty code matches every line number in `read` (`starts_with("")`),
+        // which puts an empty record on a symbol and makes the DWG unreadable
+        // (#155): skip it with a warning instead of refusing the whole table,
+        // which would stop an import after the points are already written.
+        let mut empty = 0;
+        t.codes.retain(|c| {
+            if c.code.trim().is_empty() {
+                empty += 1;
+                false
+            } else {
+                true
+            }
+        });
+        if empty > 0 {
+            t.waarschuwingen.push(t!("{empty} lege code(s) overgeslagen", "{empty} empty code(s) skipped"));
+        }
         if t.codes.is_empty() {
             return Err(t!("codetabel {bron} heeft geen codes", "code table {bron} has no codes"));
-        }
-        // An empty code matches every line number in `read` (`starts_with("")`),
-        // which puts an empty record on a symbol and makes the DWG unreadable (#155).
-        if t.codes.iter().any(|c| c.code.trim().is_empty()) {
-            return Err(t!("codetabel {bron} heeft een lege code", "code table {bron} has an empty code"));
         }
         t.bron = bron.to_string();
         Ok(t)
@@ -1020,9 +1035,10 @@ pub fn apply_codes(ctx: &Ctx, table: &CodeTable, points: &[SurveyPoint], source:
     };
     let single = if lw.single > 0 { t!(", {} lijn(en) van één punt overgeslagen", ", {} single-point line(s) skipped", lw.single) } else { String::new() };
     let replaced = if removed > 0 { t!(", {removed} oude elementen vervangen", ", {removed} old elements replaced") } else { String::new() };
+    let skipped = if table.waarschuwingen.is_empty() { String::new() } else { format!("; {}", table.waarschuwingen.join("; ")) };
     Ok(t!(
-        "Codes ({}): {} lijnen, {} symbolen, {} teksten{single}{replaced}{unknown}.",
-        "Codes ({}): {} lines, {} symbols, {} texts{single}{replaced}{unknown}.",
+        "Codes ({}): {} lijnen, {} symbolen, {} teksten{single}{replaced}{unknown}{skipped}.",
+        "Codes ({}): {} lines, {} symbols, {} texts{single}{replaced}{unknown}{skipped}.",
         table.bron,
         n.lines,
         n.symbols,
@@ -1225,7 +1241,7 @@ mod tests {
         let target = crate::bridge::Target { sender: drawing, tab_id: 171_001, unit_factor: 1.0, doc_path: None };
         crate::bridge::with_command_context(target, None, None, || {
             let ctx = Ctx::new(&crate::civiel::CivielOptions::default()).unwrap();
-            // Built directly: `CodeTable::parse` refuses the empty code.
+            // Built directly: `CodeTable::parse` would skip the empty code.
             let stuurcodes = Stuurcodes {
                 begin: vec!["B".into()],
                 einde: vec!["E".into()],
@@ -1238,7 +1254,7 @@ mod tests {
                 lijnnummers: true,
             };
             let def = |code: &str| CodeDef { code: code.into(), soort: "punt".into(), omschrijving: String::new(), nlcs: None, laag: Some("OI-TEST".into()), symbool: None, attributen: Vec::new() };
-            let table = CodeTable { versie: 1, toelichting: String::new(), stuurcodes, codes: vec![def(""), def("SBM")], bron: "test".into() };
+            let table = CodeTable { versie: 1, toelichting: String::new(), stuurcodes, codes: vec![def(""), def("SBM")], bron: "test".into(), waarschuwingen: Vec::new() };
             let points = vec![
                 SurveyPoint { name: "".into(), e: 105000.0, n: 425000.0, z: Some(1.0), code: "123".into() },
                 SurveyPoint { name: "2".into(), e: 105010.0, n: 425005.0, z: Some(1.0), code: "SBM".into() },
