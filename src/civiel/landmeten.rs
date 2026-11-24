@@ -1186,4 +1186,63 @@ mod tests {
         let lw = linework(&t, &[ring("LKAS", 0), ring("LKAS OC", 2), ring("LKAS", 4)]);
         assert!(lw.figures[0].points().iter().all(|q| (q[0].hypot(q[1]) - 10.0).abs() < 1e-9));
     }
+
+    /// A code table with an empty code is refused: `123` would read as a
+    /// line number behind that empty code and put an empty OPENINFRA
+    /// record on a symbol, which makes the DWG unreadable (#155, #153).
+    #[test]
+    fn a_code_table_with_an_empty_code_is_refused() {
+        let with_empty = r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"","soort":"punt"},{"code":"SBM","soort":"punt"}]}"#;
+        assert!(CodeTable::parse(with_empty, "test").is_err());
+        let ok = r#"{"versie":1,"stuurcodes":{},"codes":[{"code":"SBM","soort":"punt"}]}"#;
+        assert!(CodeTable::parse(ok, "test").is_ok());
+    }
+
+    /// `CIV_POINTS_IMPORT CODES=JA` with a PENZD line `,105000,425000,1,123`
+    /// (empty point number): its symbol gets no empty record, while a symbol
+    /// with real values keeps its record (#155, knownbug 171).
+    #[test]
+    fn a_symbol_gets_a_record_only_when_it_has_values() {
+        use crate::bridge::replacement_test_host::Drawing;
+        // A drawing of its own, so no other test's drawing answers.
+        let drawing = std::sync::Arc::new(Drawing::new(ocs_plugin_api::host::codec::CadDocument::new(), false));
+        let target = crate::bridge::Target { sender: drawing, tab_id: 171_001, unit_factor: 1.0, doc_path: None };
+        crate::bridge::with_command_context(target, None, None, || {
+            let ctx = Ctx::new(&crate::civiel::CivielOptions::default()).unwrap();
+            // Built directly: `CodeTable::parse` refuses the empty code.
+            let stuurcodes = Stuurcodes {
+                begin: vec!["B".into()],
+                einde: vec!["E".into()],
+                sluiten: vec!["CLS".into()],
+                vervolg: Vec::new(),
+                boog: vec!["BC".into()],
+                einde_boog: vec!["EC".into()],
+                boogpunt: vec!["OC".into()],
+                scheiding: "/".into(),
+                lijnnummers: true,
+            };
+            let def = |code: &str| CodeDef { code: code.into(), soort: "punt".into(), omschrijving: String::new(), nlcs: None, laag: Some("OI-TEST".into()), symbool: None, attributen: Vec::new() };
+            let table = CodeTable { versie: 1, toelichting: String::new(), stuurcodes, codes: vec![def(""), def("SBM")], bron: "test".into() };
+            let points = vec![
+                SurveyPoint { name: "".into(), e: 105000.0, n: 425000.0, z: Some(1.0), code: "123".into() },
+                SurveyPoint { name: "2".into(), e: 105010.0, n: 425005.0, z: Some(1.0), code: "SBM".into() },
+            ];
+            let lw = linework(&table, &points);
+            let mut out = Out::default();
+            draw_codes(&ctx, &table, &lw, &points, "test", &mut out).unwrap();
+            let entities: Vec<&EntityType> = out.layers.iter().flat_map(|(_, es)| es.iter()).collect();
+            assert_eq!(entities.len(), 2);
+            for e in &entities {
+                if let Some(r) = e.common().extended_data.get_record(crate::bridge::XDATA_APP) {
+                    assert!(!r.is_empty(), "leeg record op een symbool: {r:?}");
+                }
+            }
+            let sbm = entities
+                .iter()
+                .find_map(|e| e.common().extended_data.get_record(crate::bridge::XDATA_APP))
+                .find(|r| r.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "code=SBM")))
+                .expect("symbool met echte waarden verloor zijn record");
+            assert!(sbm.values.iter().any(|v| matches!(v, ocs_plugin_api::host::XDataValue::String(s) if s == "puntnummer=2")));
+        });
+    }
 }
