@@ -33,7 +33,30 @@ pub(crate) fn feature_data(feature: &Feature) -> ExtendedDataRecord {
     crate::bridge::object_data(pairs.take(40))
 }
 
-/// IMAGE entities for downloaded map tiles (lower-left insertion, Y north).
+/// Map images lie in a band below ground, so terrain and point clouds stay
+/// visible in 3D: the base is under the lowest ground of the Netherlands (−6.76 m NAP).
+pub const MAP_Z_BASE_M: f64 = -10.0;
+/// Top of the map band, still below the lowest ground of the Netherlands.
+pub const MAP_Z_TOP_M: f64 = -7.0;
+/// One map import above the one before, as newer over older in 2D.
+pub const MAP_Z_STEP_M: f64 = 0.02;
+
+/// Z (drawing units) of a new map import: one step above the highest of
+/// `older` (the Z of the rasters in its space) that lies in the map band,
+/// else the base; never above the top. Rasters outside the band do not count.
+pub fn map_z(older: impl IntoIterator<Item = f64>, unit_factor: f64) -> f64 {
+    let [base, top, step] = [MAP_Z_BASE_M, MAP_Z_TOP_M, MAP_Z_STEP_M].map(|m| m * unit_factor);
+    let slack = step / 4.0;
+    let highest = older.into_iter().filter(|z| (base - slack..=top + slack).contains(z)).reduce(f64::max);
+    match highest {
+        // On the grid of steps, so repeated imports do not drift.
+        Some(z) => (base + (((z - base) / step).round() + 1.0) * step).min(top),
+        None => base,
+    }
+}
+
+/// IMAGE entities for downloaded map tiles (lower-left insertion, Y north),
+/// at the base of the map band; [`crate::bridge::stack_maps`] lifts them.
 pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64, fade: u8) -> Vec<EntityType> {
     placed
         .iter()
@@ -42,7 +65,7 @@ pub fn images(site: &Site, placed: &[PlacedImage], layer: &str, unit_factor: f64
             let ur = site.to_drawing([p.bbox[2], p.bbox[3]], unit_factor);
             let mut img = RasterImage::with_size(
                 &p.path.to_string_lossy(),
-                Vector3::new(ll[0], ll[1], 0.0),
+                Vector3::new(ll[0], ll[1], MAP_Z_BASE_M * unit_factor),
                 p.px[0] as f64,
                 p.px[1] as f64,
                 ur[0] - ll[0],
@@ -180,6 +203,36 @@ mod tests {
 
     use super::*;
     use crate::bridge::XDATA_APP;
+
+    /// Map images stack in a band below the lowest ground of
+    /// the Netherlands, newer over older, never above the band.
+    #[test]
+    fn a_map_import_lies_one_step_above_the_highest_map_in_the_band() {
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        assert!(near(map_z([], 1.0), -10.0));
+        assert!(near(map_z([-10.0, -9.98], 1.0), -9.96));
+        // A raster at Z=0 (an old drawing) or one a user put elsewhere does not count.
+        assert!(near(map_z([0.0, -9.98, 3.5, -12.0], 1.0), -9.96));
+        assert!(near(map_z([0.0], 1.0), -10.0));
+        // At the top the band stays full: no import climbs above it.
+        assert!(near(map_z([-7.0], 1.0), -7.0));
+        assert!(near(map_z([-7.01], 1.0), -7.0));
+        // A drawing in millimetres.
+        assert!(near(map_z([], 1000.0), -10000.0));
+        assert!(near(map_z([-9980.0], 1000.0), -9960.0));
+        assert!(near(map_z([-9.98], 1000.0), -10000.0));
+    }
+
+    #[test]
+    fn map_images_are_placed_at_the_base_of_the_band() {
+        let site = Site::default();
+        let placed = PlacedImage { path: "a.png".into(), bbox: [0.0, 0.0, 10.0, 10.0], px: [10, 10] };
+        for f in [1.0, 1000.0] {
+            let placed = images(&site, &[placed.clone()], "GIS-X", f, 0);
+            let [EntityType::RasterImage(img)] = placed.as_slice() else { panic!("one image") };
+            assert_eq!(img.insertion_point.z, MAP_Z_BASE_M * f);
+        }
+    }
 
     /// A feature without attributes (a CSV of only x,y) is drawn without
     /// object data: an empty OPENINFRA record does not come back out of a

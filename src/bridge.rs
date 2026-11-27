@@ -1425,7 +1425,7 @@ fn write_import(label: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec
     with_import_layers(label, |layers| {
         let handles = layers.write_entities(entities)?;
         if map {
-            image_to_back(&handles, layers)?;
+            stack_maps(&handles, layers)?;
         }
         Ok(handles)
     })
@@ -1515,17 +1515,29 @@ fn run_draw_order(handles: &[Handle], command: &str) -> Result<Option<&'static s
 /// Keep the new map below vector data and above older images. The host
 /// excludes locked entities from DRAWORDER, so reopen the older image layers
 /// for this part of the same import and restore their original lock state.
-pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result<(), String> {
+/// Stack the map images among `new` (other elements there are left alone)
+/// under the older rasters of their space: in 3D one step above them in the
+/// map band below ground ([`crate::emit::map_z`]), in 2D behind the vectors
+/// and over the older rasters.
+pub(crate) fn stack_maps(new: &[Handle], layers: &mut ImportLayers) -> Result<(), String> {
     if new.is_empty() {
         return Ok(());
     }
+    let unit_factor = target().ok_or("geen tekening actief")?.unit_factor;
     let rasters = query(serde_json::json!({"type": "RASTERIMAGE"}))?;
+    let raster_handles: HashSet<Handle> = rasters.iter().map(|e| e.common().handle).collect();
+    let new: Vec<Handle> = new.iter().copied().filter(|h| raster_handles.contains(h)).collect();
     let imported: HashSet<Handle> = new.iter().copied().collect();
     let owner = rasters.iter().find(|e| imported.contains(&e.common().handle))
         .map(|e| e.common().owner_handle);
     let Some(owner) = owner else {
         return Err(crate::lang::tr("OCS gaf de geplaatste kaartbeelden niet terug", "OCS did not return the placed map images").into());
     };
+    update_entities(
+        crate::lang::tr("Kaartbeelden onder het maaiveld", "Map images below ground"),
+        lift_new_maps(&rasters, &imported, owner, unit_factor),
+    )?;
+    let new = new.as_slice();
     let older: Vec<_> = rasters.into_iter().filter_map(|e| {
         let c = e.common();
         (c.owner_handle == owner && !imported.contains(&c.handle))
@@ -1561,6 +1573,24 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
         push_info(message);
     }
     Ok(())
+}
+
+/// The new map images (`new`) moved to the Z [`crate::emit::map_z`] gives
+/// above the other rasters of `owner`; none when they lie there already.
+fn lift_new_maps(rasters: &[EntityType], new: &HashSet<Handle>, owner: Handle, unit_factor: f64) -> Vec<EntityType> {
+    let older = rasters.iter().filter_map(|e| match e {
+        EntityType::RasterImage(img) if img.common.owner_handle == owner && !new.contains(&img.common.handle) => Some(img.insertion_point.z),
+        _ => None,
+    });
+    let z = crate::emit::map_z(older, unit_factor);
+    rasters.iter().filter_map(|e| match e {
+        EntityType::RasterImage(img) if new.contains(&img.common.handle) && (img.insertion_point.z - z).abs() > 1e-9 * unit_factor => {
+            let mut img = img.clone();
+            img.insertion_point.z = z;
+            Some(EntityType::RasterImage(img))
+        }
+        _ => None,
+    }).collect()
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1829,6 +1859,38 @@ mod tests {
             raster_draw_order(older, &new, None),
             [RasterMove { handles: [older_top, older_bottom, new_bottom, new_top].to_vec(), under: None }],
         );
+    }
+
+    /// New map images go one step above the older ones in the same space,
+    /// all tiles of one import at one height; rasters elsewhere do not count.
+    #[test]
+    fn new_map_images_are_lifted_above_older_ones_in_their_space() {
+        use ocs_plugin_api::host::codec::{entities::RasterImage, Vector3};
+        let [model, paper] = [0x1F, 0x1E].map(Handle::new);
+        let raster = |handle: u64, owner: Handle, z: f64| {
+            let mut img = RasterImage::with_size("a.png", Vector3::new(0.0, 0.0, z), 1.0, 1.0, 1.0, 1.0);
+            img.common.handle = Handle::new(handle);
+            img.common.owner_handle = owner;
+            EntityType::RasterImage(img)
+        };
+        let base = crate::emit::MAP_Z_BASE_M;
+        let rasters = [
+            raster(0x10, model, base),
+            raster(0x11, model, base + 0.02),
+            raster(0x12, model, 0.0),
+            raster(0x13, paper, -8.0),
+            raster(0x20, model, base),
+            raster(0x21, model, base),
+        ];
+        let new: HashSet<_> = [0x20, 0x21].map(Handle::new).into();
+        let lifted = lift_new_maps(&rasters, &new, model, 1.0);
+        let lifted: Vec<_> = lifted.iter().map(|e| match e {
+            EntityType::RasterImage(img) => (img.common.handle.value(), (img.insertion_point.z * 100.0).round() / 100.0),
+            other => panic!("not a raster: {other:?}"),
+        }).collect();
+        assert_eq!(lifted, [(0x20, -9.96), (0x21, -9.96)]);
+        // A first map stays where it was placed: nothing to update.
+        assert!(lift_new_maps(&rasters[2..], &new, model, 1.0).is_empty());
     }
 
     #[test]

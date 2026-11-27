@@ -356,7 +356,7 @@ pub(crate) fn place_datasets(site: &Site, label: &str, origin: bool, datasets: V
             // Draw the marker above the new aerial image in the default order.
             messages.push(geo_origin(site)?);
         }
-        bridge::image_to_back(&rasters, layers)?;
+        bridge::stack_maps(&rasters, layers)?;
         Ok(messages)
     })?;
     bridge::zoom_extents();
