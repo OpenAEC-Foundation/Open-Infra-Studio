@@ -1414,8 +1414,24 @@ fn confirmed_entities(handles: Vec<Handle>) -> Result<Vec<Handle>, String> {
     Ok(handles)
 }
 
+/// [`add_imported_entities`] for downloaded map images: in the map band and,
+/// in 2D, behind the vectors and over the older rasters ([`stack_maps`]).
 pub(crate) fn add_imported_map(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
     write_import(label, entities, true)
+}
+
+/// [`add_imported_entities`] for a raster file the planner places: its images
+/// go into the map band ([`lift_maps`]), but the draw order of the drawing,
+/// older rasters included, stays as it is.
+pub(crate) fn add_imported_raster(label: &str, entities: Vec<EntityType>) -> Result<Vec<Handle>, String> {
+    if entities.is_empty() {
+        return Ok(Vec::new());
+    }
+    with_import_layers(label, |layers| {
+        let handles = layers.write_entities(entities)?;
+        lift_maps(std::slice::from_ref(&handles))?;
+        Ok(handles)
+    })
 }
 
 fn write_import(label: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec<Handle>, String> {
@@ -1425,7 +1441,7 @@ fn write_import(label: &str, entities: Vec<EntityType>, map: bool) -> Result<Vec
     with_import_layers(label, |layers| {
         let handles = layers.write_entities(entities)?;
         if map {
-            image_to_back(&handles, layers)?;
+            stack_maps(std::slice::from_ref(&handles), layers)?;
         }
         Ok(handles)
     })
@@ -1512,20 +1528,56 @@ fn run_draw_order(handles: &[Handle], command: &str) -> Result<Option<&'static s
     restored.map(|()| notice)
 }
 
-/// Keep the new map below vector data and above older images. The host
-/// excludes locked entities from DRAWORDER, so reopen the older image layers
-/// for this part of the same import and restore their original lock state.
-pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result<(), String> {
-    if new.is_empty() {
-        return Ok(());
+/// The map images just placed, after [`lift_maps`] put them in the band.
+struct LiftedMaps {
+    /// Their space (the block record of model space, say).
+    owner: Handle,
+    new: Vec<Handle>,
+    /// Every raster of the drawing, as it was before the lift.
+    rasters: Vec<EntityType>,
+}
+
+/// Put the map images among `datasets` (one list of handles per dataset;
+/// other elements there are left alone) in the map band below ground: each
+/// dataset one step above the rasters already in its space, its tiles at
+/// one height ([`crate::emit::map_z`]). `None` when none of them is a raster.
+fn lift_maps(datasets: &[Vec<Handle>]) -> Result<Option<LiftedMaps>, String> {
+    if datasets.iter().all(Vec::is_empty) {
+        return Ok(None);
     }
+    let unit_factor = target().ok_or("geen tekening actief")?.unit_factor;
     let rasters = query(serde_json::json!({"type": "RASTERIMAGE"}))?;
-    let imported: HashSet<Handle> = new.iter().copied().collect();
-    let owner = rasters.iter().find(|e| imported.contains(&e.common().handle))
+    let raster_handles: HashSet<Handle> = rasters.iter().map(|e| e.common().handle).collect();
+    let datasets: Vec<HashSet<Handle>> = datasets.iter()
+        .map(|handles| handles.iter().copied().filter(|h| raster_handles.contains(h)).collect())
+        .collect();
+    let new: Vec<Handle> = datasets.iter().flatten().copied().collect();
+    let owner = rasters.iter().find(|e| new.contains(&e.common().handle))
         .map(|e| e.common().owner_handle);
     let Some(owner) = owner else {
+        return Ok(None);
+    };
+    update_entities(
+        crate::lang::tr("Kaartbeelden onder het maaiveld", "Map images below ground"),
+        lift_new_maps(&rasters, &datasets, owner, unit_factor),
+    )?;
+    Ok(Some(LiftedMaps { owner, new, rasters }))
+}
+
+/// Stack the map images among `datasets` (see [`lift_maps`]): in 3D in the
+/// map band below ground, in 2D behind the vectors and over the older
+/// rasters of their space. The host excludes locked entities from DRAWORDER,
+/// so reopen the older image layers for this part of the same import and
+/// restore their original lock state.
+pub(crate) fn stack_maps(datasets: &[Vec<Handle>], layers: &mut ImportLayers) -> Result<(), String> {
+    if datasets.iter().all(Vec::is_empty) {
+        return Ok(());
+    }
+    let Some(LiftedMaps { owner, new, rasters }) = lift_maps(datasets)? else {
         return Err(crate::lang::tr("OCS gaf de geplaatste kaartbeelden niet terug", "OCS did not return the placed map images").into());
     };
+    let imported: HashSet<Handle> = new.iter().copied().collect();
+    let new = new.as_slice();
     let older: Vec<_> = rasters.into_iter().filter_map(|e| {
         let c = e.common();
         (c.owner_handle == owner && !imported.contains(&c.handle))
@@ -1561,6 +1613,34 @@ pub(crate) fn image_to_back(new: &[Handle], layers: &mut ImportLayers) -> Result
         push_info(message);
     }
     Ok(())
+}
+
+/// The new map images (`datasets`, in import order) moved to the Z
+/// [`crate::emit::map_z`] gives: each dataset above the other rasters of
+/// `owner` and the datasets before it. Images that lie there already are
+/// left out.
+fn lift_new_maps(rasters: &[EntityType], datasets: &[HashSet<Handle>], owner: Handle, unit_factor: f64) -> Vec<EntityType> {
+    let images = || rasters.iter().filter_map(|e| match e {
+        EntityType::RasterImage(img) if img.common.owner_handle == owner => Some(img),
+        _ => None,
+    });
+    let mut below: Vec<f64> = images()
+        .filter(|img| !datasets.iter().any(|d| d.contains(&img.common.handle)))
+        .map(|img| img.insertion_point.z)
+        .collect();
+    let mut lifted = Vec::new();
+    for dataset in datasets.iter().filter(|d| !d.is_empty()) {
+        let z = crate::emit::map_z(below.iter().copied(), unit_factor);
+        lifted.extend(images()
+            .filter(|img| dataset.contains(&img.common.handle) && (img.insertion_point.z - z).abs() > 1e-9 * unit_factor)
+            .map(|img| {
+                let mut img = img.clone();
+                img.insertion_point.z = z;
+                EntityType::RasterImage(img)
+            }));
+        below.push(z);
+    }
+    lifted
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1829,6 +1909,147 @@ mod tests {
             raster_draw_order(older, &new, None),
             [RasterMove { handles: [older_top, older_bottom, new_bottom, new_top].to_vec(), under: None }],
         );
+    }
+
+    fn raster_at(handle: u64, owner: Handle, z: f64) -> EntityType {
+        use ocs_plugin_api::host::codec::{entities::RasterImage, Vector3};
+        let mut img = RasterImage::with_size("a.png", Vector3::new(0.0, 0.0, z), 1.0, 1.0, 1.0, 1.0);
+        img.common.handle = Handle::new(handle);
+        img.common.owner_handle = owner;
+        EntityType::RasterImage(img)
+    }
+
+    fn lifted_z(lifted: &[EntityType]) -> Vec<(u64, f64)> {
+        lifted.iter().map(|e| match e {
+            EntityType::RasterImage(img) => (img.common.handle.value(), (img.insertion_point.z * 100.0).round() / 100.0),
+            other => panic!("not a raster: {other:?}"),
+        }).collect()
+    }
+
+    /// New map images go one step above the older ones in the same space,
+    /// all tiles of one import at one height; rasters elsewhere do not count.
+    #[test]
+    fn new_map_images_are_lifted_above_older_ones_in_their_space() {
+        let [model, paper] = [0x1F, 0x1E].map(Handle::new);
+        let base = crate::emit::MAP_Z_BASE_M;
+        let rasters = [
+            raster_at(0x10, model, base),
+            raster_at(0x11, model, base + 0.02),
+            raster_at(0x12, model, 0.0),
+            raster_at(0x13, paper, -8.0),
+            raster_at(0x20, model, base),
+            raster_at(0x21, model, base),
+        ];
+        let new: HashSet<_> = [0x20, 0x21].map(Handle::new).into();
+        let lifted = lift_new_maps(&rasters, std::slice::from_ref(&new), model, 1.0);
+        assert_eq!(lifted_z(&lifted), [(0x20, -9.96), (0x21, -9.96)]);
+        // A first map stays where it was placed: nothing to update.
+        assert!(lift_new_maps(&rasters[2..], &[new], model, 1.0).is_empty());
+    }
+
+    /// A combined import (aerial photo and height map in one go) gives each
+    /// dataset its own step, in import order, so they do not flicker in 3D.
+    #[test]
+    fn each_dataset_of_a_combined_import_gets_its_own_step() {
+        let model = Handle::new(0x1F);
+        let base = crate::emit::MAP_Z_BASE_M;
+        let rasters = [
+            raster_at(0x10, model, base),
+            raster_at(0x20, model, base),
+            raster_at(0x21, model, base),
+            raster_at(0x30, model, base),
+        ];
+        let photo: HashSet<_> = [0x20, 0x21].map(Handle::new).into();
+        let heights: HashSet<_> = [Handle::new(0x30)].into();
+        // A dataset without images (a WFS layer) takes no step.
+        let lifted = lift_new_maps(&rasters, &[photo, HashSet::new(), heights], model, 1.0);
+        assert_eq!(lifted_z(&lifted), [(0x20, -9.98), (0x21, -9.98), (0x30, -9.96)]);
+    }
+
+    /// A raster file the planner places goes into the map band, but the draw
+    /// order of what is already in the drawing stays as it is: no DRAWORDER,
+    /// so an older raster deliberately in front of a solid hatch stays there.
+    /// A downloaded map is still put behind the vectors.
+    #[test]
+    fn a_raster_file_goes_into_the_band_without_reordering_the_drawing() {
+        use ocs_plugin_api::host::{CommandOutcome, EntityPage};
+
+        fn model() -> Handle {
+            Handle::new(0x1F)
+        }
+        #[derive(Default)]
+        struct Drawing {
+            entities: Mutex<Vec<EntityType>>,
+            commands: Mutex<Vec<String>>,
+        }
+        impl PluginRequestSender for Drawing {
+            fn request(&self, req: PluginRequest) -> Result<PluginResponse, PluginRequestError> {
+                Ok(match req {
+                    PluginRequest::AddEntities(added) => {
+                        let mut entities = self.entities.lock().unwrap();
+                        let first = 0x100 + entities.len() as u64;
+                        let handles: Vec<_> = (first..first + added.len() as u64).map(Handle::new).collect();
+                        for (mut entity, handle) in added.into_iter().zip(&handles) {
+                            entity.common_mut().handle = *handle;
+                            entity.common_mut().owner_handle = model();
+                            entities.push(entity);
+                        }
+                        PluginResponse::Handles(handles)
+                    }
+                    PluginRequest::QueryEntities { query } => {
+                        let entities: Vec<_> = self.entities.lock().unwrap().iter()
+                            .filter(|e| query.contains("RASTERIMAGE") && matches!(e, EntityType::RasterImage(_)))
+                            .cloned().collect();
+                        PluginResponse::EntityPage(Ok(EntityPage { count: entities.len() as u64, entities, next_offset: None }))
+                    }
+                    PluginRequest::UpdateEntitiesTransaction { entities: updated, .. } => {
+                        let mut entities = self.entities.lock().unwrap();
+                        for new in updated {
+                            if let Some(old) = entities.iter_mut().find(|e| e.common().handle == new.common().handle) {
+                                *old = new;
+                            }
+                        }
+                        PluginResponse::EntityTransactionResult(Ok(()))
+                    }
+                    PluginRequest::GetSelection => PluginResponse::Selection(Vec::new()),
+                    PluginRequest::SetSelection { .. } => PluginResponse::SelectionResult(Ok(())),
+                    PluginRequest::RunCommand { request } => {
+                        self.commands.lock().unwrap().push(format!("{request:?}"));
+                        PluginResponse::CommandResult(Ok(CommandOutcome { status: "completed".into(), ..Default::default() }))
+                    }
+                    // The probe that opens an older raster's layer for DRAWORDER.
+                    PluginRequest::AddEntity(_) => PluginResponse::Handle(Handle::new(0xF00)),
+                    PluginRequest::RemoveEntity { .. } => PluginResponse::Bool(true),
+                    PluginRequest::ModifyLayer(_) => PluginResponse::Bool(true),
+                    _ => PluginResponse::Ok,
+                })
+            }
+        }
+
+        let import = |map: bool| {
+            let drawing = Arc::new(Drawing::default());
+            // An older raster, at the base of the band.
+            drawing.entities.lock().unwrap().push(raster_at(0x10, model(), crate::emit::MAP_Z_BASE_M));
+            let target = Target { sender: drawing.clone(), tab_id: 174, unit_factor: 1.0, doc_path: None };
+            let site = crate::gis::site::Site::default();
+            let placed = crate::gis::raster::PlacedImage { path: "b.png".into(), bbox: [0.0, 0.0, 10.0, 10.0], px: [10, 10] };
+            let images = crate::emit::images(&site, &[placed], "GIS-RASTER", 1.0, 0);
+            let handles = with_command_context(target, None, None, || {
+                if map { add_imported_map("Kaart", images) } else { add_imported_raster("Raster b", images) }
+            }).unwrap();
+            let entities = drawing.entities.lock().unwrap();
+            let new = entities.iter().find(|e| e.common().handle == handles[0]).unwrap();
+            let EntityType::RasterImage(img) = new else { panic!("not a raster") };
+            let z = (img.insertion_point.z * 100.0).round() / 100.0;
+            let commands = drawing.commands.lock().unwrap().clone();
+            (z, commands)
+        };
+        let (z, commands) = import(false);
+        assert_eq!(z, -9.98);
+        assert!(commands.is_empty(), "a raster file changed the draw order: {commands:?}");
+        let (z, commands) = import(true);
+        assert_eq!(z, -9.98);
+        assert!(commands.iter().any(|c| c.contains("DRAWORDER")), "{commands:?}");
     }
 
     #[test]

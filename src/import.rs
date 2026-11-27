@@ -271,12 +271,13 @@ pub(crate) enum PreparedDataset {
 }
 
 impl PreparedDataset {
-    fn write(self, site: &Site, layers: &mut bridge::ImportLayers, rasters: &mut Vec<Handle>) -> Result<String, String> {
+    /// Write the dataset; a map adds its handles to `maps` as one dataset.
+    fn write(self, site: &Site, layers: &mut bridge::ImportLayers, maps: &mut Vec<Vec<Handle>>) -> Result<String, String> {
         match self {
             Self::Map { images, layer, former, summary, .. } => {
                 let entities = emit::images(site, &images, &layer, target()?.unit_factor, 0);
                 ensure_map_layer(&layer, former.as_deref())?;
-                rasters.extend(layers.write_entities(entities)?);
+                maps.push(layers.write_entities(entities)?);
                 Ok(summary)
             }
             Self::Vector { features, feature_type, style } => write_wfs(site, &feature_type, &features, &style),
@@ -348,15 +349,15 @@ pub(crate) fn place_datasets(site: &Site, label: &str, origin: bool, datasets: V
     }
     let messages = bridge::with_import_layers(label, |layers| {
         let mut messages = Vec::new();
-        let mut rasters = Vec::new();
+        let mut maps = Vec::new();
         for dataset in datasets {
-            messages.push(dataset.write(site, layers, &mut rasters)?);
+            messages.push(dataset.write(site, layers, &mut maps)?);
         }
         if origin {
             // Draw the marker above the new aerial image in the default order.
             messages.push(geo_origin(site)?);
         }
-        bridge::image_to_back(&rasters, layers)?;
+        bridge::stack_maps(&maps, layers)?;
         Ok(messages)
     })?;
     bridge::zoom_extents();
