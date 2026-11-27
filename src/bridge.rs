@@ -2017,6 +2017,9 @@ mod tests {
                         self.commands.lock().unwrap().push(format!("{request:?}"));
                         PluginResponse::CommandResult(Ok(CommandOutcome { status: "completed".into(), ..Default::default() }))
                     }
+                    // The probe that opens an older raster's layer for DRAWORDER.
+                    PluginRequest::AddEntity(_) => PluginResponse::Handle(Handle::new(0xF00)),
+                    PluginRequest::RemoveEntity { .. } => PluginResponse::Bool(true),
                     PluginRequest::ModifyLayer(_) => PluginResponse::Bool(true),
                     _ => PluginResponse::Ok,
                 })
